@@ -3,9 +3,11 @@
     --bg-primary: #2e2e2e;
     --bg-card: #383838;
     --accent: #40748c;
-    --text-primary: #ffffff;   /* белый для заголовков и крупного текста */
-    --text-secondary: #b7b7b7; /* серый для обычного текста */
+    --accent-light: #4f8aa5;
+    --text-primary: #ffffff;
+    --text-secondary: #b7b7b7;
     --border: #4a4a4a;
+    --shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
 }
 
 * {
@@ -15,12 +17,12 @@
 }
 
 body {
-    font-family: 'Russo One', sans-serif; /* Жирный шрифт везде */
+    font-family: 'Russo One', sans-serif;
     background-color: var(--bg-primary);
     color: var(--text-secondary);
     line-height: 1.5;
     padding: 20px;
-    font-size: 16px; /* базовый размер, потом переопределим для отдельных элементов */
+    font-size: 16px;
 }
 
 .page {
@@ -33,32 +35,51 @@ body {
     background-color: #1e1e1e;
     color: #ffaa00;
     text-align: center;
-    padding: 10px 20px;
+    padding: 12px 20px;
     border-radius: 40px;
     margin-bottom: 20px;
-    font-size: 14px; /* маленький серый? но оранжевый */
     border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
 }
 
-.dev-notice a {
-    color: #ffaa00;
-    text-decoration: underline;
+.dev-notice span {
+    font-size: 14px;
+}
+
+.dev-notice .button.small {
+    background-color: #ffaa00;
+    color: #1e1e1e;
+    padding: 6px 16px;
+    font-size: 13px;
+    border-radius: 30px;
+    text-decoration: none;
+    font-weight: 400;
+    transition: background-color 0.2s;
+}
+
+.dev-notice .button.small:hover {
+    background-color: #ffc34d;
+    text-decoration: none;
 }
 
 /* Заголовки и крупный текст */
-h1, h2, h3, h4, .game-title, .section-title {
+h1, h2, h3, h4, .game-title {
     color: var(--text-primary);
-    font-weight: 400; /* Russo One уже жирный, нормально */
+    font-weight: 400;
 }
 
 .game-title {
-    font-size: 48px; /* крупный белый */
+    font-size: 48px;
     letter-spacing: -0.5px;
     margin-bottom: 8px;
 }
 
 h2 {
-    font-size: 24px; /* большой белый текст */
+    font-size: 24px;
     margin-bottom: 16px;
     border-bottom: 1px solid var(--border);
     padding-bottom: 8px;
@@ -72,12 +93,12 @@ h3 {
 
 .text-secondary {
     color: var(--text-secondary);
-    font-size: 14px; /* серый мелкий */
+    font-size: 14px;
     margin-bottom: 16px;
 }
 
 p, li, .small-note {
-    font-size: 14px; /* мелкий серый по умолчанию */
+    font-size: 14px;
     color: var(--text-secondary);
 }
 
@@ -85,7 +106,7 @@ p, li, .small-note {
     background-color: var(--accent);
     color: white;
     display: inline-block;
-    padding: 4px 12px;
+    padding: 6px 16px;
     border-radius: 20px;
     font-size: 14px;
     margin-bottom: 20px;
@@ -94,13 +115,14 @@ p, li, .small-note {
 /* Навигация */
 .nav-bar {
     background-color: var(--bg-card);
-    border-radius: 12px;
-    padding: 12px 20px;
+    border-radius: 16px;
+    padding: 12px 24px;
     margin-bottom: 24px;
     border: 1px solid var(--border);
     display: flex;
     gap: 24px;
     flex-wrap: wrap;
+    box-shadow: var(--shadow);
 }
 
 .nav-link {
@@ -110,11 +132,12 @@ p, li, .small-note {
     padding: 4px 0;
     border-bottom: 2px solid transparent;
     font-size: 16px;
+    transition: color 0.2s, border-color 0.2s;
 }
 
 .nav-link:hover {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
+    color: var(--accent-light);
+    border-bottom-color: var(--accent-light);
 }
 
 .nav-link.active {
@@ -125,11 +148,16 @@ p, li, .small-note {
 /* Карточки */
 .card {
     background-color: var(--bg-card);
-    border-radius: 16px;
+    border-radius: 20px;
     padding: 28px;
     margin-bottom: 24px;
     border: 1px solid var(--border);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.7);
 }
 
 .header-card {
@@ -138,6 +166,8 @@ p, li, .small-note {
 
 .logo-image {
     max-width: 300px;
+    width: 100%;
+    height: auto;
     margin: 20px auto 0;
     display: block;
 }
@@ -145,7 +175,7 @@ p, li, .small-note {
 .main-screenshot {
     width: 100%;
     max-width: 800px;
-    border-radius: 12px;
+    border-radius: 16px;
     margin: 20px auto 0;
     display: block;
     border: 2px solid var(--border);
@@ -161,24 +191,37 @@ p, li, .small-note {
 
 .project-card {
     background-color: var(--bg-primary);
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 16px;
     border: 1px solid var(--border);
-    transition: transform 0.2s;
+    transition: transform 0.2s, border-color 0.2s;
+    display: flex;
+    flex-direction: column;
 }
 
 .project-card:hover {
-    transform: translateY(-4px);
+    transform: translateY(-5px);
     border-color: var(--accent);
+}
+
+.image-wrapper {
+    width: 100%;
+    height: 180px;
+    overflow: hidden;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
 }
 
 .project-image {
     width: 100%;
-    height: 180px;
-    object-fit: cover;
-    border-radius: 8px;
-    margin-bottom: 12px;
-    border: 1px solid var(--border);
+    height: 100%;
+    object-fit: cover; /* Обрезка изображения */
+    transition: transform 0.3s;
+}
+
+.project-card:hover .project-image {
+    transform: scale(1.05);
 }
 
 .project-card h3 {
@@ -189,24 +232,40 @@ p, li, .small-note {
 .project-card p {
     font-size: 14px;
     margin-bottom: 16px;
+    flex-grow: 1;
 }
 
+/* Кнопки */
 .button {
     display: inline-block;
     background-color: var(--accent);
     color: white;
-    padding: 8px 16px;
-    border-radius: 20px;
+    padding: 10px 20px;
+    border-radius: 30px;
     text-decoration: none;
     font-size: 14px;
-    transition: background-color 0.2s;
+    transition: background-color 0.2s, transform 0.1s;
     border: none;
     cursor: pointer;
+    text-align: center;
+    align-self: flex-start;
 }
 
 .button:hover {
-    background-color: #2a5a70;
+    background-color: var(--accent-light);
     text-decoration: none;
+    transform: scale(1.02);
+}
+
+.button.disabled {
+    background-color: #555;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.button.small {
+    padding: 6px 16px;
+    font-size: 13px;
 }
 
 /* Ряд для двух половинок */
@@ -229,11 +288,23 @@ p, li, .small-note {
 .features-list li {
     padding: 4px 0;
     font-size: 14px;
+    position: relative;
+    padding-left: 20px;
+}
+
+.features-list li::before {
+    content: "•";
+    color: var(--accent);
+    font-size: 18px;
+    position: absolute;
+    left: 0;
+    top: -1px;
 }
 
 /* Блок скачивания */
 .download-card {
     text-align: center;
+    background: linear-gradient(145deg, var(--bg-card), #2a2a2a);
 }
 
 .download-buttons {
@@ -250,23 +321,39 @@ p, li, .small-note {
     gap: 8px;
     background-color: var(--bg-primary);
     color: var(--text-primary);
-    padding: 12px 24px;
-    border-radius: 40px;
-    border: 1px solid var(--accent);
+    padding: 14px 28px;
+    border-radius: 50px;
+    border: 2px solid var(--accent);
     text-decoration: none;
     font-size: 16px;
     transition: all 0.2s;
+    min-width: 180px;
+    justify-content: center;
 }
 
 .download-button:hover {
     background-color: var(--accent);
     color: white;
     text-decoration: none;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(64, 116, 140, 0.4);
 }
 
 .download-button::before {
     content: "⬇";
     font-size: 18px;
+}
+
+.download-button.windows::before {
+    content: "🖥️";
+}
+
+.download-button.android::before {
+    content: "📱";
+}
+
+.download-button.linux::before {
+    content: "🐧";
 }
 
 /* Системные требования */
@@ -281,7 +368,7 @@ p, li, .small-note {
     flex: 1 1 200px;
     background-color: var(--bg-primary);
     padding: 16px;
-    border-radius: 12px;
+    border-radius: 16px;
     border: 1px solid var(--border);
 }
 
@@ -300,7 +387,7 @@ p, li, .small-note {
 }
 
 .consumption-table td {
-    padding: 10px;
+    padding: 12px 10px;
     border-bottom: 1px solid var(--border);
     font-size: 14px;
 }
@@ -314,7 +401,7 @@ p, li, .small-note {
 .spoiler {
     margin-top: 16px;
     background-color: var(--bg-primary);
-    border-radius: 8px;
+    border-radius: 12px;
     border: 1px solid var(--border);
     overflow: hidden;
 }
@@ -330,6 +417,7 @@ p, li, .small-note {
     align-items: center;
     border-bottom: 1px solid transparent;
     font-size: 16px;
+    transition: background-color 0.2s;
 }
 
 .spoiler[open] summary {
@@ -342,7 +430,7 @@ p, li, .small-note {
 
 .spoiler summary::before {
     content: "▶";
-    margin-right: 10px;
+    margin-right: 12px;
     font-size: 12px;
     color: var(--accent);
     transition: transform 0.2s;
@@ -366,8 +454,8 @@ p, li, .small-note {
 .video-placeholder {
     background-color: #1a1a1a;
     border: 2px dashed var(--border);
-    border-radius: 12px;
-    padding: 60px 20px;
+    border-radius: 16px;
+    padding: 80px 20px;
     text-align: center;
     color: #666;
     margin: 20px 0;
@@ -405,5 +493,7 @@ a:hover {
     .card { padding: 20px; }
     .row { flex-direction: column; }
     .half { flex: 1 1 auto; }
-    .download-buttons { flex-direction: column; align-items: center; }
+    .download-buttons { flex-direction: column; align-items: stretch; }
+    .download-button { width: 100%; }
+    .dev-notice { flex-direction: column; gap: 8px; }
 }
