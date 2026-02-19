@@ -72,7 +72,6 @@
     padding: 60px 28px;
     text-align: center;
 }
-/* Объединённое затенение для иконки, текста и версии */
 .header-content {
     display: inline-flex;
     align-items: center;
@@ -88,6 +87,7 @@
     width: 100px;
     height: 100px;
     /* background убран, чтобы не было двойного затенения */
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -102,17 +102,6 @@
     margin-bottom: 0;
     color: #fff;
 }
-.header-content .version-badge {
-    margin-left: 10px; /* небольшой отступ от заголовка */
-    background: var(--accent);
-    color: white;
-    padding: 6px 16px;
-    border-radius: 20px;
-    font-size: 14px;
-    display: inline-block;
-    vertical-align: middle;
-}
-/* Социальные иконки в шапке */
 .social-icons {
     display: flex;
     gap: 15px;
@@ -120,13 +109,11 @@
 }
 .social-icon {
     color: white;
-    font-size: 24px;
-    text-decoration: none;
+    font-size: 28px;
     transition: opacity 0.2s;
 }
 .social-icon:hover {
     opacity: 0.8;
-    text-decoration: none;
 }
 
 /* Проекты */
@@ -213,7 +200,7 @@
     color: var(--text-primary);
 }
 
-/* Трейлер */
+/* Трейлер и разработчик */
 .trailer-card .video-embed {
     border-radius: 12px;
     overflow: hidden;
@@ -224,7 +211,14 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 15px;
+    gap: 8px; /* уменьшено с 15px */
+    margin-top: 0;
+}
+.developer-details h3 {
+    margin: 0 0 4px; /* убраны лишние отступы */
+}
+.developer-details p {
+    margin: 0 0 8px;
 }
 
 /* Особенности */

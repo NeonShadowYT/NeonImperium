@@ -38,8 +38,6 @@ h1, h2, h3, h4, .game-title {
 h2 {
     font-size: 24px;
     margin-bottom: 16px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 8px;
 }
 h3 {
     font-size: 20px;
