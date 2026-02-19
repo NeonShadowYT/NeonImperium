@@ -57,59 +57,12 @@ body {
     font-size: 13px;
     border-radius: 30px;
     text-decoration: none;
-    font-weight: 400;
     transition: background-color 0.2s;
 }
 
 .dev-notice .button.small:hover {
     background-color: #ffc34d;
     text-decoration: none;
-}
-
-/* Заголовки и крупный текст */
-h1, h2, h3, h4, .game-title {
-    color: var(--text-primary);
-    font-weight: 400;
-}
-
-.game-title {
-    font-size: 48px;
-    letter-spacing: -0.5px;
-    margin-bottom: 8px;
-}
-
-h2 {
-    font-size: 24px;
-    margin-bottom: 16px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 8px;
-}
-
-h3 {
-    font-size: 20px;
-    color: var(--text-primary);
-    margin: 16px 0 8px;
-}
-
-.text-secondary {
-    color: var(--text-secondary);
-    font-size: 14px;
-    margin-bottom: 16px;
-}
-
-p, li, .small-note {
-    font-size: 14px;
-    color: var(--text-secondary);
-}
-
-.version-badge {
-    background-color: var(--accent);
-    color: white;
-    display: inline-block;
-    padding: 6px 16px;
-    border-radius: 20px;
-    font-size: 14px;
-    margin-bottom: 20px;
 }
 
 /* Навигация */
@@ -145,6 +98,50 @@ p, li, .small-note {
     border-bottom-color: var(--accent);
 }
 
+/* Заголовки */
+h1, h2, h3, h4, .game-title {
+    color: var(--text-primary);
+    font-weight: 400;
+}
+
+.game-title {
+    font-size: 48px;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+}
+
+h2 {
+    font-size: 24px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+}
+
+h3 {
+    font-size: 20px;
+    margin: 16px 0 8px;
+}
+
+.text-secondary {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+p, li, .small-note {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.version-badge {
+    background-color: var(--accent);
+    color: white;
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+}
+
 /* Карточки */
 .card {
     background-color: var(--bg-card);
@@ -172,16 +169,27 @@ p, li, .small-note {
     display: block;
 }
 
-.main-screenshot {
-    width: 100%;
-    max-width: 800px;
-    border-radius: 16px;
-    margin: 20px auto 0;
-    display: block;
-    border: 2px solid var(--border);
+/* Шапка игры с фоновым изображением */
+.game-header {
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    padding: 0;
+    overflow: hidden;
 }
 
-/* Сетка проектов (главная) */
+.header-overlay {
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 60px 28px;
+    text-align: center;
+    backdrop-filter: blur(2px);
+}
+
+.header-overlay .game-title {
+    margin-bottom: 10px;
+}
+
+/* Сетка проектов (главная и небольшие) */
 .projects-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -189,18 +197,34 @@ p, li, .small-note {
     margin-top: 20px;
 }
 
+.project-card-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    transition: transform 0.2s;
+}
+
+.project-card-link:hover {
+    transform: translateY(-5px);
+}
+
+.project-card-link.disabled {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
 .project-card {
     background-color: var(--bg-primary);
     border-radius: 16px;
     padding: 16px;
     border: 1px solid var(--border);
-    transition: transform 0.2s, border-color 0.2s;
+    transition: border-color 0.2s;
     display: flex;
     flex-direction: column;
+    height: 100%;
 }
 
-.project-card:hover {
-    transform: translateY(-5px);
+.project-card-link:hover .project-card {
     border-color: var(--accent);
 }
 
@@ -216,17 +240,18 @@ p, li, .small-note {
 .project-image {
     width: 100%;
     height: 100%;
-    object-fit: cover; /* Обрезка изображения */
+    object-fit: cover;
     transition: transform 0.3s;
 }
 
-.project-card:hover .project-image {
+.project-card-link:hover .project-image {
     transform: scale(1.05);
 }
 
 .project-card h3 {
     margin: 8px 0 4px;
     font-size: 20px;
+    color: var(--text-primary);
 }
 
 .project-card p {
@@ -235,7 +260,6 @@ p, li, .small-note {
     flex-grow: 1;
 }
 
-/* Кнопки */
 .button {
     display: inline-block;
     background-color: var(--accent);
@@ -268,7 +292,67 @@ p, li, .small-note {
     font-size: 13px;
 }
 
-/* Ряд для двух половинок */
+/* Карточки профилей (разработчики, ютуберы) */
+.profile-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.profile-card-link {
+    text-decoration: none;
+    color: inherit;
+    flex: 1 1 150px;
+    transition: transform 0.2s;
+}
+
+.profile-card-link:hover {
+    transform: translateY(-3px);
+}
+
+.profile-card {
+    background-color: var(--bg-primary);
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: border-color 0.2s;
+}
+
+.profile-card-link:hover .profile-card {
+    border-color: var(--accent);
+}
+
+.avatar-wrapper {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-bottom: 12px;
+    border: 2px solid var(--accent);
+}
+
+.avatar-wrapper.large {
+    width: 100px;
+    height: 100px;
+}
+
+.avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-name {
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+/* Ряд для двух колонок */
 .row {
     display: flex;
     gap: 24px;
@@ -279,84 +363,108 @@ p, li, .small-note {
     flex: 1 1 calc(50% - 12px);
 }
 
-/* Списки */
-.features-list {
-    list-style: none;
-    padding-left: 0;
+.trailer-card, .developer-card {
+    flex: 1 1 calc(50% - 12px);
 }
 
-.features-list li {
-    padding: 4px 0;
-    font-size: 14px;
-    position: relative;
-    padding-left: 20px;
+.trailer-card .video-embed {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
 }
 
-.features-list li::before {
-    content: "•";
-    color: var(--accent);
-    font-size: 18px;
-    position: absolute;
-    left: 0;
-    top: -1px;
-}
-
-/* Блок скачивания */
-.download-card {
-    text-align: center;
-    background: linear-gradient(145deg, var(--bg-card), #2a2a2a);
-}
-
-.download-buttons {
+.developer-info {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 16px;
-    margin: 24px 0;
-}
-
-.download-button {
-    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.developer-details h3 {
+    margin: 0 0 5px 0;
+}
+
+.developer-details p {
+    margin-bottom: 10px;
+}
+
+/* Сетка особенностей (описание) */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.feature-item {
     background-color: var(--bg-primary);
-    color: var(--text-primary);
-    padding: 14px 28px;
-    border-radius: 50px;
-    border: 2px solid var(--accent);
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid var(--border);
+}
+
+.feature-icon {
+    font-size: 32px;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.feature-item h3 {
+    margin: 0 0 8px 0;
+    color: var(--accent);
+}
+
+.feature-item p {
+    margin: 0;
+}
+
+/* Сетка видео */
+.video-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.video-card-link {
     text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s;
+}
+
+.video-card-link:hover {
+    transform: translateY(-5px);
+}
+
+.video-card {
+    background-color: var(--bg-primary);
+    border-radius: 16px;
+    padding: 12px;
+    border: 1px solid var(--border);
+}
+
+.video-thumbnail {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+}
+
+.video-card h4 {
     font-size: 16px;
-    transition: all 0.2s;
-    min-width: 180px;
-    justify-content: center;
+    margin: 0 0 4px;
+    color: var(--text-primary);
 }
 
-.download-button:hover {
-    background-color: var(--accent);
-    color: white;
-    text-decoration: none;
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(64, 116, 140, 0.4);
+.video-card p {
+    font-size: 12px;
+    margin: 0;
+    color: var(--text-secondary);
 }
 
-.download-button::before {
-    content: "⬇";
-    font-size: 18px;
-}
-
-.download-button.windows::before {
-    content: "🖥️";
-}
-
-.download-button.android::before {
-    content: "📱";
-}
-
-.download-button.linux::before {
-    content: "🐧";
-}
-
-/* Системные требования */
+/* Системные требования (без изменений) */
 .requirements-grid {
     display: flex;
     flex-wrap: wrap;
@@ -410,14 +518,12 @@ p, li, .small-note {
     background-color: var(--bg-primary);
     color: var(--text-primary);
     padding: 14px 20px;
-    font-weight: 400;
     cursor: pointer;
     list-style: none;
     display: flex;
     align-items: center;
     border-bottom: 1px solid transparent;
     font-size: 16px;
-    transition: background-color 0.2s;
 }
 
 .spoiler[open] summary {
@@ -440,25 +546,9 @@ p, li, .small-note {
     transform: rotate(90deg);
 }
 
-.spoiler summary::-webkit-details-marker {
-    display: none;
-}
-
 .spoiler-content {
     padding: 20px;
     background-color: var(--bg-primary);
-    font-size: 14px;
-}
-
-/* Видео-заглушка */
-.video-placeholder {
-    background-color: #1a1a1a;
-    border: 2px dashed var(--border);
-    border-radius: 16px;
-    padding: 80px 20px;
-    text-align: center;
-    color: #666;
-    margin: 20px 0;
     font-size: 14px;
 }
 
@@ -493,7 +583,7 @@ a:hover {
     .card { padding: 20px; }
     .row { flex-direction: column; }
     .half { flex: 1 1 auto; }
-    .download-buttons { flex-direction: column; align-items: stretch; }
-    .download-button { width: 100%; }
+    .trailer-card, .developer-card { flex: 1 1 auto; }
     .dev-notice { flex-direction: column; gap: 8px; }
+    .developer-info { flex-direction: column; text-align: center; }
 }
