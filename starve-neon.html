@@ -11,7 +11,7 @@
 </head>
 <body>
     <div class="page">
-        <!-- Плашка о разработке (такая же) -->
+        <!-- Плашка о разработке -->
         <div class="dev-notice">
             <span>⚡ Сайт в разработке · актуальная информация на </span>
             <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank" class="button small">Оригинальная страница</a>
@@ -23,7 +23,7 @@
             <a href="starve-neon.html" class="nav-link active">Starve Neon</a>
         </nav>
 
-        <!-- Заголовок игры с фоновым изображением -->
+        <!-- Заголовок игры с фоновым изображением (без затемнения) -->
         <header class="card header-card game-header" style="background-image: url('images/starve-neon-header.jpg');">
             <div class="header-overlay">
                 <h1 class="game-title">Starve Neon</h1>
@@ -32,23 +32,12 @@
         </header>
 
         <main>
-            <!-- Блок скачивания -->
-            <section class="card download-card">
-                <h2>Скачать игру</h2>
-                <div class="download-buttons">
-                    <a href="#" class="download-button windows">Windows (32/64 бит)</a>
-                    <a href="#" class="download-button android">Android (APK)</a>
-                    <a href="#" class="download-button linux">Linux</a>
-                </div>
-                <p class="text-secondary small-note">Файлы будут доступны после первого релиза. Следите за обновлениями!</p>
-            </section>
-
-            <!-- Две горизонтальные карточки: трейлер и разработчик -->
+            <!-- Две горизонтальные карточки: трейлер и разработчик (теперь скачивание ниже) -->
             <div class="row">
                 <section class="card trailer-card">
                     <h2>Трейлер</h2>
                     <div class="video-embed">
-                        <!-- Здесь будет iframe с YouTube (замените ссылку) -->
+                        <!-- Вставьте ID видео YouTube -->
                         <iframe width="100%" height="250" src="https://www.youtube.com/embed/VIDEO_ID" frameborder="0" allowfullscreen></iframe>
                     </div>
                 </section>
@@ -67,6 +56,17 @@
                     </div>
                 </section>
             </div>
+
+            <!-- Блок скачивания (теперь под трейлером) -->
+            <section class="card download-card">
+                <h2>Скачать игру</h2>
+                <div class="download-buttons">
+                    <a href="#" class="download-button windows">Windows (32/64 бит)</a>
+                    <a href="#" class="download-button android">Android (APK)</a>
+                    <a href="#" class="download-button linux">Linux</a>
+                </div>
+                <p class="text-secondary small-note">Файлы будут доступны после первого релиза. Следите за обновлениями!</p>
+            </section>
 
             <!-- Описание разбито на карточки -->
             <section class="card">
@@ -95,7 +95,7 @@
                 </div>
             </section>
 
-            <!-- Особенности (как было) -->
+            <!-- Особенности (отдельная карточка) -->
             <section class="card">
                 <h2>Особенности</h2>
                 <ul class="features-list">
@@ -107,21 +107,40 @@
                 </ul>
             </section>
 
-            <!-- Системные требования (без изменений) -->
+            <!-- Системные требования (полностью восстановлены) -->
             <section class="card">
                 <h2>Системные требования</h2>
                 <p class="text-secondary">Примерные значения основанные на стандартных настройках для этих устройств</p>
+
                 <div class="requirements-grid">
-                    <!-- ... (та же сетка) ... -->
+                    <div class="req-item">
+                        <span class="req-label">60+ Фпс</span>
+                        <span>Процессор: Xeon-E2650 v2 3.00 GHz</span>
+                        <span>Видеокарта: GT 730 4GB</span>
+                    </div>
+                    <div class="req-item">
+                        <span class="req-label">180+ Фпс</span>
+                        <span>Процессор: AMD Athlon X4 840 3.10 GHz</span>
+                        <span>Видеокарта: GT 1030 2GB</span>
+                    </div>
+                    <div class="req-item">
+                        <span class="req-label">1000+ Фпс</span>
+                        <span>Процессор: AMD Ryzen 7 7435HS 4.00 GHz</span>
+                        <span>Видеокарта: RTX 3050 4GB Laptop</span>
+                    </div>
                 </div>
+
                 <h3>Потребление</h3>
                 <p class="text-secondary">Примерные значения</p>
                 <table class="consumption-table">
-                    <!-- ... (та же таблица) ... -->
+                    <tr><td>Видеопамять</td><td>512-1024 Мб</td></tr>
+                    <tr><td>Оперативка</td><td>512-1024 Мб</td></tr>
+                    <tr><td>Память</td><td>256 Мб</td></tr>
+                    <tr><td>Система</td><td>Win 10+ 32 Бит / Андроид 7+</td></tr>
                 </table>
             </section>
 
-            <!-- Видео от сообщества в виде карточек -->
+            <!-- Видео от сообщества -->
             <section class="card">
                 <h2>Видео</h2>
                 <p class="text-secondary">Подборка контента от сообщества</p>
@@ -176,7 +195,7 @@
                 </details>
             </section>
 
-            <!-- Подвал (без китайских символов) -->
+            <!-- Подвал -->
             <footer class="site-footer">
                 <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank">Google Sites</a></p>
             </footer>
