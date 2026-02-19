@@ -7,10 +7,15 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="page">
+        <!-- Плашка о разработке -->
+        <div class="dev-notice">
+            ⚡ Сайт в разработке · актуальная информация на <a href="https://sites.google.com/view/neonimperium" target="_blank">оригинальном сайте</a>
+        </div>
+
         <!-- Навигация -->
         <nav class="nav-bar">
             <a href="index.html" class="nav-link active">Neon Imperium</a>
@@ -18,57 +23,74 @@
         </nav>
 
         <!-- Заголовок -->
-        <header class="card">
+        <header class="card header-card">
             <h1 class="game-title">Neon Imperium</h1>
-            <!-- Место под логотип или картинку -->
-            <div class="image-placeholder small">[Логотип / Картинка]</div>
+            <!-- Логотип (замените src) -->
+            <img src="images/logo-neon-imperium.png" alt="Neon Imperium Logo" class="logo-image">
         </header>
 
         <main>
             <!-- Главные проекты -->
             <section class="card">
                 <h2>Главные проекты</h2>
-                <p>Игры с приоритетом разработки</p>
-                <ul class="features-list">
-                    <li>Starve Neon</li>
-                    <li>Alpha 01</li>
-                    <li>ГК Адвенчур</li>
-                </ul>
-                <!-- Место под скриншоты проектов -->
-                <div class="image-placeholder">[Скриншоты главных проектов]</div>
+                <p class="text-secondary">Игры с приоритетом разработки</p>
+                <div class="projects-grid">
+                    <!-- Карточка Starve Neon -->
+                    <div class="project-card">
+                        <img src="images/project-starve-neon.jpg" alt="Starve Neon Screenshot" class="project-image">
+                        <h3>Starve Neon</h3>
+                        <p>Выживание в брутальном мире с прокачкой и генетикой.</p>
+                        <a href="starve-neon.html" class="button">Подробнее</a>
+                    </div>
+                    <!-- Карточка Alpha 01 -->
+                    <div class="project-card">
+                        <img src="images/project-alpha01.jpg" alt="Alpha 01 Screenshot" class="project-image">
+                        <h3>Alpha 01</h3>
+                        <p>.</p>
+                        <a href="#" class="button">Скоро</a>
+                    </div>
+                    <!-- Карточка ГК Адвенчур -->
+                    <div class="project-card">
+                        <img src="images/project-gk-advenchur.jpg" alt="ГК Адвенчур Screenshot" class="project-image">
+                        <h3>ГК Адвенчур</h3>
+                        <p>.</p>
+                        <a href="#" class="button">Скоро</a>
+                    </div>
+                </div>
             </section>
 
             <!-- Небольшие проекты -->
             <section class="card">
                 <h2>Небольшие проекты</h2>
-                <p>Игры созданные по рофлу</p>
+                <p class="text-secondary">Игры созданные по рофлу</p>
                 <ul class="features-list">
                     <li>ПНСД 1</li>
                     <li>ПНСД 2</li>
                 </ul>
             </section>
 
-            <!-- Разработчики -->
-            <section class="card">
-                <h2>Разработчики</h2>
-                <p>Работаем в свободное время</p>
-                <ul class="features-list">
-                    <li>Neon Shadow</li>
-                </ul>
-            </section>
+            <!-- Разработчики и ютуберы -->
+            <div class="row">
+                <section class="card half">
+                    <h2>Разработчики</h2>
+                    <p class="text-secondary">Работаем в свободное время</p>
+                    <ul class="features-list">
+                        <li>Neon Shadow</li>
+                    </ul>
+                </section>
 
-            <!-- Ютуберы -->
-            <section class="card">
-                <h2>Ютуберы</h2>
-                <p>Собираем комьюнити</p>
-                <ul class="features-list">
-                    <li>Neon Shadow</li>
-                </ul>
-            </section>
+                <section class="card half">
+                    <h2>Ютуберы</h2>
+                    <p class="text-secondary">Собираем комьюнити</p>
+                    <ul class="features-list">
+                        <li>Neon Shadow</li>
+                    </ul>
+                </section>
+            </div>
 
-            <!-- Подвал с датой обновления (как в оригинале) -->
+            <!-- Подвал -->
             <footer class="site-footer">
-                <p class="small-note"><a href="https://sites.google.com/view/neonimperium" target="_blank"></a></p>
+                <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium" target="_blank">Google Sites</a></p>
             </footer>
         </main>
     </div>

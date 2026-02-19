@@ -1,10 +1,10 @@
-/* Тёмная тема — точное соответствие Google Sites */
+/* Тёмная тема, шрифт Russo One */
 :root {
-    --bg-primary: #2e2e2e;       /* основной фон */
-    --bg-card: #383838;           /* фон карточек/блоков */
-    --accent: #40748c;            /* акцентный цвет (редко) */
-    --text-primary: #ffffff;      /* белый для заголовков */
-    --text-secondary: #b7b7b7;    /* серый для обычного текста */
+    --bg-primary: #2e2e2e;
+    --bg-card: #383838;
+    --accent: #40748c;
+    --text-primary: #ffffff;   /* белый для заголовков и крупного текста */
+    --text-secondary: #b7b7b7; /* серый для обычного текста */
     --border: #4a4a4a;
 }
 
@@ -15,35 +15,70 @@
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Russo One', sans-serif; /* Жирный шрифт везде */
     background-color: var(--bg-primary);
-    color: var(--text-secondary);  /* основной текст по умолчанию серый */
-    line-height: 1.6;
+    color: var(--text-secondary);
+    line-height: 1.5;
     padding: 20px;
+    font-size: 16px; /* базовый размер, потом переопределим для отдельных элементов */
 }
 
 .page {
-    max-width: 1000px;
+    max-width: 1200px;
     margin: 0 auto;
 }
 
-/* Заголовки — белые */
+/* Плашка о разработке */
+.dev-notice {
+    background-color: #1e1e1e;
+    color: #ffaa00;
+    text-align: center;
+    padding: 10px 20px;
+    border-radius: 40px;
+    margin-bottom: 20px;
+    font-size: 14px; /* маленький серый? но оранжевый */
+    border: 1px solid var(--border);
+}
+
+.dev-notice a {
+    color: #ffaa00;
+    text-decoration: underline;
+}
+
+/* Заголовки и крупный текст */
 h1, h2, h3, h4, .game-title, .section-title {
     color: var(--text-primary);
-    font-weight: 500;
+    font-weight: 400; /* Russo One уже жирный, нормально */
 }
 
 .game-title {
-    font-size: 3rem;
+    font-size: 48px; /* крупный белый */
     letter-spacing: -0.5px;
     margin-bottom: 8px;
 }
 
-.section-title {
-    font-size: 2rem;
+h2 {
+    font-size: 24px; /* большой белый текст */
     margin-bottom: 16px;
     border-bottom: 1px solid var(--border);
     padding-bottom: 8px;
+}
+
+h3 {
+    font-size: 20px;
+    color: var(--text-primary);
+    margin: 16px 0 8px;
+}
+
+.text-secondary {
+    color: var(--text-secondary);
+    font-size: 14px; /* серый мелкий */
+    margin-bottom: 16px;
+}
+
+p, li, .small-note {
+    font-size: 14px; /* мелкий серый по умолчанию */
+    color: var(--text-secondary);
 }
 
 .version-badge {
@@ -52,7 +87,7 @@ h1, h2, h3, h4, .game-title, .section-title {
     display: inline-block;
     padding: 4px 12px;
     border-radius: 20px;
-    font-size: 0.9rem;
+    font-size: 14px;
     margin-bottom: 20px;
 }
 
@@ -71,9 +106,10 @@ h1, h2, h3, h4, .game-title, .section-title {
 .nav-link {
     color: var(--text-secondary);
     text-decoration: none;
-    font-weight: 500;
+    font-weight: 400;
     padding: 4px 0;
     border-bottom: 2px solid transparent;
+    font-size: 16px;
 }
 
 .nav-link:hover {
@@ -86,29 +122,105 @@ h1, h2, h3, h4, .game-title, .section-title {
     border-bottom-color: var(--accent);
 }
 
-/* Карточки (секции) */
+/* Карточки */
 .card {
     background-color: var(--bg-card);
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 28px;
     margin-bottom: 24px;
     border: 1px solid var(--border);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
-.card h2 {
-    font-size: 1.8rem;
-    margin-bottom: 20px;
-    color: var(--text-primary);
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 10px;
+.header-card {
+    text-align: center;
 }
 
-.card p, .card li {
-    color: var(--text-secondary);
+.logo-image {
+    max-width: 300px;
+    margin: 20px auto 0;
+    display: block;
+}
+
+.main-screenshot {
+    width: 100%;
+    max-width: 800px;
+    border-radius: 12px;
+    margin: 20px auto 0;
+    display: block;
+    border: 2px solid var(--border);
+}
+
+/* Сетка проектов (главная) */
+.projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    margin-top: 20px;
+}
+
+.project-card {
+    background-color: var(--bg-primary);
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    transition: transform 0.2s;
+}
+
+.project-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+}
+
+.project-image {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 8px;
     margin-bottom: 12px;
+    border: 1px solid var(--border);
 }
 
-/* Списки (как на Google Sites) */
+.project-card h3 {
+    margin: 8px 0 4px;
+    font-size: 20px;
+}
+
+.project-card p {
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.button {
+    display: inline-block;
+    background-color: var(--accent);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    text-decoration: none;
+    font-size: 14px;
+    transition: background-color 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.button:hover {
+    background-color: #2a5a70;
+    text-decoration: none;
+}
+
+/* Ряд для двух половинок */
+.row {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.half {
+    flex: 1 1 calc(50% - 12px);
+}
+
+/* Списки */
 .features-list {
     list-style: none;
     padding-left: 0;
@@ -116,10 +228,48 @@ h1, h2, h3, h4, .game-title, .section-title {
 
 .features-list li {
     padding: 4px 0;
-    color: var(--text-secondary);
+    font-size: 14px;
 }
 
-/* Системные требования — таблица */
+/* Блок скачивания */
+.download-card {
+    text-align: center;
+}
+
+.download-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    margin: 24px 0;
+}
+
+.download-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 12px 24px;
+    border-radius: 40px;
+    border: 1px solid var(--accent);
+    text-decoration: none;
+    font-size: 16px;
+    transition: all 0.2s;
+}
+
+.download-button:hover {
+    background-color: var(--accent);
+    color: white;
+    text-decoration: none;
+}
+
+.download-button::before {
+    content: "⬇";
+    font-size: 18px;
+}
+
+/* Системные требования */
 .requirements-grid {
     display: flex;
     flex-wrap: wrap;
@@ -131,26 +281,18 @@ h1, h2, h3, h4, .game-title, .section-title {
     flex: 1 1 200px;
     background-color: var(--bg-primary);
     padding: 16px;
-    border-radius: 8px;
+    border-radius: 12px;
     border: 1px solid var(--border);
 }
 
 .req-label {
     display: block;
-    font-weight: 600;
+    font-weight: 400;
     color: var(--accent);
     margin-bottom: 8px;
+    font-size: 16px;
 }
 
-.requirements-min {
-    background-color: var(--bg-primary);
-    padding: 16px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    color: var(--text-secondary);
-}
-
-/* Таблица потребления (из оригинальной страницы) */
 .consumption-table {
     width: 100%;
     border-collapse: collapse;
@@ -160,19 +302,18 @@ h1, h2, h3, h4, .game-title, .section-title {
 .consumption-table td {
     padding: 10px;
     border-bottom: 1px solid var(--border);
-    color: var(--text-secondary);
+    font-size: 14px;
 }
 
 .consumption-table td:first-child {
-    font-weight: 600;
     color: var(--text-primary);
     width: 40%;
 }
 
-/* Выпадающие списки (спойлеры) — фон #2e2e2e */
+/* Спойлеры */
 .spoiler {
     margin-top: 16px;
-    background-color: var(--bg-primary); /* #2e2e2e */
+    background-color: var(--bg-primary);
     border-radius: 8px;
     border: 1px solid var(--border);
     overflow: hidden;
@@ -182,12 +323,13 @@ h1, h2, h3, h4, .game-title, .section-title {
     background-color: var(--bg-primary);
     color: var(--text-primary);
     padding: 14px 20px;
-    font-weight: 500;
+    font-weight: 400;
     cursor: pointer;
     list-style: none;
     display: flex;
     align-items: center;
     border-bottom: 1px solid transparent;
+    font-size: 16px;
 }
 
 .spoiler[open] summary {
@@ -201,7 +343,7 @@ h1, h2, h3, h4, .game-title, .section-title {
 .spoiler summary::before {
     content: "▶";
     margin-right: 10px;
-    font-size: 0.8rem;
+    font-size: 12px;
     color: var(--accent);
     transition: transform 0.2s;
 }
@@ -217,53 +359,36 @@ h1, h2, h3, h4, .game-title, .section-title {
 .spoiler-content {
     padding: 20px;
     background-color: var(--bg-primary);
-    color: var(--text-secondary);
+    font-size: 14px;
 }
 
-/* Места для картинок */
-.image-placeholder {
-    background-color: #1a1a1a;
-    border: 2px dashed var(--border);
-    border-radius: 8px;
-    padding: 40px 20px;
-    text-align: center;
-    color: #666;
-    margin: 20px 0;
-    font-size: 1rem;
-}
-
-.image-placeholder.small {
-    padding: 20px;
-    max-width: 300px;
-    margin: 20px auto;
-}
-
+/* Видео-заглушка */
 .video-placeholder {
     background-color: #1a1a1a;
     border: 2px dashed var(--border);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 60px 20px;
     text-align: center;
     color: #666;
     margin: 20px 0;
+    font-size: 14px;
 }
 
 /* Подвал */
 .site-footer {
     text-align: center;
     color: #666;
-    font-size: 0.85rem;
+    font-size: 12px;
     padding: 24px 0 12px;
     border-top: 1px solid var(--border);
     margin-top: 32px;
 }
 
 .small-note {
+    font-size: 12px;
     color: #666;
-    margin-top: 8px;
 }
 
-/* Ссылки */
 a {
     color: var(--accent);
     text-decoration: none;
@@ -275,7 +400,10 @@ a:hover {
 
 /* Адаптивность */
 @media (max-width: 600px) {
-    .game-title { font-size: 2.2rem; }
+    body { padding: 10px; }
+    .game-title { font-size: 32px; }
     .card { padding: 20px; }
-    .requirements-grid { flex-direction: column; }
+    .row { flex-direction: column; }
+    .half { flex: 1 1 auto; }
+    .download-buttons { flex-direction: column; align-items: center; }
 }

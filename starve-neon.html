@@ -3,14 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Imperium - Starve Neon</title>
+    <title>Neon Imperium — Starve Neon</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="page">
+        <!-- Плашка о разработке -->
+        <div class="dev-notice">
+            ⚡ Сайт в разработке · актуальная информация на <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank">оригинальной странице</a>
+        </div>
+
         <!-- Навигация -->
         <nav class="nav-bar">
             <a href="index.html" class="nav-link">Neon Imperium</a>
@@ -18,43 +23,37 @@
         </nav>
 
         <!-- Заголовок игры -->
-        <header class="card">
+        <header class="card header-card">
             <h1 class="game-title">Starve Neon</h1>
             <div class="version-badge">Объединение 0.13.7</div>
-            <!-- Место под главный арт/скриншот -->
-            <div class="image-placeholder">[Главный арт / Скриншот игры]</div>
+            <!-- Главный арт/скриншот -->
+            <img src="images/starve-neon-header.jpg" alt="Starve Neon Screenshot" class="main-screenshot">
         </header>
 
         <main>
-            <!-- Описание (полностью с оригинала, включая английскую версию) -->
-            <section class="card">
-                <h2>Описание</h2>
-                
-                <p><strong>🍗Game world:</strong> BRUTAL HARDCORE WORLD. I won't hold your hand, buddy. I'll leave a short tutorial on the basic mechanics, and then you're on your own ;}</p>
-                <p><strong>🍗Игровой мир:</strong> БРУТАЛЬНЫЙ ХАРДКОРНЫЙ МИР. Я не буду держать тебя за руку, приятель. Я оставлю небольшой туториал по базовой механике, а дальше ты сам по себе ;}</p>
-                
-                <p><strong>⚙️ Status:</strong> Starve Neon is in early development but open for cross-platform multiplayer tests</p>
-                <p><strong>⚙️ Статус:</strong> Starve Neon находится на ранней стадии разработки, но открыт для кроссплатформенного многопользовательского тестирования.</p>
-                
-                <p><strong>⚡ Development:</strong> Complete development system from spears and swords to F***ING MINIGUN, DUDE! Armor for different biomes, modules and a genetics system similar to RimWorld to suit your gameplay.</p>
-                <p><strong>⚡ Развитие:</strong> Полная система развития от копий и мечей до ГРЕ***НОГО МИНИГАНА, ЧУВАК! Броня для разных биомов, модули и система генетики, подобная RimWorld, под твой геймплей.</p>
-                
-                <p><strong>💚 Allies:</strong> create alliances with factions and other players, take part in arena battles and tame animals. Go on a raid with your clan like Rust</p>
-                <p><strong>💚 Союзники:</strong> создавай союзы с фракциями и другими игроками, участвуй в битвах на арене и приручайте животных. Отправляйся кланом на рейд подобно Rust</p>
+            <!-- Блок скачивания -->
+            <section class="card download-card">
+                <h2>Скачать игру</h2>
+                <div class="download-buttons">
+                    <a href="#" class="download-button windows">Windows (32/64 бит)</a>
+                    <a href="#" class="download-button android">Android (APK)</a>
+                    <a href="#" class="download-button linux">Linux</a>
+                </div>
+                <p class="text-secondary small-note">Файлы будут доступны после первого релиза. Следите за обновлениями!</p>
             </section>
 
-            <!-- Особенности (Features) — полностью с оригинала -->
+            <!-- Описание (только русское) -->
             <section class="card">
-                <h2>🔥Features:</h2>
-                <ul class="features-list">
-                    <li>Internet is not required.</li>
-                    <li>Frequent major updates.</li>
-                    <li>Built-in mod support.</li>
-                    <li>Direct communication with the developer.</li>
-                    <li>Multilingual support and easy addition of custom languages and fonts.</li>
-                </ul>
-                
-                <h2>🔥Особенности:</h2>
+                <h2>Описание</h2>
+                <p><strong>🍗 Игровой мир:</strong> БРУТАЛЬНЫЙ ХАРДКОРНЫЙ МИР. Я не буду держать тебя за руку, приятель. Я оставлю небольшой туториал по базовой механике, а дальше ты сам по себе ;}</p>
+                <p><strong>⚙️ Статус:</strong> Starve Neon находится на ранней стадии разработки, но открыт для кроссплатформенного многопользовательского тестирования.</p>
+                <p><strong>⚡ Развитие:</strong> Полная система развития от копий и мечей до ГРЕБАНОГО МИНИГАНА, ЧУВАК! Броня для разных биомов, модули и система генетики, подобная RimWorld, под твой геймплей.</p>
+                <p><strong>💚 Союзники:</strong> создавай союзы с фракциями и другими игроками, участвуй в битвах на арене и приручай животных. Отправляйся кланом на рейд подобно Rust.</p>
+            </section>
+
+            <!-- Особенности -->
+            <section class="card">
+                <h2>Особенности</h2>
                 <ul class="features-list">
                     <li>Интернет необязателен.</li>
                     <li>Частые крупные обновления.</li>
@@ -64,11 +63,11 @@
                 </ul>
             </section>
 
-            <!-- Системные требования (полностью с оригинала) -->
+            <!-- Системные требования -->
             <section class="card">
                 <h2>Системные требования</h2>
-                <p>Примерные значения основанные на стандартных настройках для этих устройств</p>
-                
+                <p class="text-secondary">Примерные значения основанные на стандартных настройках для этих устройств</p>
+
                 <div class="requirements-grid">
                     <div class="req-item">
                         <span class="req-label">60+ Фпс</span>
@@ -88,7 +87,7 @@
                 </div>
 
                 <h3>Потребление</h3>
-                <p>Примерные значения</p>
+                <p class="text-secondary">Примерные значения</p>
                 <table class="consumption-table">
                     <tr><td>Видеопамять</td><td>512-1024 Мб</td></tr>
                     <tr><td>Оперативка</td><td>512-1024 Мб</td></tr>
@@ -97,51 +96,54 @@
                 </table>
             </section>
 
-            <!-- Видео (полностью с оригинала) -->
+            <!-- Видео -->
             <section class="card">
                 <h2>Видео</h2>
-                <p>Подборка контента от сообщества</p>
+                <p class="text-secondary">Подборка контента от сообщества</p>
                 <p>Чтобы сюда попасть:</p>
                 <ul class="features-list">
-                    <li>Создай плейлист с настройкой сортировки "сначала новые" или "по популярности"</li>
-                    <li>Видео в плейлисте должны понравиться разработчику после чего они могут попасть сюда</li>
+                    <li>Создай плейлист с настройкой сортировки "сначала новые" или "по популярности".</li>
+                    <li>Видео в плейлисте должны понравиться разработчику, после чего они могут попасть сюда.</li>
                 </ul>
-                <div class="video-placeholder">[Встроенный плейлист / Видео]</div>
+                <!-- Заглушка видео (заменить на iframe позже) -->
+                <div class="video-placeholder">
+                    [Встроенный плейлист / Видео]
+                </div>
             </section>
 
             <!-- Обновление (патч-ноты) -->
             <section class="card">
                 <h2>Обновление</h2>
                 <h3>Патч 0.13.7</h3>
-                
+
                 <details class="spoiler">
                     <summary>Туториал</summary>
                     <div class="spoiler-content">
                         <p>Цели по всей игре</p>
                     </div>
                 </details>
-                
+
                 <details class="spoiler">
                     <summary>Награды</summary>
                     <div class="spoiler-content">
                         <p>Локализация<br>Улучшены возможности перевода</p>
                     </div>
                 </details>
-                
+
                 <details class="spoiler">
                     <summary>Удобства</summary>
                     <div class="spoiler-content">
                         <p>Интерфейс<br>Управление</p>
                     </div>
                 </details>
-                
+
                 <details class="spoiler">
                     <summary>Баланс</summary>
                     <div class="spoiler-content">
                         <p>Награды за уровень<br>Изменение прогрессии</p>
                     </div>
                 </details>
-                
+
                 <details class="spoiler">
                     <summary>Багфикс</summary>
                     <div class="spoiler-content">
@@ -150,9 +152,9 @@
                 </details>
             </section>
 
-            <!-- Подвал с датой обновления и ссылками (как в оригинале) -->
+            <!-- Подвал -->
             <footer class="site-footer">
-                <p class="small-note"><a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank">Google 网站</a> · 举报不良行为</p>
+                <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank">Google Sites</a> · 举报不良行为</p>
             </footer>
         </main>
     </div>
