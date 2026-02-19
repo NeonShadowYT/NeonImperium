@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neon Imperium</title>
+    <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,7 +14,7 @@
     <div class="page">
         <!-- Плашка о разработке -->
         <div class="dev-notice">
-            <span>⚡ Сайт в разработке · актуальная информация на </span>
+            <span>⚡ Сайт в разработке · актуальная информация на</span>
             <a href="https://sites.google.com/view/neonimperium" target="_blank" class="button small">Оригинальный сайт</a>
         </div>
 
@@ -23,10 +24,14 @@
             <a href="starve-neon.html" class="nav-link">Starve Neon</a>
         </nav>
 
-        <!-- Заголовок -->
-        <header class="card header-card">
-            <h1 class="game-title">Neon Imperium</h1>
-            <img src="images/logo-neon-imperium.png" alt="Neon Imperium Logo" class="logo-image">
+        <!-- Заголовок с фоновым изображением и логотипом слева -->
+        <header class="card header-card game-header" style="background-image: url('images/starve-neon-header.jpg');">
+            <div class="header-overlay flex-header">
+                <div class="logo-circle">
+                    <img src="images/logo-neon-imperium.png" alt="Neon Imperium Logo" class="header-logo">
+                </div>
+                <h1 class="game-title">Neon Imperium</h1>
+            </div>
         </header>
 
         <main>

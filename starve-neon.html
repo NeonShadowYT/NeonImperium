@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neon Imperium — Starve Neon</title>
+    <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,8 +14,8 @@
     <div class="page">
         <!-- Плашка о разработке -->
         <div class="dev-notice">
-            <span>⚡ Сайт в разработке · актуальная информация на </span>
-            <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank" class="button small">Оригинальная страница</a>
+            <span>⚡ Сайт в разработке · актуальная информация на</span>
+            <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank" class="button small">Оригинальный сайт</a>
         </div>
 
         <!-- Навигация -->
@@ -23,7 +24,7 @@
             <a href="starve-neon.html" class="nav-link active">Starve Neon</a>
         </nav>
 
-        <!-- Заголовок игры с фоновым изображением (без затемнения) -->
+        <!-- Заголовок игры с фоновым изображением -->
         <header class="card header-card game-header" style="background-image: url('images/starve-neon-header.jpg');">
             <div class="header-overlay">
                 <h1 class="game-title">Starve Neon</h1>
@@ -32,12 +33,11 @@
         </header>
 
         <main>
-            <!-- Две горизонтальные карточки: трейлер и разработчик (теперь скачивание ниже) -->
+            <!-- Трейлер и разработчик -->
             <div class="row">
                 <section class="card trailer-card">
                     <h2>Трейлер</h2>
                     <div class="video-embed">
-                        <!-- Вставьте ID видео YouTube -->
                         <iframe width="100%" height="250" src="https://www.youtube.com/embed/VIDEO_ID" frameborder="0" allowfullscreen></iframe>
                     </div>
                 </section>
@@ -57,7 +57,7 @@
                 </section>
             </div>
 
-            <!-- Блок скачивания (теперь под трейлером) -->
+            <!-- Блок скачивания -->
             <section class="card download-card">
                 <h2>Скачать игру</h2>
                 <div class="download-buttons">
@@ -68,7 +68,7 @@
                 <p class="text-secondary small-note">Файлы будут доступны после первого релиза. Следите за обновлениями!</p>
             </section>
 
-            <!-- Описание разбито на карточки -->
+            <!-- Описание + Особенности (теперь в одной карточке) -->
             <section class="card">
                 <h2>Описание</h2>
                 <div class="features-grid">
@@ -93,21 +93,21 @@
                         <p>Создавай союзы с фракциями и другими игроками, участвуй в битвах на арене и приручай животных. Отправляйся кланом на рейд подобно Rust.</p>
                     </div>
                 </div>
+
+                <!-- Особенности внутри описания -->
+                <div class="features-extra">
+                    <h3>Особенности</h3>
+                    <ul class="features-list">
+                        <li>Интернет необязателен.</li>
+                        <li>Частые крупные обновления.</li>
+                        <li>Встроенная поддержка модов.</li>
+                        <li>Прямое общение с разработчиком.</li>
+                        <li>Многоязычная поддержка и простое добавление пользовательских языков и шрифтов.</li>
+                    </ul>
+                </div>
             </section>
 
-            <!-- Особенности (отдельная карточка) -->
-            <section class="card">
-                <h2>Особенности</h2>
-                <ul class="features-list">
-                    <li>Интернет необязателен.</li>
-                    <li>Частые крупные обновления.</li>
-                    <li>Встроенная поддержка модов.</li>
-                    <li>Прямое общение с разработчиком.</li>
-                    <li>Многоязычная поддержка и простое добавление пользовательских языков и шрифтов.</li>
-                </ul>
-            </section>
-
-            <!-- Системные требования (полностью восстановлены) -->
+            <!-- Системные требования -->
             <section class="card">
                 <h2>Системные требования</h2>
                 <p class="text-secondary">Примерные значения основанные на стандартных настройках для этих устройств</p>
@@ -130,14 +130,17 @@
                     </div>
                 </div>
 
-                <h3>Потребление</h3>
-                <p class="text-secondary">Примерные значения</p>
-                <table class="consumption-table">
-                    <tr><td>Видеопамять</td><td>512-1024 Мб</td></tr>
-                    <tr><td>Оперативка</td><td>512-1024 Мб</td></tr>
-                    <tr><td>Память</td><td>256 Мб</td></tr>
-                    <tr><td>Система</td><td>Win 10+ 32 Бит / Андроид 7+</td></tr>
-                </table>
+                <!-- Потребление в виде карточки -->
+                <div class="consumption-card">
+                    <h3>Потребление</h3>
+                    <p class="text-secondary">Примерные значения</p>
+                    <table class="consumption-table">
+                        <tr><td>Видеопамять</td><td>512-1024 Мб</td></tr>
+                        <tr><td>Оперативка</td><td>512-1024 Мб</td></tr>
+                        <tr><td>Память</td><td>256 Мб</td></tr>
+                        <tr><td>Система</td><td>Win 10+ 32 Бит / Андроид 7+</td></tr>
+                    </table>
+                </div>
             </section>
 
             <!-- Видео от сообщества -->
@@ -169,30 +172,42 @@
                 </div>
             </section>
 
-            <!-- Обновление (патч-ноты) -->
+            <!-- Обновления: каждая версия в отдельной карточке -->
             <section class="card">
-                <h2>Обновление</h2>
-                <h3>Патч 0.13.7</h3>
-                <details class="spoiler">
-                    <summary>Туториал</summary>
-                    <div class="spoiler-content"><p>Цели по всей игре</p></div>
-                </details>
-                <details class="spoiler">
-                    <summary>Награды</summary>
-                    <div class="spoiler-content"><p>Локализация<br>Улучшены возможности перевода</p></div>
-                </details>
-                <details class="spoiler">
-                    <summary>Удобства</summary>
-                    <div class="spoiler-content"><p>Интерфейс<br>Управление</p></div>
-                </details>
-                <details class="spoiler">
-                    <summary>Баланс</summary>
-                    <div class="spoiler-content"><p>Награды за уровень<br>Изменение прогрессии</p></div>
-                </details>
-                <details class="spoiler">
-                    <summary>Багфикс</summary>
-                    <div class="spoiler-content"><p>Множество мелких исправлений</p></div>
-                </details>
+                <h2>Обновления</h2>
+                
+                <!-- Версия 0.13.7 -->
+                <div class="update-card">
+                    <h3>Патч 0.13.7</h3>
+                    <details class="spoiler">
+                        <summary>Туториал</summary>
+                        <div class="spoiler-content"><p>Цели по всей игре</p></div>
+                    </details>
+                    <details class="spoiler">
+                        <summary>Награды</summary>
+                        <div class="spoiler-content"><p>Локализация<br>Улучшены возможности перевода</p></div>
+                    </details>
+                    <details class="spoiler">
+                        <summary>Удобства</summary>
+                        <div class="spoiler-content"><p>Интерфейс<br>Управление</p></div>
+                    </details>
+                    <details class="spoiler">
+                        <summary>Баланс</summary>
+                        <div class="spoiler-content"><p>Награды за уровень<br>Изменение прогрессии</p></div>
+                    </details>
+                    <details class="spoiler">
+                        <summary>Багфикс</summary>
+                        <div class="spoiler-content"><p>Множество мелких исправлений</p></div>
+                    </details>
+                </div>
+
+                <!-- Можно добавить другие версии аналогично -->
+                <!--
+                <div class="update-card">
+                    <h3>Патч 0.13.6</h3>
+                    ...
+                </div>
+                -->
             </section>
 
             <!-- Подвал -->
