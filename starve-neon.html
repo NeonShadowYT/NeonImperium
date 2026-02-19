@@ -22,13 +22,18 @@
         <nav class="nav-bar">
             <a href="index.html" class="nav-link">Neon Imperium</a>
             <a href="starve-neon.html" class="nav-link active">Starve Neon</a>
+            <a href="alpha-01.html" class="nav-link">Alpha 01</a>
         </nav>
 
-        <!-- Заголовок игры с фоновым изображением -->
+        <!-- Заголовок игры с фоновым изображением и иконкой -->
         <header class="card header-card game-header" style="background-image: url('images/starve-neon-header.jpg');">
             <div class="header-overlay">
-                <h1 class="game-title">Starve Neon</h1>
-                <div class="version-badge">Объединение 0.13.7</div>
+                <div class="header-content">
+                    <div class="game-icon-circle">
+                        <img src="images/starve-neon-icon.png" alt="Starve Neon Icon" class="game-icon">
+                    </div>
+                    <h1 class="game-title">Starve Neon</h1>
+                </div>
             </div>
         </header>
 
@@ -68,7 +73,7 @@
                 <p class="text-secondary small-note">Файлы будут доступны после первого релиза. Следите за обновлениями!</p>
             </section>
 
-            <!-- Описание + Особенности (теперь в одной карточке) -->
+            <!-- Описание + Особенности -->
             <section class="card">
                 <h2>Описание</h2>
                 <div class="features-grid">
@@ -94,7 +99,6 @@
                     </div>
                 </div>
 
-                <!-- Особенности внутри описания -->
                 <div class="features-extra">
                     <h3>Особенности</h3>
                     <ul class="features-list">
@@ -130,7 +134,6 @@
                     </div>
                 </div>
 
-                <!-- Потребление в виде карточки -->
                 <div class="consumption-card">
                     <h3>Потребление</h3>
                     <p class="text-secondary">Примерные значения</p>
@@ -147,6 +150,11 @@
             <section class="card">
                 <h2>Видео</h2>
                 <p class="text-secondary">Подборка контента от сообщества</p>
+                <p>Чтобы сюда попасть:</p>
+                <ul class="features-list">
+                    <li>Создай плейлист с настройкой сортировки "сначала новые" или "по популярности".</li>
+                    <li>Видео в плейлисте должны понравиться разработчику, после чего они могут попасть сюда.</li>
+                </ul>
                 <div class="video-grid">
                     <a href="https://youtube.com/playlist?list=..." target="_blank" class="video-card-link">
                         <div class="video-card">
@@ -172,11 +180,9 @@
                 </div>
             </section>
 
-            <!-- Обновления: каждая версия в отдельной карточке -->
+            <!-- Обновления -->
             <section class="card">
                 <h2>Обновления</h2>
-                
-                <!-- Версия 0.13.7 -->
                 <div class="update-card">
                     <h3>Патч 0.13.7</h3>
                     <details class="spoiler">
@@ -200,14 +206,6 @@
                         <div class="spoiler-content"><p>Множество мелких исправлений</p></div>
                     </details>
                 </div>
-
-                <!-- Можно добавить другие версии аналогично -->
-                <!--
-                <div class="update-card">
-                    <h3>Патч 0.13.6</h3>
-                    ...
-                </div>
-                -->
             </section>
 
             <!-- Подвал -->
