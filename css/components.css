@@ -72,14 +72,14 @@
     padding: 60px 28px;
     text-align: center;
 }
-/* Объединённое затенение для иконки и текста */
+/* Объединённое затенение для иконки, текста и версии */
 .header-content {
     display: inline-flex;
     align-items: center;
     gap: 30px;
     flex-wrap: wrap;
     justify-content: center;
-    background-color: rgba(0, 0, 0, 0.4); /* Прозрачное затенение */
+    background-color: rgba(0, 0, 0, 0.4);
     padding: 20px 40px;
     border-radius: 100px;
     backdrop-filter: blur(2px);
@@ -87,8 +87,7 @@
 .game-icon-circle {
     width: 100px;
     height: 100px;
-    background: rgba(0,0,0,0.3);
-    border-radius: 50%;
+    /* background убран, чтобы не было двойного затенения */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -101,8 +100,33 @@
 }
 .header-content .game-title {
     margin-bottom: 0;
-    text-shadow: none; /* Тень не нужна, т.к. есть общий фон */
     color: #fff;
+}
+.header-content .version-badge {
+    margin-left: 10px; /* небольшой отступ от заголовка */
+    background: var(--accent);
+    color: white;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    display: inline-block;
+    vertical-align: middle;
+}
+/* Социальные иконки в шапке */
+.social-icons {
+    display: flex;
+    gap: 15px;
+    margin-left: 20px;
+}
+.social-icon {
+    color: white;
+    font-size: 24px;
+    text-decoration: none;
+    transition: opacity 0.2s;
+}
+.social-icon:hover {
+    opacity: 0.8;
+    text-decoration: none;
 }
 
 /* Проекты */
