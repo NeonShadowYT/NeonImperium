@@ -233,10 +233,17 @@ const translations = {
     }
 };
 
+function getLanguageFromUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('lang');
+}
+
 function setLanguage(lang) {
+    if (!translations[lang]) return;
+    
     document.querySelectorAll('[data-lang]').forEach(element => {
         const key = element.getAttribute('data-lang');
-        if (translations[lang] && translations[lang][key]) {
+        if (translations[lang][key]) {
             if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
                 element.placeholder = translations[lang][key];
             } else {
@@ -244,16 +251,31 @@ function setLanguage(lang) {
             }
         }
     });
-    document.querySelectorAll('.lang-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.langCode === lang);
+    
+    document.querySelectorAll('.lang-switcher__btn').forEach(btn => {
+        btn.classList.toggle('lang-switcher__btn--active', btn.dataset.langCode === lang);
     });
+    
     localStorage.setItem('preferredLanguage', lang);
+    
+    // Обновляем ссылки для работы без JS (добавляем параметр lang)
+    document.querySelectorAll('form[method="get"]').forEach(form => {
+        const langInput = form.querySelector('input[name="lang"]');
+        if (langInput) {
+            langInput.value = lang;
+        }
+    });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Приоритет: параметр URL > localStorage > 'ru'
+    const urlLang = getLanguageFromUrl();
     const savedLang = localStorage.getItem('preferredLanguage') || 'ru';
-    setLanguage(savedLang);
-    document.querySelectorAll('.lang-btn').forEach(btn => {
+    const initialLang = urlLang || savedLang;
+    
+    setLanguage(initialLang);
+    
+    document.querySelectorAll('.lang-switcher__btn').forEach(btn => {
         btn.addEventListener('click', () => {
             setLanguage(btn.dataset.langCode);
         });

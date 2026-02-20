@@ -5,81 +5,142 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neon Imperium — Starve Neon</title>
     <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
+    
+    <!-- Preconnect и предзагрузка -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    
+    <!-- Критический CSS (inline для первого экрана) -->
+    <style>
+        body { margin: 0; font-family: 'Russo One', sans-serif; background: #2e2e2e; color: #b7b7b7; }
+        .page { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .dev-notice { background: #1e1e1e; color: #ffaa00; padding: 12px 20px; border-radius: 40px; margin-bottom: 20px; text-align: center; }
+        .button.small { background: #ffaa00; color: #1e1e1e; padding: 6px 16px; border-radius: 30px; text-decoration: none; }
+        .nav-bar { background: #383838; border-radius: 50px; padding: 6px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; flex-wrap: wrap; }
+        .nav-link { color: #b7b7b7; padding: 10px 20px; border-radius: 40px; text-decoration: none; }
+        .nav-link.active { background: #40748c; color: white; }
+    </style>
+    
+    <!-- Основные стили (асинхронно) -->
+    <link rel="stylesheet" href="style.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="style.css"></noscript>
+    
+    <!-- Font Awesome с SRI -->
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" 
+          integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" 
+          crossorigin="anonymous" referrerpolicy="no-referrer" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+    
+    <!-- Google Fonts -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" 
+          integrity="sha512-9oXYo5RZxmH1a8Tg1g4tOwUfqFJvLc7fd/2zPJp1cI4TIB5HcoCQ3CzIIBqH+62oHVcfV5U0M+n9N6eR+7P0A==" 
+          crossorigin="anonymous" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap"></noscript>
+    
     <script src="lang.js" defer></script>
 </head>
 <body>
     <div class="page">
+        <!-- Dev notice -->
         <div class="dev-notice">
             <span data-lang="devNotice">⚡ Сайт в разработке · актуальная информация на</span>
-            <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank" class="button small" data-lang="originalSite">Оригинальный сайт</a>
+            <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank" rel="noopener" class="button button--small" data-lang="originalSite">Оригинальный сайт</a>
         </div>
 
+        <!-- Navigation -->
         <nav class="nav-bar">
-            <div class="nav-links">
-                <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
-                <a href="starve-neon.html" class="nav-link active" data-lang="navStarve">Starve Neon</a>
-                <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
-                <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
+            <div class="nav-bar__links">
+                <a href="index.html" class="nav-bar__link" data-lang="navHome">Neon Imperium</a>
+                <a href="starve-neon.html" class="nav-bar__link nav-bar__link--active" data-lang="navStarve">Starve Neon</a>
+                <a href="alpha-01.html" class="nav-bar__link" data-lang="navAlpha">Alpha 01</a>
+                <a href="gc-adven.html" class="nav-bar__link" data-lang="navGc">ГК Адвенчур</a>
             </div>
             <div class="lang-switcher">
-                <button class="lang-btn active" data-lang-code="ru">RU</button>
-                <button class="lang-btn" data-lang-code="en">EN</button>
+                <button class="lang-switcher__btn active" data-lang-code="ru">RU</button>
+                <button class="lang-switcher__btn" data-lang-code="en">EN</button>
             </div>
+            <noscript>
+                <div style="display: inline-block; margin-left: 10px;">
+                    <form method="get" style="display: inline;">
+                        <input type="hidden" name="lang" value="ru">
+                        <button type="submit" class="lang-switcher__btn">RU</button>
+                    </form>
+                    <form method="get" style="display: inline;">
+                        <input type="hidden" name="lang" value="en">
+                        <button type="submit" class="lang-switcher__btn">EN</button>
+                    </form>
+                </div>
+            </noscript>
         </nav>
 
-        <header class="card header-card game-header" style="background-image: url('images/starve-neon-header.jpg');">
-            <div class="header-overlay">
-                <div class="header-content">
-                    <div class="game-icon-circle">
-                        <img src="images/starve-neon-icon.png" alt="Starve Neon Icon" class="game-icon">
+        <!-- Header -->
+        <header class="card game-header" style="background-image: url('images/starve-neon-header.jpg');">
+            <div class="game-header__overlay">
+                <div class="game-header__content">
+                    <div class="game-header__icon">
+                        <img src="images/starve-neon-icon.png" alt="Starve Neon Icon" width="80" height="80">
                     </div>
-                    <h1 class="game-title">Starve Neon</h1>
-                    <div class="version-badge" data-lang="starveVersion">Объединение 0.13.7</div>
-                    <div class="social-icons">
-                        <a href="https://t.me/voididea" target="_blank" class="social-icon"><i class="fab fa-telegram"></i></a>
+                    <h1 class="game-header__title">Starve Neon</h1>
+                    <span class="version-badge" data-lang="starveVersion">Объединение 0.13.7</span>
+                    <div class="game-header__social">
+                        <a href="https://t.me/voididea" target="_blank" rel="noopener" class="game-header__social-link" aria-label="Telegram"><i class="fab fa-telegram"></i></a>
                     </div>
                 </div>
             </div>
         </header>
 
         <main>
+            <!-- Trailer & Developer -->
             <div class="row">
                 <section class="card trailer-card">
                     <h2 data-lang="trailerTitle">Трейлер</h2>
                     <div class="video-embed">
-                        <iframe width="100%" height="250" src="https://www.youtube.com/embed/videoseries?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" frameborder="0" allowfullscreen></iframe>
+                        <iframe width="100%" height="250" 
+                                src="https://www.youtube.com/embed/videoseries?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" 
+                                frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowfullscreen
+                                sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+                                loading="lazy">
+                        </iframe>
                     </div>
                 </section>
 
                 <section class="card developer-card">
                     <h2 data-lang="developerTitle">Разработчик</h2>
                     <div class="developer-info">
-                        <div class="avatar-wrapper large">
-                            <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar">
+                        <div class="profile-card__avatar profile-card__avatar--large">
+                            <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" loading="lazy" width="100" height="100">
                         </div>
                         <div class="developer-details">
                             <h3>Neon Shadow</h3>
                             <p data-lang="starveDeveloperRole">Главный разработчик, геймдизайнер</p>
-                            <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="button small">YouTube</a>
+                            <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" rel="noopener" class="button button--small">YouTube</a>
                         </div>
                     </div>
                 </section>
             </div>
 
+            <!-- Download -->
             <section class="card download-card">
                 <h2 data-lang="downloadTitle">Скачать игру</h2>
                 <div class="download-buttons">
-                    <a href="https://gamejolt.com/games/Starve-Neon/797491" target="_blank" class="download-button gamejolt">GameJolt</a>
-                    <a href="https://neon-imperium.itch.io/starve-neon" target="_blank" class="download-button itch">Itch.io</a>
+                    <a href="https://gamejolt.com/games/Starve-Neon/797491" target="_blank" rel="noopener" class="download-button">
+                        <i class="fas fa-gamepad" aria-hidden="true"></i> GameJolt
+                    </a>
+                    <a href="https://neon-imperium.itch.io/starve-neon" target="_blank" rel="noopener" class="download-button">
+                        <i class="fab fa-itch-io" aria-hidden="true"></i> Itch.io
+                    </a>
                 </div>
                 <p class="text-secondary small-note" data-lang="downloadNote">Доступно на нескольких платформах. Следите за обновлениями!</p>
             </section>
 
+            <!-- Description & Features -->
             <section class="card">
                 <h2 data-lang="descriptionTitle">Описание</h2>
                 <div class="features-grid">
@@ -117,23 +178,24 @@
                 </div>
             </section>
 
+            <!-- System Requirements -->
             <section class="card">
                 <h2 data-lang="requirementsTitle">Системные требования</h2>
                 <p class="text-secondary" data-lang="requirementsNote">Примерные значения основанные на стандартных настройках для этих устройств</p>
 
                 <div class="requirements-grid">
                     <div class="req-item">
-                        <span class="req-label" data-lang="fps60">60+ Фпс</span>
+                        <span class="req-item__label" data-lang="fps60">60+ Фпс</span>
                         <span data-lang="cpu60">Процессор: Xeon-E2650 v2 3.00 GHz</span>
                         <span data-lang="gpu60">Видеокарта: GT 730 4GB</span>
                     </div>
                     <div class="req-item">
-                        <span class="req-label" data-lang="fps180">180+ Фпс</span>
+                        <span class="req-item__label" data-lang="fps180">180+ Фпс</span>
                         <span data-lang="cpu180">Процессор: AMD Athlon X4 840 3.10 GHz</span>
                         <span data-lang="gpu180">Видеокарта: GT 1030 2GB</span>
                     </div>
                     <div class="req-item">
-                        <span class="req-label" data-lang="fps1000">1000+ Фпс</span>
+                        <span class="req-item__label" data-lang="fps1000">1000+ Фпс</span>
                         <span data-lang="cpu1000">Процессор: AMD Ryzen 7 7435HS 4.00 GHz</span>
                         <span data-lang="gpu1000">Видеокарта: RTX 3050 4GB Laptop</span>
                     </div>
@@ -151,6 +213,7 @@
                 </div>
             </section>
 
+            <!-- Community Videos -->
             <section class="card">
                 <h2 data-lang="videoTitle">Видео</h2>
                 <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
@@ -160,64 +223,66 @@
                     <li data-lang="videoRule2">Видео в плейлисте должны понравиться разработчику, после чего они могут попасть сюда.</li>
                 </ul>
                 <div class="video-grid">
-                    <a href="https://youtube.com/playlist?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" target="_blank" class="video-card-link">
-                        <div class="video-card">
-                            <img src="images/video1.jpg" alt="Видео 1" class="video-thumbnail">
-                            <h4 data-lang="video1Title">Обзор Starve Neon</h4>
-                            <p>YouTube · Канал Игромана</p>
-                        </div>
+                    <a href="https://youtube.com/playlist?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" target="_blank" rel="noopener" class="video-card__link">
+                        <article class="video-card">
+                            <img src="images/video1.jpg" alt="Видео 1" class="video-card__thumbnail" loading="lazy" width="250" height="140">
+                            <h4 class="video-card__title" data-lang="video1Title">Обзор Starve Neon</h4>
+                            <p class="video-card__meta">YouTube · Канал Игромана</p>
+                        </article>
                     </a>
-                    <a href="https://youtube.com/playlist?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" target="_blank" class="video-card-link">
-                        <div class="video-card">
-                            <img src="images/video2.jpg" alt="Видео 2" class="video-thumbnail">
-                            <h4 data-lang="video2Title">Гайд для новичков</h4>
-                            <p>YouTube · Neon Shadow</p>
-                        </div>
+                    <a href="https://youtube.com/playlist?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" target="_blank" rel="noopener" class="video-card__link">
+                        <article class="video-card">
+                            <img src="images/video2.jpg" alt="Видео 2" class="video-card__thumbnail" loading="lazy" width="250" height="140">
+                            <h4 class="video-card__title" data-lang="video2Title">Гайд для новичков</h4>
+                            <p class="video-card__meta">YouTube · Neon Shadow</p>
+                        </article>
                     </a>
-                    <a href="https://youtube.com/playlist?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" target="_blank" class="video-card-link">
-                        <div class="video-card">
-                            <img src="images/video3.jpg" alt="Видео 3" class="video-thumbnail">
-                            <h4 data-lang="video3Title">Прохождение мультиплеера</h4>
-                            <p>YouTube · Сообщество</p>
-                        </div>
+                    <a href="https://youtube.com/playlist?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" target="_blank" rel="noopener" class="video-card__link">
+                        <article class="video-card">
+                            <img src="images/video3.jpg" alt="Видео 3" class="video-card__thumbnail" loading="lazy" width="250" height="140">
+                            <h4 class="video-card__title" data-lang="video3Title">Прохождение мультиплеера</h4>
+                            <p class="video-card__meta">YouTube · Сообщество</p>
+                        </article>
                     </a>
                 </div>
             </section>
 
+            <!-- Updates -->
             <section class="card">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-                    <h2 data-lang="updatesTitle" style="margin: 0;">Обновления</h2>
-                    <a href="https://t.me/starvervoprosenom" target="_blank" class="button wide" style="display: inline-flex; align-items: center; gap: 8px;">
-                        <i class="fab fa-telegram"></i> <span data-lang="polls">Опросы</span>
+                <div class="updates-header">
+                    <h2 data-lang="updatesTitle">Обновления</h2>
+                    <a href="https://t.me/starvervoprosenom" target="_blank" rel="noopener" class="button button--wide">
+                        <i class="fab fa-telegram" aria-hidden="true"></i> <span data-lang="polls">Опросы</span>
                     </a>
                 </div>
                 <div class="update-card">
-                    <h3 data-lang="starveUpdateTitle">Патч 0.13.7</h3>
+                    <h3 class="update-card__title" data-lang="starveUpdateTitle">Патч 0.13.7</h3>
                     <details class="spoiler">
                         <summary data-lang="spoilerTutorial">Туториал</summary>
-                        <div class="spoiler-content"><p data-lang="tutorialContent">Цели по всей игре</p></div>
+                        <div class="spoiler__content"><p data-lang="tutorialContent">Цели по всей игре</p></div>
                     </details>
                     <details class="spoiler">
                         <summary data-lang="spoilerRewards">Награды</summary>
-                        <div class="spoiler-content"><p data-lang="rewardsContent">Локализация<br>Улучшены возможности перевода</p></div>
+                        <div class="spoiler__content"><p data-lang="rewardsContent">Локализация<br>Улучшены возможности перевода</p></div>
                     </details>
                     <details class="spoiler">
                         <summary data-lang="spoilerQuality">Удобства</summary>
-                        <div class="spoiler-content"><p data-lang="qualityContent">Интерфейс<br>Управление</p></div>
+                        <div class="spoiler__content"><p data-lang="qualityContent">Интерфейс<br>Управление</p></div>
                     </details>
                     <details class="spoiler">
                         <summary data-lang="spoilerBalance">Баланс</summary>
-                        <div class="spoiler-content"><p data-lang="balanceContent">Награды за уровень<br>Изменение прогрессии</p></div>
+                        <div class="spoiler__content"><p data-lang="balanceContent">Награды за уровень<br>Изменение прогрессии</p></div>
                     </details>
                     <details class="spoiler">
                         <summary data-lang="spoilerBugfix">Багфикс</summary>
-                        <div class="spoiler-content"><p data-lang="bugfixContent">Множество мелких исправлений</p></div>
+                        <div class="spoiler__content"><p data-lang="bugfixContent">Множество мелких исправлений</p></div>
                     </details>
                 </div>
             </section>
 
+            <!-- Footer -->
             <footer class="site-footer">
-                <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank" data-lang="googleSites">Google Sites</a></p>
+                <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank" rel="noopener" data-lang="googleSites">Google Sites</a></p>
             </footer>
         </main>
     </div>

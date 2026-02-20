@@ -1,6 +1,22 @@
-/* style.css — основной файл, подключаем все части */
-@import url('css/variables.css');
-@import url('css/base.css');
+/* style.css — основной файл, импортирует все части по методологии ITCSS */
+
+/* 1. Settings — переменные */
+@import url('css/settings.css');
+
+/* 2. Tools — миксины и функции (если бы использовался препроцессор) */
+/* @import url('css/tools.css'); — пока пусто */
+
+/* 3. Generic — сброс стилей, normalize */
+@import url('css/generic.css');
+
+/* 4. Elements — стили для тегов */
+@import url('css/elements.css');
+
+/* 5. Objects — сетки, layout-объекты */
+@import url('css/objects.css');
+
+/* 6. Components — UI-компоненты (карточки, кнопки, профили) */
 @import url('css/components.css');
-@import url('css/layout.css');
-@import url('css/responsive.css');
+
+/* 7. Utilities — хелперы, переопределения */
+@import url('css/utilities.css');

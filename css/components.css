@@ -1,24 +1,26 @@
-/* Карточки */
+/* Card component */
 .card {
     background: var(--bg-card);
-    border-radius: 20px;
+    border-radius: var(--radius-lg);
     padding: 28px;
-    margin-bottom: 24px;
+    margin-bottom: var(--space-lg);
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
-    transition: box-shadow 0.2s;
+    transition: box-shadow var(--transition-fast);
 }
-.card:hover { box-shadow: 0 12px 28px rgba(0,0,0,0.7); }
+.card:hover {
+    box-shadow: 0 12px 28px rgba(0,0,0,0.7);
+}
 
-/* Кнопки */
+/* Button component */
 .button {
     display: inline-block;
     background: var(--accent);
     color: white;
     padding: 10px 20px;
-    border-radius: 30px;
-    font-size: 14px;
-    transition: background 0.2s, transform 0.1s;
+    border-radius: var(--radius-round);
+    font-size: var(--font-size-small);
+    transition: background var(--transition-fast), transform 0.1s;
     border: none;
     cursor: pointer;
     text-align: center;
@@ -27,23 +29,26 @@
     background: var(--accent-light);
     transform: scale(1.02);
 }
-.button.small { padding: 6px 16px; font-size: 13px; }
-.button.disabled {
+.button--small {
+    padding: 6px 16px;
+    font-size: 13px;
+}
+.button--disabled {
     background: #555;
     pointer-events: none;
     opacity: 0.6;
 }
-.button.wide {
+.button--wide {
     padding-left: 30px;
     padding-right: 30px;
 }
 
-/* Навигация */
+/* Navigation */
 .nav-bar {
     background: var(--bg-card);
-    border-radius: 50px;
+    border-radius: var(--radius-round);
     padding: 6px 20px;
-    margin-bottom: 24px;
+    margin-bottom: var(--space-lg);
     border: 1px solid var(--border);
     display: flex;
     align-items: center;
@@ -51,64 +56,64 @@
     flex-wrap: wrap;
     box-shadow: var(--shadow);
 }
-.nav-links {
+.nav-bar__links {
     display: flex;
     flex-wrap: wrap;
     gap: 5px;
 }
-.nav-link {
+.nav-bar__link {
     color: var(--text-secondary);
     padding: 10px 20px;
-    border-radius: 40px;
-    font-size: 16px;
-    transition: background 0.2s, color 0.2s;
+    border-radius: var(--radius-xl);
+    font-size: var(--font-size-base);
+    transition: background var(--transition-fast), color var(--transition-fast);
     white-space: nowrap;
 }
-.nav-link:hover {
+.nav-bar__link:hover {
     background: #4a4a4a;
     color: var(--text-primary);
 }
-.nav-link.active {
+.nav-bar__link--active {
     background: var(--accent);
     color: white;
 }
 
-/* Переключатель языка */
+/* Language switcher */
 .lang-switcher {
     display: flex;
     gap: 5px;
 }
-.lang-btn {
+.lang-switcher__btn {
     background: transparent;
     border: 1px solid var(--accent);
     color: var(--text-secondary);
     padding: 6px 12px;
-    border-radius: 20px;
+    border-radius: var(--radius-md);
     cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s;
+    font-size: var(--font-size-small);
+    transition: all var(--transition-fast);
 }
-.lang-btn:hover {
+.lang-switcher__btn:hover {
     background: var(--accent);
     color: white;
 }
-.lang-btn.active {
+.lang-switcher__btn--active {
     background: var(--accent);
     color: white;
     border-color: var(--accent);
 }
 
-/* Шапка с фоном */
+/* Game header */
 .game-header {
     background-size: cover;
     background-position: center;
     padding: 0;
 }
-.header-overlay {
+.game-header__overlay {
     padding: 60px 28px;
     text-align: center;
 }
-.header-content {
+.game-header__content {
     display: inline-flex;
     align-items: center;
     gap: 30px;
@@ -116,175 +121,350 @@
     justify-content: center;
     background-color: rgba(0, 0, 0, 0.4);
     padding: 20px 40px;
-    border-radius: 100px;
+    border-radius: var(--radius-round);
     backdrop-filter: blur(2px);
 }
-.game-icon-circle {
+.game-header__icon {
     width: 100px;
     height: 100px;
-    border-radius: 50%;
+    border-radius: var(--radius-circle);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 10px;
 }
-.game-icon {
+.game-header__icon img {
     max-width: 80px;
     max-height: 80px;
     object-fit: contain;
 }
-.header-content .game-title {
+.game-header__title {
     margin-bottom: 0;
     color: #fff;
 }
-.social-icons {
+.game-header__social {
     display: flex;
     gap: 15px;
     margin-left: 20px;
 }
-.social-icon {
+.game-header__social-link {
     color: white;
     font-size: 24px;
-    transition: opacity 0.2s;
+    transition: opacity var(--transition-fast);
 }
-.social-icon:hover {
+.game-header__social-link:hover {
     opacity: 0.8;
 }
 
-/* Проекты */
-.project-card-link {
-    display: block;
-    color: inherit;
-    transition: transform 0.2s;
-}
-.project-card-link:hover {
-    transform: translateY(-5px);
-}
-.project-card-link.disabled { pointer-events: none; opacity: 0.7; }
+/* Project card */
 .project-card {
     background: var(--bg-primary);
-    border-radius: 16px;
-    padding: 16px;
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
     border: 1px solid var(--border);
-    transition: border-color 0.2s;
+    transition: border-color var(--transition-fast);
     display: flex;
     flex-direction: column;
     height: 100%;
 }
-.project-card-link:hover .project-card { border-color: var(--accent); }
-.image-wrapper {
+.project-card__image-wrapper {
     width: 100%;
     height: 180px;
     overflow: hidden;
-    border-radius: 12px;
-    margin-bottom: 12px;
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-sm);
     border: 1px solid var(--border);
 }
-.project-image {
+.project-card__image {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform 0.3s;
 }
-.project-card-link:hover .project-image { transform: scale(1.05); }
-.project-card h3 {
-    margin: 8px 0 4px;
-    font-size: 20px;
+.project-card:hover .project-card__image {
+    transform: scale(1.05);
+}
+.project-card__title {
+    margin: var(--space-sm) 0 4px;
+    font-size: var(--font-size-h3);
     color: var(--text-primary);
 }
-.project-card p {
+.project-card__desc {
     flex-grow: 1;
-    margin-bottom: 16px;
+    margin-bottom: var(--space-md);
+}
+.project-card__link {
+    display: block;
+    color: inherit;
+    transition: transform var(--transition-fast);
+}
+.project-card__link:hover {
+    transform: translateY(-5px);
+}
+.project-card__link--disabled {
+    pointer-events: none;
+    opacity: 0.7;
+}
+.project-card__link:hover .project-card {
+    border-color: var(--accent);
 }
 
-/* Профили */
-.profile-card-link {
-    flex: 1 1 150px;
-    color: inherit;
-    transition: transform 0.2s;
-}
-.profile-card-link:hover { transform: translateY(-3px); }
+/* Profile card */
 .profile-card {
     background: var(--bg-primary);
-    border-radius: 16px;
-    padding: 16px;
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
     border: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    transition: border-color 0.2s;
+    transition: border-color var(--transition-fast);
 }
-.profile-card-link:hover .profile-card { border-color: var(--accent); }
-.avatar-wrapper {
+.profile-card__avatar {
     width: 80px;
     height: 80px;
-    border-radius: 50%;
+    border-radius: var(--radius-circle);
     overflow: hidden;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-sm);
     border: 2px solid var(--accent);
 }
-.avatar-wrapper.large { width: 100px; height: 100px; }
-.avatar {
+.profile-card__avatar--large {
+    width: 100px;
+    height: 100px;
+}
+.profile-card__avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
-.profile-name {
-    font-size: 16px;
+.profile-card__name {
+    font-size: var(--font-size-base);
     color: var(--text-primary);
 }
-
-/* Трейлер и разработчик */
-.trailer-card .video-embed {
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid var(--border);
+.profile-card__link {
+    flex: 1 1 150px;
+    color: inherit;
+    transition: transform var(--transition-fast);
 }
-.developer-info {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 8px;
-    margin-top: 0;
+.profile-card__link:hover {
+    transform: translateY(-3px);
 }
-.developer-details h3 {
-    margin: 0 0 4px;
-}
-.developer-details p {
-    margin: 0 0 8px;
+.profile-card__link:hover .profile-card {
+    border-color: var(--accent);
 }
 
-/* Особенности */
-.feature-item {
+/* Video card */
+.video-card {
     background: var(--bg-primary);
-    border-radius: 16px;
-    padding: 20px;
+    border-radius: var(--radius-md);
+    padding: 12px;
     border: 1px solid var(--border);
 }
-.feature-icon {
-    font-size: 32px;
-    display: block;
+.video-card__thumbnail {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
     margin-bottom: 10px;
-}
-.feature-item h3 {
-    margin: 0 0 8px;
-    color: var(--accent);
-}
-.features-extra {
-    margin-top: 30px;
-    padding: 20px;
-    background: var(--bg-primary);
-    border-radius: 16px;
     border: 1px solid var(--border);
 }
-.features-extra h3 {
+.video-card__title {
+    font-size: var(--font-size-base);
+    margin: 0 0 4px;
+    color: var(--text-primary);
+}
+.video-card__meta {
+    font-size: 12px;
+    margin: 0;
+}
+.video-card__link {
+    color: inherit;
+    transition: transform var(--transition-fast);
+}
+.video-card__link:hover {
+    transform: translateY(-5px);
+}
+
+/* Requirements */
+.req-item {
+    flex: 1 1 200px;
+    background: var(--bg-primary);
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+}
+.req-item__label {
+    display: block;
+    color: var(--accent);
+    margin-bottom: var(--space-sm);
+    font-size: var(--font-size-base);
+}
+
+/* Consumption */
+.consumption-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    margin-top: var(--space-lg);
+    border: 1px solid var(--border);
+}
+.consumption-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: var(--space-md);
+}
+.consumption-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: var(--font-size-small);
+}
+.consumption-table td:first-child {
+    color: var(--text-primary);
+    width: 40%;
+}
+
+/* Updates */
+.update-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+}
+.update-card__title {
     margin: 0 0 15px;
     color: var(--accent);
+    font-size: 22px;
 }
 
-/* Списки */
+/* Spoiler */
+.spoiler {
+    margin-top: var(--space-md);
+    background: var(--bg-primary);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+.spoiler summary {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 14px 20px;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid transparent;
+    font-size: var(--font-size-base);
+}
+.spoiler[open] summary {
+    border-bottom-color: var(--border);
+}
+.spoiler summary:hover {
+    background: #3a3a3a;
+}
+.spoiler summary::before {
+    content: "▶";
+    margin-right: 12px;
+    font-size: 12px;
+    color: var(--accent);
+    transition: transform var(--transition-fast);
+}
+.spoiler[open] summary::before {
+    transform: rotate(90deg);
+}
+.spoiler__content {
+    padding: 20px;
+    background: var(--bg-primary);
+    font-size: var(--font-size-small);
+}
+
+/* Download card */
+.download-card {
+    text-align: center;
+    background: linear-gradient(145deg, var(--bg-card), #2a2a2a);
+}
+.download-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-md);
+    margin: var(--space-lg) 0;
+}
+.download-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 14px 20px;
+    border-radius: var(--radius-round);
+    border: 2px solid var(--accent);
+    font-size: var(--font-size-base);
+    transition: all var(--transition-fast);
+    min-width: 200px;
+    flex: 0 1 auto;
+}
+.download-button:hover {
+    background: var(--accent);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
+}
+.download-button i {
+    font-size: 18px;
+}
+
+/* Dev notice */
+.dev-notice {
+    background: #1e1e1e;
+    color: #ffaa00;
+    text-align: center;
+    padding: 12px 20px;
+    border-radius: var(--radius-xl);
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+.dev-notice .button--small {
+    background: #ffaa00;
+    color: #1e1e1e;
+    border: none;
+}
+.dev-notice .button--small:hover {
+    background: #ffc34d;
+}
+
+/* Site footer */
+.site-footer {
+    text-align: center;
+    color: #666;
+    font-size: 12px;
+    padding: 24px 0 12px;
+    border-top: 1px solid var(--border);
+    margin-top: 32px;
+}
+.small-note {
+    font-size: 12px;
+    color: #666;
+}
+
+/* Version badge */
+.version-badge {
+    background: var(--accent);
+    color: white;
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: var(--font-size-small);
+}
+
+/* Features list */
 .features-list {
     list-style: none;
     padding-left: 0;
@@ -302,200 +482,86 @@
     top: -1px;
 }
 
-/* Видео */
-.video-card-link {
-    color: inherit;
-    transition: transform 0.2s;
-}
-.video-card-link:hover { transform: translateY(-5px); }
-.video-card {
-    background: var(--bg-primary);
-    border-radius: 16px;
-    padding: 12px;
+/* Trailer */
+.trailer-card .video-embed {
+    border-radius: var(--radius-sm);
+    overflow: hidden;
     border: 1px solid var(--border);
 }
-.video-thumbnail {
-    width: 100%;
-    height: 140px;
-    object-fit: cover;
-    border-radius: 12px;
-    margin-bottom: 10px;
-    border: 1px solid var(--border);
+
+/* Developer info */
+.developer-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--space-sm);
+    margin-top: 0;
 }
-.video-card h4 {
-    font-size: 16px;
+.developer-info h3 {
     margin: 0 0 4px;
-    color: var(--text-primary);
 }
-.video-card p {
-    font-size: 12px;
-    margin: 0;
+.developer-info p {
+    margin: 0 0 8px;
 }
 
-/* Требования */
-.req-item {
-    flex: 1 1 200px;
-    background: var(--bg-primary);
-    padding: 16px;
-    border-radius: 16px;
-    border: 1px solid var(--border);
-}
-.req-label {
-    display: block;
-    color: var(--accent);
-    margin-bottom: 8px;
-    font-size: 16px;
-}
-.consumption-card {
-    background: var(--bg-primary);
-    border-radius: 16px;
-    padding: 20px;
-    margin-top: 24px;
-    border: 1px solid var(--border);
-}
-.consumption-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 16px;
-}
-.consumption-table td {
-    padding: 12px 10px;
-    border-bottom: 1px solid var(--border);
-    font-size: 14px;
-}
-.consumption-table td:first-child {
-    color: var(--text-primary);
-    width: 40%;
+/* Свечение кнопок при наведении */
+.button:hover,
+.download-button:hover,
+.game-header__social-link:hover,
+.profile-card__link:hover .profile-card,
+.project-card__link:hover .project-card {
+    box-shadow: 0 0 15px var(--accent), 0 0 30px rgba(64, 116, 140, 0.5);
+    transition: box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
-/* Обновления */
-.update-card {
-    background: var(--bg-primary);
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 20px;
-    border: 1px solid var(--border);
-}
-.update-card h3 {
-    margin: 0 0 15px;
-    color: var(--accent);
-    font-size: 22px;
+/* Плавное появление карточек */
+.card {
+    animation: fadeInUp 0.5s ease-out;
 }
 
-/* Спойлеры */
-.spoiler {
-    margin-top: 16px;
-    background: var(--bg-primary);
-    border-radius: 12px;
-    border: 1px solid var(--border);
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Мерцание версии */
+.version-badge {
+    animation: glow 2s infinite alternate;
+}
+
+@keyframes glow {
+    from {
+        box-shadow: 0 0 5px var(--accent);
+    }
+    to {
+        box-shadow: 0 0 20px var(--accent-light);
+    }
+}
+
+/* Подсветка активной навигации */
+.nav-bar__link--active {
+    position: relative;
     overflow: hidden;
 }
-.spoiler summary {
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    padding: 14px 20px;
-    cursor: pointer;
-    list-style: none;
-    display: flex;
-    align-items: center;
-    border-bottom: 1px solid transparent;
-    font-size: 16px;
-}
-.spoiler[open] summary { border-bottom-color: var(--border); }
-.spoiler summary:hover { background: #3a3a3a; }
-.spoiler summary::before {
-    content: "▶";
-    margin-right: 12px;
-    font-size: 12px;
-    color: var(--accent);
-    transition: transform 0.2s;
-}
-.spoiler[open] summary::before { transform: rotate(90deg); }
-.spoiler-content {
-    padding: 20px;
-    background: var(--bg-primary);
-    font-size: 14px;
+.nav-bar__link--active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--accent-light);
+    animation: slideIn 0.3s ease-out;
 }
 
-/* Скачивание */
-.download-card {
-    text-align: center;
-    background: linear-gradient(145deg, var(--bg-card), #2a2a2a);
+@keyframes slideIn {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
 }
-.download-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 16px;
-    margin: 24px 0;
-}
-.download-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    padding: 14px 20px;
-    border-radius: 50px;
-    border: 2px solid var(--accent);
-    font-size: 16px;
-    transition: all 0.2s;
-    min-width: 200px;
-    flex: 0 1 auto;
-}
-.download-button:hover {
-    background: var(--accent);
-    color: white;
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
-}
-.download-button::before { content: "⬇"; font-size: 18px; }
-.download-button.windows::before { content: "🖥️"; }
-.download-button.android::before { content: "📱"; }
-.download-button.linux::before { content: "🐧"; }
-
-/* Кнопки GameJolt и Itch.io (синие, как основные) */
-.download-button.gamejolt::before {
-    content: "\f3e5"; /* fa-gamejolt */
-    font-family: "Font Awesome 6 Brands";
-    font-weight: 400;
-}
-.download-button.itch::before {
-    content: "\f83a"; /* fa-itch-io */
-    font-family: "Font Awesome 6 Brands";
-}
-/* Наследуют цвета от .download-button, поэтому дополнительных стилей не требуется */
-
-/* Плашка разработки */
-.dev-notice {
-    background: #1e1e1e;
-    color: #ffaa00;
-    text-align: center;
-    padding: 12px 20px;
-    border-radius: 40px;
-    margin-bottom: 20px;
-    border: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 15px;
-    flex-wrap: wrap;
-}
-.dev-notice .button.small {
-    background: #ffaa00;
-    color: #1e1e1e;
-    border: none;
-}
-.dev-notice .button.small:hover { background: #ffc34d; }
-
-/* Подвал */
-.site-footer {
-    text-align: center;
-    color: #666;
-    font-size: 12px;
-    padding: 24px 0 12px;
-    border-top: 1px solid var(--border);
-    margin-top: 32px;
-}
-.small-note { font-size: 12px; color: #666; }

@@ -1,0 +1,33 @@
+/* Отступы */
+.u-margin-bottom-small { margin-bottom: var(--space-sm); }
+.u-margin-bottom-medium { margin-bottom: var(--space-md); }
+.u-margin-bottom-large { margin-bottom: var(--space-lg); }
+.u-margin-top-small { margin-top: var(--space-sm); }
+.u-margin-top-medium { margin-top: var(--space-md); }
+.u-margin-top-large { margin-top: var(--space-lg); }
+.u-padding-small { padding: var(--space-sm); }
+.u-padding-medium { padding: var(--space-md); }
+.u-padding-large { padding: var(--space-lg); }
+
+/* Выравнивание текста */
+.u-text-center { text-align: center; }
+.u-text-left { text-align: left; }
+.u-text-right { text-align: right; }
+
+/* Отображение */
+.u-hidden { display: none; }
+.u-visually-hidden { 
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    clip: rect(0 0 0 0);
+}
+
+/* Цвета */
+.u-color-accent { color: var(--accent); }
+.u-color-primary { color: var(--text-primary); }
+.u-color-secondary { color: var(--text-secondary); }

@@ -5,41 +5,81 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neon Imperium — ГК Адвенчур</title>
     <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
+    
+    <!-- Preconnect и предзагрузка -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    
+    <style>
+        body { margin: 0; font-family: 'Russo One', sans-serif; background: #2e2e2e; color: #b7b7b7; }
+        .page { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .dev-notice { background: #1e1e1e; color: #ffaa00; padding: 12px 20px; border-radius: 40px; margin-bottom: 20px; text-align: center; }
+        .button.small { background: #ffaa00; color: #1e1e1e; padding: 6px 16px; border-radius: 30px; text-decoration: none; }
+        .nav-bar { background: #383838; border-radius: 50px; padding: 6px 20px; margin-bottom: 24px; display: flex; justify-content: space-between; flex-wrap: wrap; }
+        .nav-link { color: #b7b7b7; padding: 10px 20px; border-radius: 40px; text-decoration: none; }
+        .nav-link.active { background: #40748c; color: white; }
+    </style>
+    
+    <link rel="stylesheet" href="style.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="style.css"></noscript>
+    
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" 
+          integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" 
+          crossorigin="anonymous" referrerpolicy="no-referrer" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+    
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" 
+          integrity="sha512-9oXYo5RZxmH1a8Tg1g4tOwUfqFJvLc7fd/2zPJp1cI4TIB5HcoCQ3CzIIBqH+62oHVcfV5U0M+n9N6eR+7P0A==" 
+          crossorigin="anonymous" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap"></noscript>
+    
     <script src="lang.js" defer></script>
 </head>
 <body>
     <div class="page">
         <div class="dev-notice">
             <span data-lang="devNotice">⚡ Сайт в разработке · актуальная информация на</span>
-            <a href="https://sites.google.com/view/neonimperium/gc-adven" target="_blank" class="button small" data-lang="originalSite">Оригинальный сайт</a>
+            <a href="https://sites.google.com/view/neonimperium/gc-adven" target="_blank" rel="noopener" class="button button--small" data-lang="originalSite">Оригинальный сайт</a>
         </div>
 
         <nav class="nav-bar">
-            <div class="nav-links">
-                <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
-                <a href="starve-neon.html" class="nav-link" data-lang="navStarve">Starve Neon</a>
-                <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
-                <a href="gc-adven.html" class="nav-link active" data-lang="navGc">ГК Адвенчур</a>
+            <div class="nav-bar__links">
+                <a href="index.html" class="nav-bar__link" data-lang="navHome">Neon Imperium</a>
+                <a href="starve-neon.html" class="nav-bar__link" data-lang="navStarve">Starve Neon</a>
+                <a href="alpha-01.html" class="nav-bar__link" data-lang="navAlpha">Alpha 01</a>
+                <a href="gc-adven.html" class="nav-bar__link nav-bar__link--active" data-lang="navGc">ГК Адвенчур</a>
             </div>
             <div class="lang-switcher">
-                <button class="lang-btn active" data-lang-code="ru">RU</button>
-                <button class="lang-btn" data-lang-code="en">EN</button>
+                <button class="lang-switcher__btn active" data-lang-code="ru">RU</button>
+                <button class="lang-switcher__btn" data-lang-code="en">EN</button>
             </div>
+            <noscript>
+                <div style="display: inline-block; margin-left: 10px;">
+                    <form method="get" style="display: inline;">
+                        <input type="hidden" name="lang" value="ru">
+                        <button type="submit" class="lang-switcher__btn">RU</button>
+                    </form>
+                    <form method="get" style="display: inline;">
+                        <input type="hidden" name="lang" value="en">
+                        <button type="submit" class="lang-switcher__btn">EN</button>
+                    </form>
+                </div>
+            </noscript>
         </nav>
 
-        <header class="card header-card game-header" style="background-image: url('images/gc-adven-header.jpg');">
-            <div class="header-overlay">
-                <div class="header-content">
-                    <div class="game-icon-circle">
-                        <img src="images/gc-adven-icon.png" alt="ГК Адвенчур Icon" class="game-icon">
+        <header class="card game-header" style="background-image: url('images/gc-adven-header.jpg');">
+            <div class="game-header__overlay">
+                <div class="game-header__content">
+                    <div class="game-header__icon">
+                        <img src="images/gc-adven-icon.png" alt="ГК Адвенчур Icon" width="80" height="80">
                     </div>
-                    <h1 class="game-title">ГК Адвенчур</h1>
-                    <div class="version-badge" data-lang="gcVersion">Обновление 0.1.0</div>
+                    <h1 class="game-header__title">ГК Адвенчур</h1>
+                    <span class="version-badge" data-lang="gcVersion">Обновление 0.1.0</span>
                 </div>
             </div>
         </header>
@@ -49,20 +89,27 @@
                 <section class="card trailer-card">
                     <h2 data-lang="trailerTitle">Трейлер</h2>
                     <div class="video-embed">
-                        <iframe width="100%" height="250" src="https://www.youtube.com/embed/scqYneefAds" frameborder="0" allowfullscreen></iframe>
+                        <iframe width="100%" height="250" 
+                                src="https://www.youtube.com/embed/scqYneefAds" 
+                                frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowfullscreen
+                                sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+                                loading="lazy">
+                        </iframe>
                     </div>
                 </section>
 
                 <section class="card developer-card">
                     <h2 data-lang="developerTitle">Разработчик</h2>
                     <div class="developer-info">
-                        <div class="avatar-wrapper large">
-                            <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar">
+                        <div class="profile-card__avatar profile-card__avatar--large">
+                            <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" loading="lazy" width="100" height="100">
                         </div>
                         <div class="developer-details">
                             <h3>Golden Creeper</h3>
                             <p data-lang="gcDeveloperRole">Главный разработчик</p>
-                            <a href="https://www.youtube.com/@Gc567" target="_blank" class="button small">YouTube</a>
+                            <a href="https://www.youtube.com/@Gc567" target="_blank" rel="noopener" class="button button--small">YouTube</a>
                         </div>
                     </div>
                 </section>
@@ -71,7 +118,9 @@
             <section class="card download-card">
                 <h2 data-lang="downloadTitle">Скачать игру</h2>
                 <div class="download-buttons">
-                    <a href="https://gamejolt.com/games/Gc_advenchur/804610" target="_blank" class="download-button gamejolt">GameJolt</a>
+                    <a href="https://gamejolt.com/games/Gc_advenchur/804610" target="_blank" rel="noopener" class="download-button">
+                        <i class="fas fa-gamepad" aria-hidden="true"></i> GameJolt
+                    </a>
                 </div>
                 <p class="text-secondary small-note" data-lang="gcDownloadNote">Версия 0.1.0 · Обновление от 01.11.2023</p>
             </section>
@@ -96,12 +145,12 @@
                     <li data-lang="videoRule2">Видео в плейлисте должны понравиться разработчику, после чего они могут попасть сюда.</li>
                 </ul>
                 <div class="video-grid">
-                    <a href="https://youtu.be/scqYneefAds" target="_blank" class="video-card-link">
-                        <div class="video-card">
-                            <img src="images/video-gc-1.jpg" alt="Видео 1" class="video-thumbnail">
-                            <h4 data-lang="gcVideo1Title">Обзор ГК Адвенчур</h4>
-                            <p>YouTube · Канал</p>
-                        </div>
+                    <a href="https://youtu.be/scqYneefAds" target="_blank" rel="noopener" class="video-card__link">
+                        <article class="video-card">
+                            <img src="images/video-gc-1.jpg" alt="Видео 1" class="video-card__thumbnail" loading="lazy" width="250" height="140">
+                            <h4 class="video-card__title" data-lang="gcVideo1Title">Обзор ГК Адвенчур</h4>
+                            <p class="video-card__meta">YouTube · Канал</p>
+                        </article>
                     </a>
                 </div>
             </section>
@@ -109,16 +158,16 @@
             <section class="card">
                 <h2 data-lang="updatesTitle">Обновления</h2>
                 <div class="update-card">
-                    <h3 data-lang="gcUpdateTitle">Обновление 0.1.0</h3>
+                    <h3 class="update-card__title" data-lang="gcUpdateTitle">Обновление 0.1.0</h3>
                     <details class="spoiler">
                         <summary data-lang="gcUpdateSummary">Игра вышла</summary>
-                        <div class="spoiler-content"><p data-lang="gcUpdateContent">Первый релиз игры.</p></div>
+                        <div class="spoiler__content"><p data-lang="gcUpdateContent">Первый релиз игры.</p></div>
                     </details>
                 </div>
             </section>
 
             <footer class="site-footer">
-                <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium/gc-adven" target="_blank" data-lang="googleSites">Google Sites</a></p>
+                <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium/gc-adven" target="_blank" rel="noopener" data-lang="googleSites">Google Sites</a></p>
             </footer>
         </main>
     </div>
