@@ -14,22 +14,24 @@
 </head>
 <body>
     <div class="page">
-        <!-- Плашка о разработке с переключателем языка -->
+        <!-- Плашка о разработке (без переключателя) -->
         <div class="dev-notice">
             <span data-lang="devNotice">⚡ Сайт в разработке · актуальная информация на</span>
             <a href="https://sites.google.com/view/neonimperium/alpha-01" target="_blank" class="button small" data-lang="originalSite">Оригинальный сайт</a>
+        </div>
+
+        <!-- Навигация с переключателем языков справа -->
+        <nav class="nav-bar">
+            <div class="nav-links">
+                <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
+                <a href="starve-neon.html" class="nav-link" data-lang="navStarve">Starve Neon</a>
+                <a href="alpha-01.html" class="nav-link active" data-lang="navAlpha">Alpha 01</a>
+                <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
+            </div>
             <div class="lang-switcher">
                 <button class="lang-btn active" data-lang-code="ru">RU</button>
                 <button class="lang-btn" data-lang-code="en">EN</button>
             </div>
-        </div>
-
-        <!-- Навигация -->
-        <nav class="nav-bar">
-            <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
-            <a href="starve-neon.html" class="nav-link" data-lang="navStarve">Starve Neon</a>
-            <a href="alpha-01.html" class="nav-link active" data-lang="navAlpha">Alpha 01</a>
-            <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
         </nav>
 
         <!-- Заголовок игры с фоновым изображением, иконкой и версией -->
