@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Imperium — ГК Адвенчур</title>
+    <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+    <script src="lang.js" defer></script>
+</head>
+<body>
+    <div class="page">
+        <!-- Плашка о разработке с переключателем языка -->
+        <div class="dev-notice">
+            <span data-lang="devNotice">⚡ Сайт в разработке · актуальная информация на</span>
+            <a href="https://sites.google.com/view/neonimperium/gc-adven" target="_blank" class="button small" data-lang="originalSite">Оригинальный сайт</a>
+            <div class="lang-switcher">
+                <button class="lang-btn active" data-lang-code="ru">RU</button>
+                <button class="lang-btn" data-lang-code="en">EN</button>
+            </div>
+        </div>
+
+        <!-- Навигация -->
+        <nav class="nav-bar">
+            <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
+            <a href="starve-neon.html" class="nav-link" data-lang="navStarve">Starve Neon</a>
+            <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
+            <a href="gc-adven.html" class="nav-link active" data-lang="navGc">ГК Адвенчур</a>
+        </nav>
+
+        <!-- Заголовок игры с фоновым изображением, иконкой и версией -->
+        <header class="card header-card game-header" style="background-image: url('images/gc-adven-header.jpg');">
+            <div class="header-overlay">
+                <div class="header-content">
+                    <div class="game-icon-circle">
+                        <img src="images/gc-adven-icon.png" alt="ГК Адвенчур Icon" class="game-icon">
+                    </div>
+                    <h1 class="game-title">ГК Адвенчур</h1>
+                    <div class="version-badge" data-lang="gcVersion">Обновление 0.1.0</div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <!-- Трейлер и разработчик -->
+            <div class="row">
+                <section class="card trailer-card">
+                    <h2 data-lang="trailerTitle">Трейлер</h2>
+                    <div class="video-embed">
+                        <iframe width="100%" height="250" src="https://www.youtube.com/embed/VIDEO_ID" frameborder="0" allowfullscreen></iframe>
+                    </div>
+                </section>
+
+                <section class="card developer-card">
+                    <h2 data-lang="developerTitle">Разработчик</h2>
+                    <div class="developer-info">
+                        <div class="avatar-wrapper large">
+                            <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar">
+                        </div>
+                        <div class="developer-details">
+                            <h3>Neon Shadow</h3>
+                            <p data-lang="gcDeveloperRole">Главный разработчик</p>
+                            <a href="https://youtube.com/@neonshadow" target="_blank" class="button small">YouTube</a>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Блок скачивания -->
+            <section class="card download-card">
+                <h2 data-lang="downloadTitle">Скачать игру</h2>
+                <div class="download-buttons">
+                    <a href="#" class="download-button windows">Windows</a>
+                </div>
+                <p class="text-secondary small-note" data-lang="gcDownloadNote">Версия 0.1.0 · Обновление от 01.11.2023</p>
+            </section>
+
+            <!-- Описание -->
+            <section class="card">
+                <h2 data-lang="descriptionTitle">Описание</h2>
+                <div class="features-grid">
+                    <div class="feature-item">
+                        <span class="feature-icon">🎮</span>
+                        <h3 data-lang="gcAboutTitle">Об игре</h3>
+                        <p data-lang="gcDescription">Что тут писать? Просто приключение ГКТМО.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Видео от сообщества -->
+            <section class="card">
+                <h2 data-lang="videoTitle">Видео</h2>
+                <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
+                <p data-lang="videoHowTo">Чтобы сюда попасть:</p>
+                <ul class="features-list">
+                    <li data-lang="videoRule1">Создай плейлист с настройкой сортировки "сначала новые" или "по популярности".</li>
+                    <li data-lang="videoRule2">Видео в плейлисте должны понравиться разработчику, после чего они могут попасть сюда.</li>
+                </ul>
+                <div class="video-grid">
+                    <a href="https://youtube.com/playlist?list=..." target="_blank" class="video-card-link">
+                        <div class="video-card">
+                            <img src="images/video-gc-1.jpg" alt="Видео 1" class="video-thumbnail">
+                            <h4 data-lang="gcVideo1Title">Обзор ГК Адвенчур</h4>
+                            <p>YouTube · Канал</p>
+                        </div>
+                    </a>
+                </div>
+            </section>
+
+            <!-- Обновления -->
+            <section class="card">
+                <h2 data-lang="updatesTitle">Обновления</h2>
+                <div class="update-card">
+                    <h3 data-lang="gcUpdateTitle">Обновление 0.1.0</h3>
+                    <details class="spoiler">
+                        <summary data-lang="gcUpdateSummary">Игра вышла</summary>
+                        <div class="spoiler-content"><p data-lang="gcUpdateContent">Первый релиз игры.</p></div>
+                    </details>
+                </div>
+            </section>
+
+            <!-- Подвал -->
+            <footer class="site-footer">
+                <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium/gc-adven" target="_blank" data-lang="googleSites">Google Sites</a></p>
+            </footer>
+        </main>
+    </div>
+</body>
+</html>
