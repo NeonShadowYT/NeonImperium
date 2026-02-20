@@ -9,10 +9,11 @@
     body { padding: 10px; }
     .game-title { font-size: 32px; }
     .card { padding: 20px; }
+    .dev-notice { flex-direction: column; gap: 8px; }
     .download-buttons { flex-direction: column; align-items: stretch; }
     .download-button { width: 100%; }
 }
 
 @media (max-width: 500px) {
-    /* любые дополнительные правки */
+    .dev-notice { flex-direction: column; text-align: center; gap: 10px; }
 }
