@@ -243,12 +243,16 @@
     overflow: hidden;
     margin-bottom: 12px;
     border: 2px solid var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .avatar-wrapper.large { width: 100px; height: 100px; }
 .avatar {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: center;
 }
 .profile-name {
     font-size: 16px;
@@ -354,7 +358,14 @@
     border-radius: 12px;
     border: 1px solid var(--border);
     width: 100%;
-    height: 200px;
+    aspect-ratio: 16 / 9;
+}
+
+/* Видео в трейлере */
+.video-embed iframe {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: none;
 }
 
 /* Требования */
@@ -491,22 +502,18 @@
     font-family: "Font Awesome 6 Brands";
 }
 
-/* Плашка разработки (удалена) */
-
-/* Подвал (удален) */
-
 /* Небольшие проекты на главной */
 .small-projects-container {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr 1fr;
     gap: 20px;
     margin-top: 20px;
 }
 .trailer-small iframe {
     border-radius: 16px;
     border: 1px solid var(--border);
-    height: 180px;
     width: 100%;
+    aspect-ratio: 16 / 9;
 }
 @media (max-width: 700px) {
     .small-projects-container {
