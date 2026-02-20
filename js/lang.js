@@ -117,7 +117,10 @@ const translations = {
         gcUpdateTitle: "Обновление 0.1.0",
         gcUpdateSummary: "Игра вышла",
         gcUpdateContent: "Первый релиз игры.",
-        downloadBtn: "Скачать"
+        downloadBtn: "Скачать",
+        error404Title: "404 - Страница не найдена",
+        error404Desc: "Извините, запрашиваемая страница не существует или была перемещена.",
+        backHome: "Вернуться на главную"
     },
     en: {
         devNotice: "⚡ Site under development",
@@ -237,29 +240,48 @@ const translations = {
         gcUpdateTitle: "Update 0.1.0",
         gcUpdateSummary: "Game released",
         gcUpdateContent: "First release of the game.",
-        downloadBtn: "Download"
+        downloadBtn: "Download",
+        error404Title: "404 - Page not found",
+        error404Desc: "Sorry, the page you requested does not exist or has been moved.",
+        backHome: "Back to home"
     }
 };
 
 function setLanguage(lang) {
+    if (!translations[lang]) {
+        console.warn(`Language ${lang} not found, falling back to ru`);
+        lang = 'ru';
+    }
     document.querySelectorAll('[data-lang]').forEach(element => {
         const key = element.getAttribute('data-lang');
-        if (translations[lang] && translations[lang][key]) {
+        if (translations[lang] && translations[lang][key] !== undefined) {
             if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
                 element.placeholder = translations[lang][key];
             } else {
                 element.textContent = translations[lang][key];
             }
+        } else {
+            // Если ключ не найден, можно оставить текущий текст или ничего не делать
+            // console.warn(`Translation key "${key}" not found for language ${lang}`);
         }
     });
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.langCode === lang);
     });
-    localStorage.setItem('preferredLanguage', lang);
+    try {
+        localStorage.setItem('preferredLanguage', lang);
+    } catch (e) {
+        console.warn('Could not save language preference to localStorage');
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const savedLang = localStorage.getItem('preferredLanguage') || 'ru';
+    let savedLang = 'ru';
+    try {
+        savedLang = localStorage.getItem('preferredLanguage') || 'ru';
+    } catch (e) {
+        console.warn('Could not read language preference from localStorage');
+    }
     setLanguage(savedLang);
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.addEventListener('click', () => {
