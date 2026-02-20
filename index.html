@@ -4,13 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neon Imperium</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="googlebot" content="noindex, nofollow">
     <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
-    <script src="lang.js" defer></script>
+    <link rel="stylesheet" href="css/style.min.css">
+    <script src="js/lang.js" defer></script>
+    <noscript>
+        <style>.lang-switcher,.js-only{display:none}</style>
+        <div class="noscript-notice">⚡ Для полноценной работы сайта рекомендуется включить JavaScript.</div>
+    </noscript>
 </head>
 <body>
     <div class="page">
@@ -36,12 +38,12 @@
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
-                        <img src="images/logo-neon-imperium.png" alt="Neon Imperium Logo" class="game-icon">
+                        <img src="images/logo-neon-imperium.png" alt="Neon Imperium Logo" class="game-icon" loading="lazy">
                     </div>
                     <h1 class="game-title" data-lang="siteTitle">Neon Imperium</h1>
                     <div class="social-icons">
-                        <a href="https://discord.com/invite/9gv5sRhk9R" target="_blank" class="social-icon"><i class="fab fa-discord"></i></a>
-                        <a href="https://t.me/voididea" target="_blank" class="social-icon"><i class="fab fa-telegram"></i></a>
+                        <a href="https://discord.com/invite/9gv5sRhk9R" target="_blank" class="social-icon" rel="noopener noreferrer"><i class="fab fa-discord"></i></a>
+                        <a href="https://t.me/voididea" target="_blank" class="social-icon" rel="noopener noreferrer"><i class="fab fa-telegram"></i></a>
                     </div>
                 </div>
             </div>
@@ -55,7 +57,7 @@
                     <a href="starve-neon.html" class="project-card-link">
                         <div class="project-card">
                             <div class="image-wrapper">
-                                <img src="images/starve-neon-header.jpg" alt="Starve Neon" class="project-image">
+                                <img src="images/starve-neon-header.jpg" alt="Starve Neon" class="project-image" loading="lazy">
                             </div>
                             <h3>Starve Neon</h3>
                             <p data-lang="starveDesc">Выживание в брутальном мире с прокачкой и генетикой.</p>
@@ -65,7 +67,7 @@
                     <a href="alpha-01.html" class="project-card-link">
                         <div class="project-card">
                             <div class="image-wrapper">
-                                <img src="images/alpha-01-header.jpg" alt="Alpha 01" class="project-image">
+                                <img src="images/alpha-01-header.jpg" alt="Alpha 01" class="project-image" loading="lazy">
                             </div>
                             <h3>Alpha 01</h3>
                             <p data-lang="alphaDesc">Top-down шутер, где вы робот, помогающий солдатам.</p>
@@ -75,7 +77,7 @@
                     <a href="gc-adven.html" class="project-card-link">
                         <div class="project-card">
                             <div class="image-wrapper">
-                                <img src="images/gc-adven-header.jpg" alt="ГК Адвенчур" class="project-image">
+                                <img src="images/gc-adven-header.jpg" alt="ГК Адвенчур" class="project-image" loading="lazy">
                             </div>
                             <h3>ГК Адвенчур</h3>
                             <p data-lang="gcDesc">Просто приключение ГКТМО.</p>
@@ -89,20 +91,20 @@
                 <h2 data-lang="smallProjectsTitle">Небольшие проекты</h2>
                 <p class="text-secondary" data-lang="smallProjectsDesc">Игры созданные по рофлу</p>
                 <div class="projects-grid">
-                    <a href="#" class="project-card-link disabled">
+                    <a href="#" class="project-card-link disabled" aria-disabled="true">
                         <div class="project-card">
                             <div class="image-wrapper">
-                                <img src="images/project-pnsd1.jpg" alt="ПНСД 1" class="project-image">
+                                <img src="images/project-pnsd1.jpg" alt="ПНСД 1" class="project-image" loading="lazy">
                             </div>
                             <h3>ПНСД 1</h3>
                             <p data-lang="pnsd1Desc">Первая часть безумной серии.</p>
                             <span class="button disabled" data-lang="comingSoon">Скоро</span>
                         </div>
                     </a>
-                    <a href="#" class="project-card-link disabled">
+                    <a href="#" class="project-card-link disabled" aria-disabled="true">
                         <div class="project-card">
                             <div class="image-wrapper">
-                                <img src="images/project-pnsd2.jpg" alt="ПНСД 2" class="project-image">
+                                <img src="images/project-pnsd2.jpg" alt="ПНСД 2" class="project-image" loading="lazy">
                             </div>
                             <h3>ПНСД 2</h3>
                             <p data-lang="pnsd2Desc">Продолжение, ещё безумнее.</p>
@@ -117,18 +119,18 @@
                     <h2 data-lang="developersTitle">Разработчики</h2>
                     <p class="text-secondary" data-lang="developersDesc">Работаем в свободное время</p>
                     <div class="profile-cards">
-                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link" rel="noopener noreferrer">
                             <div class="profile-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar">
+                                    <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar" loading="lazy">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
                         </a>
-                        <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link" rel="noopener noreferrer">
                             <div class="profile-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar">
+                                    <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar" loading="lazy">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
@@ -140,18 +142,18 @@
                     <h2 data-lang="youtubersTitle">Ютуберы</h2>
                     <p class="text-secondary" data-lang="youtubersDesc">Собираем комьюнити</p>
                     <div class="profile-cards">
-                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link" rel="noopener noreferrer">
                             <div class="profile-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar">
+                                    <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar" loading="lazy">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
                         </a>
-                        <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link" rel="noopener noreferrer">
                             <div class="profile-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar">
+                                    <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar" loading="lazy">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
@@ -159,11 +161,11 @@
                     </div>
                 </section>
             </div>
-
-            <footer class="site-footer">
-                <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium" target="_blank" data-lang="googleSites">Google Sites</a></p>
-            </footer>
         </main>
+
+        <footer class="site-footer">
+            <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium" target="_blank" data-lang="googleSites">Google Sites</a></p>
+        </footer>
     </div>
 </body>
 </html>
