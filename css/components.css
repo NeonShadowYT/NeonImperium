@@ -38,16 +38,23 @@
 .nav-bar {
     background: var(--bg-card);
     border-radius: 50px;
-    padding: 6px;
+    padding: 6px 20px;
     margin-bottom: 24px;
     border: 1px solid var(--border);
-    display: inline-flex;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     flex-wrap: wrap;
     box-shadow: var(--shadow);
 }
+.nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
 .nav-link {
     color: var(--text-secondary);
-    padding: 10px 24px;
+    padding: 10px 20px;
     border-radius: 40px;
     font-size: 16px;
     transition: background 0.2s, color 0.2s;
@@ -60,6 +67,31 @@
 .nav-link.active {
     background: var(--accent);
     color: white;
+}
+
+/* Переключатель языка */
+.lang-switcher {
+    display: flex;
+    gap: 5px;
+}
+.lang-btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+.lang-btn:hover {
+    background: var(--accent);
+    color: white;
+}
+.lang-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
 }
 
 /* Шапка с фоном */
@@ -440,32 +472,6 @@
     border: none;
 }
 .dev-notice .button.small:hover { background: #ffc34d; }
-
-/* Переключатель языка */
-.lang-switcher {
-    display: flex;
-    gap: 5px;
-    margin-left: 15px;
-}
-.lang-btn {
-    background: transparent;
-    border: 1px solid var(--accent);
-    color: var(--text-secondary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    transition: all 0.2s;
-}
-.lang-btn:hover {
-    background: var(--accent);
-    color: white;
-}
-.lang-btn.active {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
-}
 
 /* Подвал */
 .site-footer {
