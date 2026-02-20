@@ -4,19 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neon Imperium</title>
-    <meta name="description" content="Neon Imperium - официальный сайт игр Starve Neon, Alpha 01, ГК Адвенчур и других проектов">
-    <meta name="keywords" content="Neon Imperium, игры, Starve Neon, Alpha 01, ГК Адвенчур, разработка игр">
-    <meta name="author" content="Neon Shadow, Golden Creeper">
     <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
-    <link rel="apple-touch-icon" href="images/logo-neon-imperium.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="style.min.css"> <!-- минифицированная версия -->
+    <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
-    <!-- preload критических изображений -->
-    <link rel="preload" as="image" href="images/neon-imperium-header.jpg">
-    <link rel="preload" as="image" href="images/logo-neon-imperium.png">
     <script src="lang.js" defer></script>
 </head>
 <body>
@@ -38,15 +31,12 @@
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
-                        <picture>
-                            <source srcset="images/logo-neon-imperium.webp" type="image/webp">
-                            <img src="images/logo-neon-imperium.png" alt="Neon Imperium Logo" class="game-icon" loading="eager">
-                        </picture>
+                        <img src="images/logo-neon-imperium.png" alt="Neon Imperium Logo" class="game-icon">
                     </div>
                     <h1 class="game-title" data-lang="siteTitle">Neon Imperium</h1>
                     <div class="social-icons">
-                        <a href="https://discord.com/invite/9gv5sRhk9R" target="_blank" class="social-icon" rel="noopener noreferrer"><i class="fab fa-discord"></i></a>
-                        <a href="https://t.me/voididea" target="_blank" class="social-icon" rel="noopener noreferrer"><i class="fab fa-telegram"></i></a>
+                        <a href="https://discord.com/invite/9gv5sRhk9R" target="_blank" class="social-icon"><i class="fab fa-discord"></i></a>
+                        <a href="https://t.me/voididea" target="_blank" class="social-icon"><i class="fab fa-telegram"></i></a>
                     </div>
                 </div>
             </div>
@@ -60,10 +50,7 @@
                     <a href="starve-neon.html" class="project-card-link">
                         <div class="project-card">
                             <div class="image-wrapper">
-                                <picture>
-                                    <source srcset="images/starve-neon-header.webp" type="image/webp">
-                                    <img src="images/starve-neon-header.jpg" alt="Starve Neon" class="project-image" loading="lazy">
-                                </picture>
+                                <img src="images/starve-neon-header.jpg" alt="Starve Neon" class="project-image">
                             </div>
                             <h3>Starve Neon</h3>
                             <p data-lang="starveDesc">Выживание в брутальном мире с прокачкой и генетикой.</p>
@@ -73,10 +60,7 @@
                     <a href="alpha-01.html" class="project-card-link">
                         <div class="project-card">
                             <div class="image-wrapper">
-                                <picture>
-                                    <source srcset="images/alpha-01-header.webp" type="image/webp">
-                                    <img src="images/alpha-01-header.jpg" alt="Alpha 01" class="project-image" loading="lazy">
-                                </picture>
+                                <img src="images/alpha-01-header.jpg" alt="Alpha 01" class="project-image">
                             </div>
                             <h3>Alpha 01</h3>
                             <p data-lang="alphaDesc">Top-down шутер, где вы робот, помогающий солдатам.</p>
@@ -86,10 +70,7 @@
                     <a href="gc-adven.html" class="project-card-link">
                         <div class="project-card">
                             <div class="image-wrapper">
-                                <picture>
-                                    <source srcset="images/gc-adven-header.webp" type="image/webp">
-                                    <img src="images/gc-adven-header.jpg" alt="ГК Адвенчур" class="project-image" loading="lazy">
-                                </picture>
+                                <img src="images/gc-adven-header.jpg" alt="ГК Адвенчур" class="project-image">
                             </div>
                             <h3>ГК Адвенчур</h3>
                             <p data-lang="gcDesc">Просто приключение ГКТМО.</p>
@@ -104,28 +85,22 @@
                 <p class="text-secondary" data-lang="smallProjectsDesc">Игры созданные по рофлу</p>
                 <div class="small-projects-container">
                     <div class="trailer-small">
-                        <iframe width="100%" height="180" src="https://www.youtube.com/embed/Ckjgf8Jza5w" frameborder="0" allowfullscreen loading="lazy" title="ПНСД трейлер"></iframe>
+                        <iframe width="100%" height="180" src="https://www.youtube.com/embed/Ckjgf8Jza5w" frameborder="0" allowfullscreen></iframe>
                     </div>
-                    <a href="https://disk.yandex.ru/d/kV-dcNQvZg1Y_g" target="_blank" class="project-card-link" rel="noopener noreferrer">
+                    <a href="https://disk.yandex.ru/d/kV-dcNQvZg1Y_g" target="_blank" class="project-card-link">
                         <div class="project-card">
                             <div class="image-wrapper">
-                                <picture>
-                                    <source srcset="images/project-pnsd1.webp" type="image/webp">
-                                    <img src="images/project-pnsd1.jpg" alt="ПНСД 1" class="project-image" loading="lazy">
-                                </picture>
+                                <img src="images/project-pnsd1.jpg" alt="ПНСД 1" class="project-image">
                             </div>
                             <h3>ПНСД 1</h3>
                             <p data-lang="pnsd1Desc">Первая часть безумной серии.</p>
                             <span class="button" data-lang="downloadBtn">Скачать</span>
                         </div>
                     </a>
-                    <a href="https://disk.yandex.ru/d/J3f2JxRbzAIwxQ" target="_blank" class="project-card-link" rel="noopener noreferrer">
+                    <a href="https://disk.yandex.ru/d/J3f2JxRbzAIwxQ" target="_blank" class="project-card-link">
                         <div class="project-card">
                             <div class="image-wrapper">
-                                <picture>
-                                    <source srcset="images/project-pnsd2.webp" type="image/webp">
-                                    <img src="images/project-pnsd2.jpg" alt="ПНСД 2" class="project-image" loading="lazy">
-                                </picture>
+                                <img src="images/project-pnsd2.jpg" alt="ПНСД 2" class="project-image">
                             </div>
                             <h3>ПНСД 2</h3>
                             <p data-lang="pnsd2Desc">Продолжение, ещё безумнее.</p>
@@ -140,24 +115,18 @@
                     <h2 data-lang="developersTitle">Разработчики</h2>
                     <p class="text-secondary" data-lang="developersDesc">Работаем в свободное время</p>
                     <div class="profile-cards">
-                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link" rel="noopener noreferrer">
+                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
                             <div class="profile-card">
                                 <div class="avatar-wrapper">
-                                    <picture>
-                                        <source srcset="images/avatar-neon-shadow.webp" type="image/webp">
-                                        <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar" loading="lazy">
-                                    </picture>
+                                    <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
                         </a>
-                        <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link" rel="noopener noreferrer">
+                        <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
                             <div class="profile-card">
                                 <div class="avatar-wrapper">
-                                    <picture>
-                                        <source srcset="images/avatar-golden-creeper.webp" type="image/webp">
-                                        <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar" loading="lazy">
-                                    </picture>
+                                    <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
@@ -169,24 +138,18 @@
                     <h2 data-lang="youtubersTitle">Ютуберы</h2>
                     <p class="text-secondary" data-lang="youtubersDesc">Собираем комьюнити</p>
                     <div class="profile-cards">
-                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link" rel="noopener noreferrer">
+                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
                             <div class="profile-card">
                                 <div class="avatar-wrapper">
-                                    <picture>
-                                        <source srcset="images/avatar-neon-shadow.webp" type="image/webp">
-                                        <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar" loading="lazy">
-                                    </picture>
+                                    <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
                         </a>
-                        <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link" rel="noopener noreferrer">
+                        <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
                             <div class="profile-card">
                                 <div class="avatar-wrapper">
-                                    <picture>
-                                        <source srcset="images/avatar-golden-creeper.webp" type="image/webp">
-                                        <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar" loading="lazy">
-                                    </picture>
+                                    <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
