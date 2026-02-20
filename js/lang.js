@@ -1,7 +1,6 @@
 const translations = {
     ru: {
-        devNotice: "⚡ Сайт в разработке · актуальная информация на",
-        originalSite: "Оригинальный сайт",
+        devNotice: "⚡ Сайт в разработке",
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
@@ -78,6 +77,8 @@ const translations = {
         video1Title: "Обзор Starve Neon",
         video2Title: "Гайд для новичков",
         video3Title: "Прохождение мультиплеера",
+        video4Title: "Лучшие моменты",
+        video5Title: "Секреты и пасхалки",
         starveUpdateTitle: "Патч 0.13.7",
         spoilerTutorial: "Туториал",
         tutorialContent: "Цели по всей игре",
@@ -98,6 +99,7 @@ const translations = {
         alphaStatusDesc: "Игра находится в активной разработке. Текущая версия: 0.0.5.2",
         alphaVideo1Title: "Обзор Alpha 01",
         alphaVideo2Title: "Прохождение",
+        alphaVideo3Title: "Стрим с разработчиком",
         alphaUpdateTitle: "Патч 0.0.5.2",
         spoilerGameplay: "Геймплей",
         gameplayContent: "Добавлена 1 точка бандитов на свалке",
@@ -111,15 +113,14 @@ const translations = {
         gcAboutTitle: "Об игре",
         gcDescription: "Что тут писать? Просто приключение ГКТМО.",
         gcVideo1Title: "Обзор ГК Адвенчур",
+        gcVideo2Title: "Прохождение",
         gcUpdateTitle: "Обновление 0.1.0",
         gcUpdateSummary: "Игра вышла",
         gcUpdateContent: "Первый релиз игры.",
-        downloadBtn: "Скачать",
-        pnsdTrailerTitle: "Трейлер ПНСД"
+        downloadBtn: "Скачать"
     },
     en: {
-        devNotice: "⚡ Site under development · actual info at",
-        originalSite: "Original site",
+        devNotice: "⚡ Site under development",
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
@@ -196,6 +197,8 @@ const translations = {
         video1Title: "Starve Neon Review",
         video2Title: "Beginner's Guide",
         video3Title: "Multiplayer Walkthrough",
+        video4Title: "Highlights",
+        video5Title: "Secrets & Easter Eggs",
         starveUpdateTitle: "Patch 0.13.7",
         spoilerTutorial: "Tutorial",
         tutorialContent: "Goals throughout the game",
@@ -216,6 +219,7 @@ const translations = {
         alphaStatusDesc: "The game is in active development. Current version: 0.0.5.2",
         alphaVideo1Title: "Alpha 01 Review",
         alphaVideo2Title: "Walkthrough",
+        alphaVideo3Title: "Dev Stream",
         alphaUpdateTitle: "Patch 0.0.5.2",
         spoilerGameplay: "Gameplay",
         gameplayContent: "Added 1 bandit point at the dump",
@@ -229,11 +233,11 @@ const translations = {
         gcAboutTitle: "About",
         gcDescription: "What to write? Just a GC adventure.",
         gcVideo1Title: "GC Adven Review",
+        gcVideo2Title: "Walkthrough",
         gcUpdateTitle: "Update 0.1.0",
         gcUpdateSummary: "Game released",
         gcUpdateContent: "First release of the game.",
-        downloadBtn: "Download",
-        pnsdTrailerTitle: "PNSD Trailer"
+        downloadBtn: "Download"
     }
 };
 
