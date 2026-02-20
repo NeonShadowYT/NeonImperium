@@ -1,0 +1,19 @@
+@media (max-width: 700px) {
+    .row { flex-direction: column; }
+    .trailer-card, .developer-card, .half { flex: 1 1 auto; }
+    .nav-bar { width: 100%; justify-content: center; }
+    .nav-link { flex: 1 1 auto; text-align: center; }
+}
+
+@media (max-width: 600px) {
+    body { padding: 10px; }
+    .game-title { font-size: 32px; }
+    .card { padding: 20px; }
+    .dev-notice { flex-direction: column; gap: 8px; }
+    .download-buttons { flex-direction: column; align-items: stretch; }
+    .download-button { width: 100%; }
+}
+
+@media (max-width: 500px) {
+    .dev-notice { flex-direction: column; text-align: center; gap: 10px; }
+}

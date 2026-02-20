@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Imperium — Starve Neon</title>
+    <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+    <script src="lang.js" defer></script>
+</head>
+<body>
+    <div class="page">
+        <div class="dev-notice">
+            <span data-lang="devNotice">⚡ Сайт в разработке · актуальная информация на</span>
+            <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank" class="button small" data-lang="originalSite">Оригинальный сайт</a>
+        </div>
+
+        <nav class="nav-bar">
+            <div class="nav-links">
+                <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
+                <a href="starve-neon.html" class="nav-link active" data-lang="navStarve">Starve Neon</a>
+                <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
+                <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
+            </div>
+            <div class="lang-switcher">
+                <button class="lang-btn active" data-lang-code="ru">RU</button>
+                <button class="lang-btn" data-lang-code="en">EN</button>
+            </div>
+        </nav>
+
+        <header class="card header-card game-header" style="background-image: url('images/starve-neon-header.jpg');">
+            <div class="header-overlay">
+                <div class="header-content">
+                    <div class="game-icon-circle">
+                        <img src="images/starve-neon-icon.png" alt="Starve Neon Icon" class="game-icon">
+                    </div>
+                    <h1 class="game-title">Starve Neon</h1>
+                    <div class="version-badge" data-lang="starveVersion">Объединение 0.13.7</div>
+                    <div class="social-icons">
+                        <a href="https://t.me/voididea" target="_blank" class="social-icon"><i class="fab fa-telegram"></i></a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="row">
+                <section class="card trailer-card">
+                    <h2 data-lang="trailerTitle">Трейлер</h2>
+                    <div class="video-embed">
+                        <iframe width="100%" height="250" src="https://www.youtube.com/embed/videoseries?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" frameborder="0" allowfullscreen></iframe>
+                    </div>
+                </section>
+
+                <section class="card developer-card">
+                    <h2 data-lang="developerTitle">Разработчик</h2>
+                    <div class="developer-info">
+                        <div class="avatar-wrapper large">
+                            <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar">
+                        </div>
+                        <div class="developer-details">
+                            <h3>Neon Shadow</h3>
+                            <p data-lang="starveDeveloperRole">Главный разработчик, геймдизайнер</p>
+                            <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="button small">YouTube</a>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <section class="card download-card">
+                <h2 data-lang="downloadTitle">Скачать игру</h2>
+                <div class="download-buttons">
+                    <a href="https://gamejolt.com/games/Starve-Neon/797491" target="_blank" class="download-button gamejolt">GameJolt</a>
+                    <a href="https://neon-imperium.itch.io/starve-neon" target="_blank" class="download-button itch">Itch.io</a>
+                </div>
+                <p class="text-secondary small-note" data-lang="downloadNote">Доступно на нескольких платформах. Следите за обновлениями!</p>
+            </section>
+
+            <section class="card">
+                <h2 data-lang="descriptionTitle">Описание</h2>
+                <div class="features-grid">
+                    <div class="feature-item">
+                        <span class="feature-icon">🍗</span>
+                        <h3 data-lang="worldTitle">Игровой мир</h3>
+                        <p data-lang="worldDesc">БРУТАЛЬНЫЙ ХАРДКОРНЫЙ МИР. Я не буду держать тебя за руку, приятель. Я оставлю небольшой туториал по базовой механике, а дальше ты сам по себе ;}</p>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">⚙️</span>
+                        <h3 data-lang="statusTitle">Статус</h3>
+                        <p data-lang="statusDesc">Starve Neon находится на ранней стадии разработки, но открыт для кроссплатформенного многопользовательского тестирования.</p>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">⚡</span>
+                        <h3 data-lang="developmentTitle">Развитие</h3>
+                        <p data-lang="developmentDesc">Полная система развития от копий и мечей до ГРЕБАНОГО МИНИГАНА, ЧУВАК! Броня для разных биомов, модули и система генетики, подобная RimWorld.</p>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">💚</span>
+                        <h3 data-lang="alliesTitle">Союзники</h3>
+                        <p data-lang="alliesDesc">Создавай союзы с фракциями и другими игроками, участвуй в битвах на арене и приручай животных. Отправляйся кланом на рейд подобно Rust.</p>
+                    </div>
+                </div>
+
+                <div class="features-extra">
+                    <h3 data-lang="featuresTitle">Особенности</h3>
+                    <ul class="features-list">
+                        <li data-lang="feature1">Интернет необязателен.</li>
+                        <li data-lang="feature2">Частые крупные обновления.</li>
+                        <li data-lang="feature3">Встроенная поддержка модов.</li>
+                        <li data-lang="feature4">Прямое общение с разработчиком.</li>
+                        <li data-lang="feature5">Многоязычная поддержка и простое добавление пользовательских языков и шрифтов.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2 data-lang="requirementsTitle">Системные требования</h2>
+                <p class="text-secondary" data-lang="requirementsNote">Примерные значения основанные на стандартных настройках для этих устройств</p>
+
+                <div class="requirements-grid">
+                    <div class="req-item">
+                        <span class="req-label" data-lang="fps60">60+ Фпс</span>
+                        <span data-lang="cpu60">Процессор: Xeon-E2650 v2 3.00 GHz</span>
+                        <span data-lang="gpu60">Видеокарта: GT 730 4GB</span>
+                    </div>
+                    <div class="req-item">
+                        <span class="req-label" data-lang="fps180">180+ Фпс</span>
+                        <span data-lang="cpu180">Процессор: AMD Athlon X4 840 3.10 GHz</span>
+                        <span data-lang="gpu180">Видеокарта: GT 1030 2GB</span>
+                    </div>
+                    <div class="req-item">
+                        <span class="req-label" data-lang="fps1000">1000+ Фпс</span>
+                        <span data-lang="cpu1000">Процессор: AMD Ryzen 7 7435HS 4.00 GHz</span>
+                        <span data-lang="gpu1000">Видеокарта: RTX 3050 4GB Laptop</span>
+                    </div>
+                </div>
+
+                <div class="consumption-card">
+                    <h3 data-lang="consumptionTitle">Потребление</h3>
+                    <p class="text-secondary" data-lang="consumptionNote">Примерные значения</p>
+                    <table class="consumption-table">
+                        <tr><td data-lang="vram">Видеопамять</td><td data-lang="vramVal">512-1024 Мб</td></tr>
+                        <tr><td data-lang="ram">Оперативка</td><td data-lang="ramVal">512-1024 Мб</td></tr>
+                        <tr><td data-lang="storage">Память</td><td data-lang="storageVal">256 Мб</td></tr>
+                        <tr><td data-lang="os">Система</td><td data-lang="osVal">Win 10+ 32 Бит / Андроид 7+</td></tr>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2 data-lang="videoTitle">Видео</h2>
+                <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
+                <p data-lang="videoHowTo">Чтобы сюда попасть:</p>
+                <ul class="features-list">
+                    <li data-lang="videoRule1">Создай плейлист с настройкой сортировки "сначала новые" или "по популярности".</li>
+                    <li data-lang="videoRule2">Видео в плейлисте должны понравиться разработчику, после чего они могут попасть сюда.</li>
+                </ul>
+                <div class="video-grid">
+                    <a href="https://youtube.com/playlist?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" target="_blank" class="video-card-link">
+                        <div class="video-card">
+                            <img src="images/video1.jpg" alt="Видео 1" class="video-thumbnail">
+                            <h4 data-lang="video1Title">Обзор Starve Neon</h4>
+                            <p>YouTube · Канал Игромана</p>
+                        </div>
+                    </a>
+                    <a href="https://youtube.com/playlist?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" target="_blank" class="video-card-link">
+                        <div class="video-card">
+                            <img src="images/video2.jpg" alt="Видео 2" class="video-thumbnail">
+                            <h4 data-lang="video2Title">Гайд для новичков</h4>
+                            <p>YouTube · Neon Shadow</p>
+                        </div>
+                    </a>
+                    <a href="https://youtube.com/playlist?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" target="_blank" class="video-card-link">
+                        <div class="video-card">
+                            <img src="images/video3.jpg" alt="Видео 3" class="video-thumbnail">
+                            <h4 data-lang="video3Title">Прохождение мультиплеера</h4>
+                            <p>YouTube · Сообщество</p>
+                        </div>
+                    </a>
+                </div>
+            </section>
+
+            <section class="card">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                    <h2 data-lang="updatesTitle" style="margin: 0;">Обновления</h2>
+                    <a href="https://t.me/starvervoprosenom" target="_blank" class="button wide" style="display: inline-flex; align-items: center; gap: 8px;">
+                        <i class="fab fa-telegram"></i> <span data-lang="polls">Опросы</span>
+                    </a>
+                </div>
+                <div class="update-card">
+                    <h3 data-lang="starveUpdateTitle">Патч 0.13.7</h3>
+                    <details class="spoiler">
+                        <summary data-lang="spoilerTutorial">Туториал</summary>
+                        <div class="spoiler-content"><p data-lang="tutorialContent">Цели по всей игре</p></div>
+                    </details>
+                    <details class="spoiler">
+                        <summary data-lang="spoilerRewards">Награды</summary>
+                        <div class="spoiler-content"><p data-lang="rewardsContent">Локализация<br>Улучшены возможности перевода</p></div>
+                    </details>
+                    <details class="spoiler">
+                        <summary data-lang="spoilerQuality">Удобства</summary>
+                        <div class="spoiler-content"><p data-lang="qualityContent">Интерфейс<br>Управление</p></div>
+                    </details>
+                    <details class="spoiler">
+                        <summary data-lang="spoilerBalance">Баланс</summary>
+                        <div class="spoiler-content"><p data-lang="balanceContent">Награды за уровень<br>Изменение прогрессии</p></div>
+                    </details>
+                    <details class="spoiler">
+                        <summary data-lang="spoilerBugfix">Багфикс</summary>
+                        <div class="spoiler-content"><p data-lang="bugfixContent">Множество мелких исправлений</p></div>
+                    </details>
+                </div>
+            </section>
+
+            <footer class="site-footer">
+                <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium/starve-neon" target="_blank" data-lang="googleSites">Google Sites</a></p>
+            </footer>
+        </main>
+    </div>
+</body>
+</html>

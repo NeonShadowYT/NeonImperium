@@ -1,0 +1,501 @@
+/* Карточки */
+.card {
+    background: var(--bg-card);
+    border-radius: 20px;
+    padding: 28px;
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.2s;
+}
+.card:hover { box-shadow: 0 12px 28px rgba(0,0,0,0.7); }
+
+/* Кнопки */
+.button {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-size: 14px;
+    transition: background 0.2s, transform 0.1s;
+    border: none;
+    cursor: pointer;
+    text-align: center;
+}
+.button:hover {
+    background: var(--accent-light);
+    transform: scale(1.02);
+}
+.button.small { padding: 6px 16px; font-size: 13px; }
+.button.disabled {
+    background: #555;
+    pointer-events: none;
+    opacity: 0.6;
+}
+.button.wide {
+    padding-left: 30px;
+    padding-right: 30px;
+}
+
+/* Навигация */
+.nav-bar {
+    background: var(--bg-card);
+    border-radius: 50px;
+    padding: 6px 20px;
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    box-shadow: var(--shadow);
+}
+.nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.nav-link {
+    color: var(--text-secondary);
+    padding: 10px 20px;
+    border-radius: 40px;
+    font-size: 16px;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+.nav-link:hover {
+    background: #4a4a4a;
+    color: var(--text-primary);
+}
+.nav-link.active {
+    background: var(--accent);
+    color: white;
+}
+
+/* Переключатель языка */
+.lang-switcher {
+    display: flex;
+    gap: 5px;
+}
+.lang-btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+.lang-btn:hover {
+    background: var(--accent);
+    color: white;
+}
+.lang-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+/* Шапка с фоном */
+.game-header {
+    background-size: cover;
+    background-position: center;
+    padding: 0;
+}
+.header-overlay {
+    padding: 60px 28px;
+    text-align: center;
+}
+.header-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 30px;
+    flex-wrap: wrap;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.4);
+    padding: 20px 40px;
+    border-radius: 100px;
+    backdrop-filter: blur(2px);
+}
+.game-icon-circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+}
+.game-icon {
+    max-width: 80px;
+    max-height: 80px;
+    object-fit: contain;
+}
+.header-content .game-title {
+    margin-bottom: 0;
+    color: #fff;
+}
+.social-icons {
+    display: flex;
+    gap: 15px;
+    margin-left: 20px;
+}
+.social-icon {
+    color: white;
+    font-size: 24px;
+    transition: opacity 0.2s;
+}
+.social-icon:hover {
+    opacity: 0.8;
+}
+
+/* Проекты */
+.project-card-link {
+    display: block;
+    color: inherit;
+    transition: transform 0.2s;
+}
+.project-card-link:hover {
+    transform: translateY(-5px);
+}
+.project-card-link.disabled { pointer-events: none; opacity: 0.7; }
+.project-card {
+    background: var(--bg-primary);
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    transition: border-color 0.2s;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+.project-card-link:hover .project-card { border-color: var(--accent); }
+.image-wrapper {
+    width: 100%;
+    height: 180px;
+    overflow: hidden;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+}
+.project-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s;
+}
+.project-card-link:hover .project-image { transform: scale(1.05); }
+.project-card h3 {
+    margin: 8px 0 4px;
+    font-size: 20px;
+    color: var(--text-primary);
+}
+.project-card p {
+    flex-grow: 1;
+    margin-bottom: 16px;
+}
+
+/* Профили */
+.profile-card-link {
+    flex: 1 1 150px;
+    color: inherit;
+    transition: transform 0.2s;
+}
+.profile-card-link:hover { transform: translateY(-3px); }
+.profile-card {
+    background: var(--bg-primary);
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: border-color 0.2s;
+}
+.profile-card-link:hover .profile-card { border-color: var(--accent); }
+.avatar-wrapper {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-bottom: 12px;
+    border: 2px solid var(--accent);
+}
+.avatar-wrapper.large { width: 100px; height: 100px; }
+.avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.profile-name {
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+/* Трейлер и разработчик */
+.trailer-card .video-embed {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+.developer-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    margin-top: 0;
+}
+.developer-details h3 {
+    margin: 0 0 4px;
+}
+.developer-details p {
+    margin: 0 0 8px;
+}
+
+/* Особенности */
+.feature-item {
+    background: var(--bg-primary);
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid var(--border);
+}
+.feature-icon {
+    font-size: 32px;
+    display: block;
+    margin-bottom: 10px;
+}
+.feature-item h3 {
+    margin: 0 0 8px;
+    color: var(--accent);
+}
+.features-extra {
+    margin-top: 30px;
+    padding: 20px;
+    background: var(--bg-primary);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+}
+.features-extra h3 {
+    margin: 0 0 15px;
+    color: var(--accent);
+}
+
+/* Списки */
+.features-list {
+    list-style: none;
+    padding-left: 0;
+}
+.features-list li {
+    padding: 4px 0 4px 20px;
+    position: relative;
+}
+.features-list li::before {
+    content: "•";
+    color: var(--accent);
+    font-size: 18px;
+    position: absolute;
+    left: 0;
+    top: -1px;
+}
+
+/* Видео */
+.video-card-link {
+    color: inherit;
+    transition: transform 0.2s;
+}
+.video-card-link:hover { transform: translateY(-5px); }
+.video-card {
+    background: var(--bg-primary);
+    border-radius: 16px;
+    padding: 12px;
+    border: 1px solid var(--border);
+}
+.video-thumbnail {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+}
+.video-card h4 {
+    font-size: 16px;
+    margin: 0 0 4px;
+    color: var(--text-primary);
+}
+.video-card p {
+    font-size: 12px;
+    margin: 0;
+}
+
+/* Требования */
+.req-item {
+    flex: 1 1 200px;
+    background: var(--bg-primary);
+    padding: 16px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+}
+.req-label {
+    display: block;
+    color: var(--accent);
+    margin-bottom: 8px;
+    font-size: 16px;
+}
+.consumption-card {
+    background: var(--bg-primary);
+    border-radius: 16px;
+    padding: 20px;
+    margin-top: 24px;
+    border: 1px solid var(--border);
+}
+.consumption-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+}
+.consumption-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+}
+.consumption-table td:first-child {
+    color: var(--text-primary);
+    width: 40%;
+}
+
+/* Обновления */
+.update-card {
+    background: var(--bg-primary);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+}
+.update-card h3 {
+    margin: 0 0 15px;
+    color: var(--accent);
+    font-size: 22px;
+}
+
+/* Спойлеры */
+.spoiler {
+    margin-top: 16px;
+    background: var(--bg-primary);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+.spoiler summary {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 14px 20px;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid transparent;
+    font-size: 16px;
+}
+.spoiler[open] summary { border-bottom-color: var(--border); }
+.spoiler summary:hover { background: #3a3a3a; }
+.spoiler summary::before {
+    content: "▶";
+    margin-right: 12px;
+    font-size: 12px;
+    color: var(--accent);
+    transition: transform 0.2s;
+}
+.spoiler[open] summary::before { transform: rotate(90deg); }
+.spoiler-content {
+    padding: 20px;
+    background: var(--bg-primary);
+    font-size: 14px;
+}
+
+/* Скачивание */
+.download-card {
+    text-align: center;
+    background: linear-gradient(145deg, var(--bg-card), #2a2a2a);
+}
+.download-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    margin: 24px 0;
+}
+.download-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 14px 20px;
+    border-radius: 50px;
+    border: 2px solid var(--accent);
+    font-size: 16px;
+    transition: all 0.2s;
+    min-width: 200px;
+    flex: 0 1 auto;
+}
+.download-button:hover {
+    background: var(--accent);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
+}
+.download-button::before { content: "⬇"; font-size: 18px; }
+.download-button.windows::before { content: "🖥️"; }
+.download-button.android::before { content: "📱"; }
+.download-button.linux::before { content: "🐧"; }
+
+/* Кнопки GameJolt и Itch.io (синие, как основные) */
+.download-button.gamejolt::before {
+    content: "\f3e5"; /* fa-gamejolt */
+    font-family: "Font Awesome 6 Brands";
+    font-weight: 400;
+}
+.download-button.itch::before {
+    content: "\f83a"; /* fa-itch-io */
+    font-family: "Font Awesome 6 Brands";
+}
+/* Наследуют цвета от .download-button, поэтому дополнительных стилей не требуется */
+
+/* Плашка разработки */
+.dev-notice {
+    background: #1e1e1e;
+    color: #ffaa00;
+    text-align: center;
+    padding: 12px 20px;
+    border-radius: 40px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+.dev-notice .button.small {
+    background: #ffaa00;
+    color: #1e1e1e;
+    border: none;
+}
+.dev-notice .button.small:hover { background: #ffc34d; }
+
+/* Подвал */
+.site-footer {
+    text-align: center;
+    color: #666;
+    font-size: 12px;
+    padding: 24px 0 12px;
+    border-top: 1px solid var(--border);
+    margin-top: 32px;
+}
+.small-note { font-size: 12px; color: #666; }

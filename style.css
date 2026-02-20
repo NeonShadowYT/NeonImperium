@@ -1,0 +1,6 @@
+/* style.css — основной файл, подключаем все части */
+@import url('css/variables.css');
+@import url('css/base.css');
+@import url('css/components.css');
+@import url('css/layout.css');
+@import url('css/responsive.css');
