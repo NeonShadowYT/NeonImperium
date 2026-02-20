@@ -8,15 +8,7 @@
     <meta name="keywords" content="Neon Imperium, игры, Starve Neon, Alpha 01, ГК Адвенчур, разработка игр">
     <meta name="author" content="Neon Shadow, Golden Creeper">
     <!-- Content Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="
-        default-src 'self';
-        script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://www.youtube.com https://s.ytimg.com https://www.google.com https://www.gstatic.com;
-        style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com;
-        font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com;
-        img-src 'self' data: https://ytimg.com https://i.ytimg.com;
-        frame-src https://www.youtube.com https://youtube.com https://www.google.com https://*.doubleclick.net;
-        connect-src 'self' https://www.youtube.com https://*.google.com https://*.doubleclick.net;
-    ">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data:; frame-src https://www.youtube.com https://youtube.com; connect-src 'self';">
     <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
     <link rel="apple-touch-icon" href="images/logo-neon-imperium.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -24,6 +16,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+    <!-- Preload только критических ресурсов -->
+    <link rel="preload" as="image" href="images/logo-neon-imperium.png">
     <script src="lang.js" defer onerror="this.onerror=null; console.error('Не удалось загрузить lang.js');"></script>
 </head>
 <body>
@@ -111,7 +105,7 @@
                 <p class="text-secondary" data-lang="smallProjectsDesc">Игры созданные по рофлу</p>
                 <div class="small-projects-container">
                     <div class="trailer-small">
-                        <iframe width="100%" height="180" src="https://www.youtube.com/embed/Ckjgf8Jza5w" frameborder="0" allowfullscreen loading="lazy" title="ПНСД трейлер" sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>
+                        <iframe width="100%" height="180" src="https://www.youtube.com/embed/Ckjgf8Jza5w" frameborder="0" allowfullscreen loading="lazy" title="ПНСД трейлер"></iframe>
                     </div>
                     <a href="https://disk.yandex.ru/d/kV-dcNQvZg1Y_g" target="_blank" class="project-card-link" rel="noopener noreferrer">
                         <div class="project-card">
