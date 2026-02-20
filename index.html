@@ -5,24 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neon Imperium</title>
     <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
+    <!-- Font Awesome для иконок соцсетей -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+    <!-- Скрипт для переключения языка -->
+    <script src="lang.js" defer></script>
 </head>
 <body>
     <div class="page">
-        <!-- Плашка о разработке -->
+        <!-- Плашка о разработке с переключателем языка -->
         <div class="dev-notice">
-            <span>⚡ Сайт в разработке · актуальная информация на</span>
-            <a href="https://sites.google.com/view/neonimperium" target="_blank" class="button small">Оригинальный сайт</a>
+            <span data-lang="devNotice">⚡ Сайт в разработке · актуальная информация на</span>
+            <a href="https://sites.google.com/view/neonimperium" target="_blank" class="button small" data-lang="originalSite">Оригинальный сайт</a>
+            <div class="lang-switcher">
+                <button class="lang-btn active" data-lang-code="ru">RU</button>
+                <button class="lang-btn" data-lang-code="en">EN</button>
+            </div>
         </div>
 
         <!-- Навигация -->
         <nav class="nav-bar">
-            <a href="index.html" class="nav-link active">Neon Imperium</a>
-            <a href="starve-neon.html" class="nav-link">Starve Neon</a>
-            <a href="alpha-01.html" class="nav-link">Alpha 01</a>
+            <a href="index.html" class="nav-link active" data-lang="navHome">Neon Imperium</a>
+            <a href="starve-neon.html" class="nav-link" data-lang="navStarve">Starve Neon</a>
+            <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
+            <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
         </nav>
 
         <!-- Заголовок с фоновым изображением, иконкой и соцсетями -->
@@ -32,9 +41,9 @@
                     <div class="game-icon-circle">
                         <img src="images/logo-neon-imperium.png" alt="Neon Imperium Logo" class="game-icon">
                     </div>
-                    <h1 class="game-title">Neon Imperium</h1>
+                    <h1 class="game-title" data-lang="siteTitle">Neon Imperium</h1>
                     <div class="social-icons">
-                        <a href="https://discord.gg/..." target="_blank" class="social-icon">💬</a>
+                        <a href="https://discord.gg/..." target="_blank" class="social-icon"><i class="fab fa-discord"></i></a>
                         <!-- Здесь можно добавить другие иконки -->
                     </div>
                 </div>
@@ -44,8 +53,8 @@
         <main>
             <!-- Главные проекты -->
             <section class="card">
-                <h2>Главные проекты</h2>
-                <p class="text-secondary">Игры с приоритетом разработки</p>
+                <h2 data-lang="mainProjectsTitle">Главные проекты</h2>
+                <p class="text-secondary" data-lang="mainProjectsDesc">Игры с приоритетом разработки</p>
                 <div class="projects-grid">
                     <a href="starve-neon.html" class="project-card-link">
                         <div class="project-card">
@@ -53,8 +62,8 @@
                                 <img src="images/starve-neon-header.jpg" alt="Starve Neon" class="project-image">
                             </div>
                             <h3>Starve Neon</h3>
-                            <p>Выживание в брутальном мире с прокачкой и генетикой.</p>
-                            <span class="button">Подробнее</span>
+                            <p data-lang="starveDesc">Выживание в брутальном мире с прокачкой и генетикой.</p>
+                            <span class="button" data-lang="detailsBtn">Подробнее</span>
                         </div>
                     </a>
                     <a href="alpha-01.html" class="project-card-link">
@@ -63,27 +72,27 @@
                                 <img src="images/alpha-01-header.jpg" alt="Alpha 01" class="project-image">
                             </div>
                             <h3>Alpha 01</h3>
-                            <p>Top-down шутер, где вы робот, помогающий солдатам.</p>
-                            <span class="button">Подробнее</span>
+                            <p data-lang="alphaDesc">Top-down шутер, где вы робот, помогающий солдатам.</p>
+                            <span class="button" data-lang="detailsBtn">Подробнее</span>
                         </div>
                     </a>
-                    <a href="#" class="project-card-link disabled">
+                    <a href="gc-adven.html" class="project-card-link">
                         <div class="project-card">
                             <div class="image-wrapper">
-                                <img src="images/project-gk-advenchur.jpg" alt="ГК Адвенчур" class="project-image">
+                                <img src="images/gc-adven-header.jpg" alt="ГК Адвенчур" class="project-image">
                             </div>
                             <h3>ГК Адвенчур</h3>
-                            <p>Классическое приключение в духе старых RPG.</p>
-                            <span class="button disabled">Скоро</span>
+                            <p data-lang="gcDesc">Просто приключение ГКТМО.</p>
+                            <span class="button" data-lang="detailsBtn">Подробнее</span>
                         </div>
                     </a>
                 </div>
             </section>
 
-            <!-- Небольшие проекты (теперь тоже "скоро") -->
+            <!-- Небольшие проекты -->
             <section class="card">
-                <h2>Небольшие проекты</h2>
-                <p class="text-secondary">Игры созданные по рофлу</p>
+                <h2 data-lang="smallProjectsTitle">Небольшие проекты</h2>
+                <p class="text-secondary" data-lang="smallProjectsDesc">Игры созданные по рофлу</p>
                 <div class="projects-grid">
                     <a href="#" class="project-card-link disabled">
                         <div class="project-card">
@@ -91,8 +100,8 @@
                                 <img src="images/project-pnsd1.jpg" alt="ПНСД 1" class="project-image">
                             </div>
                             <h3>ПНСД 1</h3>
-                            <p>Первая часть безумной серии.</p>
-                            <span class="button disabled">Скоро</span>
+                            <p data-lang="pnsd1Desc">Первая часть безумной серии.</p>
+                            <span class="button disabled" data-lang="comingSoon">Скоро</span>
                         </div>
                     </a>
                     <a href="#" class="project-card-link disabled">
@@ -101,8 +110,8 @@
                                 <img src="images/project-pnsd2.jpg" alt="ПНСД 2" class="project-image">
                             </div>
                             <h3>ПНСД 2</h3>
-                            <p>Продолжение, ещё безумнее.</p>
-                            <span class="button disabled">Скоро</span>
+                            <p data-lang="pnsd2Desc">Продолжение, ещё безумнее.</p>
+                            <span class="button disabled" data-lang="comingSoon">Скоро</span>
                         </div>
                     </a>
                 </div>
@@ -111,8 +120,8 @@
             <!-- Разработчики и ютуберы -->
             <div class="row">
                 <section class="card half">
-                    <h2>Разработчики</h2>
-                    <p class="text-secondary">Работаем в свободное время</p>
+                    <h2 data-lang="developersTitle">Разработчики</h2>
+                    <p class="text-secondary" data-lang="developersDesc">Работаем в свободное время</p>
                     <div class="profile-cards">
                         <a href="https://youtube.com/@neonshadow" target="_blank" class="profile-card-link">
                             <div class="profile-card">
@@ -134,8 +143,8 @@
                 </section>
 
                 <section class="card half">
-                    <h2>Ютуберы</h2>
-                    <p class="text-secondary">Собираем комьюнити</p>
+                    <h2 data-lang="youtubersTitle">Ютуберы</h2>
+                    <p class="text-secondary" data-lang="youtubersDesc">Собираем комьюнити</p>
                     <div class="profile-cards">
                         <a href="https://youtube.com/@neonshadow" target="_blank" class="profile-card-link">
                             <div class="profile-card">
@@ -159,7 +168,7 @@
 
             <!-- Подвал -->
             <footer class="site-footer">
-                <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium" target="_blank">Google Sites</a></p>
+                <p class="small-note">© Neon Imperium · <a href="https://sites.google.com/view/neonimperium" target="_blank" data-lang="googleSites">Google Sites</a></p>
             </footer>
         </main>
     </div>
