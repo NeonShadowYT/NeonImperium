@@ -1,0 +1,57 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Russo One', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    line-height: 1.5;
+    padding: 20px;
+    font-size: 16px;
+}
+
+.page {
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+a:hover { text-decoration: none; }
+
+/* Типографика */
+h1, h2, h3, h4, .game-title {
+    color: var(--text-primary);
+    font-weight: 400;
+}
+.game-title {
+    font-size: 48px;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+}
+h2 {
+    font-size: 24px;
+    margin-bottom: 16px;
+}
+h3 {
+    font-size: 20px;
+    margin: 16px 0 8px;
+}
+.text-secondary, p, li, .small-note {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+.version-badge {
+    background: var(--accent);
+    color: white;
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+}
