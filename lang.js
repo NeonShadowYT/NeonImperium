@@ -36,7 +36,7 @@ const translations = {
         windowsBtn: "Windows (32/64 бит)",
         androidBtn: "Android (APK)",
         linuxBtn: "Linux",
-        downloadNote: "Файлы будут доступны после первого релиза. Следите за обновлениями!",
+        downloadNote: "Доступно на нескольких платформах. Следите за обновлениями!",
         starveVersion: "Объединение 0.13.7",
         starveDeveloperRole: "Главный разработчик, геймдизайнер",
         worldTitle: "Игровой мир",
@@ -117,7 +117,10 @@ const translations = {
         gcUpdateTitle: "Обновление 0.1.0",
         gcUpdateSummary: "Игра вышла",
         gcUpdateContent: "Первый релиз игры.",
-        downloadBtn: "Скачать"
+        downloadBtn: "Скачать",
+        notFoundTitle: "404 — Страница не найдена",
+        notFoundDesc: "Запрашиваемая страница не существует или была перемещена.",
+        backHome: "Вернуться на главную"
     },
     en: {
         devNotice: "⚡ Site under development",
@@ -156,7 +159,7 @@ const translations = {
         windowsBtn: "Windows (32/64 bit)",
         androidBtn: "Android (APK)",
         linuxBtn: "Linux",
-        downloadNote: "Files will be available after the first release. Stay tuned!",
+        downloadNote: "Available on multiple platforms. Stay tuned!",
         starveVersion: "Union 0.13.7",
         starveDeveloperRole: "Lead developer, game designer",
         worldTitle: "Game World",
@@ -237,7 +240,10 @@ const translations = {
         gcUpdateTitle: "Update 0.1.0",
         gcUpdateSummary: "Game released",
         gcUpdateContent: "First release of the game.",
-        downloadBtn: "Download"
+        downloadBtn: "Download",
+        notFoundTitle: "404 — Page not found",
+        notFoundDesc: "The requested page does not exist or has been moved.",
+        backHome: "Back to home"
     }
 };
 
