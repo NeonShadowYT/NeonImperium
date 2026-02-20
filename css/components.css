@@ -86,7 +86,6 @@
 .game-icon-circle {
     width: 100px;
     height: 100px;
-    /* background убран, чтобы не было двойного затенения */
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -109,7 +108,7 @@
 }
 .social-icon {
     color: white;
-    font-size: 28px;
+    font-size: 24px;
     transition: opacity 0.2s;
 }
 .social-icon:hover {
@@ -211,11 +210,11 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 8px; /* уменьшено с 15px */
+    gap: 8px;
     margin-top: 0;
 }
 .developer-details h3 {
-    margin: 0 0 4px; /* убраны лишние отступы */
+    margin: 0 0 4px;
 }
 .developer-details p {
     margin: 0 0 8px;
@@ -441,6 +440,32 @@
     border: none;
 }
 .dev-notice .button.small:hover { background: #ffc34d; }
+
+/* Переключатель языка */
+.lang-switcher {
+    display: flex;
+    gap: 5px;
+    margin-left: 15px;
+}
+.lang-btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+.lang-btn:hover {
+    background: var(--accent);
+    color: white;
+}
+.lang-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
 
 /* Подвал */
 .site-footer {
