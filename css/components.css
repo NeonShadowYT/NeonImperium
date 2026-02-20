@@ -451,6 +451,18 @@
 .download-button.android::before { content: "📱"; }
 .download-button.linux::before { content: "🐧"; }
 
+/* Кнопки GameJolt и Itch.io (синие, как основные) */
+.download-button.gamejolt::before {
+    content: "\f3e5"; /* fa-gamejolt */
+    font-family: "Font Awesome 6 Brands";
+    font-weight: 400;
+}
+.download-button.itch::before {
+    content: "\f83a"; /* fa-itch-io */
+    font-family: "Font Awesome 6 Brands";
+}
+/* Наследуют цвета от .download-button, поэтому дополнительных стилей не требуется */
+
 /* Плашка разработки */
 .dev-notice {
     background: #1e1e1e;
@@ -483,28 +495,3 @@
     margin-top: 32px;
 }
 .small-note { font-size: 12px; color: #666; }
-/* Добавить в конец файла */
-
-.download-button.gamejolt {
-    border-color: #e57d22; /* оранжевый GameJolt */
-}
-.download-button.gamejolt:hover {
-    background-color: #e57d22;
-    border-color: #e57d22;
-}
-.download-button.itch {
-    border-color: #fa5c5c; /* красный Itch.io */
-}
-.download-button.itch:hover {
-    background-color: #fa5c5c;
-    border-color: #fa5c5c;
-}
-.download-button.gamejolt::before {
-    content: "\f1b0"; /* иконка GameJolt (можно заменить) */
-    font-family: "Font Awesome 6 Brands";
-    font-weight: 400;
-}
-.download-button.itch::before {
-    content: "\f1b0"; /* временно, можно заменить на свою иконку */
-    font-family: "Font Awesome 6 Brands";
-}
