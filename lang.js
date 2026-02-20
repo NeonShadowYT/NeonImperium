@@ -260,9 +260,6 @@ function setLanguage(lang) {
             } else {
                 element.textContent = translations[lang][key];
             }
-        } else {
-            // Если ключ не найден, можно оставить текущий текст или ничего не делать
-            // console.warn(`Translation key "${key}" not found for language ${lang}`);
         }
     });
     document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -275,14 +272,20 @@ function setLanguage(lang) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+// Попытка восстановить язык даже если скрипт загрузился поздно
+(function() {
     let savedLang = 'ru';
     try {
         savedLang = localStorage.getItem('preferredLanguage') || 'ru';
-    } catch (e) {
-        console.warn('Could not read language preference from localStorage');
+    } catch (e) {}
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => setLanguage(savedLang));
+    } else {
+        setLanguage(savedLang);
     }
-    setLanguage(savedLang);
+})();
+
+document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             setLanguage(btn.dataset.langCode);

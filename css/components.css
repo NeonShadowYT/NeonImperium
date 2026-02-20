@@ -247,14 +247,14 @@
 .avatar-wrapper.large {
     width: 100px;
     height: 100px;
-    min-width: 100px; /* гарантия квадрата */
+    min-width: 100px;
     min-height: 100px;
 }
 .avatar {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    display: block; /* убирает возможные лишние отступы */
+    display: block;
 }
 .profile-name {
     font-size: 16px;
@@ -500,7 +500,7 @@
 /* Небольшие проекты на главной */
 .small-projects-container {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr; /* трейлер занимает больше места */
+    grid-template-columns: 2fr 1fr 1fr;
     gap: 20px;
     margin-top: 20px;
 }

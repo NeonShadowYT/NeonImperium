@@ -4,13 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neon Imperium — ГК Адвенчур</title>
+    <meta name="description" content="ГК Адвенчур - просто приключение ГКТМО">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data:; frame-src https://www.youtube.com https://youtube.com; connect-src 'self';">
     <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
-    <script src="lang.js" defer></script>
+    <script src="lang.js" defer onerror="this.onerror=null; console.error('Не удалось загрузить lang.js');"></script>
 </head>
 <body>
     <div class="page">
@@ -31,7 +33,10 @@
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
-                        <img src="images/gc-adven-icon.png" alt="ГК Адвенчур Icon" class="game-icon">
+                        <picture>
+                            <source srcset="images/gc-adven-icon.webp" type="image/webp">
+                            <img src="images/gc-adven-icon.png" alt="ГК Адвенчур Icon" class="game-icon">
+                        </picture>
                     </div>
                     <div class="header-text">
                         <h1 class="game-title">ГК Адвенчур</h1>
@@ -46,7 +51,7 @@
                 <section class="card trailer-card">
                     <h2 data-lang="trailerTitle">Трейлер</h2>
                     <div class="video-embed">
-                        <iframe width="100%" height="250" src="https://www.youtube.com/embed/scqYneefAds" frameborder="0" allowfullscreen></iframe>
+                        <iframe width="100%" height="250" src="https://www.youtube.com/embed/scqYneefAds" frameborder="0" allowfullscreen loading="lazy"></iframe>
                     </div>
                 </section>
 
@@ -54,13 +59,16 @@
                     <h2 data-lang="developerTitle">Разработчик</h2>
                     <div class="developer-info">
                         <div class="avatar-wrapper large">
-                            <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar">
+                            <picture>
+                                <source srcset="images/avatar-golden-creeper.webp" type="image/webp">
+                                <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar">
+                            </picture>
                         </div>
                         <div class="developer-details">
                             <h3>Golden Creeper</h3>
                             <p data-lang="gcDeveloperRole">Главный разработчик</p>
                             <div class="developer-actions">
-                                <a href="https://www.youtube.com/@Gc567" target="_blank" class="button small"><i class="fab fa-youtube"></i> YouTube</a>
+                                <a href="https://www.youtube.com/@Gc567" target="_blank" class="button small" rel="noopener noreferrer"><i class="fab fa-youtube"></i> YouTube</a>
                             </div>
                         </div>
                     </div>
@@ -70,7 +78,7 @@
             <section class="card download-card">
                 <h2 data-lang="downloadTitle">Скачать игру</h2>
                 <div class="download-buttons">
-                    <a href="https://gamejolt.com/games/Gc_advenchur/804610" target="_blank" class="download-button gamejolt">GameJolt</a>
+                    <a href="https://gamejolt.com/games/Gc_advenchur/804610" target="_blank" class="download-button gamejolt" rel="noopener noreferrer">GameJolt</a>
                 </div>
                 <p class="text-secondary small-note" data-lang="gcDownloadNote">Версия 0.1.0 · Обновление от 01.11.2023</p>
             </section>
@@ -90,8 +98,8 @@
                 <h2 data-lang="videoTitle">Видео</h2>
                 <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
                 <div class="video-grid">
-                    <iframe class="video-embed" width="100%" height="200" src="https://www.youtube.com/embed/scqYneefAds" frameborder="0" allowfullscreen></iframe>
-                    <iframe class="video-embed" width="100%" height="200" src="https://www.youtube.com/embed/koe3h-kXr3k" frameborder="0" allowfullscreen></iframe>
+                    <iframe class="video-embed" width="100%" height="200" src="https://www.youtube.com/embed/scqYneefAds" frameborder="0" allowfullscreen loading="lazy"></iframe>
+                    <iframe class="video-embed" width="100%" height="200" src="https://www.youtube.com/embed/koe3h-kXr3k" frameborder="0" allowfullscreen loading="lazy"></iframe>
                 </div>
             </section>
 
