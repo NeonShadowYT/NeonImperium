@@ -91,6 +91,9 @@
 .lang-btn:hover {
     background: var(--accent);
     color: white;
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
 }
 .lang-btn.active {
     background: var(--accent);
@@ -136,6 +139,12 @@
 .header-content .game-title {
     margin-bottom: 0;
     color: #fff;
+}
+.header-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
 }
 .social-icons {
     display: flex;
@@ -241,13 +250,30 @@
     overflow: hidden;
     border: 1px solid var(--border);
 }
+.developer-card {
+    display: flex;
+    flex-direction: column;
+}
 .developer-info {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
     gap: 8px;
-    margin-top: 0;
+}
+.developer-details {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+}
+.developer-actions {
+    margin-top: auto;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
 }
 .developer-details h3 {
     margin: 0 0 4px;
@@ -457,15 +483,14 @@
 
 /* Кнопки GameJolt и Itch.io (синие, как основные) */
 .download-button.gamejolt::before {
-    content: "\f3e5"; /* fa-gamejolt */
-    font-family: "Font Awesome 6 Brands";
-    font-weight: 400;
+    content: "\f0e7"; /* fa-bolt */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
 }
 .download-button.itch::before {
     content: "\f83a"; /* fa-itch-io */
     font-family: "Font Awesome 6 Brands";
 }
-/* Наследуют цвета от .download-button, поэтому дополнительных стилей не требуется */
 
 /* Плашка разработки */
 .dev-notice {

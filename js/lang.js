@@ -113,7 +113,9 @@ const translations = {
         gcVideo1Title: "Обзор ГК Адвенчур",
         gcUpdateTitle: "Обновление 0.1.0",
         gcUpdateSummary: "Игра вышла",
-        gcUpdateContent: "Первый релиз игры."
+        gcUpdateContent: "Первый релиз игры.",
+        downloadBtn: "Скачать",
+        pnsdTrailerTitle: "Трейлер ПНСД"
     },
     en: {
         devNotice: "⚡ Site under development · actual info at",
@@ -229,7 +231,9 @@ const translations = {
         gcVideo1Title: "GC Adven Review",
         gcUpdateTitle: "Update 0.1.0",
         gcUpdateSummary: "Game released",
-        gcUpdateContent: "First release of the game."
+        gcUpdateContent: "First release of the game.",
+        downloadBtn: "Download",
+        pnsdTrailerTitle: "PNSD Trailer"
     }
 };
 
