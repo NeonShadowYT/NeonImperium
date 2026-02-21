@@ -27,7 +27,10 @@ function initTiltEffect() {
             card.classList.contains('download-card') ||
             card.classList.contains('features-extra')) return;
         
-        const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon, .feature-icon');
+        // Изображения, которые будем двигать (кроме аватарок в профилях)
+        const img = card.querySelector('.project-image, .video-thumbnail, .game-icon, .feature-icon');
+        // Если это карточка профиля, не двигаем изображение
+        const isProfile = card.closest('.profile-card') || card.classList.contains('profile-card');
         
         const handleMove = throttleAnimation((e) => {
             const rect = card.getBoundingClientRect();
@@ -38,13 +41,13 @@ function initTiltEffect() {
             const rotateX = (y - centerY) / 20;
             const rotateY = (centerX - x) / 20;
             
-            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.01)`;
+            // Увеличиваем scale до 1.02
+            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
             
-            if (img && !card.classList.contains('feature-item') && !card.classList.contains('update-card')) {
+            if (img && !isProfile && !card.classList.contains('feature-item') && !card.classList.contains('update-card')) {
                 const imgX = (x - centerX) / 25;
                 const imgY = (y - centerY) / 25;
-                // Увеличиваем scale для лучшего заполнения при смещении
-                img.style.transform = `translate(${imgX}px, ${imgY}px) scale(1.05)`;
+                img.style.transform = `translate(${imgX}px, ${imgY}px) scale(1.03)`;
             }
         });
         
@@ -52,7 +55,7 @@ function initTiltEffect() {
         
         card.addEventListener('mouseleave', () => {
             card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)';
-            if (img) {
+            if (img && !isProfile) {
                 img.style.transform = 'translate(0, 0) scale(1)';
             }
         });
@@ -68,9 +71,6 @@ function initHeaderParallax() {
     if ('ontouchstart' in window) return;
 
     headers.forEach(header => {
-        // Сохраняем исходный background-size
-        const originalSize = 'cover';
-        
         const handleMove = throttleAnimation((e) => {
             const rect = header.getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -78,18 +78,19 @@ function initHeaderParallax() {
             const centerX = rect.width / 2;
             const centerY = rect.height / 2;
             
-            const moveX = (x - centerX) / 30;
-            const moveY = (y - centerY) / 30;
+            // Ограничиваем смещение, чтобы не показывать края (макс 20px)
+            let moveX = (x - centerX) / 30;
+            let moveY = (y - centerY) / 30;
+            const maxOffset = 20; // пикселей
+            moveX = Math.max(-maxOffset, Math.min(maxOffset, moveX));
+            moveY = Math.max(-maxOffset, Math.min(maxOffset, moveY));
             
-            // Увеличиваем размер фона, чтобы избежать видимости краёв
-            header.style.backgroundSize = '110%';
             header.style.backgroundPosition = `calc(50% + ${moveX}px) calc(50% + ${moveY}px)`;
         });
         
         header.addEventListener('mousemove', handleMove);
         
         header.addEventListener('mouseleave', () => {
-            header.style.backgroundSize = originalSize;
             header.style.backgroundPosition = 'center';
         });
     });

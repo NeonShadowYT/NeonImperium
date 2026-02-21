@@ -12,7 +12,7 @@
 
 /* Шапка с фоном (специфичная карточка) */
 .game-header {
-    background-size: cover;
+    background-size: 110%; /* увеличено, чтобы скрыть края при параллаксе */
     background-position: center;
     padding: 0;
     transition: background-position 0.1s ease-out;
@@ -89,7 +89,7 @@
 }
 .project-card-link.disabled { pointer-events: none; opacity: 0.7; }
 .project-card {
-    background: var(--bg-card-solid);
+    background: var(--bg-inner-gradient); /* градиент для внутренних карточек */
     border-radius: 16px;
     padding: 16px;
     border: 1px solid var(--border);
@@ -137,7 +137,7 @@
 }
 .profile-card-link:hover { transform: translateY(-3px); }
 .profile-card {
-    background: var(--bg-card-solid);
+    background: var(--bg-inner-gradient); /* градиент для карточек профилей */
     border-radius: 16px;
     padding: 16px;
     border: 1px solid var(--border);
@@ -170,7 +170,6 @@
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
 }
-/* Имена разработчиков и ютуберов — белым */
 .profile-name {
     color: var(--text-primary);
 }
@@ -210,7 +209,7 @@
 }
 .developer-actions .button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
+    box-shadow: 0 5px 15px rgba(58,168,201,0.4);
 }
 .developer-details h3 {
     margin: 0 0 4px;
@@ -218,7 +217,7 @@
 
 /* Особенности */
 .feature-item {
-    background: var(--bg-card-solid);
+    background: var(--bg-inner-gradient); /* градиент для блоков особенностей */
     border-radius: 16px;
     padding: 20px;
     border: 1px solid var(--border);
@@ -233,12 +232,12 @@
 }
 .feature-item h3 {
     margin: 0 0 8px;
-    color: var(--accent-light); /* изменено на светлый акцент */
+    color: var(--accent); /* теперь яркий бирюзовый */
 }
 .features-extra {
     margin-top: 30px;
     padding: 20px;
-    background: var(--bg-card-solid);
+    background: var(--bg-inner-gradient);
     border-radius: 16px;
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -246,7 +245,7 @@
 }
 .features-extra h3 {
     margin: 0 0 15px;
-    color: var(--accent-light); /* изменено на светлый акцент */
+    color: var(--accent);
 }
 
 /* Списки */
@@ -269,7 +268,7 @@
 
 /* Видео карточки */
 .video-card {
-    background: var(--bg-card-solid);
+    background: var(--bg-inner-gradient);
     border-radius: 16px;
     padding: 12px;
     border: 1px solid var(--border);
@@ -307,7 +306,7 @@
 /* Требования */
 .req-item {
     flex: 1 1 200px;
-    background: var(--bg-card-solid);
+    background: var(--bg-inner-gradient);
     padding: 16px;
     border-radius: 16px;
     border: 1px solid var(--border);
@@ -316,12 +315,12 @@
 }
 .req-label {
     display: block;
-    color: var(--accent-light); /* изменено на светлый акцент */
+    color: var(--accent);
     margin-bottom: 8px;
     font-size: 16px;
 }
 .consumption-card {
-    background: var(--bg-card-solid);
+    background: var(--bg-inner-gradient);
     border-radius: 16px;
     padding: 20px;
     margin-top: 24px;
@@ -346,7 +345,7 @@
 
 /* Обновления */
 .update-card {
-    background: var(--bg-card-solid);
+    background: var(--bg-inner-gradient);
     border-radius: 16px;
     padding: 20px;
     margin-bottom: 20px;
@@ -356,20 +355,20 @@
 }
 .update-card h3 {
     margin: 0 0 15px;
-    color: var(--accent-light); /* изменено на светлый акцент */
+    color: var(--accent);
     font-size: 22px;
 }
 
 /* Спойлеры */
 .spoiler {
     margin-top: 16px;
-    background: var(--bg-card-solid);
+    background: var(--bg-inner-gradient);
     border-radius: 12px;
     border: 1px solid var(--border);
     overflow: hidden;
 }
 .spoiler summary {
-    background: var(--bg-card-solid);
+    background: var(--bg-inner-gradient);
     color: var(--text-primary);
     padding: 14px 20px;
     cursor: pointer;
@@ -396,7 +395,7 @@
 .spoiler[open] summary::before { transform: rotate(90deg); }
 .spoiler-content {
     padding: 20px;
-    background: var(--bg-card-solid);
+    background: var(--bg-inner-gradient);
     font-size: 14px;
 }
 
@@ -417,15 +416,18 @@
 .tilt-card {
     transform-style: preserve-3d;
     will-change: transform;
-    transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* более плавный переход */
 }
 .tilt-card .project-image,
-.tilt-card .avatar,
 .tilt-card .video-thumbnail,
 .tilt-card .game-icon,
 .tilt-card .feature-icon {
-    transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
+}
+/* Для аватарок в профилях отключаем перемещение */
+.profile-card .avatar {
+    transition: none;
 }
 
 /* Умеренный эффект для карточек описания и дополнительных блоков */

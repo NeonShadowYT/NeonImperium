@@ -110,4 +110,9 @@
         text-align: center;
         gap: 10px;
     }
+    /* Уменьшаем отступы кнопок языка, чтобы они точно помещались в одну строку */
+    .lang-btn {
+        padding: 6px 8px;
+        font-size: 13px;
+    }
 }

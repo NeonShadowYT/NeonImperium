@@ -51,7 +51,7 @@
 .lang-switcher {
     display: flex;
     gap: 5px;
-    flex-wrap: nowrap;
+    flex-wrap: nowrap; /* гарантируем одну строку */
 }
 .lang-btn {
     background: transparent;
@@ -69,7 +69,7 @@
     color: white;
     border-color: var(--accent);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
+    box-shadow: 0 5px 15px rgba(58,168,201,0.4);
 }
 .lang-btn.active {
     background: var(--accent);
