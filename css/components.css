@@ -317,6 +317,7 @@
     font-size: 32px;
     display: block;
     margin-bottom: 10px;
+    transition: transform 0.2s;
 }
 .feature-item h3 {
     margin: 0 0 8px;
@@ -366,12 +367,32 @@
     aspect-ratio: 16 / 9;
 }
 .video-card {
+    background: var(--bg-primary);
+    border-radius: 16px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    transition: transform 0.2s, border-color 0.2s;
+    will-change: transform;
+}
+.video-card:hover { border-color: var(--accent); }
+.video-thumbnail {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
     transition: transform 0.2s;
     will-change: transform;
 }
-.video-thumbnail {
-    transition: transform 0.2s;
-    will-change: transform;
+.video-card h4 {
+    font-size: 16px;
+    margin: 0 0 4px;
+    color: var(--text-primary);
+}
+.video-card p {
+    font-size: 12px;
+    margin: 0;
 }
 
 /* Видео в трейлере */
