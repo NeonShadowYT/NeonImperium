@@ -74,7 +74,10 @@
             </div>
 
             <section class="card download-card">
-                <h2 data-lang="downloadTitle">Скачать игру</h2>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <h2 data-lang="downloadTitle">Скачать</h2>
+                    <span class="download-counter" data-game="starve-neon">0</span>
+                </div>
                 <div class="download-buttons">
                     <a href="https://gamejolt.com/games/Starve-Neon/797491" target="_blank" class="download-button gamejolt">GameJolt</a>
                     <a href="https://neon-imperium.itch.io/starve-neon" target="_blank" class="download-button itch">Itch.io</a>
@@ -85,22 +88,22 @@
             <section class="card">
                 <h2 data-lang="descriptionTitle">Описание</h2>
                 <div class="features-grid">
-                    <div class="feature-item">
+                    <div class="feature-item tilt-card">
                         <span class="feature-icon">🍗</span>
                         <h3 data-lang="worldTitle">Игровой мир</h3>
                         <p data-lang="worldDesc">БРУТАЛЬНЫЙ ХАРДКОРНЫЙ МИР. Я не буду держать тебя за руку, приятель. Я оставлю небольшой туториал по базовой механике, а дальше ты сам по себе ;}</p>
                     </div>
-                    <div class="feature-item">
+                    <div class="feature-item tilt-card">
                         <span class="feature-icon">⚙️</span>
                         <h3 data-lang="statusTitle">Статус</h3>
                         <p data-lang="statusDesc">Starve Neon находится на ранней стадии разработки, но открыт для кроссплатформенного многопользовательского тестирования.</p>
                     </div>
-                    <div class="feature-item">
+                    <div class="feature-item tilt-card">
                         <span class="feature-icon">⚡</span>
                         <h3 data-lang="developmentTitle">Развитие</h3>
                         <p data-lang="developmentDesc">Полная система развития от копий и мечей до ГРЕБАНОГО МИНИГАНА, ЧУВАК! Броня для разных биомов, модули и система генетики, подобная RimWorld.</p>
                     </div>
-                    <div class="feature-item">
+                    <div class="feature-item tilt-card">
                         <span class="feature-icon">💚</span>
                         <h3 data-lang="alliesTitle">Союзники</h3>
                         <p data-lang="alliesDesc">Создавай союзы с фракциями и другими игроками, участвуй в битвах на арене и приручай животных. Отправляйся кланом на рейд подобно Rust.</p>
@@ -124,17 +127,17 @@
                 <p class="text-secondary" data-lang="requirementsNote">Примерные значения основанные на стандартных настройках для этих устройств</p>
 
                 <div class="requirements-grid">
-                    <div class="req-item">
+                    <div class="req-item tilt-card">
                         <span class="req-label" data-lang="fps60">60+ Фпс</span>
                         <span data-lang="cpu60">Процессор: Xeon-E2650 v2 3.00 GHz</span>
                         <span data-lang="gpu60">Видеокарта: GT 730 4GB</span>
                     </div>
-                    <div class="req-item">
+                    <div class="req-item tilt-card">
                         <span class="req-label" data-lang="fps180">180+ Фпс</span>
                         <span data-lang="cpu180">Процессор: AMD Athlon X4 840 3.10 GHz</span>
                         <span data-lang="gpu180">Видеокарта: GT 1030 2GB</span>
                     </div>
-                    <div class="req-item">
+                    <div class="req-item tilt-card">
                         <span class="req-label" data-lang="fps1000">1000+ Фпс</span>
                         <span data-lang="cpu1000">Процессор: AMD Ryzen 7 7435HS 4.00 GHz</span>
                         <span data-lang="gpu1000">Видеокарта: RTX 3050 4GB Laptop</span>
@@ -172,7 +175,7 @@
                         <i class="fab fa-telegram"></i> <span data-lang="polls">Опросы</span>
                     </a>
                 </div>
-                <div class="update-card">
+                <div class="update-card tilt-card">
                     <h3 data-lang="starveUpdateTitle">Патч 0.13.7</h3>
                     <details class="spoiler">
                         <summary data-lang="spoilerTutorial">Туториал</summary>
