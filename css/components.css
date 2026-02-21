@@ -403,7 +403,7 @@
 
 /* Требования */
 .requirements-grid {
-    margin-top: 24px; /* увеличен отступ сверху для лучшей читаемости */
+    margin-top: 24px;
 }
 .req-item {
     flex: 1 1 200px;
@@ -564,7 +564,7 @@
 .update-card.tilt-card:hover,
 .req-item.tilt-card:hover,
 .consumption-card.tilt-card:hover {
-    transform: scale(1.02);
+    transform: scale(1.03); /* увеличено для заметности */
 }
 .feature-item.tilt-card:hover .feature-icon,
 .update-card.tilt-card:hover *,
@@ -576,7 +576,7 @@
 /* Небольшие проекты на главной */
 .small-projects-container {
     display: grid;
-    grid-template-columns: 2fr 1.5fr 1.5fr; /* увеличена ширина карточек */
+    grid-template-columns: 2.5fr 1.75fr 1.75fr; /* трейлер шире, карточки немного расширены */
     gap: 20px;
     margin-top: 20px;
     align-items: stretch;
@@ -671,7 +671,7 @@
         min-height: 280px;
     }
     .card {
-        margin-bottom: 16px; /* немного уменьшаем отступы на мобильных */
+        margin-bottom: 16px;
     }
 }
 
