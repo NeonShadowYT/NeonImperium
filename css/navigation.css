@@ -36,6 +36,16 @@
     background: var(--accent);
     color: white;
 }
+/* Фокус для навигации */
+.nav-link:focus-visible,
+.lang-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 40px; /* для nav-link */
+}
+.lang-btn:focus-visible {
+    border-radius: 20px;
+}
 
 /* Переключатель языка */
 .lang-switcher {
@@ -59,7 +69,7 @@
     color: white;
     border-color: var(--accent);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
+    box-shadow: 0 5px 15px rgba(0, 173, 181, 0.4);
 }
 .lang-btn.active {
     background: var(--accent);
