@@ -170,6 +170,10 @@
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
 }
+/* Имена разработчиков и ютуберов — белым */
+.profile-name {
+    color: var(--text-primary);
+}
 
 /* Трейлер и разработчик */
 .trailer-card .video-embed {
@@ -229,7 +233,7 @@
 }
 .feature-item h3 {
     margin: 0 0 8px;
-    color: var(--accent);
+    color: var(--accent-light); /* изменено на светлый акцент */
 }
 .features-extra {
     margin-top: 30px;
@@ -242,7 +246,7 @@
 }
 .features-extra h3 {
     margin: 0 0 15px;
-    color: var(--accent);
+    color: var(--accent-light); /* изменено на светлый акцент */
 }
 
 /* Списки */
@@ -312,7 +316,7 @@
 }
 .req-label {
     display: block;
-    color: var(--accent);
+    color: var(--accent-light); /* изменено на светлый акцент */
     margin-bottom: 8px;
     font-size: 16px;
 }
@@ -352,7 +356,7 @@
 }
 .update-card h3 {
     margin: 0 0 15px;
-    color: var(--accent);
+    color: var(--accent-light); /* изменено на светлый акцент */
     font-size: 22px;
 }
 

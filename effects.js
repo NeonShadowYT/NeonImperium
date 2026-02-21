@@ -43,7 +43,8 @@ function initTiltEffect() {
             if (img && !card.classList.contains('feature-item') && !card.classList.contains('update-card')) {
                 const imgX = (x - centerX) / 25;
                 const imgY = (y - centerY) / 25;
-                img.style.transform = `translate(${imgX}px, ${imgY}px) scale(1.03)`;
+                // Увеличиваем scale для лучшего заполнения при смещении
+                img.style.transform = `translate(${imgX}px, ${imgY}px) scale(1.05)`;
             }
         });
         
@@ -67,6 +68,9 @@ function initHeaderParallax() {
     if ('ontouchstart' in window) return;
 
     headers.forEach(header => {
+        // Сохраняем исходный background-size
+        const originalSize = 'cover';
+        
         const handleMove = throttleAnimation((e) => {
             const rect = header.getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -77,12 +81,15 @@ function initHeaderParallax() {
             const moveX = (x - centerX) / 30;
             const moveY = (y - centerY) / 30;
             
+            // Увеличиваем размер фона, чтобы избежать видимости краёв
+            header.style.backgroundSize = '110%';
             header.style.backgroundPosition = `calc(50% + ${moveX}px) calc(50% + ${moveY}px)`;
         });
         
         header.addEventListener('mousemove', handleMove);
         
         header.addEventListener('mouseleave', () => {
+            header.style.backgroundSize = originalSize;
             header.style.backgroundPosition = 'center';
         });
     });
