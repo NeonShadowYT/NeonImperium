@@ -570,7 +570,7 @@
 .update-card.tilt-card:hover *,
 .req-item.tilt-card:hover *,
 .consumption-card.tilt-card:hover * {
-    transform: none;
+    transform: scale(1.05);
 }
 
 /* Небольшие проекты на главной */
