@@ -139,6 +139,7 @@
     max-width: 80px;
     max-height: 80px;
     object-fit: contain;
+    transition: transform 0.2s;
 }
 .header-content .game-title {
     margin-bottom: 0;
@@ -186,10 +187,11 @@
     border-radius: 16px;
     padding: 16px;
     border: 1px solid var(--border);
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, transform 0.2s;
     display: flex;
     flex-direction: column;
     height: 100%;
+    will-change: transform;
 }
 .project-card-link:hover .project-card { border-color: var(--accent); }
 .image-wrapper {
@@ -205,6 +207,7 @@
     height: 100%;
     object-fit: cover;
     transition: transform 0.3s;
+    will-change: transform;
 }
 .project-card-link:hover .project-image { transform: scale(1.05); }
 .project-card h3 {
@@ -233,7 +236,8 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, transform 0.2s;
+    will-change: transform;
 }
 .profile-card-link:hover .profile-card { border-color: var(--accent); }
 .avatar-wrapper {
@@ -254,6 +258,8 @@
     height: 100%;
     object-fit: cover;
     object-position: center;
+    transition: transform 0.2s;
+    will-change: transform;
 }
 
 /* Трейлер и разработчик */
@@ -304,6 +310,8 @@
     border-radius: 16px;
     padding: 20px;
     border: 1px solid var(--border);
+    transition: transform 0.2s;
+    will-change: transform;
 }
 .feature-icon {
     font-size: 32px;
@@ -357,6 +365,14 @@
     width: 100%;
     aspect-ratio: 16 / 9;
 }
+.video-card {
+    transition: transform 0.2s;
+    will-change: transform;
+}
+.video-thumbnail {
+    transition: transform 0.2s;
+    will-change: transform;
+}
 
 /* Видео в трейлере */
 .video-embed iframe {
@@ -372,6 +388,8 @@
     padding: 16px;
     border-radius: 16px;
     border: 1px solid var(--border);
+    transition: transform 0.2s;
+    will-change: transform;
 }
 .req-label {
     display: block;
@@ -408,6 +426,8 @@
     padding: 20px;
     margin-bottom: 20px;
     border: 1px solid var(--border);
+    transition: transform 0.2s;
+    will-change: transform;
 }
 .update-card h3 {
     margin: 0 0 15px;
@@ -497,6 +517,23 @@
 .download-button.itch::before {
     content: "\f83a"; /* fa-itch-io */
     font-family: "Font Awesome 6 Brands";
+}
+
+/* Счётчик скачиваний */
+.download-counter {
+    background: var(--accent);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+/* Tilt карточки */
+.tilt-card {
+    transition: transform 0.1s;
+    transform-style: preserve-3d;
+    will-change: transform;
 }
 
 /* Небольшие проекты на главной */
