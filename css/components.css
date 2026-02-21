@@ -278,6 +278,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     text-align: center;
     gap: 8px;
 }
@@ -286,13 +287,15 @@
     flex-direction: column;
     align-items: center;
     width: 100%;
+    flex: 1;
 }
 .developer-actions {
-    margin-top: 10px;
+    margin-top: auto;
     display: flex;
     gap: 10px;
     justify-content: center;
     flex-wrap: wrap;
+    padding-top: 10px;
 }
 .developer-actions .button:hover {
     transform: translateY(-2px);
@@ -590,6 +593,9 @@
     width: 100%;
     aspect-ratio: 16 / 9;
 }
+.small-projects-container .project-card {
+    height: auto;
+}
 .small-projects-container .project-card .image-wrapper {
     height: auto;
     aspect-ratio: 1 / 1;
@@ -597,8 +603,88 @@
 .small-projects-container .project-card p {
     display: none;
 }
+.small-projects-container .project-card h3 {
+    margin: 8px 0;
+}
+.small-projects-container .project-card .button {
+    margin-top: 4px;
+}
+
+/* Мобильная адаптация */
+@media (max-width: 900px) {
+    .nav-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .nav-links {
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+    .lang-switcher {
+        justify-content: center;
+    }
+}
+
 @media (max-width: 700px) {
+    .row {
+        flex-direction: column;
+    }
+    .trailer-card, .developer-card, .half {
+        flex: 1 1 auto;
+    }
     .small-projects-container {
         grid-template-columns: 1fr;
+    }
+    .header-content {
+        flex-direction: column;
+        padding: 20px;
+    }
+    .game-icon-circle {
+        width: 80px;
+        height: 80px;
+    }
+    .game-icon {
+        max-width: 60px;
+        max-height: 60px;
+    }
+    .game-title {
+        font-size: 28px;
+    }
+    .nav-bar {
+        border-radius: 20px;
+        padding: 10px;
+    }
+    .nav-link {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    .download-card .download-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .download-counter {
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 500px) {
+    .nav-links {
+        flex-wrap: wrap;
+    }
+    .nav-link {
+        flex: 1 1 auto;
+        text-align: center;
+    }
+    .version-row {
+        flex-direction: column;
+        gap: 5px;
+    }
+    .developer-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+    .developer-actions .button {
+        width: 100%;
     }
 }
