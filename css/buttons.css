@@ -1,0 +1,64 @@
+/* Кнопки */
+.button {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-size: 14px;
+    transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+    border: none;
+    cursor: pointer;
+    text-align: center;
+}
+.button:hover {
+    background: var(--accent-light);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
+}
+.button.small { padding: 6px 16px; font-size: 13px; }
+.button.disabled {
+    background: #555;
+    pointer-events: none;
+    opacity: 0.6;
+}
+.button.wide {
+    padding-left: 30px;
+    padding-right: 30px;
+}
+
+/* Кнопки скачивания */
+.download-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 14px 20px;
+    border-radius: 50px;
+    border: 2px solid var(--accent);
+    font-size: 16px;
+    transition: all 0.2s;
+    min-width: 200px;
+    flex: 0 1 auto;
+}
+.download-button:hover {
+    background: var(--accent);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
+}
+.download-button::before { content: "⬇"; font-size: 18px; }
+.download-button.windows::before { content: "🖥️"; }
+.download-button.android::before { content: "📱"; }
+.download-button.linux::before { content: "🐧"; }
+.download-button.gamejolt::before {
+    content: "\f0e7"; /* fa-bolt */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+}
+.download-button.itch::before {
+    content: "\f83a"; /* fa-itch-io */
+    font-family: "Font Awesome 6 Brands";
+}

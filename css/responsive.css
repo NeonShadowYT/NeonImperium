@@ -1,19 +1,113 @@
+/* Адаптивность */
+
+@media (max-width: 900px) {
+    .nav-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .nav-links {
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+    .lang-switcher {
+        justify-content: center;
+    }
+}
+
 @media (max-width: 700px) {
-    .row { flex-direction: column; }
-    .trailer-card, .developer-card, .half { flex: 1 1 auto; }
-    .nav-bar { width: 100%; justify-content: center; }
-    .nav-link { flex: 1 1 auto; text-align: center; }
+    .row {
+        flex-direction: column;
+    }
+    .trailer-card, .developer-card, .half {
+        flex: 1 1 auto;
+    }
+    .small-projects-container {
+        grid-template-columns: 1fr;
+    }
+    .header-content {
+        flex-direction: column;
+        padding: 20px;
+    }
+    .game-icon-circle {
+        width: 80px;
+        height: 80px;
+    }
+    .game-icon {
+        max-width: 60px;
+        max-height: 60px;
+    }
+    .game-title {
+        font-size: 28px;
+    }
+    .nav-bar {
+        border-radius: 20px;
+        padding: 10px;
+    }
+    .nav-link {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    .developer-card {
+        min-height: 280px;
+    }
+    .card {
+        margin-bottom: 16px;
+    }
+    .nav-bar {
+        width: 100%;
+        justify-content: center;
+    }
+    .nav-link {
+        flex: 1 1 auto;
+        text-align: center;
+    }
 }
 
 @media (max-width: 600px) {
-    body { padding: 10px; }
-    .game-title { font-size: 32px; }
-    .card { padding: 20px; }
-    .dev-notice { flex-direction: column; gap: 8px; }
-    .download-buttons { flex-direction: column; align-items: stretch; }
-    .download-button { width: 100%; }
+    body {
+        padding: 10px;
+    }
+    .game-title {
+        font-size: 32px;
+    }
+    .card {
+        padding: 20px;
+    }
+    .dev-notice {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .download-buttons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .download-button {
+        width: 100%;
+    }
 }
 
 @media (max-width: 500px) {
-    .dev-notice { flex-direction: column; text-align: center; gap: 10px; }
+    .nav-links {
+        flex-wrap: wrap;
+    }
+    .nav-link {
+        flex: 1 1 auto;
+        text-align: center;
+    }
+    .version-row {
+        flex-direction: column;
+        gap: 5px;
+    }
+    .developer-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+    .developer-actions .button {
+        width: 100%;
+    }
+    .dev-notice {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+    }
 }

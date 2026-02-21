@@ -1,0 +1,68 @@
+/* Навигация */
+.nav-bar {
+    background: var(--bg-card);
+    border-radius: 50px;
+    padding: 6px 20px;
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    box-shadow: var(--shadow);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.nav-link {
+    color: var(--text-secondary);
+    padding: 10px 20px;
+    border-radius: 40px;
+    font-size: 16px;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+.nav-link:hover {
+    background: #4a4a4a;
+    color: var(--text-primary);
+}
+.nav-link.active {
+    background: var(--accent);
+    color: white;
+}
+
+/* Переключатель языка */
+.lang-switcher {
+    display: flex;
+    gap: 5px;
+    flex-wrap: nowrap;
+}
+.lang-btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.lang-btn:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
+}
+.lang-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}

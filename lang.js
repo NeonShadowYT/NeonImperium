@@ -1,3 +1,4 @@
+// ==================== СЛОВАРИ ====================
 const translations = {
     ru: {
         // Навигация
@@ -363,6 +364,7 @@ const translations = {
     }
 };
 
+// ==================== ФУНКЦИИ ПЕРЕКЛЮЧЕНИЯ ЯЗЫКА ====================
 function setLanguage(lang) {
     document.querySelectorAll('[data-lang]').forEach(element => {
         const key = element.getAttribute('data-lang');
@@ -380,7 +382,8 @@ function setLanguage(lang) {
     localStorage.setItem('preferredLanguage', lang);
 }
 
-// 3D Tilt and Parallax effect for cards (без шапок)
+// ==================== ЭФФЕКТЫ ====================
+// 3D Tilt для карточек (кроме шапок)
 function initTiltEffect() {
     const cards = document.querySelectorAll('.tilt-card');
     cards.forEach(card => {
@@ -449,9 +452,12 @@ function initHeaderParallax() {
     });
 }
 
+// ==================== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ====================
 document.addEventListener('DOMContentLoaded', () => {
     const savedLang = localStorage.getItem('preferredLanguage') || 'ru';
     setLanguage(savedLang);
+    
+    // Обработчики для кнопок языка
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             setLanguage(btn.dataset.langCode);
