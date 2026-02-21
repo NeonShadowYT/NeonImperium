@@ -1,6 +1,5 @@
 const translations = {
     ru: {
-        devNotice: "⚡ Сайт в разработке",
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
@@ -21,21 +20,14 @@ const translations = {
         developersDesc: "Работаем в свободное время",
         youtubersTitle: "Ютуберы",
         youtubersDesc: "Собираем комьюнити",
-        googleSites: "Google Sites",
         trailerTitle: "Трейлер",
         developerTitle: "Разработчик",
         downloadTitle: "Скачать",
         descriptionTitle: "Описание",
         videoTitle: "Видео",
         videoDesc: "Подборка контента от сообщества",
-        videoHowTo: "Чтобы сюда попасть:",
-        videoRule1: "Создай плейлист с настройкой сортировки \"сначала новые\" или \"по популярности\".",
-        videoRule2: "Видео в плейлисте должны понравиться разработчику, после чего они могут попасть сюда.",
         updatesTitle: "Обновления",
         polls: "Опросы",
-        windowsBtn: "Windows (32/64 бит)",
-        androidBtn: "Android (APK)",
-        linuxBtn: "Linux",
         downloadNote: "Доступно на нескольких платформах. Следите за обновлениями!",
         starveVersion: "Объединение 0.13.7",
         starveDeveloperRole: "Главный разработчик, геймдизайнер",
@@ -123,7 +115,6 @@ const translations = {
         backHome: "Вернуться на главную"
     },
     en: {
-        devNotice: "⚡ Site under development",
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
@@ -144,21 +135,14 @@ const translations = {
         developersDesc: "Working in free time",
         youtubersTitle: "YouTubers",
         youtubersDesc: "Building community",
-        googleSites: "Google Sites",
         trailerTitle: "Trailer",
         developerTitle: "Developer",
         downloadTitle: "Download",
         descriptionTitle: "Description",
         videoTitle: "Video",
         videoDesc: "Community content",
-        videoHowTo: "To get here:",
-        videoRule1: "Create a playlist with 'newest first' or 'most popular' sorting.",
-        videoRule2: "Videos in the playlist must be liked by the developer to be featured.",
         updatesTitle: "Updates",
         polls: "Polls",
-        windowsBtn: "Windows (32/64 bit)",
-        androidBtn: "Android (APK)",
-        linuxBtn: "Linux",
         downloadNote: "Available on multiple platforms. Stay tuned!",
         starveVersion: "Union 0.13.7",
         starveDeveloperRole: "Lead developer, game designer",
@@ -247,7 +231,6 @@ const translations = {
     }
 };
 
-// Language switching
 function setLanguage(lang) {
     document.querySelectorAll('[data-lang]').forEach(element => {
         const key = element.getAttribute('data-lang');
@@ -269,21 +252,22 @@ function setLanguage(lang) {
 function initTiltEffect() {
     const cards = document.querySelectorAll('.tilt-card');
     cards.forEach(card => {
-        const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon');
+        const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon, .feature-icon');
+        if (!img) return;
         card.addEventListener('mousemove', (e) => {
             const rect = card.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
             const centerX = rect.width / 2;
             const centerY = rect.height / 2;
-            const rotateX = (y - centerY) / 10; // max 5deg
-            const rotateY = (centerX - x) / 10;
+            const rotateX = (y - centerY) / 15; // max 5deg
+            const rotateY = (centerX - x) / 15;
             
             card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
             
             if (img) {
-                const imgX = (x - centerX) / 15;
-                const imgY = (y - centerY) / 15;
+                const imgX = (x - centerX) / 20;
+                const imgY = (y - centerY) / 20;
                 img.style.transform = `translate(${imgX}px, ${imgY}px) scale(1.05)`;
             }
         });
