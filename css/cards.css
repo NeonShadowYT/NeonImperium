@@ -206,7 +206,7 @@
 }
 .developer-actions .button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0,173,181,0.4);
+    box-shadow: 0 5px 15px rgba(42,111,219,0.4);
 }
 .developer-details h3 {
     margin: 0 0 4px;
@@ -500,4 +500,11 @@
 .project-card-link:focus-visible .project-card,
 .profile-card-link:focus-visible .profile-card {
     border-color: var(--accent);
+}
+
+/* Свечение кнопки при наведении на карточку проекта */
+.project-card-link:hover .button {
+    box-shadow: 0 0 15px var(--accent), 0 4px 8px rgba(0,0,0,0.3);
+    transform: scale(1.02);
+    transition: box-shadow 0.2s, transform 0.2s;
 }
