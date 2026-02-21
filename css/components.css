@@ -559,12 +559,12 @@
     will-change: transform;
 }
 
-/* Умеренный эффект для карточек описания */
+/* Умеренный эффект для карточек описания (усилен) */
 .feature-item.tilt-card:hover,
 .update-card.tilt-card:hover,
 .req-item.tilt-card:hover,
 .consumption-card.tilt-card:hover {
-    transform: scale(1.03); /* увеличено для заметности */
+    transform: scale(1.05); /* увеличен для заметности */
 }
 .feature-item.tilt-card:hover .feature-icon,
 .update-card.tilt-card:hover *,
@@ -576,7 +576,7 @@
 /* Небольшие проекты на главной */
 .small-projects-container {
     display: grid;
-    grid-template-columns: 2.5fr 1.75fr 1.75fr; /* трейлер шире, карточки немного расширены */
+    grid-template-columns: 3fr 1.5fr 1.5fr; /* трейлер значительно шире */
     gap: 20px;
     margin-top: 20px;
     align-items: stretch;
@@ -595,6 +595,7 @@
 .small-projects-container .project-card {
     height: 100%;
     padding: 12px;
+    width: 100%; /* гарантируем, что карточка занимает всю ширину колонки */
 }
 .small-projects-container .project-card .image-wrapper {
     flex: 1;
@@ -617,6 +618,8 @@
 }
 .small-projects-container .project-card .button {
     margin-top: 8px;
+    width: 100%; /* кнопка на всю ширину карточки */
+    box-sizing: border-box;
 }
 
 /* Мобильная адаптация */
