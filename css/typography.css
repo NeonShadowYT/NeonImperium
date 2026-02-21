@@ -28,3 +28,10 @@ h3 {
     border-radius: 20px;
     font-size: 14px;
 }
+
+.feature-item h3,
+.developer-details h3,
+.update-card h3,
+.req-label {
+    color: var(--accent);
+}

@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Russo One', sans-serif;
-    background: var(--bg-page);
+    background: var(--bg-primary);
     color: var(--text-secondary);
     line-height: 1.5;
     padding: 20px;
