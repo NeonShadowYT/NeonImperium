@@ -12,6 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <script src="lang.js" defer></script>
     <script src="effects.js" defer></script>
+    <script src="news.js" defer></script>
 </head>
 <body>
     <div class="page">
@@ -198,6 +199,22 @@
                                 <span class="profile-name">GGelita</span>
                             </div>
                         </a>
+                    </div>
+                </section>
+                <section class="card" id="news-section">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                        <h2 data-lang="newsTitle" style="margin: 0;">📰 Последние новости</h2>
+                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="button wide" style="display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fab fa-youtube"></i> <span data-lang="newsChannelBtn">Канал Neon Shadow</span>
+                        </a>
+                    </div>
+                    <p class="text-secondary" data-lang="newsDesc" style="margin-bottom: 25px;">Свежие видео с официального канала разработчика.</p>
+
+                    <div id="news-feed" class="video-grid">
+                        <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
+                            <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);"></i>
+                            <p style="margin-top: 10px;" data-lang="newsLoading">Загрузка новостей...</p>
+                        </div>
                     </div>
                 </section>
             </div>

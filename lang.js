@@ -24,6 +24,10 @@ const translations = {
         developersDesc: "Работаем в свободное время",
         youtubersTitle: "Ютуберы",
         youtubersDesc: "Собираем комьюнити",
+        newsTitle: "📰 Последние новости",
+        newsChannelBtn: "Канал Neon Shadow",
+        newsDesc: "Свежие видео с официального канала разработчика.",
+        newsLoading: "Загрузка новостей...",
         
         // Общие для страниц игр
         trailerTitle: "Трейлер",
@@ -205,6 +209,10 @@ const translations = {
         developersDesc: "Working in free time",
         youtubersTitle: "YouTubers",
         youtubersDesc: "Building community",
+        newsTitle: "📰 Latest News",
+        newsChannelBtn: "Neon Shadow Channel",
+        newsDesc: "Fresh videos from the official developer's channel.",
+        newsLoading: "Loading news...",
         
         // Common for game pages
         trailerTitle: "Trailer",
