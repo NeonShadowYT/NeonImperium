@@ -69,7 +69,7 @@
     color: white;
     border-color: var(--accent);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 173, 181, 0.4);
+    box-shadow: 0 5px 15px rgba(0,173,181,0.4);
 }
 .lang-btn.active {
     background: var(--accent);

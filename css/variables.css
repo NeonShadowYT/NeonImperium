@@ -1,10 +1,12 @@
 :root {
-    --bg-primary: #1e1e2f;
-    --bg-card: rgba(30, 30, 47, 0.8);
-    --accent: #00adb5;
+    --bg-gradient-start: #0f0c1f; /* тёмно-фиолетовый */
+    --bg-gradient-end: #1a1a2e;    /* тёмно-синий */
+    --bg-card: rgba(25, 20, 35, 0.85); /* полупрозрачный фиолетово-серый */
+    --bg-card-solid: #1f1a2a;      /* непрозрачный для внутренних карточек */
+    --accent: #00adb5;              /* бирюзовый акцент */
     --accent-light: #33bbc5;
     --text-primary: #ffffff;
     --text-secondary: #dddddd;
-    --border: #3a3a4f;
-    --shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+    --border: #3a2a4a;              /* фиолетовая граница */
+    --shadow: 0 8px 20px rgba(0, 0, 0, 0.7);
 }

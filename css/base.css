@@ -6,11 +6,12 @@
 
 body {
     font-family: 'Russo One', sans-serif;
-    background: var(--bg-primary);
+    background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end));
     color: var(--text-secondary);
     line-height: 1.5;
     padding: 20px;
     font-size: 16px;
+    min-height: 100vh;
 }
 
 .page {
@@ -25,7 +26,6 @@ a {
 }
 a:hover { text-decoration: none; }
 
-/* Оптимизация изображений */
 img {
     image-rendering: auto;
 }
