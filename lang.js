@@ -242,17 +242,10 @@ function setLanguage(lang) {
     localStorage.setItem('preferredLanguage', lang);
 }
 
-// 3D Tilt and Parallax effect
+// 3D Tilt and Parallax effect – применяется ко всем .tilt-card
 function initTiltEffect() {
     const cards = document.querySelectorAll('.tilt-card');
     cards.forEach(card => {
-        // Пропускаем карточки, для которых tilt слишком сильный
-        if (card.classList.contains('feature-item') ||
-            card.classList.contains('update-card') ||
-            card.classList.contains('req-item') ||
-            card.classList.contains('consumption-card') ||
-            card.classList.contains('download-card')) return;
-        
         const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon, .feature-icon');
         card.addEventListener('mousemove', (e) => {
             const rect = card.getBoundingClientRect();
@@ -265,7 +258,7 @@ function initTiltEffect() {
             
             card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.01)`;
             
-            if (img && !card.classList.contains('feature-item') && !card.classList.contains('update-card')) {
+            if (img) {
                 const imgX = (x - centerX) / 25;
                 const imgY = (y - centerY) / 25;
                 img.style.transform = `translate(${imgX}px, ${imgY}px) scale(1.03)`;
@@ -280,14 +273,16 @@ function initTiltEffect() {
     });
 }
 
-// Счётчик загрузок через countapi.xyz
-const COUNTAPI_NAMESPACE = 'neonimperium';
+// Счётчик загрузок через counterapi.dev (поддерживает CORS)
+const COUNTER_NAMESPACE = 'neonimperium';
+const COUNTER_API = 'https://api.counterapi.dev/v1';
 
 async function getDownloadCount(gameKey) {
     try {
-        const response = await fetch(`https://api.countapi.xyz/get/${COUNTAPI_NAMESPACE}/${gameKey}`);
+        const response = await fetch(`${COUNTER_API}/${COUNTER_NAMESPACE}/${gameKey}`);
+        if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
-        return data.value || 0;
+        return data.count || 0;
     } catch (error) {
         console.error('Failed to fetch download count:', error);
         return 0;
@@ -296,9 +291,14 @@ async function getDownloadCount(gameKey) {
 
 async function incrementDownloadCount(gameKey) {
     try {
-        const response = await fetch(`https://api.countapi.xyz/hit/${COUNTAPI_NAMESPACE}/${gameKey}`);
+        const response = await fetch(`${COUNTER_API}/${COUNTER_NAMESPACE}/${gameKey}/add`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: 1 })
+        });
+        if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
-        return data.value || 0;
+        return data.count || 0;
     } catch (error) {
         console.error('Failed to increment download count:', error);
         return 0;

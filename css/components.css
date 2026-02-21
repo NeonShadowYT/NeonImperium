@@ -286,16 +286,13 @@
     flex-direction: column;
     align-items: center;
     width: 100%;
-    flex: 1;
-    justify-content: center;
 }
 .developer-actions {
-    margin-top: auto;
     display: flex;
     gap: 10px;
     justify-content: center;
     flex-wrap: wrap;
-    padding-top: 10px;
+    margin-top: 10px; /* убрал margin-top: auto */
 }
 .developer-actions .button:hover {
     transform: translateY(-2px);
@@ -510,6 +507,7 @@
 .download-card h2 {
     margin: 0;
     text-align: left;
+    white-space: nowrap; /* заголовок не переносится */
 }
 .download-counter {
     background: var(--accent);
@@ -563,7 +561,7 @@
     font-family: "Font Awesome 6 Brands";
 }
 
-/* Tilt карточки - ограничиваем силу эффекта */
+/* Tilt карточки - лёгкий эффект для всех карточек */
 .tilt-card {
     transform-style: preserve-3d;
     will-change: transform;
@@ -576,26 +574,6 @@
 .tilt-card .feature-icon {
     transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
-}
-
-/* Убираем tilt с карточек, где он слишком сильный */
-.feature-item.tilt-card,
-.update-card.tilt-card,
-.req-item.tilt-card,
-.consumption-card.tilt-card {
-    transition: transform 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-.feature-item.tilt-card:hover,
-.update-card.tilt-card:hover,
-.req-item.tilt-card:hover,
-.consumption-card.tilt-card:hover {
-    transform: perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1.01);
-}
-.feature-item.tilt-card:hover .feature-icon,
-.update-card.tilt-card:hover *,
-.req-item.tilt-card:hover *,
-.consumption-card.tilt-card:hover * {
-    transform: translate(0, 0) scale(1);
 }
 
 /* Небольшие проекты на главной */
@@ -622,7 +600,7 @@
     padding: 12px;
 }
 .small-projects-container .project-card .image-wrapper {
-    height: 140px;
+    height: 180px; /* увеличено со 140px до 180px */
     width: 100%;
     aspect-ratio: auto;
     margin-bottom: 8px;
@@ -635,7 +613,7 @@
     margin: 4px 0;
     font-size: 16px;
 }
-/* Кнопка теперь стандартная - убраны переопределения */
+/* Кнопка стандартная */
 
 /* Мобильная адаптация */
 @media (max-width: 900px) {
