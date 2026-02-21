@@ -24,7 +24,7 @@ const translations = {
         googleSites: "Google Sites",
         trailerTitle: "Трейлер",
         developerTitle: "Разработчик",
-        downloadTitle: "Скачать игру",
+        downloadTitle: "Скачать",
         descriptionTitle: "Описание",
         videoTitle: "Видео",
         videoDesc: "Подборка контента от сообщества",
@@ -147,7 +147,7 @@ const translations = {
         googleSites: "Google Sites",
         trailerTitle: "Trailer",
         developerTitle: "Developer",
-        downloadTitle: "Download game",
+        downloadTitle: "Download",
         descriptionTitle: "Description",
         videoTitle: "Video",
         videoDesc: "Community content",
@@ -247,6 +247,7 @@ const translations = {
     }
 };
 
+// Language switching
 function setLanguage(lang) {
     document.querySelectorAll('[data-lang]').forEach(element => {
         const key = element.getAttribute('data-lang');
@@ -264,6 +265,82 @@ function setLanguage(lang) {
     localStorage.setItem('preferredLanguage', lang);
 }
 
+// 3D Tilt and Parallax effect
+function initTiltEffect() {
+    const cards = document.querySelectorAll('.tilt-card');
+    cards.forEach(card => {
+        const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon');
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            const rotateX = (y - centerY) / 10; // max 5deg
+            const rotateY = (centerX - x) / 10;
+            
+            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
+            
+            if (img) {
+                const imgX = (x - centerX) / 15;
+                const imgY = (y - centerY) / 15;
+                img.style.transform = `translate(${imgX}px, ${imgY}px) scale(1.05)`;
+            }
+        });
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)';
+            if (img) {
+                img.style.transform = 'translate(0, 0) scale(1)';
+            }
+        });
+    });
+}
+
+// Download counter
+function initDownloadCounter() {
+    const downloadSections = document.querySelectorAll('.download-card');
+    downloadSections.forEach(section => {
+        // Determine game name from page URL or data attribute
+        let game = '';
+        if (window.location.pathname.includes('starve-neon')) game = 'starve-neon';
+        else if (window.location.pathname.includes('alpha-01')) game = 'alpha-01';
+        else if (window.location.pathname.includes('gc-adven')) game = 'gc-adven';
+        else return; // Not a game page
+        
+        const counterKey = `downloads_${game}`;
+        let count = localStorage.getItem(counterKey) ? parseInt(localStorage.getItem(counterKey)) : 0;
+        
+        // Create or update counter display
+        let counterSpan = section.querySelector('.download-counter');
+        if (!counterSpan) {
+            const header = section.querySelector('h2');
+            if (header) {
+                counterSpan = document.createElement('span');
+                counterSpan.className = 'download-counter';
+                counterSpan.textContent = count;
+                header.style.display = 'flex';
+                header.style.alignItems = 'center';
+                header.style.gap = '10px';
+                header.appendChild(counterSpan);
+            }
+        } else {
+            counterSpan.textContent = count;
+        }
+        
+        // Add click listeners to download buttons
+        const buttons = section.querySelectorAll('.download-button');
+        buttons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault(); // We'll still let the link open, but increment first
+                count++;
+                localStorage.setItem(counterKey, count);
+                if (counterSpan) counterSpan.textContent = count;
+                window.open(btn.href, '_blank'); // Open link
+            });
+        });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const savedLang = localStorage.getItem('preferredLanguage') || 'ru';
     setLanguage(savedLang);
@@ -272,4 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setLanguage(btn.dataset.langCode);
         });
     });
+    
+    initTiltEffect();
+    initDownloadCounter();
 });
