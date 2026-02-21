@@ -187,7 +187,7 @@
     border-radius: 16px;
     padding: 16px;
     border: 1px solid var(--border);
-    transition: border-color 0.2s, transform 0.2s;
+    transition: border-color 0.2s, transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -206,7 +206,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.3s;
+    transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
 }
 .project-card-link:hover .project-image { transform: scale(1.05); }
@@ -236,7 +236,7 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    transition: border-color 0.2s, transform 0.2s;
+    transition: border-color 0.2s, transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
 }
 .profile-card-link:hover .profile-card { border-color: var(--accent); }
@@ -258,7 +258,7 @@
     height: 100%;
     object-fit: cover;
     object-position: center;
-    transition: transform 0.2s;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
 }
 
@@ -271,6 +271,7 @@
 .developer-card {
     display: flex;
     flex-direction: column;
+    padding: 20px;
 }
 .developer-info {
     flex: 1;
@@ -283,11 +284,11 @@
 .developer-details {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    align-items: center;
     width: 100%;
 }
 .developer-actions {
-    margin-top: auto;
+    margin-top: 10px;
     display: flex;
     gap: 10px;
     justify-content: center;
@@ -300,9 +301,6 @@
 .developer-details h3 {
     margin: 0 0 4px;
 }
-.developer-details p {
-    margin: 0 0 8px;
-}
 
 /* Особенности */
 .feature-item {
@@ -310,14 +308,14 @@
     border-radius: 16px;
     padding: 20px;
     border: 1px solid var(--border);
-    transition: transform 0.2s;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
 }
 .feature-icon {
     font-size: 32px;
     display: block;
     margin-bottom: 10px;
-    transition: transform 0.2s;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 .feature-item h3 {
     margin: 0 0 8px;
@@ -371,7 +369,7 @@
     border-radius: 16px;
     padding: 12px;
     border: 1px solid var(--border);
-    transition: transform 0.2s, border-color 0.2s;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color 0.2s;
     will-change: transform;
 }
 .video-card:hover { border-color: var(--accent); }
@@ -382,7 +380,7 @@
     border-radius: 12px;
     margin-bottom: 10px;
     border: 1px solid var(--border);
-    transition: transform 0.2s;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
 }
 .video-card h4 {
@@ -409,7 +407,7 @@
     padding: 16px;
     border-radius: 16px;
     border: 1px solid var(--border);
-    transition: transform 0.2s;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
 }
 .req-label {
@@ -424,6 +422,8 @@
     padding: 20px;
     margin-top: 24px;
     border: 1px solid var(--border);
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
 }
 .consumption-table {
     width: 100%;
@@ -447,7 +447,7 @@
     padding: 20px;
     margin-bottom: 20px;
     border: 1px solid var(--border);
-    transition: transform 0.2s;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
 }
 .update-card h3 {
@@ -495,6 +495,28 @@
 .download-card {
     text-align: center;
     background: linear-gradient(145deg, var(--bg-card), #2a2a2a);
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
+}
+.download-card .download-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+.download-card h2 {
+    margin: 0;
+    flex: 1;
+    text-align: left;
+}
+.download-counter {
+    background: var(--accent);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+    margin-left: 20px;
 }
 .download-buttons {
     display: flex;
@@ -540,20 +562,18 @@
     font-family: "Font Awesome 6 Brands";
 }
 
-/* Счётчик скачиваний */
-.download-counter {
-    background: var(--accent);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: bold;
-}
-
 /* Tilt карточки */
 .tilt-card {
-    transition: transform 0.1s;
     transform-style: preserve-3d;
+    will-change: transform;
+    transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.tilt-card .project-image,
+.tilt-card .avatar,
+.tilt-card .video-thumbnail,
+.tilt-card .game-icon,
+.tilt-card .feature-icon {
+    transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
 }
 
