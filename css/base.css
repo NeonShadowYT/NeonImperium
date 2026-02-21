@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Russo One', sans-serif;
-    background: radial-gradient(circle at 20% 30%, #1a1230, #0f0c1f 70%, #0a0a1a);
+    background: linear-gradient(135deg, #252530, #1f1f2a);
     color: var(--text-secondary);
     line-height: 1.5;
     padding: 20px;
