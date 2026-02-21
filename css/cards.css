@@ -442,7 +442,7 @@
 /* Небольшие проекты на главной */
 .small-projects-container {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
+    grid-template-columns: 1.75fr 1fr 1fr 1fr;
     gap: 20px;
     margin-top: 20px;
     align-items: stretch;
