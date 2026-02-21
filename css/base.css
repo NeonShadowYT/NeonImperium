@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Russo One', sans-serif;
-    background: linear-gradient(135deg, #1a1a28, #12121c); /* более мягкий фиолетовый фон */
+    background: var(--bg-page);
     color: var(--text-secondary);
     line-height: 1.5;
     padding: 20px;

@@ -1,19 +1,20 @@
 :root {
-    /* Основные тона с фиолетово-бирюзовым подтоном */
-    --bg-primary: #1a1a28;              /* фон страницы (тёмный, но не слишком) */
-    --bg-card: #2a2a3a;                  /* базовый фон карточек */
-    --bg-card-gradient: linear-gradient(145deg, #2a2a3a, #2a3a4a); /* плавный переход к бирюзовому */
-    --bg-card-solid: #2f2f42;             /* сплошной фон */
-    --bg-inner-gradient: linear-gradient(145deg, #2f2f42, #35354a); /* для внутренних блоков */
-    
-    /* Акцент — мягкий бирюзовый */
-    --accent: #3a94b0;
-    --accent-light: #4faaca;
-    
+    /* Фон страницы — глубокий чёрно-фиолетовый градиент */
+    --bg-page: linear-gradient(135deg, #010314, #00010a);
+
+    /* Карточки */
+    --bg-card-gradient: linear-gradient(145deg, #1A1824, #251F30);
+    --bg-card-solid: #1F1B2A;
+    --bg-inner-gradient: linear-gradient(145deg, #2A2533, #322D40);
+
+    /* Акцент — яркий бирюзовый */
+    --accent: #3AA8C9;
+    --accent-light: #5fc1e0;
+
     /* Текст */
     --text-primary: #ffffff;
     --text-secondary: #b7b7b7;
-    
+
     /* Границы и тени */
     --border: #4a4a5a;
     --shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
