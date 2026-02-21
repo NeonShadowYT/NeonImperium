@@ -246,8 +246,12 @@ function setLanguage(lang) {
 function initTiltEffect() {
     const cards = document.querySelectorAll('.tilt-card');
     cards.forEach(card => {
-        // Skip download cards
-        if (card.classList.contains('download-card')) return;
+        // Исключаем карточки, для которых эффект слишком сильный
+        if (card.classList.contains('download-card') ||
+            card.classList.contains('feature-item') ||
+            card.classList.contains('update-card') ||
+            card.classList.contains('req-item') ||
+            card.classList.contains('consumption-card')) return;
         
         const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon, .feature-icon');
         card.addEventListener('mousemove', (e) => {
@@ -256,7 +260,7 @@ function initTiltEffect() {
             const y = e.clientY - rect.top;
             const centerX = rect.width / 2;
             const centerY = rect.height / 2;
-            const rotateX = (y - centerY) / 20; // уменьшил интенсивность
+            const rotateX = (y - centerY) / 20;
             const rotateY = (centerX - x) / 20;
             
             card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.01)`;
@@ -276,50 +280,19 @@ function initTiltEffect() {
     });
 }
 
-// LibreCounter functions
-async function getLibreCounterCount(pageUrl) {
-    try {
-        const hostname = new URL(pageUrl).hostname;
-        const response = await fetch(`https://librecounter.org/${hostname}/siteStats?days=9999`);
-        const data = await response.json();
-        const pagePath = new URL(pageUrl).pathname;
-        const pageStat = data.pages.find(p => p.page === pagePath);
-        return pageStat ? pageStat.visits : 0;
-    } catch (error) {
-        console.error('Failed to fetch LibreCounter count:', error);
-        return 0;
-    }
-}
-
-async function incrementLibreCounter(pageUrl) {
-    try {
-        await fetch(`https://librecounter.org/count?url=${encodeURIComponent(pageUrl)}`, {
-            mode: 'no-cors',
-        });
-        return await getLibreCounterCount(pageUrl);
-    } catch (error) {
-        console.error('Failed to increment LibreCounter:', error);
-        return 0;
-    }
-}
-
-// Download counter using LibreCounter
+// Простой счётчик скачиваний на основе localStorage
 function initDownloadCounter() {
     const downloadSections = document.querySelectorAll('.download-card');
-    downloadSections.forEach(async section => {
+    downloadSections.forEach(section => {
+        // Определяем игру
         let game = '';
         const path = window.location.pathname;
         if (path.includes('starve-neon')) game = 'starve-neon';
         else if (path.includes('alpha-01')) game = 'alpha-01';
         else if (path.includes('gc-adven')) game = 'gc-adven';
         else return;
-        
-        // Replace with your actual domain
-        const baseUrl = 'https://neonshadowyt.github.io';
-        const pageUrl = `${baseUrl}/${game}.html`;
-        
-        let count = await getLibreCounterCount(pageUrl);
-        
+
+        // Находим или создаём элемент счётчика
         let counterSpan = section.querySelector('.download-counter');
         if (!counterSpan) {
             const header = section.querySelector('h2');
@@ -327,16 +300,30 @@ function initDownloadCounter() {
                 counterSpan = document.createElement('span');
                 counterSpan.className = 'download-counter';
                 header.insertAdjacentElement('afterend', counterSpan);
+            } else {
+                return;
             }
         }
-        if (counterSpan) counterSpan.textContent = count;
-        
+
+        // Загружаем сохранённое значение или устанавливаем 0
+        const storageKey = 'downloadCount_' + game;
+        let count = localStorage.getItem(storageKey);
+        if (count === null) {
+            count = 0;
+            localStorage.setItem(storageKey, count);
+        }
+        counterSpan.textContent = count;
+
+        // Обработчик клика на кнопки скачивания
         const buttons = section.querySelectorAll('.download-button');
         buttons.forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                const newCount = await incrementLibreCounter(pageUrl);
-                if (counterSpan) counterSpan.textContent = newCount;
+            btn.addEventListener('click', (e) => {
+                e.preventDefault(); // не даём сразу перейти, чтобы обновить счётчик
+                // Увеличиваем счётчик
+                let newCount = parseInt(localStorage.getItem(storageKey) || '0') + 1;
+                localStorage.setItem(storageKey, newCount);
+                counterSpan.textContent = newCount;
+                // Переходим по ссылке
                 window.open(btn.href, '_blank');
             });
         });
