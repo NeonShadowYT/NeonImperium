@@ -382,76 +382,6 @@ function setLanguage(lang) {
     localStorage.setItem('preferredLanguage', lang);
 }
 
-// ==================== ЭФФЕКТЫ ====================
-// 3D Tilt для карточек (кроме шапок)
-function initTiltEffect() {
-    const cards = document.querySelectorAll('.tilt-card');
-    cards.forEach(card => {
-        // Пропускаем карточки, для которых tilt слишком сильный (они обрабатываются через CSS)
-        if (card.classList.contains('feature-item') ||
-            card.classList.contains('update-card') ||
-            card.classList.contains('req-item') ||
-            card.classList.contains('consumption-card') ||
-            card.classList.contains('download-card') ||
-            card.classList.contains('features-extra')) return;
-        
-        // Обычные карточки (с изображениями)
-        const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon, .feature-icon');
-        card.addEventListener('mousemove', (e) => {
-            const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            const centerX = rect.width / 2;
-            const centerY = rect.height / 2;
-            const rotateX = (y - centerY) / 20;
-            const rotateY = (centerX - x) / 20;
-            
-            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.01)`;
-            
-            if (img && !card.classList.contains('feature-item') && !card.classList.contains('update-card')) {
-                const imgX = (x - centerX) / 25;
-                const imgY = (y - centerY) / 25;
-                img.style.transform = `translate(${imgX}px, ${imgY}px) scale(1.03)`;
-            }
-        });
-        card.addEventListener('mouseleave', () => {
-            card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)';
-            if (img) {
-                img.style.transform = 'translate(0, 0) scale(1)';
-            }
-        });
-    });
-}
-
-// Параллакс для шапок игр (отдельно, без tilt-card)
-function initHeaderParallax() {
-    const headers = document.querySelectorAll('.game-header');
-    if (headers.length === 0) return;
-
-    // Отключаем на мобильных устройствах
-    if (window.matchMedia('(max-width: 700px)').matches) return;
-
-    headers.forEach(header => {
-        header.addEventListener('mousemove', (e) => {
-            const rect = header.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            const centerX = rect.width / 2;
-            const centerY = rect.height / 2;
-            
-            // Смещение фона: чем дальше от центра, тем сильнее смещение
-            const moveX = (x - centerX) / 30;
-            const moveY = (y - centerY) / 30;
-            
-            header.style.backgroundPosition = `calc(50% + ${moveX}px) calc(50% + ${moveY}px)`;
-        });
-        
-        header.addEventListener('mouseleave', () => {
-            header.style.backgroundPosition = 'center';
-        });
-    });
-}
-
 // ==================== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ====================
 document.addEventListener('DOMContentLoaded', () => {
     const savedLang = localStorage.getItem('preferredLanguage') || 'ru';
@@ -463,7 +393,4 @@ document.addEventListener('DOMContentLoaded', () => {
             setLanguage(btn.dataset.langCode);
         });
     });
-    
-    initTiltEffect();
-    initHeaderParallax();
 });
