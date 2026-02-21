@@ -244,11 +244,11 @@ function setLanguage(lang) {
     localStorage.setItem('preferredLanguage', lang);
 }
 
-// 3D Tilt and Parallax effect for cards
+// 3D Tilt and Parallax effect for cards and headers
 function initTiltEffect() {
     const cards = document.querySelectorAll('.tilt-card');
     cards.forEach(card => {
-        // Пропускаем карточки, для которых tilt слишком сильный
+        // Пропускаем карточки, для которых tilt слишком сильный (они обрабатываются через CSS)
         if (card.classList.contains('feature-item') ||
             card.classList.contains('update-card') ||
             card.classList.contains('req-item') ||
@@ -256,6 +256,30 @@ function initTiltEffect() {
             card.classList.contains('download-card') ||
             card.classList.contains('features-extra')) return;
         
+        // Если это шапка игры, обрабатываем параллакс фона
+        if (card.classList.contains('game-header')) {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                
+                // Смещение фона: чем дальше от центра, тем сильнее смещение
+                const moveX = (x - centerX) / 30;
+                const moveY = (y - centerY) / 30;
+                
+                card.style.backgroundPosition = `calc(50% + ${moveX}px) calc(50% + ${moveY}px)`;
+            });
+            
+            card.addEventListener('mouseleave', () => {
+                card.style.backgroundPosition = 'center';
+            });
+            
+            return; // для шапок дальнейшая обработка не нужна
+        }
+        
+        // Обычные карточки (с изображениями)
         const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon, .feature-icon');
         card.addEventListener('mousemove', (e) => {
             const rect = card.getBoundingClientRect();
@@ -283,35 +307,6 @@ function initTiltEffect() {
     });
 }
 
-// Параллакс для шапок игр
-function initHeaderParallax() {
-    const headers = document.querySelectorAll('.game-header');
-    if (headers.length === 0) return;
-
-    // Отключаем на мобильных устройствах, чтобы не мешать скроллу
-    if (window.matchMedia('(max-width: 700px)').matches) return;
-
-    headers.forEach(header => {
-        header.addEventListener('mousemove', (e) => {
-            const rect = header.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            const centerX = rect.width / 2;
-            const centerY = rect.height / 2;
-            
-            // Смещение фона: чем дальше от центра, тем сильнее смещение
-            const moveX = (x - centerX) / 30;
-            const moveY = (y - centerY) / 30;
-            
-            header.style.backgroundPosition = `calc(50% + ${moveX}px) calc(50% + ${moveY}px)`;
-        });
-        
-        header.addEventListener('mouseleave', () => {
-            header.style.backgroundPosition = 'center';
-        });
-    });
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     const savedLang = localStorage.getItem('preferredLanguage') || 'ru';
     setLanguage(savedLang);
@@ -322,5 +317,4 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     initTiltEffect();
-    initHeaderParallax();
 });
