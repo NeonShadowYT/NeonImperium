@@ -1,9 +1,12 @@
 const translations = {
     ru: {
+        // Навигация
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
         navGc: "ГК Адвенчур",
+        
+        // Главная
         siteTitle: "Neon Imperium",
         mainProjectsTitle: "Главные проекты",
         mainProjectsDesc: "Игры с приоритетом разработки",
@@ -20,6 +23,8 @@ const translations = {
         developersDesc: "Работаем в свободное время",
         youtubersTitle: "Ютуберы",
         youtubersDesc: "Собираем комьюнити",
+        
+        // Общие для страниц игр
         trailerTitle: "Трейлер",
         developerTitle: "Разработчик",
         downloadTitle: "Скачать",
@@ -28,7 +33,9 @@ const translations = {
         videoDesc: "Подборка контента от сообщества",
         updatesTitle: "Обновления",
         polls: "Опросы",
-        downloadNote: "Доступно на нескольких платформах. Следите за обновлениями!",
+        downloadBtn: "Скачать",
+        
+        // Starve Neon
         starveDownloadNote: "Версия 0.13.7 · Обновление от 31.12.2025",
         starveVersion: "Объединение 0.13.7",
         worldTitle: "Игровой мир",
@@ -82,6 +89,8 @@ const translations = {
         balanceContent: "Награды за уровень\nИзменение прогрессии",
         spoilerBugfix: "Багфикс",
         bugfixContent: "Множество мелких исправлений",
+        
+        // Alpha 01
         alphaVersion: "Патч 0.0.5.2",
         alphaDownloadNote: "Версия 0.0.5.2 · Обновление от 21.01.2024",
         alphaStoryTitle: "Сюжет",
@@ -98,6 +107,8 @@ const translations = {
         craftContent: "Метеоритные пули теперь можно скрафтить в лесу",
         spoilerGraphics: "Графика",
         graphicsContent: "Улучшение меню",
+        
+        // ГК Адвенчур
         gcVersion: "Обновление 0.1.0",
         gcDownloadNote: "Версия 0.1.0 · Обновление от 01.11.2023",
         gcAboutTitle: "Об игре",
@@ -107,16 +118,76 @@ const translations = {
         gcUpdateTitle: "Обновление 0.1.0",
         gcUpdateSummary: "Игра вышла",
         gcUpdateContent: "Первый релиз игры.",
-        downloadBtn: "Скачать",
+        
+        // 404
         notFoundTitle: "404 — Страница не найдена",
         notFoundDesc: "Запрашиваемая страница не существует или была перемещена.",
-        backHome: "Вернуться на главную"
+        backHome: "Вернуться на главную",
+        
+        // Лицензионное соглашение (новые ключи)
+        licenseTitle: "Лицензионное соглашение",
+        licenseLastUpdate: "Последнее обновление: 21 февраля 2026 г.",
+        licenseAllowedTitle: "Разрешено",
+        licenseAllowed1: "Коммерческое использование с отчислением % авторам",
+        licenseAllowed2: "Распространение оригинальных версий",
+        licenseAllowed3: "Конфиденциальность: без сбора статистики без согласия",
+        licenseAllowed4: "Модификация в рамках правил игр",
+        licenseAllowed5: "Бесплатный доступ к любому платному контенту через активность",
+        licenseAllowed6: "Бесплатные обновления",
+        licenseForbiddenTitle: "Запрещено",
+        licenseForbidden1: "Выдавать имена, товарные знаки, логотипы за свои",
+        licenseForbidden2: "Создание/использование/распространение вредоносных/читерских модификаций",
+        licenseObligationTitle: "Обязанность",
+        licenseObligation1: "Сохранять первоначальные авторские права",
+        licenseObligation2: "Выплачивать авторам от 4.2% доходов и более",
+        licenseObligation3: "Моды должны иметь открытый исходный код и ссылку на него",
+        licenseObligation4: "Моды должны содержать доступ к лицензии оригинальных приложений",
+        licenseObligation5: "Указывать ссылки на оригинальные страницы и автора",
+        licenseObligation6: "Ты отдаёшь свою душу авторам приложений ;}",
+        licenseBack: "← Вернуться к игре",
+        allRightsReserved: "Все права защищены.",
+        
+        // Разделы лицензии (подробные)
+        licenseSection1Title: "1. Общие положения",
+        licenseSection1Text: "Настоящее Лицензионное соглашение (далее — «Соглашение») заключается между вами (далее — «Пользователь») и разработчиками игр Neon Imperium (далее — «Правообладатель») и регулирует порядок использования игр: Starve Neon, Alpha 01, ГК Адвенчур, а также всех связанных с ними материалов, обновлений и дополнений.",
+        licenseSection1Text2: "Устанавливая, копируя или иным образом используя игру, Пользователь выражает своё полное согласие с условиями настоящего Соглашения. Если Пользователь не принимает условия Соглашения, он обязан незамедлительно удалить все копии игры и не использовать её.",
+        licenseSection2Title: "2. Права на игру",
+        licenseSection2Text: "Все исключительные права на игру, включая, но не ограничиваясь: исходный код, графические и звуковые материалы, сценарии, персонажей, названия, товарные знаки принадлежат Правообладателю. Игра предоставляется Пользователю на условиях простой (неисключительной) лицензии, то есть Пользователю разрешается:",
+        licenseSection2Li1: "устанавливать игру на неограниченное количество принадлежащих ему устройств;",
+        licenseSection2Li2: "воспроизводить игру в целях личного некоммерческого использования;",
+        licenseSection2Li3: "записывать и публиковать видеоролики и стримы с игровым процессом на любых платформах (YouTube, Twitch, VK Видео и др.) при условии указания авторства (ссылка на страницу игры).",
+        licenseSection3Title: "3. Ограничения",
+        licenseSection3Text: "Пользователю запрещается:",
+        licenseSection3Li1: "распространять игру (в том числе бесплатно) на сторонних сайтах, торрент-трекерах, в социальных сетях и иных ресурсах без письменного разрешения Правообладателя;",
+        licenseSection3Li2: "изменять, декомпилировать, дизассемблировать, обфусцировать или создавать производные произведения на основе игры;",
+        licenseSection3Li3: "использовать игру для любых коммерческих целей (в том числе продажа, сдача в аренду, прокат) без отдельного соглашения;",
+        licenseSection3Li4: "удалять или изменять любые уведомления об авторских правах или товарных знаках;",
+        licenseSection3Li5: "использовать игру способами, нарушающими законодательство Российской Федерации или международное право.",
+        licenseSection4Title: "4. Обновления и модификации",
+        licenseSection4Text: "Правообладатель имеет право выпускать обновления, патчи и дополнительные материалы для игры. Все такие обновления являются неотъемлемой частью игры и регулируются настоящим Соглашением. Правообладатель не гарантирует постоянную обратную совместимость старых версий игры.",
+        licenseSection4Text2: "Игра может поддерживать пользовательские модификации (моды), созданные сообществом. Правообладатель не несёт ответственности за моды, созданные третьими лицами, и оставляет за собой право ограничивать использование модов в многопользовательских режимах.",
+        licenseSection5Title: "5. Ответственность и гарантии",
+        licenseSection5Text: "Игра предоставляется «как есть» (as is). Правообладатель не предоставляет никаких гарантий относительно:",
+        licenseSection5Li1: "безошибочной и бесперебойной работы игры;",
+        licenseSection5Li2: "соответствия игры ожиданиям Пользователя;",
+        licenseSection5Li3: "отсутствия ошибок, багов или сбоев;",
+        licenseSection5Li4: "сохранности пользовательских данных (рекомендуется создавать резервные копии сохранений).",
+        licenseSection5Text2: "Правообладатель не несёт ответственности за любой прямой или косвенный ущерб, возникший в результате использования или невозможности использования игры, включая потерю данных, финансовые убытки или моральный вред.",
+        licenseSection6Title: "6. Сбор данных и конфиденциальность",
+        licenseSection6Text: "Игра может собирать анонимную статистику использования (например, версию игры, время в игре, настройки графики) для улучшения качества продукта. Эти данные не позволяют идентифицировать конкретного Пользователя. Игра не собирает персональные данные без вашего согласия. Файлы сохранений хранятся локально на устройстве Пользователя.",
+        licenseSection7Title: "7. Заключительные положения",
+        licenseSection7Text: "Настоящее Соглашение регулируется и толкуется в соответствии с законодательством Российской Федерации. Все споры, возникающие из настоящего Соглашения или в связи с ним, подлежат рассмотрению в суде по месту нахождения Правообладателя.",
+        licenseSection7Text2: "Если какое-либо положение Соглашения будет признано недействительным или не имеющим юридической силы, это не влияет на действительность остальных положений.",
+        licenseSection7Text3: "Правообладатель оставляет за собой право в одностороннем порядке изменять условия настоящего Соглашения. Новая версия Соглашения вступает в силу с момента её публикации на данном сайте. Продолжение использования игры после изменения условий означает согласие с новой редакцией."
     },
     en: {
+        // Navigation
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
         navGc: "GC Adven",
+        
+        // Home
         siteTitle: "Neon Imperium",
         mainProjectsTitle: "Main Projects",
         mainProjectsDesc: "Priority development games",
@@ -133,6 +204,8 @@ const translations = {
         developersDesc: "Working in free time",
         youtubersTitle: "YouTubers",
         youtubersDesc: "Building community",
+        
+        // Common for game pages
         trailerTitle: "Trailer",
         developerTitle: "Developer",
         downloadTitle: "Download",
@@ -141,7 +214,9 @@ const translations = {
         videoDesc: "Community content",
         updatesTitle: "Updates",
         polls: "Polls",
-        downloadNote: "Available on multiple platforms. Stay tuned!",
+        downloadBtn: "Download",
+        
+        // Starve Neon
         starveDownloadNote: "Version 0.13.7 · Update 2025-12-31",
         starveVersion: "Union 0.13.7",
         worldTitle: "Game World",
@@ -195,6 +270,8 @@ const translations = {
         balanceContent: "Level rewards\nProgression changes",
         spoilerBugfix: "Bugfix",
         bugfixContent: "Many minor fixes",
+        
+        // Alpha 01
         alphaVersion: "Patch 0.0.5.2",
         alphaDownloadNote: "Version 0.0.5.2 · Update 2024-01-21",
         alphaStoryTitle: "Story",
@@ -211,6 +288,8 @@ const translations = {
         craftContent: "Meteorite bullets can now be crafted in the forest",
         spoilerGraphics: "Graphics",
         graphicsContent: "Menu improvement",
+        
+        // GC Adven
         gcVersion: "Update 0.1.0",
         gcDownloadNote: "Version 0.1.0 · Update 2023-11-01",
         gcAboutTitle: "About",
@@ -220,10 +299,67 @@ const translations = {
         gcUpdateTitle: "Update 0.1.0",
         gcUpdateSummary: "Game released",
         gcUpdateContent: "First release of the game.",
-        downloadBtn: "Download",
+        
+        // 404
         notFoundTitle: "404 — Page not found",
         notFoundDesc: "The requested page does not exist or has been moved.",
-        backHome: "Back to home"
+        backHome: "Back to home",
+        
+        // License Agreement (new keys)
+        licenseTitle: "License Agreement",
+        licenseLastUpdate: "Last updated: February 21, 2026",
+        licenseAllowedTitle: "Allowed",
+        licenseAllowed1: "Commercial use with % share to authors",
+        licenseAllowed2: "Distribution of original versions",
+        licenseAllowed3: "Privacy: no data collection without consent",
+        licenseAllowed4: "Modification within game rules",
+        licenseAllowed5: "Free access to any paid content through activity",
+        licenseAllowed6: "Free updates",
+        licenseForbiddenTitle: "Forbidden",
+        licenseForbidden1: "Claim names, trademarks, logos as your own",
+        licenseForbidden2: "Creation/use/distribution of malicious/cheating modifications",
+        licenseObligationTitle: "Obligations",
+        licenseObligation1: "Retain original copyright notices",
+        licenseObligation2: "Pay authors from 4.2% of revenue or more",
+        licenseObligation3: "Mods must have open source code and a link to it",
+        licenseObligation4: "Mods must provide access to the original license",
+        licenseObligation5: "Provide links to original game pages and authors",
+        licenseObligation6: "You give your soul to the game authors ;}",
+        licenseBack: "← Back to game",
+        allRightsReserved: "All rights reserved.",
+        
+        // Detailed license sections
+        licenseSection1Title: "1. General Provisions",
+        licenseSection1Text: "This License Agreement (hereinafter — the \"Agreement\") is concluded between you (hereinafter — the \"User\") and the developers of Neon Imperium games (hereinafter — the \"Copyright Holder\") and governs the use of the games: Starve Neon, Alpha 01, GC Adven, as well as all related materials, updates and add-ons.",
+        licenseSection1Text2: "By installing, copying or otherwise using the game, the User expresses their full consent to the terms of this Agreement. If the User does not accept the terms of the Agreement, they must immediately delete all copies of the game and not use it.",
+        licenseSection2Title: "2. Rights to the Game",
+        licenseSection2Text: "All exclusive rights to the game, including but not limited to: source code, graphic and sound materials, scripts, characters, names, trademarks belong to the Copyright Holder. The game is granted to the User under a simple (non-exclusive) license, i.e. the User is permitted to:",
+        licenseSection2Li1: "install the game on an unlimited number of devices owned by them;",
+        licenseSection2Li2: "reproduce the game for personal non-commercial use;",
+        licenseSection2Li3: "record and publish videos and streams of gameplay on any platforms (YouTube, Twitch, VK Video, etc.) provided that authorship is indicated (link to the game page).",
+        licenseSection3Title: "3. Restrictions",
+        licenseSection3Text: "The User is prohibited from:",
+        licenseSection3Li1: "distributing the game (including for free) on third-party sites, torrent trackers, social networks and other resources without the written permission of the Copyright Holder;",
+        licenseSection3Li2: "modifying, decompiling, disassembling, obfuscating or creating derivative works based on the game;",
+        licenseSection3Li3: "using the game for any commercial purposes (including sale, rental, lease) without a separate agreement;",
+        licenseSection3Li4: "removing or altering any copyright notices or trademarks;",
+        licenseSection3Li5: "using the game in ways that violate the laws of the Russian Federation or international law.",
+        licenseSection4Title: "4. Updates and Modifications",
+        licenseSection4Text: "The Copyright Holder has the right to release updates, patches and additional materials for the game. All such updates are an integral part of the game and are governed by this Agreement. The Copyright Holder does not guarantee continuous backward compatibility of old versions of the game.",
+        licenseSection4Text2: "The game may support user modifications (mods) created by the community. The Copyright Holder is not responsible for mods created by third parties and reserves the right to restrict the use of mods in multiplayer modes.",
+        licenseSection5Title: "5. Liability and Warranties",
+        licenseSection5Text: "The game is provided \"as is\". The Copyright Holder makes no warranties regarding:",
+        licenseSection5Li1: "error-free and uninterrupted operation of the game;",
+        licenseSection5Li2: "the game meeting the User's expectations;",
+        licenseSection5Li3: "absence of errors, bugs or failures;",
+        licenseSection5Li4: "safety of user data (it is recommended to back up saves).",
+        licenseSection5Text2: "The Copyright Holder shall not be liable for any direct or indirect damages arising from the use or inability to use the game, including loss of data, financial losses or moral harm.",
+        licenseSection6Title: "6. Data Collection and Privacy",
+        licenseSection6Text: "The game may collect anonymous usage statistics (e.g., game version, time played, graphics settings) to improve the product. This data does not allow identification of a specific User. The game does not collect personal data without your consent. Save files are stored locally on the User's device.",
+        licenseSection7Title: "7. Final Provisions",
+        licenseSection7Text: "This Agreement is governed and interpreted in accordance with the laws of the Russian Federation. All disputes arising out of or in connection with this Agreement shall be subject to consideration in court at the location of the Copyright Holder.",
+        licenseSection7Text2: "If any provision of the Agreement is found to be invalid or unenforceable, this does not affect the validity of the remaining provisions.",
+        licenseSection7Text3: "The Copyright Holder reserves the right to unilaterally change the terms of this Agreement. The new version of the Agreement comes into force from the moment it is published on this site. Continued use of the game after the terms have been changed implies acceptance of the new version."
     }
 };
 
@@ -244,7 +380,7 @@ function setLanguage(lang) {
     localStorage.setItem('preferredLanguage', lang);
 }
 
-// 3D Tilt and Parallax effect for cards and headers
+// 3D Tilt and Parallax effect for cards (без шапок)
 function initTiltEffect() {
     const cards = document.querySelectorAll('.tilt-card');
     cards.forEach(card => {
@@ -255,29 +391,6 @@ function initTiltEffect() {
             card.classList.contains('consumption-card') ||
             card.classList.contains('download-card') ||
             card.classList.contains('features-extra')) return;
-        
-        // Если это шапка игры, обрабатываем параллакс фона
-        if (card.classList.contains('game-header')) {
-            card.addEventListener('mousemove', (e) => {
-                const rect = card.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                const centerX = rect.width / 2;
-                const centerY = rect.height / 2;
-                
-                // Смещение фона: чем дальше от центра, тем сильнее смещение
-                const moveX = (x - centerX) / 30;
-                const moveY = (y - centerY) / 30;
-                
-                card.style.backgroundPosition = `calc(50% + ${moveX}px) calc(50% + ${moveY}px)`;
-            });
-            
-            card.addEventListener('mouseleave', () => {
-                card.style.backgroundPosition = 'center';
-            });
-            
-            return; // для шапок дальнейшая обработка не нужна
-        }
         
         // Обычные карточки (с изображениями)
         const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon, .feature-icon');
@@ -307,6 +420,35 @@ function initTiltEffect() {
     });
 }
 
+// Параллакс для шапок игр (отдельно, без tilt-card)
+function initHeaderParallax() {
+    const headers = document.querySelectorAll('.game-header');
+    if (headers.length === 0) return;
+
+    // Отключаем на мобильных устройствах
+    if (window.matchMedia('(max-width: 700px)').matches) return;
+
+    headers.forEach(header => {
+        header.addEventListener('mousemove', (e) => {
+            const rect = header.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            // Смещение фона: чем дальше от центра, тем сильнее смещение
+            const moveX = (x - centerX) / 30;
+            const moveY = (y - centerY) / 30;
+            
+            header.style.backgroundPosition = `calc(50% + ${moveX}px) calc(50% + ${moveY}px)`;
+        });
+        
+        header.addEventListener('mouseleave', () => {
+            header.style.backgroundPosition = 'center';
+        });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const savedLang = localStorage.getItem('preferredLanguage') || 'ru';
     setLanguage(savedLang);
@@ -317,4 +459,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     initTiltEffect();
+    initHeaderParallax();
 });
