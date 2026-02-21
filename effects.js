@@ -1,4 +1,4 @@
-// effects.js — 3D tilt и параллакс для шапок
+// effects.js — 3D tilt и параллакс для шапок + гироскоп для мобильных
 
 // Простой throttle через requestAnimationFrame
 function throttleAnimation(fn) {
@@ -13,13 +13,12 @@ function throttleAnimation(fn) {
     };
 }
 
-// 3D Tilt для карточек (кроме шапок)
+// 3D Tilt для карточек (только на десктопе)
 function initTiltEffect() {
     const cards = document.querySelectorAll('.tilt-card');
     if (cards.length === 0) return;
 
     cards.forEach(card => {
-        // Пропускаем карточки, для которых tilt слишком сильный (они обрабатываются через CSS)
         if (card.classList.contains('feature-item') ||
             card.classList.contains('update-card') ||
             card.classList.contains('req-item') ||
@@ -27,9 +26,7 @@ function initTiltEffect() {
             card.classList.contains('download-card') ||
             card.classList.contains('features-extra')) return;
         
-        // Изображения, которые будем двигать (кроме аватарок в профилях)
         const img = card.querySelector('.project-image, .video-thumbnail, .game-icon, .feature-icon');
-        // Если это карточка профиля, не двигаем изображение
         const isProfile = card.closest('.profile-card') || card.classList.contains('profile-card');
         
         const handleMove = throttleAnimation((e) => {
@@ -41,7 +38,6 @@ function initTiltEffect() {
             const rotateX = (y - centerY) / 20;
             const rotateY = (centerX - x) / 20;
             
-            // Увеличиваем scale до 1.02
             card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
             
             if (img && !isProfile && !card.classList.contains('feature-item') && !card.classList.contains('update-card')) {
@@ -52,7 +48,6 @@ function initTiltEffect() {
         });
         
         card.addEventListener('mousemove', handleMove);
-        
         card.addEventListener('mouseleave', () => {
             card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)';
             if (img && !isProfile) {
@@ -62,13 +57,10 @@ function initTiltEffect() {
     });
 }
 
-// Параллакс для шапок игр (отдельно, без tilt-card)
+// Параллакс для шапок игр (на десктопе)
 function initHeaderParallax() {
     const headers = document.querySelectorAll('.game-header');
     if (headers.length === 0) return;
-
-    // Отключаем на тач-устройствах
-    if ('ontouchstart' in window) return;
 
     headers.forEach(header => {
         const handleMove = throttleAnimation((e) => {
@@ -78,10 +70,9 @@ function initHeaderParallax() {
             const centerX = rect.width / 2;
             const centerY = rect.height / 2;
             
-            // Ограничиваем смещение, чтобы не показывать края (макс 20px)
             let moveX = (x - centerX) / 30;
             let moveY = (y - centerY) / 30;
-            const maxOffset = 20; // пикселей
+            const maxOffset = 20;
             moveX = Math.max(-maxOffset, Math.min(maxOffset, moveX));
             moveY = Math.max(-maxOffset, Math.min(maxOffset, moveY));
             
@@ -89,18 +80,71 @@ function initHeaderParallax() {
         });
         
         header.addEventListener('mousemove', handleMove);
-        
         header.addEventListener('mouseleave', () => {
             header.style.backgroundPosition = 'center';
         });
     });
 }
 
+// Параллакс на основе гироскопа для мобильных устройств
+function initGyroParallax() {
+    // Проверяем, что устройство поддерживает ориентацию и это тач-устройство
+    if (!('ontouchstart' in window) || !window.DeviceOrientationEvent) return;
+
+    const headers = document.querySelectorAll('.game-header');
+    if (headers.length === 0) return;
+
+    // Для iOS 13+ требуется запрос разрешения
+    const requestPermission = (typeof DeviceOrientationEvent.requestPermission === 'function');
+    
+    function startGyro() {
+        window.addEventListener('deviceorientation', throttleAnimation((event) => {
+            // Используем gamma (влево-вправо) для X, beta (вперёд-назад) для Y
+            let gamma = event.gamma || 0; // диапазон от -90 до 90, обычно в играх -30..30
+            let beta = event.beta || 0;   // от -180 до 180, для наклона телефона
+
+            // Ограничиваем значения, чтобы смещение не было слишком сильным
+            const maxAngle = 30; // градусы
+            gamma = Math.max(-maxAngle, Math.min(maxAngle, gamma));
+            beta = Math.max(-maxAngle, Math.min(maxAngle, beta));
+
+            // Преобразуем угол в смещение пикселей (макс 20px)
+            const maxOffset = 20;
+            const moveX = (gamma / maxAngle) * maxOffset;
+            const moveY = (beta / maxAngle) * maxOffset;
+
+            headers.forEach(header => {
+                header.style.backgroundPosition = `calc(50% + ${moveX}px) calc(50% + ${moveY}px)`;
+            });
+        }));
+    }
+
+    if (requestPermission) {
+        // iOS: показываем кнопку или просто запрашиваем разрешение при взаимодействии
+        // Здесь мы просто пытаемся запросить разрешение при загрузке (может не сработать без жеста)
+        DeviceOrientationEvent.requestPermission()
+            .then(response => {
+                if (response === 'granted') {
+                    startGyro();
+                }
+            })
+            .catch(console.error);
+    } else {
+        // Android и остальные
+        startGyro();
+    }
+}
+
 // Инициализация после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
-    // Отключаем на тач-устройствах
-    if ('ontouchstart' in window) return;
+    const isTouch = 'ontouchstart' in window;
     
-    initTiltEffect();
-    initHeaderParallax();
+    if (!isTouch) {
+        // Десктоп: tilt и мышиный параллакс
+        initTiltEffect();
+        initHeaderParallax();
+    } else {
+        // Мобильные: гироскоп-параллакс
+        initGyroParallax();
+    }
 });

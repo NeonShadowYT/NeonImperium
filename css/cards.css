@@ -514,3 +514,40 @@
     transform: scale(1.02);
     transition: box-shadow 0.2s, transform 0.2s;
 }
+
+/* Прогресс-бар разработки */
+.progress-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.progress-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.progress-bar {
+    flex: 1;
+    min-width: 150px;
+    height: 8px;
+    background: var(--bg-inner-gradient);
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 20px;
+    transition: width 0.3s ease;
+}
+.progress-percent {
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: bold;
+    min-width: 45px;
+    text-align: right;
+}

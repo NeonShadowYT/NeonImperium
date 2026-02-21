@@ -31,6 +31,7 @@ const translations = {
         // Общие для страниц игр
         trailerTitle: "Трейлер",
         developerTitle: "Разработчик",
+        nextUpdateProgress: "Следующее обновление:",
         downloadTitle: "Скачать",
         descriptionTitle: "Описание",
         videoTitle: "Видео",
@@ -215,6 +216,7 @@ const translations = {
         // Common for game pages
         trailerTitle: "Trailer",
         developerTitle: "Developer",
+        nextUpdateProgress: "Next update:",
         downloadTitle: "Download",
         descriptionTitle: "Description",
         videoTitle: "Video",

@@ -84,6 +84,17 @@
     .download-button {
         width: 100%;
     }
+    .progress-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .progress-label, .progress-percent {
+        text-align: center;
+    }
+    .progress-bar {
+        min-width: auto;
+    }
 }
 
 @media (max-width: 500px) {
