@@ -123,6 +123,20 @@
                 </div>
             </section>
 
+            <section class="card" id="news-section">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                    <h2 data-lang="newsTitle" style="margin: 0;">📰 Последние новости</h2>
+                </div>
+                <p class="text-secondary" data-lang="newsDesc" style="margin-bottom: 25px;">Свежие видео и обновления</p>
+
+                <div id="news-feed" class="video-grid">
+                    <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
+                        <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);"></i>
+                        <p style="margin-top: 10px;" data-lang="newsLoading">Загрузка новостей...</p>
+                    </div>
+                </div>
+            </section>
+
             <div class="row">
                 <section class="card half">
                     <h2 data-lang="developersTitle">Разработчики</h2>
@@ -199,19 +213,6 @@
                                 <span class="profile-name">GGelita</span>
                             </div>
                         </a>
-                    </div>
-                </section>
-                <section class="card" id="news-section">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
-                        <h2 data-lang="newsTitle" style="margin: 0;">📰 Последние новости</h2>
-                    </div>
-                    <p class="text-secondary" data-lang="newsDesc" style="margin-bottom: 25px;">Свежие видео и обновления</p>
-
-                    <div id="news-feed" class="video-grid">
-                        <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
-                            <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);"></i>
-                            <p style="margin-top: 10px;" data-lang="newsLoading">Загрузка новостей...</p>
-                        </div>
                     </div>
                 </section>
             </div>
