@@ -328,6 +328,8 @@
     background: var(--bg-primary);
     border-radius: 16px;
     border: 1px solid var(--border);
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color 0.2s;
+    will-change: transform;
 }
 .features-extra h3 {
     margin: 0 0 15px;
@@ -559,24 +561,29 @@
     will-change: transform;
 }
 
-/* Умеренный эффект для карточек описания (усилен) */
+/* Умеренный эффект для карточек описания и дополнительных блоков */
 .feature-item.tilt-card:hover,
 .update-card.tilt-card:hover,
 .req-item.tilt-card:hover,
-.consumption-card.tilt-card:hover {
-    transform: scale(1.05); /* увеличен для заметности */
+.consumption-card.tilt-card:hover,
+.features-extra.tilt-card:hover {
+    transform: scale(1.02);
 }
 .feature-item.tilt-card:hover .feature-icon,
 .update-card.tilt-card:hover *,
 .req-item.tilt-card:hover *,
-.consumption-card.tilt-card:hover * {
-    transform: scale(1.05);
+.consumption-card.tilt-card:hover *,
+.features-extra.tilt-card:hover * {
+    transform: none;
+}
+.features-extra.tilt-card:hover {
+    border-color: var(--accent);
 }
 
 /* Небольшие проекты на главной */
 .small-projects-container {
     display: grid;
-    grid-template-columns: 3fr 1.5fr 1.5fr; /* трейлер значительно шире */
+    grid-template-columns: 3fr 1.5fr 1.5fr;
     gap: 20px;
     margin-top: 20px;
     align-items: stretch;
@@ -645,7 +652,7 @@
         flex: 1 1 auto;
     }
     .small-projects-container {
-        grid-template-columns: 1fr; /* на мобильных всё в колонку */
+        grid-template-columns: 1fr;
     }
     .header-content {
         flex-direction: column;

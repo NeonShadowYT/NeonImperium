@@ -253,7 +253,8 @@ function initTiltEffect() {
             card.classList.contains('update-card') ||
             card.classList.contains('req-item') ||
             card.classList.contains('consumption-card') ||
-            card.classList.contains('download-card')) return;
+            card.classList.contains('download-card') ||
+            card.classList.contains('features-extra')) return;
         
         const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon, .feature-icon');
         card.addEventListener('mousemove', (e) => {
