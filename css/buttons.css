@@ -49,7 +49,6 @@
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(64,116,140,0.4);
 }
-.download-button::before { content: "⬇"; font-size: 18px; }
 .download-button.windows::before { content: "🖥️"; }
 .download-button.android::before { content: "📱"; }
 .download-button.linux::before { content: "🐧"; }
