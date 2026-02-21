@@ -246,12 +246,12 @@ function setLanguage(lang) {
 function initTiltEffect() {
     const cards = document.querySelectorAll('.tilt-card');
     cards.forEach(card => {
-        // Исключаем карточки, для которых эффект слишком сильный
-        if (card.classList.contains('download-card') ||
-            card.classList.contains('feature-item') ||
+        // Пропускаем карточки, для которых tilt слишком сильный
+        if (card.classList.contains('feature-item') ||
             card.classList.contains('update-card') ||
             card.classList.contains('req-item') ||
-            card.classList.contains('consumption-card')) return;
+            card.classList.contains('consumption-card') ||
+            card.classList.contains('download-card')) return;
         
         const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon, .feature-icon');
         card.addEventListener('mousemove', (e) => {
@@ -280,19 +280,43 @@ function initTiltEffect() {
     });
 }
 
-// Простой счётчик скачиваний на основе localStorage
+// Счётчик загрузок через countapi.xyz
+const COUNTAPI_NAMESPACE = 'neonimperium';
+
+async function getDownloadCount(gameKey) {
+    try {
+        const response = await fetch(`https://api.countapi.xyz/get/${COUNTAPI_NAMESPACE}/${gameKey}`);
+        const data = await response.json();
+        return data.value || 0;
+    } catch (error) {
+        console.error('Failed to fetch download count:', error);
+        return 0;
+    }
+}
+
+async function incrementDownloadCount(gameKey) {
+    try {
+        const response = await fetch(`https://api.countapi.xyz/hit/${COUNTAPI_NAMESPACE}/${gameKey}`);
+        const data = await response.json();
+        return data.value || 0;
+    } catch (error) {
+        console.error('Failed to increment download count:', error);
+        return 0;
+    }
+}
+
 function initDownloadCounter() {
     const downloadSections = document.querySelectorAll('.download-card');
-    downloadSections.forEach(section => {
-        // Определяем игру
-        let game = '';
+    downloadSections.forEach(async section => {
+        let gameKey = '';
         const path = window.location.pathname;
-        if (path.includes('starve-neon')) game = 'starve-neon';
-        else if (path.includes('alpha-01')) game = 'alpha-01';
-        else if (path.includes('gc-adven')) game = 'gc-adven';
+        if (path.includes('starve-neon')) gameKey = 'starve-neon';
+        else if (path.includes('alpha-01')) gameKey = 'alpha-01';
+        else if (path.includes('gc-adven')) gameKey = 'gc-adven';
         else return;
-
-        // Находим или создаём элемент счётчика
+        
+        let count = await getDownloadCount(gameKey);
+        
         let counterSpan = section.querySelector('.download-counter');
         if (!counterSpan) {
             const header = section.querySelector('h2');
@@ -300,30 +324,16 @@ function initDownloadCounter() {
                 counterSpan = document.createElement('span');
                 counterSpan.className = 'download-counter';
                 header.insertAdjacentElement('afterend', counterSpan);
-            } else {
-                return;
             }
         }
-
-        // Загружаем сохранённое значение или устанавливаем 0
-        const storageKey = 'downloadCount_' + game;
-        let count = localStorage.getItem(storageKey);
-        if (count === null) {
-            count = 0;
-            localStorage.setItem(storageKey, count);
-        }
-        counterSpan.textContent = count;
-
-        // Обработчик клика на кнопки скачивания
+        if (counterSpan) counterSpan.textContent = count;
+        
         const buttons = section.querySelectorAll('.download-button');
         buttons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault(); // не даём сразу перейти, чтобы обновить счётчик
-                // Увеличиваем счётчик
-                let newCount = parseInt(localStorage.getItem(storageKey) || '0') + 1;
-                localStorage.setItem(storageKey, newCount);
-                counterSpan.textContent = newCount;
-                // Переходим по ссылке
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const newCount = await incrementDownloadCount(gameKey);
+                if (counterSpan) counterSpan.textContent = newCount;
                 window.open(btn.href, '_blank');
             });
         });
