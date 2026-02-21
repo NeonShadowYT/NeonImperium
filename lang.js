@@ -242,10 +242,17 @@ function setLanguage(lang) {
     localStorage.setItem('preferredLanguage', lang);
 }
 
-// 3D Tilt and Parallax effect – применяется ко всем .tilt-card
+// 3D Tilt and Parallax effect
 function initTiltEffect() {
     const cards = document.querySelectorAll('.tilt-card');
     cards.forEach(card => {
+        // Пропускаем карточки, для которых tilt слишком сильный
+        if (card.classList.contains('feature-item') ||
+            card.classList.contains('update-card') ||
+            card.classList.contains('req-item') ||
+            card.classList.contains('consumption-card') ||
+            card.classList.contains('download-card')) return;
+        
         const img = card.querySelector('.project-image, .avatar, .video-thumbnail, .game-icon, .feature-icon');
         card.addEventListener('mousemove', (e) => {
             const rect = card.getBoundingClientRect();
@@ -258,7 +265,7 @@ function initTiltEffect() {
             
             card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.01)`;
             
-            if (img) {
+            if (img && !card.classList.contains('feature-item') && !card.classList.contains('update-card')) {
                 const imgX = (x - centerX) / 25;
                 const imgY = (y - centerY) / 25;
                 img.style.transform = `translate(${imgX}px, ${imgY}px) scale(1.03)`;
@@ -273,73 +280,6 @@ function initTiltEffect() {
     });
 }
 
-// Счётчик загрузок через counterapi.dev (поддерживает CORS)
-const COUNTER_NAMESPACE = 'neonimperium';
-const COUNTER_API = 'https://api.counterapi.dev/v1';
-
-async function getDownloadCount(gameKey) {
-    try {
-        const response = await fetch(`${COUNTER_API}/${COUNTER_NAMESPACE}/${gameKey}`);
-        if (!response.ok) throw new Error('Network response was not ok');
-        const data = await response.json();
-        return data.count || 0;
-    } catch (error) {
-        console.error('Failed to fetch download count:', error);
-        return 0;
-    }
-}
-
-async function incrementDownloadCount(gameKey) {
-    try {
-        const response = await fetch(`${COUNTER_API}/${COUNTER_NAMESPACE}/${gameKey}/add`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: 1 })
-        });
-        if (!response.ok) throw new Error('Network response was not ok');
-        const data = await response.json();
-        return data.count || 0;
-    } catch (error) {
-        console.error('Failed to increment download count:', error);
-        return 0;
-    }
-}
-
-function initDownloadCounter() {
-    const downloadSections = document.querySelectorAll('.download-card');
-    downloadSections.forEach(async section => {
-        let gameKey = '';
-        const path = window.location.pathname;
-        if (path.includes('starve-neon')) gameKey = 'starve-neon';
-        else if (path.includes('alpha-01')) gameKey = 'alpha-01';
-        else if (path.includes('gc-adven')) gameKey = 'gc-adven';
-        else return;
-        
-        let count = await getDownloadCount(gameKey);
-        
-        let counterSpan = section.querySelector('.download-counter');
-        if (!counterSpan) {
-            const header = section.querySelector('h2');
-            if (header) {
-                counterSpan = document.createElement('span');
-                counterSpan.className = 'download-counter';
-                header.insertAdjacentElement('afterend', counterSpan);
-            }
-        }
-        if (counterSpan) counterSpan.textContent = count;
-        
-        const buttons = section.querySelectorAll('.download-button');
-        buttons.forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                const newCount = await incrementDownloadCount(gameKey);
-                if (counterSpan) counterSpan.textContent = newCount;
-                window.open(btn.href, '_blank');
-            });
-        });
-    });
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     const savedLang = localStorage.getItem('preferredLanguage') || 'ru';
     setLanguage(savedLang);
@@ -350,5 +290,4 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     initTiltEffect();
-    initDownloadCounter();
 });

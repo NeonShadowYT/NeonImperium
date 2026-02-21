@@ -271,6 +271,7 @@
 .developer-card {
     display: flex;
     flex-direction: column;
+    min-height: 320px; /* Обеспечиваем место для центрирования */
 }
 .developer-info {
     flex: 1;
@@ -288,11 +289,11 @@
     width: 100%;
 }
 .developer-actions {
+    margin-top: 16px;
     display: flex;
     gap: 10px;
     justify-content: center;
     flex-wrap: wrap;
-    margin-top: 10px; /* убрал margin-top: auto */
 }
 .developer-actions .button:hover {
     transform: translateY(-2px);
@@ -496,27 +497,6 @@
     text-align: center;
     background: linear-gradient(145deg, var(--bg-card), #2a2a2a);
 }
-.download-card .download-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-.download-card h2 {
-    margin: 0;
-    text-align: left;
-    white-space: nowrap; /* заголовок не переносится */
-}
-.download-counter {
-    background: var(--accent);
-    color: white;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: bold;
-}
 .download-buttons {
     display: flex;
     flex-wrap: wrap;
@@ -561,7 +541,7 @@
     font-family: "Font Awesome 6 Brands";
 }
 
-/* Tilt карточки - лёгкий эффект для всех карточек */
+/* Tilt карточки - ограничиваем силу эффекта */
 .tilt-card {
     transform-style: preserve-3d;
     will-change: transform;
@@ -574,6 +554,20 @@
 .tilt-card .feature-icon {
     transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
+}
+
+/* Умеренный эффект для карточек описания */
+.feature-item.tilt-card:hover,
+.update-card.tilt-card:hover,
+.req-item.tilt-card:hover,
+.consumption-card.tilt-card:hover {
+    transform: scale(1.02);
+}
+.feature-item.tilt-card:hover .feature-icon,
+.update-card.tilt-card:hover *,
+.req-item.tilt-card:hover *,
+.consumption-card.tilt-card:hover * {
+    transform: none; /* отключаем смещение внутри */
 }
 
 /* Небольшие проекты на главной */
@@ -600,11 +594,16 @@
     padding: 12px;
 }
 .small-projects-container .project-card .image-wrapper {
-    height: 180px; /* увеличено со 140px до 180px */
+    flex: 1; /* изображение занимает всё доступное место */
     width: 100%;
-    aspect-ratio: auto;
     margin-bottom: 8px;
-    flex-shrink: 0;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.small-projects-container .project-card .image-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 .small-projects-container .project-card p {
     display: none;
@@ -613,7 +612,9 @@
     margin: 4px 0;
     font-size: 16px;
 }
-/* Кнопка стандартная */
+.small-projects-container .project-card .button {
+    margin-top: 8px;
+}
 
 /* Мобильная адаптация */
 @media (max-width: 900px) {
@@ -662,6 +663,9 @@
     .nav-link {
         padding: 8px 12px;
         font-size: 14px;
+    }
+    .developer-card {
+        min-height: 280px; /* уменьшаем на мобильных */
     }
 }
 
