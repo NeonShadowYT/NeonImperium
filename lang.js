@@ -25,8 +25,7 @@ const translations = {
         youtubersTitle: "Ютуберы",
         youtubersDesc: "Собираем комьюнити",
         newsTitle: "📰 Последние новости",
-        newsChannelBtn: "Канал Neon Shadow",
-        newsDesc: "Свежие видео с официального канала разработчика.",
+        newsDesc: "Свежие видео и обновления",
         newsLoading: "Загрузка новостей...",
         
         // Общие для страниц игр
@@ -210,8 +209,7 @@ const translations = {
         youtubersTitle: "YouTubers",
         youtubersDesc: "Building community",
         newsTitle: "📰 Latest News",
-        newsChannelBtn: "Neon Shadow Channel",
-        newsDesc: "Fresh videos from the official developer's channel.",
+        newsDesc: "Fresh videos and updates",
         newsLoading: "Loading news...",
         
         // Common for game pages

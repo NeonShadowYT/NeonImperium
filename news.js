@@ -1,105 +1,122 @@
-// news.js — Автоматическая загрузка последних видео с YouTube канала
+// news.js — Автоматическая загрузка последних видео с нескольких YouTube каналов
 
 document.addEventListener('DOMContentLoaded', function() {
     const newsFeed = document.getElementById('news-feed');
-    // ID канала Neon Shadow
-    const channelId = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
-    // RSS ссылка на видео канала (не требует API ключа!)
-    const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+    if (!newsFeed) return;
 
-    // Используем прокси, чтобы обойти CORS-ограничения браузера.
-    // Это бесплатный публичный сервис для разработки.
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
+    // ID каналов
+    const channelIds = [
+        'UC2pH2qNfh2sEAeYEGs1k_Lg', // Neon Shadow
+        'UCxuByf9jKs6ijiJyrMKBzdA'  // Оборотень
+    ];
 
-    fetch(proxyUrl)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Ошибка сети: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            // Парсим XML из ответа прокси
+    // Для каждого канала формируем RSS URL
+    const rssUrls = channelIds.map(id => `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`);
+
+    // Прокси для обхода CORS (тот же бесплатный сервис)
+    const proxyUrl = 'https://api.allorigins.win/get?url=';
+
+    // Функция загрузки одного канала
+    async function fetchChannelFeed(url) {
+        try {
+            const response = await fetch(proxyUrl + encodeURIComponent(url));
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
             const parser = new DOMParser();
             const xml = parser.parseFromString(data.contents, 'text/xml');
+            return Array.from(xml.querySelectorAll('entry'));
+        } catch (error) {
+            console.warn('Ошибка загрузки ленты:', url, error);
+            return []; // Возвращаем пустой массив, чтобы не ломать общую загрузку
+        }
+    }
 
-            // Находим все элементы <entry> (это и есть видео)
-            const entries = xml.querySelectorAll('entry');
-            if (!entries.length) {
+    // Загружаем все каналы параллельно
+    Promise.all(rssUrls.map(url => fetchChannelFeed(url)))
+        .then(results => {
+            // Объединяем все entry из всех каналов
+            const allEntries = results.flat();
+            if (allEntries.length === 0) {
                 showError('Нет видео для отображения.');
                 return;
             }
 
-            // Очищаем контейнер и строим новости
+            // Преобразуем entry в объекты с нужными полями и сортируем по дате (свежие сверху)
+            const videos = allEntries.map(entry => parseEntry(entry))
+                                     .sort((a, b) => new Date(b.published) - new Date(a.published));
+
+            // Оставляем только первые 6 самых свежих
+            const latestVideos = videos.slice(0, 6);
+
+            // Очищаем контейнер и строим карточки
             newsFeed.innerHTML = '';
-            entries.forEach((entry, index) => {
-                // Показываем только последние 6 видео, чтобы не загромождать страницу
-                if (index < 6) {
-                    const videoCard = createVideoCard(entry);
-                    newsFeed.appendChild(videoCard);
-                }
+            latestVideos.forEach(video => {
+                const card = createVideoCard(video);
+                newsFeed.appendChild(card);
             });
         })
         .catch(error => {
-            console.error('Ошибка загрузки новостей:', error);
+            console.error('Критическая ошибка загрузки новостей:', error);
             showError('Не удалось загрузить новости. Пожалуйста, попробуйте позже.');
         });
 
-    // Функция для создания одной карточки видео из XML-элемента <entry>
-    function createVideoCard(entry) {
+    // Парсинг одного entry в удобный объект
+    function parseEntry(entry) {
+        const getNS = (tag) => {
+            const nsTag = entry.getElementsByTagNameNS('*', tag)[0];
+            return nsTag ? nsTag.textContent : '';
+        };
         const title = entry.querySelector('title')?.textContent || 'Без названия';
-        const videoId = entry.querySelector('yt\\:videoId, videoId')?.textContent || '';
-        const published = entry.querySelector('published')?.textContent;
-        const author = entry.querySelector('author name')?.textContent || 'Neon Shadow';
-        // Правильный неймспейс для media:group может отличаться, поэтому используем универсальный поиск
+        const videoId = getNS('videoId') || entry.querySelector('videoId')?.textContent || '';
+        const published = entry.querySelector('published')?.textContent || '';
+        const author = entry.querySelector('author name')?.textContent || 'Неизвестный автор';
         const mediaGroup = entry.getElementsByTagNameNS('*', 'group')[0];
         const thumbnailUrl = mediaGroup?.getElementsByTagNameNS('*', 'thumbnail')[0]?.getAttribute('url') || '';
 
-        // Форматируем дату для читабельности
+        return { title, videoId, published, author, thumbnailUrl };
+    }
+
+    // Создание DOM-карточки из объекта video
+    function createVideoCard(video) {
+        const { title, videoId, published, author, thumbnailUrl } = video;
+
         const publishDate = published ? new Date(published).toLocaleDateString('ru-RU', {
             year: 'numeric', month: 'long', day: 'numeric'
         }) : 'Дата неизвестна';
 
-        // Ссылка на видео
         const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-        // Создаем DOM-элементы
         const card = document.createElement('a');
         card.href = videoUrl;
         card.target = '_blank';
-        card.className = 'project-card-link'; // Используем существующий стиль для карточек-ссылок
+        card.className = 'project-card-link';
         card.style.textDecoration = 'none';
 
         const cardInner = document.createElement('div');
-        cardInner.className = 'project-card tilt-card'; // Добавляем tilt-card для красивого эффекта
+        cardInner.className = 'project-card tilt-card';
 
-        // Изображение (обложка видео)
         const imgWrapper = document.createElement('div');
         imgWrapper.className = 'image-wrapper';
         const img = document.createElement('img');
         img.src = thumbnailUrl;
         img.alt = title;
-        img.loading = 'lazy'; // Ленивая загрузка для производительности
+        img.loading = 'lazy';
         img.className = 'project-image';
         imgWrapper.appendChild(img);
 
-        // Заголовок
         const titleEl = document.createElement('h3');
         titleEl.textContent = title.length > 70 ? title.substring(0, 70) + '…' : title;
 
-        // Мета-информация: автор и дата
         const metaEl = document.createElement('p');
         metaEl.className = 'text-secondary';
         metaEl.style.fontSize = '12px';
         metaEl.style.margin = '4px 0 8px';
         metaEl.innerHTML = `<i class="fas fa-user"></i> ${author} · <i class="fas fa-calendar-alt"></i> ${publishDate}`;
 
-        // Кнопка "Смотреть"
         const button = document.createElement('span');
         button.className = 'button';
         button.innerHTML = '<i class="fas fa-play"></i> Смотреть';
 
-        // Собираем карточку
         cardInner.appendChild(imgWrapper);
         cardInner.appendChild(titleEl);
         cardInner.appendChild(metaEl);
@@ -109,7 +126,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return card;
     }
 
-    // Функция для отображения ошибки, если загрузка не удалась
     function showError(message) {
         newsFeed.innerHTML = `<div class="card" style="grid-column: 1/-1; text-align: center; padding: 40px;">
             <i class="fas fa-exclamation-triangle" style="font-size: 32px; color: #f44336; margin-bottom: 15px;"></i>
