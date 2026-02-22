@@ -83,7 +83,7 @@ const translations = {
         githubLogout: "Выйти",
         githubLoginVia: "Войти через GitHub",
         githubWhy: "Зачем это нужно?",
-        githubClearToken: "Очистить токен",
+        githubClearCache: "Очистить кеш",
         githubError: "Ошибка",
         githubRetry: "Попробовать снова",
 
@@ -318,7 +318,7 @@ const translations = {
         githubLogout: "Logout",
         githubLoginVia: "Sign in with GitHub",
         githubWhy: "Why is this needed?",
-        githubClearToken: "Clear token",
+        githubClearCache: "Clear cache",
         githubError: "Error",
         githubRetry: "Try again",
 

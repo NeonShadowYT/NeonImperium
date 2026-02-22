@@ -68,8 +68,10 @@
                 const isActive = btn.classList.contains('active');
 
                 if (isActive && reactionId) {
-                    await onRemove(issueNumber, reactionId);
+                    // Удаление
+                    await onRemove(issueNumber, parseInt(reactionId));
                 } else {
+                    // Показываем меню выбора реакции
                     showReactionMenu(container, issueNumber, async (selectedContent) => {
                         await onAdd(issueNumber, selectedContent);
                     });

@@ -8,6 +8,9 @@
     };
 
     const TOKEN_KEY = 'github_token';
+    const LAST_CLEAR_KEY = 'last_cache_clear';
+    const CLEAR_COOLDOWN = 10000; // 10 секунд
+
     let navBar, profileContainer, modal, tokenInput;
 
     document.addEventListener('DOMContentLoaded', init);
@@ -179,6 +182,9 @@
                     <i class="fas fa-key"></i> <span data-lang="githubTokenActive">Токен активен</span>
                 </div>
                 <div class="profile-dropdown-divider"></div>
+                <div class="profile-dropdown-item" data-action="clear-cache">
+                    <i class="fas fa-trash-alt"></i> <span data-lang="githubClearCache">Очистить кеш</span>
+                </div>
                 <div class="profile-dropdown-item" data-action="logout">
                     <i class="fas fa-sign-out-alt"></i> <span data-lang="githubLogout">Выйти</span>
                 </div>
@@ -269,6 +275,9 @@
                     alert(`Вы вошли как ${userLogin}. Токен сохранён в браузере и действителен до отзыва.`);
                 }
                 break;
+            case 'clear-cache':
+                handleClearCache();
+                break;
             case 'logout':
                 localStorage.removeItem(TOKEN_KEY);
                 window.dispatchEvent(new CustomEvent('github-logout'));
@@ -282,6 +291,22 @@
                 modal.classList.add('active');
                 break;
         }
+    }
+
+    function handleClearCache() {
+        const lastClear = localStorage.getItem(LAST_CLEAR_KEY);
+        if (lastClear && Date.now() - parseInt(lastClear) < CLEAR_COOLDOWN) {
+            const remaining = Math.ceil((CLEAR_COOLDOWN - (Date.now() - parseInt(lastClear))) / 1000);
+            alert(`Очистка кеша доступна раз в 10 секунд. Подождите ${remaining} секунд.`);
+            return;
+        }
+
+        // Очищаем sessionStorage (кеш данных)
+        sessionStorage.clear();
+        localStorage.setItem(LAST_CLEAR_KEY, Date.now().toString());
+
+        // Обновляем страницу, чтобы перезагрузить данные
+        location.reload();
     }
 
     function toggleDropdown(e) {

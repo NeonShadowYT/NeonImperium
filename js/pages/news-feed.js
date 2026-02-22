@@ -1,4 +1,5 @@
 // news-feed.js — лента новостей на главной (сначала посты, потом видео)
+// Улучшена обработка ошибок, рендер происходит при появлении любых данных
 
 (function() {
     const { cacheGet, cacheSet, renderMarkdown, escapeHtml, CONFIG } = GithubCore;
@@ -27,24 +28,31 @@
     });
 
     window.refreshNewsFeed = () => {
-        if (container) loadNewsFeed();
+        if (container) {
+            // Сбрасываем состояние
+            posts = [];
+            videos = [];
+            postsLoaded = false;
+            videosLoaded = false;
+            loadNewsFeed();
+        }
     };
 
     async function loadNewsFeed() {
         container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>`;
 
-        // Сначала загружаем посты (они из GitHub, обычно быстрее)
+        // Загружаем посты (сначала показываем их)
         loadPosts().then(p => {
             posts = p;
             postsLoaded = true;
             renderMixed();
         }).catch(err => {
             console.warn('Posts failed', err);
-            postsLoaded = true; // всё равно попытаемся рендерить, но с пустыми постами
+            postsLoaded = true; // чтобы рендер всё равно произошёл
             renderMixed();
         });
 
-        // Параллельно загружаем видео
+        // Загружаем видео (могут быть медленными или ошибочными)
         loadVideos().then(v => {
             videos = v;
             videosLoaded = true;
@@ -57,22 +65,23 @@
     }
 
     function renderMixed() {
-        // Ждём хотя бы одну загрузку
+        // Если ни один источник ещё не готов, ничего не делаем
         if (!postsLoaded && !videosLoaded) return;
 
         const mixed = [...posts, ...videos].sort((a, b) => b.date - a.date).slice(0, 6);
 
+        // Если контейнер пуст или там только спиннер, очищаем
+        if (container.querySelector('.loading-spinner')) {
+            container.innerHTML = '';
+        }
+
+        // Если нет элементов, показываем заглушку
         if (mixed.length === 0) {
             container.innerHTML = `<p class="text-secondary">Нет новостей.</p>`;
             return;
         }
 
-        // Если это первый рендер, очищаем контейнер
-        if (container.querySelector('.loading-spinner')) {
-            container.innerHTML = '';
-        }
-
-        // Добавляем карточки, которых ещё нет (по id)
+        // Добавляем только те карточки, которых ещё нет
         const existingIds = new Set();
         container.querySelectorAll('[data-news-id]').forEach(el => {
             existingIds.add(el.dataset.newsId);
@@ -87,8 +96,6 @@
                 existingIds.add(id);
             }
         });
-
-        // Если после добавления карточек их меньше 6, можно показать сообщение, но у нас уже есть
     }
 
     async function loadVideos() {
@@ -313,6 +320,7 @@
 
             const addReactionHandler = async (num, content) => {
                 await addReaction(num, content);
+                // после добавления перезагружаем реакции
                 const updated = await loadReactions(num);
                 renderReactions(reactionsDiv, num, updated, currentUser, addReactionHandler, removeReactionHandler);
             };
