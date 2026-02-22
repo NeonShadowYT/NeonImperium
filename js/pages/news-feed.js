@@ -1,5 +1,4 @@
-// news-feed.js — лента новостей на главной (смесь видео и постов)
-// Поддерживает постепенную загрузку: сначала показывает видео, потом посты
+// news-feed.js — лента новостей на главной (сначала посты, потом видео)
 
 (function() {
     const { cacheGet, cacheSet, renderMarkdown, escapeHtml, CONFIG } = GithubCore;
@@ -15,10 +14,10 @@
     const DEFAULT_IMAGE = 'images/default-news.jpg';
 
     let container;
-    let videosLoaded = false;
-    let postsLoaded = false;
-    let videos = [];
     let posts = [];
+    let videos = [];
+    let postsLoaded = false;
+    let videosLoaded = false;
 
     document.addEventListener('DOMContentLoaded', () => {
         container = document.getElementById('news-feed');
@@ -32,49 +31,67 @@
     };
 
     async function loadNewsFeed() {
-        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка...</p></div>`;
+        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>`;
 
-        // Запускаем загрузку параллельно
-        Promise.allSettled([loadYouTubeVideos(), loadNewsPosts()]).then(results => {
-            // Видео загружены
-            if (results[0].status === 'fulfilled') {
-                videos = results[0].value;
-                videosLoaded = true;
-            } else {
-                console.warn('Failed to load videos', results[0].reason);
-            }
-            // Посты загружены
-            if (results[1].status === 'fulfilled') {
-                posts = results[1].value;
-                postsLoaded = true;
-            } else {
-                console.warn('Failed to load posts', results[1].reason);
-            }
+        // Сначала загружаем посты (они из GitHub, обычно быстрее)
+        loadPosts().then(p => {
+            posts = p;
+            postsLoaded = true;
+            renderMixed();
+        }).catch(err => {
+            console.warn('Posts failed', err);
+            postsLoaded = true; // всё равно попытаемся рендерить, но с пустыми постами
+            renderMixed();
+        });
+
+        // Параллельно загружаем видео
+        loadVideos().then(v => {
+            videos = v;
+            videosLoaded = true;
+            renderMixed();
+        }).catch(err => {
+            console.warn('Videos failed', err);
+            videosLoaded = true;
             renderMixed();
         });
     }
 
     function renderMixed() {
-        const mixed = [...(videosLoaded ? videos : []), ...(postsLoaded ? posts : [])]
-            .sort((a, b) => b.date - a.date)
-            .slice(0, 6);
+        // Ждём хотя бы одну загрузку
+        if (!postsLoaded && !videosLoaded) return;
+
+        const mixed = [...posts, ...videos].sort((a, b) => b.date - a.date).slice(0, 6);
 
         if (mixed.length === 0) {
             container.innerHTML = `<p class="text-secondary">Нет новостей.</p>`;
             return;
         }
 
-        container.innerHTML = '';
+        // Если это первый рендер, очищаем контейнер
+        if (container.querySelector('.loading-spinner')) {
+            container.innerHTML = '';
+        }
+
+        // Добавляем карточки, которых ещё нет (по id)
+        const existingIds = new Set();
+        container.querySelectorAll('[data-news-id]').forEach(el => {
+            existingIds.add(el.dataset.newsId);
+        });
+
         mixed.forEach(item => {
-            if (item.type === 'video') {
-                container.appendChild(createVideoCard(item));
-            } else {
-                container.appendChild(createPostCard(item));
+            const id = item.type === 'video' ? `yt-${item.id}` : `post-${item.id}`;
+            if (!existingIds.has(id)) {
+                const card = item.type === 'video' ? createVideoCard(item) : createPostCard(item);
+                card.dataset.newsId = id;
+                container.appendChild(card);
+                existingIds.add(id);
             }
         });
+
+        // Если после добавления карточек их меньше 6, можно показать сообщение, но у нас уже есть
     }
 
-    async function loadYouTubeVideos() {
+    async function loadVideos() {
         const cacheKey = 'youtube_videos';
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
@@ -99,7 +116,7 @@
         try {
             const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`;
             const response = await fetch(PROXY_URL + encodeURIComponent(url));
-            if (!response.ok) throw new Error('Network error');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             const parser = new DOMParser();
             const xml = parser.parseFromString(data.contents, 'text/xml');
@@ -127,7 +144,7 @@
         }
     }
 
-    async function loadNewsPosts() {
+    async function loadPosts() {
         const cacheKey = 'posts_news+update';
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
@@ -294,7 +311,6 @@
             const reactions = await loadReactions(issueNumber);
             const currentUser = GithubAuth.getCurrentUser();
 
-            // Определяем функции-колбэки, чтобы избежать arguments.callee
             const addReactionHandler = async (num, content) => {
                 await addReaction(num, content);
                 const updated = await loadReactions(num);

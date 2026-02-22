@@ -3,7 +3,7 @@
 (function() {
     const { cacheRemove, CONFIG } = GithubCore;
     const { createIssue } = GithubAPI;
-    const { isAdmin } = GithubAuth;
+    const { isAdmin, getCurrentUser } = GithubAuth;
 
     const RATE_LIMIT = 60 * 1000; // 1 минута
     const GAMES = [
@@ -12,23 +12,10 @@
         { id: 'gc-adven', name: 'ГК Адвенчур' }
     ];
 
-    // Пытаемся отрисовать панели сразу, если админ уже авторизован
-    function tryRenderPanels() {
-        if (isAdmin()) {
-            renderAdminPanels();
-        }
-    }
-
-    // Пробуем при загрузке скрипта
-    tryRenderPanels();
-
-    // И при последующих событиях
-    window.addEventListener('github-login-success', tryRenderPanels);
-    window.addEventListener('github-logout', () => {
-        document.querySelectorAll('.admin-panel').forEach(el => el.remove());
-    });
-
+    // Функция для рендера панелей
     function renderAdminPanels() {
+        if (!isAdmin()) return;
+
         const newsSection = document.getElementById('news-section');
         if (newsSection && !newsSection.querySelector('.admin-panel')) {
             const panel = createAdminPanel('news');
@@ -45,6 +32,22 @@
             }
         }
     }
+
+    // Пытаемся сразу при загрузке скрипта
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            // Даём время github-auth.js отрисовать профиль
+            setTimeout(renderAdminPanels, 100);
+        });
+    } else {
+        setTimeout(renderAdminPanels, 100);
+    }
+
+    // Слушаем события авторизации
+    window.addEventListener('github-login-success', renderAdminPanels);
+    window.addEventListener('github-logout', () => {
+        document.querySelectorAll('.admin-panel').forEach(el => el.remove());
+    });
 
     function createAdminPanel(type, game = null) {
         const container = document.createElement('div');
