@@ -76,3 +76,144 @@
     color: white;
     border-color: var(--accent);
 }
+
+/* Profile in navigation */
+.nav-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px 4px 12px;
+    border-radius: 40px;
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.2s;
+    position: relative;
+}
+.nav-profile:hover {
+    border-color: var(--accent);
+}
+.nav-profile-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--accent);
+}
+.nav-profile-login {
+    font-size: 14px;
+    color: var(--text-primary);
+    max-width: 100px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.nav-profile-login.placeholder {
+    color: var(--text-secondary);
+    font-weight: normal;
+}
+.nav-profile-chevron {
+    color: var(--text-secondary);
+    font-size: 12px;
+    transition: transform 0.2s;
+}
+.nav-profile:hover .nav-profile-chevron {
+    transform: rotate(90deg);
+}
+
+/* Profile dropdown menu */
+.profile-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 0;
+    min-width: 200px;
+    box-shadow: var(--shadow);
+    display: none;
+    z-index: 1000;
+}
+.nav-profile.active .profile-dropdown {
+    display: block;
+}
+.profile-dropdown-item {
+    padding: 10px 16px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.profile-dropdown-item:hover {
+    background: var(--bg-inner-gradient);
+    color: var(--text-primary);
+}
+.profile-dropdown-item i {
+    width: 16px;
+    color: var(--accent);
+}
+.profile-dropdown-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 8px 0;
+}
+
+/* Token modal (если пользователь не вошёл) */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+}
+.modal.active {
+    display: flex;
+}
+.modal-content {
+    background: var(--bg-card);
+    border-radius: 20px;
+    padding: 28px;
+    max-width: 400px;
+    width: 90%;
+    border: 1px solid var(--accent);
+}
+.modal-content h3 {
+    margin-top: 0;
+    color: var(--accent);
+}
+.modal-content p {
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+.modal-content input {
+    width: 100%;
+    padding: 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    font-family: monospace;
+}
+.modal-content input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+.modal-buttons .button {
+    min-width: 80px;
+}
