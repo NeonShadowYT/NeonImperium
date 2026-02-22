@@ -1,5 +1,3 @@
-// github-api.js — унифицированные методы для работы с GitHub API
-
 (function() {
     const { CONFIG } = GithubCore;
 
@@ -13,27 +11,30 @@
             'Accept': 'application/vnd.github.v3+json',
             ...options.headers
         };
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
         const response = await fetch(url, { ...options, headers });
         if (!response.ok) {
-            const error = await response.json().catch(() => ({}));
-            throw new Error(error.message || `HTTP ${response.status}`);
+            let errorMsg = `HTTP ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.message || errorMsg;
+            } catch {
+            }
+            throw new Error(errorMsg);
         }
         return response;
     }
 
-    // ----- Issues -----
-    async function loadIssues({ labels = '', state = 'open', per_page = 20, page = 1 } = {}) {
+    async function loadIssues({ labels = '', state = 'open', per_page = 20, page = 1, signal } = {}) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=${state}&per_page=${per_page}&page=${page}&labels=${encodeURIComponent(labels)}`;
-        const response = await githubFetch(url);
+        const response = await githubFetch(url, { signal });
         return response.json();
     }
 
-    async function loadIssue(issueNumber) {
+    async function loadIssue(issueNumber, signal) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`;
-        const response = await githubFetch(url);
+        const response = await githubFetch(url, { signal });
         return response.json();
     }
 
@@ -61,10 +62,9 @@
         return updateIssue(issueNumber, { state: 'closed' });
     }
 
-    // ----- Comments -----
-    async function loadComments(issueNumber) {
+    async function loadComments(issueNumber, signal) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`;
-        const response = await githubFetch(url);
+        const response = await githubFetch(url, { signal });
         return response.json();
     }
 
@@ -78,10 +78,9 @@
         return response.json();
     }
 
-    // ----- Reactions -----
-    async function loadReactions(issueNumber) {
+    async function loadReactions(issueNumber, signal) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
-        const response = await githubFetch(url);
+        const response = await githubFetch(url, { signal });
         return response.json();
     }
 
