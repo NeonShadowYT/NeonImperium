@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const videos = allEntries.map(entry => parseEntry(entry));
         videos.sort((a, b) => new Date(b.published) - new Date(a.published));
-        const latestVideos = videos.slice(0, 6);
+        const latestVideos = videos.slice(0, 8);
 
         newsFeed.innerHTML = '';
         latestVideos.forEach(video => {

@@ -10,6 +10,7 @@
     border: none;
     cursor: pointer;
     text-align: center;
+    font-family: 'Russo One', sans-serif; /* добавлено */
 }
 .button:hover {
     background: var(--accent-light);
