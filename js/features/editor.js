@@ -117,13 +117,13 @@
         `;
         toolbar.appendChild(baseGroup);
 
-        // Группа заголовков
+        // Группа заголовков (используем текст вместо иконок)
         const headingGroup = document.createElement('div');
         headingGroup.className = 'editor-btn-group';
         headingGroup.innerHTML = `
-            <button type="button" class="editor-btn" data-tag="# " title="Заголовок 1"><i class="fas fa-h1"></i></button>
-            <button type="button" class="editor-btn" data-tag="## " title="Заголовок 2"><i class="fas fa-h2"></i></button>
-            <button type="button" class="editor-btn" data-tag="### " title="Заголовок 3"><i class="fas fa-h3"></i></button>
+            <button type="button" class="editor-btn" data-tag="# " title="Заголовок 1">H1</button>
+            <button type="button" class="editor-btn" data-tag="## " title="Заголовок 2">H2</button>
+            <button type="button" class="editor-btn" data-tag="### " title="Заголовок 3">H3</button>
         `;
         toolbar.appendChild(headingGroup);
 

@@ -1,12 +1,17 @@
-// github-auth.js — обновлён с инструкцией и событием, добавлена обработка ошибок
-// Заменён пункт "Очистить токен" на "Очистить кеш" в неавторизованном меню
+// github-auth.js — обновлён с инструкцией и событием, улучшена обработка ошибок
 
 (function() {
-    const CONFIG = {
+    // Используем глобальную конфигурацию из GithubCore, если доступна
+    const DEFAULT_CONFIG = {
         REPO_OWNER: 'NeonShadowYT',
         REPO_NAME: 'NeonImperium',
         DEFAULT_AVATAR: 'images/default-avatar.png'
     };
+    const CONFIG = (window.GithubCore && window.GithubCore.CONFIG) ? {
+        REPO_OWNER: window.GithubCore.CONFIG.REPO_OWNER,
+        REPO_NAME: window.GithubCore.CONFIG.REPO_NAME,
+        DEFAULT_AVATAR: DEFAULT_CONFIG.DEFAULT_AVATAR
+    } : DEFAULT_CONFIG;
 
     const TOKEN_KEY = 'github_token';
     const LAST_CLEAR_KEY = 'last_cache_clear';
@@ -106,6 +111,7 @@
                 <i class="fas fa-circle-notch fa-spin" style="color: var(--accent); margin: 8px;"></i>
             `;
 
+            // Запрос к GitHub API для получения информации о пользователе
             const userResponse = await fetch('https://api.github.com/user', {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -119,15 +125,19 @@
 
             const userData = await userResponse.json();
 
-            const repoResponse = await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/vnd.github.v3+json'
+            // Опционально: проверяем доступ к репозиторию (необязательно для входа)
+            try {
+                const repoResponse = await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+                if (!repoResponse.ok) {
+                    console.warn('Token does not have access to the repository, but login successful');
                 }
-            });
-
-            if (!repoResponse.ok) {
-                console.warn('Token does not have access to the repository');
+            } catch (repoErr) {
+                console.warn('Could not verify repository access, but login successful', repoErr);
             }
 
             if (shouldSave) {
@@ -144,7 +154,18 @@
         } catch (error) {
             console.error('Auth error:', error);
             localStorage.removeItem(TOKEN_KEY);
-            showLoginError();
+            
+            // Определяем тип ошибки для более понятного сообщения
+            let errorMessage = 'Ошибка авторизации. Проверьте токен или попробуйте снова.';
+            if (error.name === 'TypeError' && error.message.includes('NetworkError')) {
+                errorMessage = 'Сетевая ошибка. Проверьте подключение к интернету.';
+            } else if (error.message.includes('401')) {
+                errorMessage = 'Неверный токен. Проверьте правильность ввода.';
+            } else if (error.message.includes('403')) {
+                errorMessage = 'Доступ запрещён. Возможно, токен не имеет нужных прав.';
+            }
+
+            showLoginError(errorMessage);
             setTimeout(() => {
                 modal.classList.add('active');
                 let errorMsg = modal.querySelector('.error-message');
@@ -158,8 +179,10 @@
                     errorMsg.style.borderRadius = '8px';
                     errorMsg.style.textAlign = 'center';
                     errorMsg.setAttribute('data-lang', 'githubAuthError');
-                    errorMsg.textContent = 'Ошибка авторизации. Проверьте токен или попробуйте снова.';
+                    errorMsg.textContent = errorMessage;
                     modal.querySelector('.modal-content').insertBefore(errorMsg, tokenInput);
+                } else {
+                    errorMsg.textContent = errorMessage;
                 }
                 tokenInput.value = '';
                 tokenInput.focus();
@@ -226,7 +249,7 @@
         attachDropdownHandlers();
     }
 
-    function showLoginError() {
+    function showLoginError(errorMessage) {
         profileContainer.innerHTML = `
             <span class="nav-profile-login placeholder" data-lang="githubError">Ошибка</span>
             <i class="fas fa-exclamation-triangle" style="color: #f44336;"></i>
@@ -286,7 +309,6 @@
                 delete profileContainer.dataset.githubLogin;
                 showNotLoggedIn();
                 break;
-            // case 'clear-token' удалён, теперь используется clear-cache везде
         }
     }
 
@@ -317,7 +339,9 @@
         getToken: () => localStorage.getItem('github_token'),
         isAdmin: () => {
             const user = window.GithubAuth.getCurrentUser();
-            return user && GithubCore.CONFIG.ALLOWED_AUTHORS.includes(user);
+            // Используем глобальный конфиг для списка администраторов
+            const allowedAuthors = (window.GithubCore && window.GithubCore.CONFIG) ? window.GithubCore.CONFIG.ALLOWED_AUTHORS : ['NeonShadowYT', 'GoldenCreeper567'];
+            return user && allowedAuthors.includes(user);
         }
     };
 })();
