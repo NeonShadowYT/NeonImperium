@@ -18,8 +18,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <script src="lang.js" defer></script>
     <script src="effects.js" defer></script>
-		<script src="github-auth.js" defer></script>
-		<script src="feedback.js" defer></script>
+	<script src="github-auth.js" defer></script>
+	<script src="feedback.js" defer></script>
+    <script src="news-feed.js" defer></script> <!-- для загрузки обновлений -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> <!-- для Markdown -->
+    <script src="admin-news.js" defer></script> <!-- админка -->
 </head>
 <body>
     <div class="page">
@@ -130,31 +133,14 @@
                 </div>
             </section>
 
+            <!-- Динамический блок обновлений -->
             <section class="card">
-                <h2 data-lang="updatesTitle">Обновления</h2>
-                <div class="update-card tilt-card">
-                    <h3 data-lang="alphaUpdateTitle">Патч 0.0.5.2</h3>
-                    <details class="spoiler">
-                        <summary data-lang="spoilerGameplay">Геймплей</summary>
-                        <div class="spoiler-content"><p data-lang="gameplayContent">Добавлена 1 точка бандитов на свалке</p></div>
-                    </details>
-                    <details class="spoiler">
-                        <summary data-lang="spoilerQuality">Удобства</summary>
-                        <div class="spoiler-content"><p data-lang="qualityContent">Облегчён момент с бандитом в базе</p></div>
-                    </details>
-                    <details class="spoiler">
-                        <summary data-lang="spoilerCraft">Крафт</summary>
-                        <div class="spoiler-content"><p data-lang="craftContent">Метеоритные пули теперь можно скрафтить в лесу</p></div>
-                    </details>
-                    <details class="spoiler">
-                        <summary data-lang="spoilerGraphics">Графика</summary>
-                        <div class="spoiler-content"><p data-lang="graphicsContent">Улучшение меню</p></div>
-                    </details>
-                    <details class="spoiler">
-                        <summary data-lang="spoilerBugfix">Исправления</summary>
-                        <div class="spoiler-content"><p data-lang="bugfixContent">Баг с темнотой</p></div>
-                    </details>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                    <h2 data-lang="updatesTitle" style="margin: 0;">Обновления</h2>
                 </div>
+                <!-- Контейнер для динамической загрузки обновлений -->
+                <div id="game-updates" data-game="alpha-01"></div>
+                <!-- Сюда admin-news.js добавит панель для NeonShadowYT -->
             </section>
         </main>
     </div>

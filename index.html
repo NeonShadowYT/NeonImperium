@@ -19,8 +19,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <script src="lang.js" defer></script>
     <script src="effects.js" defer></script>
-    <script src="news.js" defer></script>
-		<script src="github-auth.js" defer></script>
+    <!-- Заменяем news.js на news-feed.js -->
+    <script src="news-feed.js" defer></script>
+    <script src="github-auth.js" defer></script>
+    <script src="admin-news.js" defer></script> <!-- новый скрипт -->
 </head>
 <body>
     <div class="page">
@@ -142,6 +144,7 @@
                         <p style="margin-top: 10px;" data-lang="newsLoading">Загрузка новостей...</p>
                     </div>
                 </div>
+                <!-- Сюда admin-news.js добавит панель для NeonShadowYT -->
             </section>
 
             <div class="row">

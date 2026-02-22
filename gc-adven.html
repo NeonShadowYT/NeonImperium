@@ -18,8 +18,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <script src="lang.js" defer></script>
     <script src="effects.js" defer></script>
-		<script src="github-auth.js" defer></script>
-		<script src="feedback.js" defer></script>
+	<script src="github-auth.js" defer></script>
+	<script src="feedback.js" defer></script>
+    <script src="news-feed.js" defer></script> <!-- для загрузки обновлений -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> <!-- для Markdown -->
+    <script src="admin-news.js" defer></script> <!-- админка -->
 </head>
 <body>
     <div class="page">
@@ -124,15 +127,14 @@
                 </div>
             </section>
 
+            <!-- Динамический блок обновлений -->
             <section class="card">
-                <h2 data-lang="updatesTitle">Обновления</h2>
-                <div class="update-card tilt-card">
-                    <h3 data-lang="gcUpdateTitle">Обновление 0.1.0</h3>
-                    <details class="spoiler">
-                        <summary data-lang="gcUpdateSummary">Игра вышла</summary>
-                        <div class="spoiler-content"><p data-lang="gcUpdateContent">Первый релиз игры.</p></div>
-                    </details>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                    <h2 data-lang="updatesTitle" style="margin: 0;">Обновления</h2>
                 </div>
+                <!-- Контейнер для динамической загрузки обновлений -->
+                <div id="game-updates" data-game="gc-adven"></div>
+                <!-- Сюда admin-news.js добавит панель для NeonShadowYT -->
             </section>
         </main>
     </div>

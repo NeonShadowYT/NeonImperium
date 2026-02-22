@@ -18,9 +18,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <script src="lang.js" defer></script>
     <script src="platform.js" defer></script>
-		<script src="github-auth.js" defer></script>
-		<script src="feedback.js" defer></script>
+    <script src="github-auth.js" defer></script>
+    <script src="feedback.js" defer></script>
     <script src="effects.js" defer></script>
+    <script src="news-feed.js" defer></script> <!-- для загрузки обновлений -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> <!-- для Markdown -->
+    <script src="admin-news.js" defer></script> <!-- админка -->
 </head>
 <body>
     <div class="page">
@@ -196,7 +199,7 @@
                 </div>
             </section>
 
-			<section class="card" id="feedback-section" data-game="starve-neon">
+            <section class="card" id="feedback-section" data-game="starve-neon">
                 <div class="feedback-header">
                     <h2><i class="fab fa-github"></i> <span data-lang="feedbackTitle">Идеи, баги и отзывы</span></h2>
                     <button class="button" id="toggle-form-btn"><i class="fas fa-plus"></i> <span data-lang="feedbackNewBtn">Оставить сообщение</span></button>
@@ -211,6 +214,7 @@
                 </div>
             </section>
 
+            <!-- Динамический блок обновлений -->
             <section class="card">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                     <h2 data-lang="updatesTitle" style="margin: 0;">Обновления</h2>
@@ -218,29 +222,9 @@
                         <i class="fab fa-telegram"></i> <span data-lang="polls">Опросы</span>
                     </a>
                 </div>
-                <div class="update-card tilt-card">
-                    <h3 data-lang="starveUpdateTitle">Патч 0.13.7</h3>
-                    <details class="spoiler">
-                        <summary data-lang="spoilerTutorial">Туториал</summary>
-                        <div class="spoiler-content"><p data-lang="tutorialContent">Цели по всей игре</p></div>
-                    </details>
-                    <details class="spoiler">
-                        <summary data-lang="spoilerRewards">Награды</summary>
-                        <div class="spoiler-content"><p data-lang="rewardsContent">Локализация<br>Улучшены возможности перевода</p></div>
-                    </details>
-                    <details class="spoiler">
-                        <summary data-lang="spoilerQuality">Удобства</summary>
-                        <div class="spoiler-content"><p data-lang="qualityContent">Интерфейс<br>Управление</p></div>
-                    </details>
-                    <details class="spoiler">
-                        <summary data-lang="spoilerBalance">Баланс</summary>
-                        <div class="spoiler-content"><p data-lang="balanceContent">Награды за уровень<br>Изменение прогрессии</p></div>
-                    </details>
-                    <details class="spoiler">
-                        <summary data-lang="spoilerBugfix">Багфикс</summary>
-                        <div class="spoiler-content"><p data-lang="bugfixContent">Множество мелких исправлений</p></div>
-                    </details>
-                </div>
+                <!-- Контейнер для динамической загрузки обновлений -->
+                <div id="game-updates" data-game="starve-neon"></div>
+                <!-- Сюда admin-news.js добавит панель для NeonShadowYT -->
             </section>
         </main>
     </div>
