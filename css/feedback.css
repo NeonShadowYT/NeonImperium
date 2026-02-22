@@ -23,6 +23,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
+    font-family: 'Russo One', sans-serif; /* добавлено */
 }
 
 /* Вкладки */
@@ -95,6 +96,7 @@
     min-width: 120px;
     border-radius: 40px;
     padding: 10px 24px;
+    font-family: 'Russo One', sans-serif; /* добавлено */
 }
 .feedback-form .button-secondary {
     background: transparent;
@@ -256,6 +258,7 @@
     padding: 8px 18px;
     border-radius: 40px;
     white-space: nowrap;
+    font-family: 'Russo One', sans-serif; /* добавлено */
 }
 
 /* Состояния загрузки и ошибок */
@@ -291,6 +294,9 @@
     margin-bottom: 20px;
     font-size: 14px;
     color: var(--text-secondary);
+}
+.login-prompt .button {
+    font-family: 'Russo One', sans-serif; /* добавлено */
 }
 
 /* Reactions */

@@ -2,15 +2,28 @@
 
 @media (max-width: 900px) {
     .nav-bar {
-        flex-direction: column;
-        align-items: stretch;
+        flex-wrap: nowrap;
+        padding: 6px 10px;
     }
     .nav-links {
-        justify-content: center;
-        margin-bottom: 10px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        justify-content: flex-start;
+        margin-bottom: 0;
+        padding-bottom: 2px;
+    }
+    .nav-links::-webkit-scrollbar {
+        height: 3px;
+    }
+    .nav-links::-webkit-scrollbar-thumb {
+        background: var(--accent);
+        border-radius: 3px;
     }
     .lang-switcher {
-        justify-content: center;
+        flex-shrink: 0;
+        margin-left: auto;
     }
 }
 
@@ -53,14 +66,6 @@
     .card {
         margin-bottom: 16px;
     }
-    .nav-bar {
-        width: 100%;
-        justify-content: center;
-    }
-    .nav-link {
-        flex: 1 1 auto;
-        text-align: center;
-    }
 }
 
 @media (max-width: 600px) {
@@ -99,11 +104,10 @@
 
 @media (max-width: 500px) {
     .nav-links {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
     }
     .nav-link {
-        flex: 1 1 auto;
-        text-align: center;
+        flex: 0 0 auto;
     }
     .version-row {
         flex-direction: column;
@@ -121,7 +125,6 @@
         text-align: center;
         gap: 10px;
     }
-    /* Уменьшаем отступы кнопок языка, чтобы они точно помещались в одну строку */
     .lang-btn {
         padding: 6px 8px;
         font-size: 13px;

@@ -63,6 +63,7 @@
     font-size: 14px;
     transition: all 0.2s;
     white-space: nowrap;
+    font-family: 'Russo One', sans-serif; /* добавлено */
 }
 .lang-btn:hover {
     background: var(--accent);
