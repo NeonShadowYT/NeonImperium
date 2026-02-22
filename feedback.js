@@ -1,4 +1,4 @@
-// feedback.js — полная версия с редактированием и удалением
+// feedback.js — с поддержкой реакций
 
 (function() {
     const CONFIG = {
@@ -8,6 +8,18 @@
         ITEMS_PER_PAGE: 10
     };
 
+    // Доступные типы реакций (из документации GitHub API)
+    const REACTION_TYPES = [
+        { content: '+1', emoji: '👍' },
+        { content: '-1', emoji: '👎' },
+        { content: 'laugh', emoji: '😄' },
+        { content: 'confused', emoji: '😕' },
+        { content: 'heart', emoji: '❤️' },
+        { content: 'hooray', emoji: '🎉' },
+        { content: 'rocket', emoji: '🚀' },
+        { content: 'eyes', emoji: '👀' }
+    ];
+
     let currentGame = '';
     let currentTab = 'all';
     let currentPage = 1;
@@ -16,6 +28,11 @@
     let allIssues = [];
     let displayedIssues = [];
     let container, feedbackSection;
+    let currentUser = null;
+    let editingIssue = null;
+
+    // Кеш реакций для быстрого доступа
+    let reactionsCache = new Map();
 
     document.addEventListener('DOMContentLoaded', init);
 
@@ -32,14 +49,17 @@
         container = feedbackSection.querySelector('.feedback-container');
         if (!container) return;
 
-        checkAuthAndRender();
-
-        // Слушаем изменения localStorage (для выхода в другой вкладке)
-        window.addEventListener('storage', (e) => {
-            if (e.key === 'github_token') {
-                checkAuthAndRender();
-            }
+        window.addEventListener('github-login-success', (e) => {
+            currentUser = e.detail.login;
+            checkAuthAndRender();
         });
+
+        window.addEventListener('github-logout', () => {
+            currentUser = null;
+            checkAuthAndRender();
+        });
+
+        checkAuthAndRender();
     }
 
     function getCurrentUser() {
@@ -49,7 +69,7 @@
 
     function checkAuthAndRender() {
         const token = localStorage.getItem('github_token');
-        const currentUser = getCurrentUser();
+        currentUser = getCurrentUser();
 
         if (token && currentUser) {
             renderFeedbackInterface(token, currentUser);
@@ -64,36 +84,28 @@
                 <i class="fab fa-github"></i>
                 <h3 data-lang="feedbackLoginPrompt">Войдите через GitHub, чтобы участвовать</h3>
                 <p class="text-secondary">
-                    Ваш токен останется только у вас в браузере. 
-                    <button class="button-small" id="show-token-info">Подробнее</button>
+                    Ваш токен останется только у вас в браузере.
                 </p>
-                <button class="button" id="feedback-login-btn" data-lang="feedbackLoginBtn">Войти</button>
+                <button class="button" id="feedback-login-btn">Войти</button>
             </div>
         `;
 
         document.getElementById('feedback-login-btn').addEventListener('click', () => {
-            // Если пользователь уже залогинен (но интерфейс не обновился), перезапустим
             if (localStorage.getItem('github_token') && getCurrentUser()) {
                 checkAuthAndRender();
             } else {
-                // Запрашиваем открытие модалки входа
                 window.dispatchEvent(new CustomEvent('github-login-requested'));
-                // Также подпишемся на однократное событие после входа
-                const onLogin = () => {
-                    checkAuthAndRender();
-                    window.removeEventListener('github-login-success', onLogin);
-                };
-                window.addEventListener('github-login-success', onLogin);
             }
-        });
-
-        document.getElementById('show-token-info').addEventListener('click', () => {
-            alert('Безопасность: токен хранится локально, передаётся только в GitHub API, имеет доступ только к issues этого репозитория. Вы можете отозвать его в любой момент в настройках GitHub.');
         });
     }
 
     async function renderFeedbackInterface(token, currentUser) {
         container.innerHTML = `
+            <div class="feedback-header">
+                <h2><i class="fab fa-github"></i> <span data-lang="feedbackTitle">Идеи, баги и отзывы</span></h2>
+                <button class="button" id="toggle-form-btn"><i class="fas fa-plus"></i> <span data-lang="feedbackNewBtn">Оставить сообщение</span></button>
+            </div>
+
             <div class="feedback-tabs">
                 <button class="feedback-tab active" data-tab="all">Все</button>
                 <button class="feedback-tab" data-tab="idea">💡 Идеи</button>
@@ -101,16 +113,21 @@
                 <button class="feedback-tab" data-tab="review">⭐ Отзывы</button>
             </div>
 
-            <div class="feedback-form">
-                <h3 data-lang="feedbackFormTitle">Оставить сообщение</h3>
-                <input type="text" id="feedback-title" placeholder="Заголовок">
-                <select id="feedback-category">
-                    <option value="idea">💡 Идея</option>
-                    <option value="bug">🐛 Баг</option>
-                    <option value="review">⭐ Отзыв</option>
-                </select>
-                <textarea id="feedback-body" placeholder="Подробное описание..."></textarea>
-                <button class="button" id="feedback-submit">Отправить</button>
+            <div class="feedback-form-wrapper" style="display: none;">
+                <div class="feedback-form" id="feedback-form">
+                    <h3 data-lang="feedbackFormTitle">Оставить сообщение</h3>
+                    <input type="text" id="feedback-title" placeholder="Заголовок">
+                    <select id="feedback-category">
+                        <option value="idea">💡 Идея</option>
+                        <option value="bug">🐛 Баг</option>
+                        <option value="review">⭐ Отзыв</option>
+                    </select>
+                    <textarea id="feedback-body" placeholder="Подробное описание..."></textarea>
+                    <div class="button-group">
+                        <button class="button button-secondary" id="feedback-cancel">Отмена</button>
+                        <button class="button" id="feedback-submit">Отправить</button>
+                    </div>
+                </div>
             </div>
 
             <div class="feedback-list" id="feedback-list">
@@ -122,7 +139,31 @@
             </div>
         `;
 
-        await loadIssues(token, 1, true, currentUser);
+        document.getElementById('toggle-form-btn').addEventListener('click', () => {
+            const wrapper = document.querySelector('.feedback-form-wrapper');
+            if (wrapper.style.display === 'none') {
+                wrapper.style.display = 'block';
+                editingIssue = null;
+                document.getElementById('feedback-title').value = '';
+                document.getElementById('feedback-body').value = '';
+                document.getElementById('feedback-category').value = 'idea';
+            } else {
+                wrapper.style.display = 'none';
+            }
+        });
+
+        document.getElementById('feedback-cancel').addEventListener('click', () => {
+            document.querySelector('.feedback-form-wrapper').style.display = 'none';
+            editingIssue = null;
+        });
+
+        document.getElementById('feedback-submit').addEventListener('click', () => {
+            if (editingIssue) {
+                updateIssue(token, currentUser);
+            } else {
+                submitNewIssue(token, currentUser);
+            }
+        });
 
         document.querySelectorAll('.feedback-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
@@ -130,12 +171,8 @@
                 e.target.classList.add('active');
                 currentTab = e.target.dataset.tab;
                 currentPage = 1;
-                filterAndDisplayIssues(currentUser);
+                filterAndDisplayIssues(currentUser, token);
             });
-        });
-
-        document.getElementById('feedback-submit').addEventListener('click', () => {
-            submitNewIssue(token, currentUser);
         });
 
         document.getElementById('load-more').addEventListener('click', () => {
@@ -143,6 +180,8 @@
                 loadIssues(token, currentPage + 1, false, currentUser);
             }
         });
+
+        await loadIssues(token, 1, true, currentUser);
     }
 
     async function loadIssues(token, page, reset = false, currentUser) {
@@ -179,7 +218,7 @@
             }
 
             currentPage = page;
-            filterAndDisplayIssues(currentUser);
+            filterAndDisplayIssues(currentUser, token);
 
         } catch (error) {
             console.error('Error loading issues:', error);
@@ -196,18 +235,18 @@
         }
     }
 
-    function filterAndDisplayIssues(currentUser) {
-        let filtered = allIssues.filter(issue => issue.state === 'open'); // показываем только открытые
+    function filterAndDisplayIssues(currentUser, token) {
+        let filtered = allIssues.filter(issue => issue.state === 'open');
         if (currentTab !== 'all') {
             filtered = filtered.filter(issue => 
                 issue.labels.some(l => l.name === `type:${currentTab}`)
             );
         }
         displayedIssues = filtered;
-        renderIssuesList(displayedIssues, currentUser);
+        renderIssuesList(displayedIssues, currentUser, token);
     }
 
-    function renderIssuesList(issues, currentUser) {
+    function renderIssuesList(issues, currentUser, token) {
         const listEl = document.getElementById('feedback-list');
         if (!listEl) return;
 
@@ -219,8 +258,15 @@
         listEl.innerHTML = issues.map(issue => {
             const isAuthor = currentUser && issue.user.login === currentUser;
             const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
+            const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
+            
+            // Получаем реакции из кеша или инициализируем
+            if (!reactionsCache.has(`issue_${issue.number}`)) {
+                reactionsCache.set(`issue_${issue.number}`, []);
+            }
+            
             return `
-            <div class="feedback-item" data-issue-number="${issue.number}">
+            <div class="feedback-item" data-issue-number="${issue.number}" data-issue-id="${issue.id}">
                 <div class="feedback-item-header">
                     <h4 class="feedback-item-title">${escapeHtml(issue.title)}</h4>
                     <div class="feedback-item-meta">
@@ -228,45 +274,75 @@
                         <span class="feedback-label">#${issue.number}</span>
                     </div>
                 </div>
-                <div class="feedback-item-body">
-                    ${escapeHtml(issue.body || '').replace(/\n/g, '<br>')}
+                <div class="feedback-item-preview">
+                    ${escapeHtml(preview).replace(/\n/g, ' ')}
+                </div>
+                <div class="reactions-container" data-target-type="issue" data-target-id="${issue.number}">
+                    ${renderReactionButtons('issue', issue.number, currentUser)}
                 </div>
                 <div class="feedback-item-footer">
                     <span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span>
                     <span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span>
                     <span><i class="fas fa-comment"></i> ${issue.comments}</span>
+                    ${isAuthor ? `
+                    <div class="feedback-item-actions">
+                        <button class="edit-issue" title="Редактировать"><i class="fas fa-edit"></i></button>
+                        <button class="close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>
+                    </div>` : ''}
                 </div>
-                ${isAuthor ? `
-                <div class="feedback-item-actions">
-                    <button class="edit-issue" title="Редактировать"><i class="fas fa-edit"></i></button>
-                    <button class="close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>
-                </div>` : ''}
-                <div class="feedback-comments" id="comments-${issue.number}"></div>
-                ${issue.comments > 0 ? 
-                    `<button class="button-small load-comments-btn" data-issue="${issue.number}">Загрузить комментарии (${issue.comments})</button>` : ''}
-                <div class="comment-form" data-issue="${issue.number}">
-                    <input type="text" placeholder="Написать комментарий..." class="comment-input">
-                    <button class="button-small comment-submit">Отправить</button>
+                <div class="feedback-item-details" style="display: none;">
+                    <div class="feedback-comments" id="comments-${issue.number}"></div>
+                    <div class="comment-form" data-issue="${issue.number}">
+                        <input type="text" placeholder="Написать комментарий..." class="comment-input">
+                        <button class="button-small comment-submit">Отправить</button>
+                    </div>
                 </div>
             </div>`;
         }).join('');
 
+        // Загружаем реакции для всех отображаемых issues
+        issues.forEach(issue => {
+            if (!reactionsCache.has(`issue_${issue.number}`)) {
+                loadReactions('issue', issue.number, token);
+            }
+        });
+
         // Обработчики
-        document.querySelectorAll('.load-comments-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const issueNumber = e.target.dataset.issue;
-                loadComments(issueNumber, localStorage.getItem('github_token'));
+        document.querySelectorAll('.feedback-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('button') || e.target.closest('.reaction-button')) return;
+                
+                document.querySelectorAll('.feedback-item.expanded').forEach(el => {
+                    if (el !== item) {
+                        el.classList.remove('expanded');
+                        el.querySelector('.feedback-item-details').style.display = 'none';
+                    }
+                });
+                
+                const details = item.querySelector('.feedback-item-details');
+                if (item.classList.contains('expanded')) {
+                    item.classList.remove('expanded');
+                    details.style.display = 'none';
+                } else {
+                    item.classList.add('expanded');
+                    details.style.display = 'block';
+                    const issueNumber = item.dataset.issueNumber;
+                    if (!item.querySelector('.comment')) {
+                        loadComments(issueNumber, token);
+                    }
+                }
             });
         });
 
         document.querySelectorAll('.comment-submit').forEach(btn => {
             btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const form = e.target.closest('.comment-form');
                 const issueNumber = form.dataset.issue;
                 const input = form.querySelector('.comment-input');
                 const comment = input.value.trim();
                 if (comment) {
-                    submitComment(issueNumber, comment, localStorage.getItem('github_token'));
+                    submitComment(issueNumber, comment, token);
                     input.value = '';
                 }
             });
@@ -274,104 +350,228 @@
 
         document.querySelectorAll('.edit-issue').forEach(btn => {
             btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const issueItem = e.target.closest('.feedback-item');
                 const issueNumber = issueItem.dataset.issueNumber;
-                editIssue(issueNumber, localStorage.getItem('github_token'), currentUser);
+                const issue = allIssues.find(i => i.number == issueNumber);
+                if (issue && issue.user.login === currentUser) {
+                    startEditing(issue);
+                }
             });
         });
 
         document.querySelectorAll('.close-issue').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                if (!confirm('Вы уверены, что хотите закрыть это сообщение? Оно исчезнет из общего списка.')) return;
+                e.stopPropagation();
+                if (!confirm('Вы уверены, что хотите закрыть это сообщение?')) return;
                 const issueItem = e.target.closest('.feedback-item');
                 const issueNumber = issueItem.dataset.issueNumber;
-                closeIssue(issueNumber, localStorage.getItem('github_token'), currentUser);
+                closeIssue(issueNumber, token, currentUser);
+            });
+        });
+
+        // Обработчики реакций
+        document.querySelectorAll('.reaction-button').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const reactionBtn = e.currentTarget;
+                const targetType = reactionBtn.dataset.targetType;
+                const targetId = reactionBtn.dataset.targetId;
+                const content = reactionBtn.dataset.content;
+                const isActive = reactionBtn.classList.contains('active');
+                
+                handleReaction(targetType, targetId, content, isActive, token);
             });
         });
     }
 
-    // ---- Вспомогательные функции API ----
-
-    async function loadComments(issueNumber, token) {
-        const commentsDiv = document.getElementById(`comments-${issueNumber}`);
-        if (!commentsDiv) return;
-        try {
-            const response = await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error();
-            const comments = await response.json();
-            commentsDiv.innerHTML = comments.map(c => `
-                <div class="comment">
-                    <div class="comment-meta">
-                        <span class="comment-author">${escapeHtml(c.user.login)}</span>
-                        <span>${new Date(c.created_at).toLocaleString()}</span>
-                    </div>
-                    <div>${escapeHtml(c.body).replace(/\n/g, '<br>')}</div>
-                </div>
-            `).join('');
-        } catch (error) {
-            console.error('Error loading comments:', error);
-        }
+    function renderReactionButtons(targetType, targetId, currentUser) {
+        const cacheKey = `${targetType}_${targetId}`;
+        const reactions = reactionsCache.get(cacheKey) || [];
+        
+        // Группируем реакции по типу
+        const grouped = {};
+        REACTION_TYPES.forEach(type => {
+            grouped[type.content] = {
+                count: 0,
+                userReacted: false
+            };
+        });
+        
+        reactions.forEach(r => {
+            if (grouped[r.content]) {
+                grouped[r.content].count++;
+                if (currentUser && r.user && r.user.login === currentUser) {
+                    grouped[r.content].userReacted = true;
+                }
+            }
+        });
+        
+        return REACTION_TYPES.map(type => {
+            const data = grouped[type.content];
+            const activeClass = data.userReacted ? 'active' : '';
+            return `
+                <button class="reaction-button ${activeClass}" 
+                        data-target-type="${targetType}" 
+                        data-target-id="${targetId}" 
+                        data-content="${type.content}">
+                    <span class="reaction-emoji">${type.emoji}</span>
+                    <span class="reaction-count">${data.count}</span>
+                </button>
+            `;
+        }).join('');
     }
 
-    async function submitComment(issueNumber, comment, token) {
+    async function loadReactions(targetType, targetId, token) {
+        const cacheKey = `${targetType}_${targetId}`;
+        
         try {
-            const response = await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`, {
-                method: 'POST',
+            let url;
+            if (targetType === 'issue') {
+                url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions`;
+            } else {
+                url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${targetId}/reactions`;
+            }
+            
+            const response = await fetch(url, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ body: comment })
+                    'Accept': 'application/vnd.github.v3+json'
+                }
             });
+            
             if (response.ok) {
-                loadComments(issueNumber, token);
-                // Обновляем счётчик комментариев в кнопке
-                const btn = document.querySelector(`.load-comments-btn[data-issue="${issueNumber}"]`);
-                if (btn) {
-                    const current = parseInt(btn.textContent.match(/\d+/)[0]) || 0;
-                    btn.textContent = `Загрузить комментарии (${current + 1})`;
+                const reactions = await response.json();
+                reactionsCache.set(cacheKey, reactions);
+                
+                // Обновляем отображение кнопок
+                const container = document.querySelector(`.reactions-container[data-target-type="${targetType}"][data-target-id="${targetId}"]`);
+                if (container) {
+                    container.innerHTML = renderReactionButtons(targetType, targetId, currentUser);
                 }
             }
         } catch (error) {
-            console.error('Error posting comment:', error);
+            console.error('Error loading reactions:', error);
         }
     }
 
-    async function editIssue(issueNumber, token, currentUser) {
-        const issue = allIssues.find(i => i.number == issueNumber);
-        if (!issue || issue.user.login !== currentUser) return;
+    async function handleReaction(targetType, targetId, content, isActive, token) {
+        if (!token || !currentUser) {
+            alert('Войдите через GitHub, чтобы ставить реакции');
+            return;
+        }
+        
+        try {
+            if (isActive) {
+                // Находим ID реакции пользователя
+                const cacheKey = `${targetType}_${targetId}`;
+                const reactions = reactionsCache.get(cacheKey) || [];
+                const userReaction = reactions.find(r => 
+                    r.content === content && r.user && r.user.login === currentUser
+                );
+                
+                if (userReaction) {
+                    // Удаляем реакцию
+                    let url;
+                    if (targetType === 'issue') {
+                        url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions/${userReaction.id}`;
+                    } else {
+                        url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${targetId}/reactions/${userReaction.id}`;
+                    }
+                    
+                    const response = await fetch(url, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+                    
+                    if (response.status === 204) {
+                        // Перезагружаем реакции
+                        await loadReactions(targetType, targetId, token);
+                    }
+                }
+            } else {
+                // Создаём реакцию
+                let url;
+                if (targetType === 'issue') {
+                    url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions`;
+                } else {
+                    url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${targetId}/reactions`;
+                }
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content })
+                });
+                
+                if (response.ok || response.status === 200) {
+                    // Перезагружаем реакции
+                    await loadReactions(targetType, targetId, token);
+                }
+            }
+        } catch (error) {
+            console.error('Error handling reaction:', error);
+            alert('Не удалось поставить реакцию. Попробуйте позже.');
+        }
+    }
 
-        const newTitle = prompt('Редактировать заголовок:', issue.title);
-        if (newTitle === null) return;
-        const newBody = prompt('Редактировать описание:', issue.body);
-        if (newBody === null) return;
+    function startEditing(issue) {
+        editingIssue = issue;
+        document.querySelector('.feedback-form-wrapper').style.display = 'block';
+        document.getElementById('feedback-title').value = issue.title;
+        document.getElementById('feedback-body').value = issue.body;
+        const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
+        document.getElementById('feedback-category').value = typeLabel;
+    }
+
+    async function updateIssue(token, currentUser) {
+        if (!editingIssue) return;
+        const title = document.getElementById('feedback-title').value.trim();
+        const category = document.getElementById('feedback-category').value;
+        const body = document.getElementById('feedback-body').value.trim();
+
+        if (!title || !body) {
+            alert('Заполните заголовок и описание');
+            return;
+        }
 
         try {
-            const response = await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`, {
+            const response = await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${editingIssue.number}`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ title: newTitle, body: newBody })
+                body: JSON.stringify({
+                    title: title,
+                    body: body,
+                    labels: [`game:${currentGame}`, `type:${category}`]
+                })
             });
+
             if (response.ok) {
+                document.querySelector('.feedback-form-wrapper').style.display = 'none';
+                editingIssue = null;
                 sessionStorage.removeItem(`issues_${currentGame}_page_1`);
                 await loadIssues(token, 1, true, currentUser);
             } else {
-                alert('Не удалось отредактировать');
+                const error = await response.json();
+                alert(`Ошибка: ${error.message}`);
             }
         } catch (error) {
-            console.error('Edit error:', error);
+            console.error('Update error:', error);
+            alert('Не удалось обновить сообщение');
         }
     }
 
     async function closeIssue(issueNumber, token, currentUser) {
-        const issue = allIssues.find(i => i.number == issueNumber);
-        if (!issue || issue.user.login !== currentUser) return;
-
         try {
             const response = await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`, {
                 method: 'PATCH',
@@ -419,6 +619,7 @@
             if (response.ok) {
                 document.getElementById('feedback-title').value = '';
                 document.getElementById('feedback-body').value = '';
+                document.querySelector('.feedback-form-wrapper').style.display = 'none';
                 sessionStorage.removeItem(`issues_${currentGame}_page_1`);
                 await loadIssues(token, 1, true, currentUser);
             } else {
@@ -428,6 +629,75 @@
         } catch (error) {
             console.error('Error creating issue:', error);
             alert('Не удалось создать сообщение. Проверьте соединение.');
+        }
+    }
+
+    async function loadComments(issueNumber, token) {
+        const commentsDiv = document.getElementById(`comments-${issueNumber}`);
+        if (!commentsDiv) return;
+        
+        try {
+            const response = await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error();
+            const comments = await response.json();
+            
+            commentsDiv.innerHTML = comments.map(c => {
+                // Инициализируем кеш для комментариев
+                if (!reactionsCache.has(`comment_${c.id}`)) {
+                    reactionsCache.set(`comment_${c.id}`, []);
+                }
+                
+                return `
+                    <div class="comment" data-comment-id="${c.id}">
+                        <div class="comment-meta">
+                            <span class="comment-author">${escapeHtml(c.user.login)}</span>
+                            <span>${new Date(c.created_at).toLocaleString()}</span>
+                        </div>
+                        <div>${escapeHtml(c.body).replace(/\n/g, '<br>')}</div>
+                        <div class="reactions-container" data-target-type="comment" data-target-id="${c.id}">
+                            ${renderReactionButtons('comment', c.id, currentUser)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Загружаем реакции для комментариев
+            comments.forEach(c => {
+                if (!reactionsCache.has(`comment_${c.id}`)) {
+                    loadReactions('comment', c.id, token);
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error loading comments:', error);
+        }
+    }
+
+    async function submitComment(issueNumber, comment, token) {
+        try {
+            const response = await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ body: comment })
+            });
+            if (response.ok) {
+                loadComments(issueNumber, token);
+                const item = document.querySelector(`.feedback-item[data-issue-number="${issueNumber}"]`);
+                if (item) {
+                    const commentsSpan = item.querySelector('.feedback-item-footer span:last-child');
+                    if (commentsSpan) {
+                        const current = parseInt(commentsSpan.textContent.match(/\d+/)[0]) || 0;
+                        commentsSpan.innerHTML = `<i class="fas fa-comment"></i> ${current + 1}`;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error posting comment:', error);
         }
     }
 

@@ -141,6 +141,8 @@
                 localStorage.setItem(TOKEN_KEY, token);
             }
 
+            window.dispatchEvent(new CustomEvent('github-login-success', { detail: { login: user.login } }));
+
             // Отображаем профиль
             renderProfile(userData, token);
             modal.classList.remove('active');
@@ -250,6 +252,7 @@
                 break;
             case 'logout':
                 localStorage.removeItem(TOKEN_KEY);
+                window.dispatchEvent(new CustomEvent('github-logout'));
                 delete profileContainer.dataset.githubToken;
                 delete profileContainer.dataset.githubLogin;
                 showNotLoggedIn();
