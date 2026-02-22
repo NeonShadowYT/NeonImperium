@@ -4,10 +4,9 @@
 (function() {
     // Конфигурация — замените на свои данные
     const CONFIG = {
-    		 REPO_OWNER: 'NeonShadowYT',
-    	   REPO_NAME: 'NeonImperium',
-    		 DEFAULT_AVATAR: 'images/default-avatar.png', // если есть
-        CACHE_TTL: 5 * 60 * 1000
+				REPO_OWNER: 'NeonShadowYT',
+				REPO_NAME: 'NeonImperium',
+				DEFAULT_AVATAR: 'images/default-avatar.png'
     };
 
     // Ключ для хранения токена в localStorage
