@@ -101,21 +101,25 @@
         const textarea = document.getElementById('admin-post-body');
         const toolbarContainer = document.getElementById('admin-editor-toolbar');
 
-        const toolbar = Editor.createEditorToolbar(textarea, {
-            previewId: 'preview-btn-admin',
-            previewAreaId: 'preview-area-admin',
-            onPreview: () => {
-                const previewArea = document.getElementById('preview-area-admin');
-                const body = textarea.value;
-                if (!body.trim()) {
-                    previewArea.style.display = 'none';
-                    return;
+        if (typeof Editor !== 'undefined') {
+            const toolbar = Editor.createEditorToolbar(textarea, {
+                previewId: 'preview-btn-admin',
+                previewAreaId: 'preview-area-admin',
+                onPreview: () => {
+                    const previewArea = document.getElementById('preview-area-admin');
+                    const body = textarea.value;
+                    if (!body.trim()) {
+                        previewArea.style.display = 'none';
+                        return;
+                    }
+                    previewArea.innerHTML = GithubCore.renderMarkdown(body);
+                    previewArea.style.display = 'block';
                 }
-                previewArea.innerHTML = GithubCore.renderMarkdown(body);
-                previewArea.style.display = 'block';
-            }
-        });
-        toolbarContainer.appendChild(toolbar);
+            });
+            toolbarContainer.appendChild(toolbar);
+        } else {
+            console.warn('Editor module not loaded');
+        }
 
         document.getElementById('admin-post-cancel').addEventListener('click', () => form.remove());
         document.getElementById('admin-post-submit').addEventListener('click', () => submitPost(type));
