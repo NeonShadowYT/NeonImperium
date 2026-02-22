@@ -25,11 +25,8 @@
     }
 
     // ----- Issues -----
-    async function loadIssues({ labels = '', state = 'open', per_page = 20, page = 1, game = null, type = null } = {}) {
-        let labelParam = labels;
-        if (game) labelParam += `,game:${game}`;
-        if (type) labelParam += `,type:${type}`;
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=${state}&per_page=${per_page}&page=${page}&labels=${encodeURIComponent(labelParam)}`;
+    async function loadIssues({ labels = '', state = 'open', per_page = 20, page = 1 } = {}) {
+        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=${state}&per_page=${per_page}&page=${page}&labels=${encodeURIComponent(labels)}`;
         const response = await githubFetch(url);
         return response.json();
     }

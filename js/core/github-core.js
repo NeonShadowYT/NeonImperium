@@ -41,9 +41,7 @@ function renderMarkdown(text) {
 
     let html = '';
 
-    // Используем marked, если доступен
     if (window.marked) {
-        // Настройки для поддержки GitHub-стиля (включая alerts)
         marked.setOptions({
             gfm: true,
             breaks: true,
@@ -53,11 +51,9 @@ function renderMarkdown(text) {
         });
         html = marked.parse(text);
     } else {
-        // fallback
         html = text.replace(/\n/g, '<br>');
     }
 
-    // Преобразование YouTube-ссылок в iframe
     const youtubeRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[^\s]*)/g;
     html = html.replace(youtubeRegex, (match, videoId) => {
         return `<div class="youtube-embed"><iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe></div>`;

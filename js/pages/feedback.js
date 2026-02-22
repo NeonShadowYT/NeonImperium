@@ -4,6 +4,7 @@
     const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown } = GithubCore;
     const { loadIssues, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
     const { renderReactions, renderComments } = UIFeedback;
+    const { isAdmin, getCurrentUser } = GithubAuth;
 
     const ITEMS_PER_PAGE = 10;
 
@@ -52,8 +53,7 @@
         });
 
         token = localStorage.getItem('github_token');
-        const profile = document.querySelector('.nav-profile');
-        currentUser = profile ? profile.dataset.githubLogin : null;
+        currentUser = getCurrentUser();
 
         checkAuthAndRender();
     }
@@ -84,6 +84,11 @@
 
     async function renderFeedbackInterface() {
         container.innerHTML = `
+            <div class="feedback-header">
+                <h2 data-lang="feedbackTitle">Идеи, баги и отзывы</h2>
+                <button class="button" id="toggle-form-btn" data-lang="feedbackNewBtn">Оставить сообщение</button>
+            </div>
+
             <div class="feedback-tabs">
                 <button class="feedback-tab active" data-tab="all" data-lang="feedbackTabAll">Все</button>
                 <button class="feedback-tab" data-tab="idea" data-lang="feedbackTabIdea">💡 Идеи</button>
@@ -125,7 +130,6 @@
         const textarea = document.getElementById('feedback-body');
         const toolbarContainer = document.getElementById('feedback-editor-toolbar');
 
-        // Проверяем наличие Editor
         if (typeof Editor !== 'undefined') {
             const toolbar = Editor.createEditorToolbar(textarea, {
                 previewId: 'preview-btn-feedback',
@@ -142,9 +146,15 @@
                 }
             });
             toolbarContainer.appendChild(toolbar);
-        } else {
-            console.warn('Editor module not loaded. Markdown toolbar will not be available.');
         }
+
+        document.getElementById('toggle-form-btn').addEventListener('click', () => {
+            document.querySelector('.feedback-form-wrapper').style.display = 'block';
+            editingIssue = null;
+            document.getElementById('feedback-title').value = '';
+            document.getElementById('feedback-body').value = '';
+            document.getElementById('feedback-category').value = 'idea';
+        });
 
         document.getElementById('feedback-cancel').addEventListener('click', () => {
             document.querySelector('.feedback-form-wrapper').style.display = 'none';
@@ -249,6 +259,7 @@
 
         listEl.innerHTML = issues.map(issue => {
             const isAuthor = currentUser && issue.user.login === currentUser;
+            const canEdit = isAuthor || isAdmin(); // администратор тоже может
             const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
             const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
 
@@ -269,7 +280,7 @@
                     <span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span>
                     <span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span>
                     <span><i class="fas fa-comment"></i> ${issue.comments}</span>
-                    ${isAuthor ? `
+                    ${canEdit ? `
                     <div class="feedback-item-actions">
                         <button class="edit-issue" title="Редактировать"><i class="fas fa-edit"></i></button>
                         <button class="close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>
@@ -341,7 +352,7 @@
 
     function attachEventHandlers() {
         document.querySelectorAll('.feedback-item').forEach(item => {
-            item.addEventListener('click', (e) => {
+            item.addEventListener('click', async (e) => {
                 if (e.target.closest('button') || e.target.closest('.reaction-button') ||
                     e.target.closest('.reaction-add-btn') || e.target.closest('.comment-input') ||
                     e.target.closest('.comment-submit')) return;
@@ -363,8 +374,9 @@
                     item.classList.add('expanded');
                     details.style.display = 'block';
                     const issueNumber = item.dataset.issueNumber;
-                    if (!item.querySelector('.comment')) {
-                        loadAndRenderComments(issueNumber, document.getElementById(`comments-${issueNumber}`));
+                    // Если детали ещё не загружены, загружаем
+                    if (!item.querySelector('.feedback-item-actions-admin')) {
+                        await loadFeedbackDetails(issueNumber, item);
                     }
                 }
             });
@@ -414,7 +426,7 @@
                 const issueItem = e.target.closest('.feedback-item');
                 const issueNumber = issueItem.dataset.issueNumber;
                 const issue = allIssues.find(i => i.number == issueNumber);
-                if (issue && issue.user.login === currentUser) {
+                if (issue && (issue.user.login === currentUser || isAdmin())) {
                     startEditing(issue);
                 }
             });
@@ -440,6 +452,54 @@
                 }
             });
         });
+    }
+
+    // Новая функция для загрузки дополнительных деталей (комментарии, реакции, админ-кнопки)
+    async function loadFeedbackDetails(issueNumber, issueItem) {
+        const detailsDiv = issueItem.querySelector('.feedback-item-details');
+        if (!detailsDiv) return;
+
+        // Загружаем комментарии, если их нет
+        const commentsDiv = document.getElementById(`comments-${issueNumber}`);
+        if (commentsDiv && !commentsDiv.hasChildNodes()) {
+            await loadAndRenderComments(issueNumber, commentsDiv);
+        }
+
+        // Добавляем панель администратора, если нужно и её ещё нет
+        if (isAdmin() && !detailsDiv.querySelector('.feedback-item-actions-admin')) {
+            const adminActions = document.createElement('div');
+            adminActions.className = 'feedback-item-actions-admin';
+            adminActions.style.marginTop = '10px';
+            adminActions.style.display = 'flex';
+            adminActions.style.gap = '10px';
+            adminActions.innerHTML = `
+                <button class="button-small edit-issue-admin">Редактировать</button>
+                <button class="button-small close-issue-admin">Закрыть</button>
+            `;
+            detailsDiv.appendChild(adminActions);
+
+            adminActions.querySelector('.edit-issue-admin').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const issue = allIssues.find(i => i.number == issueNumber);
+                if (issue) startEditing(issue);
+            });
+
+            adminActions.querySelector('.close-issue-admin').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('Вы уверены, что хотите закрыть это сообщение?')) return;
+                issueItem.style.opacity = '0.5';
+                e.target.disabled = true;
+                try {
+                    await closeIssue(issueNumber);
+                    cacheRemove(`issues_${currentGame}_page_1`);
+                    await loadIssuesPage(1, true);
+                } catch (err) {
+                    issueItem.style.opacity = '1';
+                    e.target.disabled = false;
+                    alert('Ошибка при закрытии');
+                }
+            });
+        }
     }
 
     async function loadAndRenderComments(issueNumber, container) {

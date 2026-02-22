@@ -1,9 +1,9 @@
-// admin-news.js — форма создания новостей и обновлений для администраторов
+// admin-news.js — форма создания и редактирования новостей и обновлений для администраторов
 
 (function() {
     const { cacheRemove, CONFIG } = GithubCore;
-    const { createIssue } = GithubAPI;
-    const { isAdmin, getCurrentUser } = GithubAuth;
+    const { createIssue, updateIssue } = GithubAPI;
+    const { isAdmin } = GithubAuth;
 
     const RATE_LIMIT = 60 * 1000;
     const GAMES = [
@@ -11,6 +11,13 @@
         { id: 'alpha-01', name: 'Alpha 01' },
         { id: 'gc-adven', name: 'ГК Адвенчур' }
     ];
+
+    // Глобальная функция для открытия формы редактирования (вызывается из других модулей)
+    window.AdminNews = {
+        openEditForm: function(type, issueData) {
+            showForm(type, issueData.game, issueData);
+        }
+    };
 
     function renderAdminPanels() {
         if (!isAdmin()) {
@@ -63,7 +70,7 @@
         return container;
     }
 
-    function showForm(type, game) {
+    function showForm(type, game, existingIssue = null) {
         const oldForm = document.getElementById('admin-post-form');
         if (oldForm) oldForm.remove();
 
@@ -82,21 +89,32 @@
             `;
         }
 
+        const titleValue = existingIssue ? existingIssue.title : '';
+        const bodyValue = existingIssue ? existingIssue.body : '';
+
         form.innerHTML = `
-            <h3>${type === 'news' ? 'Новая новость' : 'Новое обновление'}</h3>
-            <input type="text" id="admin-post-title" placeholder="Заголовок" required class="feedback-input">
+            <h3>${existingIssue ? 'Редактирование' : (type === 'news' ? 'Новая новость' : 'Новое обновление')}</h3>
+            <input type="text" id="admin-post-title" placeholder="Заголовок" required class="feedback-input" value="${GithubCore.escapeHtml(titleValue)}">
             ${gameSelectHtml}
             <div id="admin-editor-toolbar"></div>
-            <textarea id="admin-post-body" placeholder="Текст (поддерживается Markdown, можно вставлять изображения)" rows="10" required class="feedback-textarea"></textarea>
+            <textarea id="admin-post-body" placeholder="Текст (поддерживается Markdown, можно вставлять изображения)" rows="10" required class="feedback-textarea">${GithubCore.escapeHtml(bodyValue)}</textarea>
             <div class="preview-area" id="preview-area-admin" style="display: none; background: var(--bg-primary); border-radius: 16px; padding: 16px; margin-top: 10px;"></div>
             <div class="button-group">
                 <button class="button button-secondary" id="admin-post-cancel">Отмена</button>
-                <button class="button" id="admin-post-submit">Опубликовать</button>
+                <button class="button" id="admin-post-submit">${existingIssue ? 'Сохранить' : 'Опубликовать'}</button>
             </div>
         `;
 
-        const parent = document.querySelector('.admin-panel');
-        parent.parentNode.insertBefore(form, parent.nextSibling);
+        // Вставляем форму после панели администратора или в нужное место
+        const target = document.querySelector('.admin-panel');
+        if (target) {
+            target.parentNode.insertBefore(form, target.nextSibling);
+        } else {
+            // Если панели нет (например, при редактировании с главной), вставляем в контейнер
+            const container = type === 'news' ? document.getElementById('news-section') : document.getElementById('game-updates')?.parentNode;
+            if (container) container.appendChild(form);
+            else document.querySelector('.page').appendChild(form);
+        }
 
         const textarea = document.getElementById('admin-post-body');
         const toolbarContainer = document.getElementById('admin-editor-toolbar');
@@ -117,17 +135,15 @@
                 }
             });
             toolbarContainer.appendChild(toolbar);
-        } else {
-            console.warn('Editor module not loaded');
         }
 
         document.getElementById('admin-post-cancel').addEventListener('click', () => form.remove());
-        document.getElementById('admin-post-submit').addEventListener('click', () => submitPost(type));
+        document.getElementById('admin-post-submit').addEventListener('click', () => submitPost(type, existingIssue));
     }
 
-    async function submitPost(type) {
+    async function submitPost(type, existingIssue = null) {
         const lastPostTime = localStorage.getItem('last_post_time');
-        if (lastPostTime && Date.now() - parseInt(lastPostTime) < RATE_LIMIT) {
+        if (!existingIssue && lastPostTime && Date.now() - parseInt(lastPostTime) < RATE_LIMIT) {
             const remaining = Math.ceil((RATE_LIMIT - (Date.now() - parseInt(lastPostTime))) / 1000);
             alert(`Пожалуйста, подождите ${remaining} секунд перед следующей публикацией.`);
             return;
@@ -136,37 +152,52 @@
         const title = document.getElementById('admin-post-title').value.trim();
         const bodyRaw = document.getElementById('admin-post-body').value;
         const bodyTrimmed = bodyRaw.trim();
-        let game = null;
-        if (type === 'update') {
-            game = document.getElementById('admin-post-game').value;
-            if (!game) {
-                alert('Выберите игру');
-                return;
-            }
-        }
 
         if (!title || !bodyTrimmed) {
             alert('Заполните заголовок и текст');
             return;
         }
 
-        const labels = type === 'news' ? ['news'] : ['update', `game:${game}`];
+        let labels;
+        if (type === 'news') {
+            labels = ['type:news'];
+        } else {
+            const game = document.getElementById('admin-post-game').value;
+            if (!game) {
+                alert('Выберите игру');
+                return;
+            }
+            labels = ['type:update', `game:${game}`];
+        }
 
         const submitBtn = document.getElementById('admin-post-submit');
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Публикация...';
+        submitBtn.textContent = existingIssue ? 'Сохранение...' : 'Публикация...';
 
         try {
-            await createIssue(title, bodyRaw, labels);
-            localStorage.setItem('last_post_time', Date.now().toString());
+            if (existingIssue) {
+                await updateIssue(existingIssue.number, {
+                    title: title,
+                    body: bodyRaw,
+                    labels: labels
+                });
+            } else {
+                await createIssue(title, bodyRaw, labels);
+                localStorage.setItem('last_post_time', Date.now().toString());
+            }
 
-            cacheRemove('posts_news+update');
-            if (type === 'update') {
+            // Очистка кеша
+            if (type === 'news') {
+                cacheRemove('posts_news');
+            } else {
+                const game = existingIssue ? existingIssue.game : document.getElementById('admin-post-game').value;
                 cacheRemove(`game_updates_${game}`);
             }
+            cacheRemove('posts_news+update');
 
             if (window.refreshNewsFeed) window.refreshNewsFeed();
             if (type === 'update' && window.refreshGameUpdates) {
+                const game = existingIssue ? existingIssue.game : document.getElementById('admin-post-game').value;
                 window.refreshGameUpdates(game);
             }
 
@@ -177,7 +208,7 @@
             alert('Ошибка: ' + err.message);
         } finally {
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Опубликовать';
+            submitBtn.textContent = existingIssue ? 'Сохранить' : 'Опубликовать';
         }
     }
 })();
