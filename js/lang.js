@@ -318,7 +318,7 @@ const translations = {
         githubLogout: "Logout",
         githubLoginVia: "Sign in with GitHub",
         githubWhy: "Why is this needed?",
-        githubClearCache: "Clear cache",
+        githubClearCache: "Clear cache", 
         githubError: "Error",
         githubRetry: "Try again",
 
