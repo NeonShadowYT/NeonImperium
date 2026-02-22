@@ -1,4 +1,4 @@
-// news.js — Автоматическая загрузка последних видео с нескольких YouTube каналов
+// news.js — Автоматическая загрузка последних видео с нескольких YouTube каналов (постепенная)
 
 document.addEventListener('DOMContentLoaded', function() {
     const newsFeed = document.getElementById('news-feed');
@@ -13,46 +13,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const rssUrls = channelIds.map(id => `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`);
     const proxyUrl = 'https://api.allorigins.win/get?url=';
 
-    async function fetchChannelFeed(url) {
+    let allVideos = [];
+    let loadedCount = 0;
+
+    async function fetchChannelFeed(url, index) {
         try {
             const response = await fetch(proxyUrl + encodeURIComponent(url));
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             const parser = new DOMParser();
             const xml = parser.parseFromString(data.contents, 'text/xml');
-            return Array.from(xml.querySelectorAll('entry'));
+            const entries = Array.from(xml.querySelectorAll('entry'));
+            const videos = entries.map(entry => parseEntry(entry, index));
+            return videos;
         } catch (error) {
             console.warn('Ошибка загрузки ленты:', url, error);
             return [];
         }
     }
 
-    async function loadAllFeeds() {
-        newsFeed.innerHTML = `<div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
-            <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);"></i>
-            <p style="margin-top: 10px;" data-lang="newsLoading">Загрузка новостей...</p>
-        </div>`;
-
-        const results = await Promise.all(rssUrls.map(url => fetchChannelFeed(url)));
-        const allEntries = results.flat();
-
-        if (allEntries.length === 0) {
-            showError('Не удалось загрузить новости. Проверьте подключение к интернету.', true);
-            return;
-        }
-
-        const videos = allEntries.map(entry => parseEntry(entry));
-        videos.sort((a, b) => new Date(b.published) - new Date(a.published));
-        const latestVideos = videos.slice(0, 8);
-
-        newsFeed.innerHTML = '';
-        latestVideos.forEach(video => {
-            const card = createVideoCard(video);
-            newsFeed.appendChild(card);
-        });
-    }
-
-    function parseEntry(entry) {
+    function parseEntry(entry, channelIndex) {
         const getNS = (tag) => {
             const nsTag = entry.getElementsByTagNameNS('*', tag)[0];
             return nsTag ? nsTag.textContent : '';
@@ -64,7 +44,25 @@ document.addEventListener('DOMContentLoaded', function() {
         const mediaGroup = entry.getElementsByTagNameNS('*', 'group')[0];
         const thumbnailUrl = mediaGroup?.getElementsByTagNameNS('*', 'thumbnail')[0]?.getAttribute('url') || '';
 
-        return { title, videoId, published, author, thumbnailUrl };
+        return { title, videoId, published, author, thumbnailUrl, channelIndex };
+    }
+
+    function updateNewsFeed() {
+        if (allVideos.length === 0) {
+            if (loadedCount === channelIds.length) {
+                showError('Нет доступных видео.');
+            }
+            return;
+        }
+
+        const sorted = [...allVideos].sort((a, b) => new Date(b.published) - new Date(a.published));
+        const latest = sorted.slice(0, 6);
+
+        newsFeed.innerHTML = '';
+        latest.forEach(video => {
+            const card = createVideoCard(video);
+            newsFeed.appendChild(card);
+        });
     }
 
     function createVideoCard(video) {
@@ -116,24 +114,40 @@ document.addEventListener('DOMContentLoaded', function() {
         return card;
     }
 
-    function showError(message, showRetry = false) {
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'card';
-        errorDiv.style.gridColumn = '1/-1';
-        errorDiv.style.textAlign = 'center';
-        errorDiv.style.padding = '40px';
-        errorDiv.innerHTML = `
-            <i class="fas fa-exclamation-triangle" style="font-size: 32px; color: #f44336; margin-bottom: 15px;"></i>
-            <p>${message}</p>
-            ${showRetry ? '<button class="button" id="retry-news" style="margin-top: 15px;"><i class="fas fa-sync-alt"></i> Повторить</button>' : ''}
+    function showError(message) {
+        newsFeed.innerHTML = `
+            <div class="card" style="grid-column: 1/-1; text-align: center; padding: 40px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 32px; color: #f44336; margin-bottom: 15px;"></i>
+                <p>${message}</p>
+                <button class="button" id="retry-news" style="margin-top: 15px;"><i class="fas fa-sync-alt"></i> Повторить</button>
+            </div>
         `;
-        newsFeed.innerHTML = '';
-        newsFeed.appendChild(errorDiv);
+        document.getElementById('retry-news').addEventListener('click', () => {
+            loadAllFeeds();
+        });
+    }
 
-        if (showRetry) {
-            document.getElementById('retry-news')?.addEventListener('click', () => {
-                loadAllFeeds();
-            });
+    async function loadAllFeeds() {
+        newsFeed.innerHTML = `<div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
+            <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);"></i>
+            <p style="margin-top: 10px;" data-lang="newsLoading">Загрузка новостей...</p>
+        </div>`;
+
+        allVideos = [];
+        loadedCount = 0;
+
+        const promises = rssUrls.map((url, index) => 
+            fetchChannelFeed(url, index).then(videos => {
+                allVideos = [...allVideos, ...videos];
+                loadedCount++;
+                updateNewsFeed();
+            })
+        );
+
+        await Promise.allSettled(promises);
+
+        if (loadedCount === channelIds.length && allVideos.length === 0) {
+            showError('Не удалось загрузить новости. Проверьте подключение к интернету.');
         }
     }
 

@@ -55,7 +55,6 @@
 
         window.addEventListener('github-logout', () => {
             currentUser = null;
-            // очистить кеш при выходе
             reactionsCache.clear();
             commentsCache.clear();
             checkAuthAndRender();
@@ -297,15 +296,12 @@
             </div>`;
         }).join('');
 
-        // Загружаем реакции для всех отображаемых issues (из кеша или с сервера)
         issues.forEach(issue => {
             const cacheKey = `issue_${issue.number}`;
             if (reactionsCache.has(cacheKey)) {
-                // Если уже есть в кеше, сразу отображаем
                 const container = document.querySelector(`.reactions-container[data-target-type="issue"][data-target-id="${issue.number}"]`);
                 if (container) updateReactionsContainer(container, 'issue', issue.number, token, reactionsCache.get(cacheKey));
             } else {
-                // Загружаем с сервера
                 loadReactions('issue', issue.number, token);
             }
         });
@@ -379,8 +375,6 @@
                 closeIssue(issueNumber, token, currentUser);
             });
         });
-
-        // Обработчики для кнопок реакций (будут переопределяться после обновления контейнера)
     }
 
     function showReactionMenu(container, targetType, targetId, token) {
@@ -411,7 +405,6 @@
             btn.onmouseout = () => btn.style.background = 'transparent';
             btn.onclick = (e) => {
                 e.stopPropagation();
-                // Оптимистичное добавление реакции
                 optimisticAddReaction(targetType, targetId, type.content, token, container);
                 document.body.removeChild(menu);
             };
@@ -434,23 +427,14 @@
         }, 100);
     }
 
-    // Оптимистичное добавление реакции
     function optimisticAddReaction(targetType, targetId, content, token, container) {
         if (!currentUser) return;
         const cacheKey = `${targetType}_${targetId}`;
         let reactions = reactionsCache.get(cacheKey) || [];
 
-        // Проверяем, есть ли уже такая реакция от текущего пользователя
         const existing = reactions.find(r => r.content === content && r.user?.login === currentUser);
-        if (existing) {
-            // Если уже есть, значит нужно убрать (это обработка клика на активной кнопке, но здесь мы вызываем из меню добавления)
-            // Но в меню добавляем только если нет активной? В текущей логике кнопка + показывает меню, и мы должны добавить, а не убрать.
-            // Однако пользователь может нажать на уже активную реакцию через кнопку, а не через меню. В обработчике reaction-button мы отдельно обрабатываем удаление.
-            // Здесь мы добавляем новую.
-            return;
-        }
+        if (existing) return;
 
-        // Создаём временную реакцию с локальным ID
         const tempReaction = {
             id: 'temp-' + Date.now(),
             content: content,
@@ -458,11 +442,8 @@
         };
         reactions.push(tempReaction);
         reactionsCache.set(cacheKey, reactions);
-
-        // Обновляем UI
         updateReactionsContainer(container, targetType, targetId, token, reactions);
 
-        // Отправляем запрос на сервер
         fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions`, {
             method: 'POST',
             headers: {
@@ -477,19 +458,16 @@
             return response.json();
         })
         .then(realReaction => {
-            // Заменяем временную реакцию на реальную
             const updated = reactionsCache.get(cacheKey) || [];
             const index = updated.findIndex(r => r.id === tempReaction.id);
             if (index !== -1) {
                 updated[index] = realReaction;
                 reactionsCache.set(cacheKey, updated);
+                updateReactionsContainer(container, targetType, targetId, token, updated);
             }
-            // Обновляем UI с реальными данными
-            updateReactionsContainer(container, targetType, targetId, token, updated);
         })
         .catch(error => {
             console.error('Error adding reaction:', error);
-            // Откат: убираем временную реакцию
             const rolledBack = reactionsCache.get(cacheKey).filter(r => r.id !== tempReaction.id);
             reactionsCache.set(cacheKey, rolledBack);
             updateReactionsContainer(container, targetType, targetId, token, rolledBack);
@@ -497,19 +475,16 @@
         });
     }
 
-    // Оптимистичное удаление реакции
     function optimisticRemoveReaction(targetType, targetId, reactionId, token, container) {
         const cacheKey = `${targetType}_${targetId}`;
         let reactions = reactionsCache.get(cacheKey) || [];
-        const reactionToRemove = reactions.find(r => r.id === reactionId);
+        const reactionToRemove = reactions.find(r => r.id == reactionId);
         if (!reactionToRemove) return;
 
-        // Удаляем локально
-        const newReactions = reactions.filter(r => r.id !== reactionId);
+        const newReactions = reactions.filter(r => r.id != reactionId);
         reactionsCache.set(cacheKey, newReactions);
         updateReactionsContainer(container, targetType, targetId, token, newReactions);
 
-        // Отправляем запрос на удаление
         fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions/${reactionId}`, {
             method: 'DELETE',
             headers: {
@@ -519,7 +494,6 @@
         })
         .catch(error => {
             console.error('Error removing reaction:', error);
-            // Откат: возвращаем реакцию
             reactionsCache.set(cacheKey, reactions);
             updateReactionsContainer(container, targetType, targetId, token, reactions);
             alert('Не удалось удалить реакцию.');
@@ -606,7 +580,6 @@
 
         container.innerHTML = html;
 
-        // Навешиваем обработчики
         container.querySelectorAll('.reaction-button').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -615,12 +588,8 @@
                 const isActive = btn.classList.contains('active');
                 
                 if (isActive && reactionId) {
-                    // Удаляем реакцию
                     optimisticRemoveReaction(targetType, targetId, reactionId, token, container);
                 } else {
-                    // Добавляем реакцию (через меню, но здесь это клик на неактивной кнопке, значит нужно добавить через меню)
-                    // Однако мы решили, что клик на неактивной кнопке открывает меню, а не сразу добавляет.
-                    // Поэтому здесь мы просто открываем меню.
                     showReactionMenu(container, targetType, targetId, token);
                 }
             });
@@ -749,7 +718,6 @@
         const commentsDiv = document.getElementById(`comments-${issueNumber}`);
         if (!commentsDiv) return;
 
-        // Проверяем кеш
         const cacheKey = `comments_${issueNumber}`;
         if (commentsCache.has(cacheKey)) {
             renderComments(commentsDiv, commentsCache.get(cacheKey));
@@ -784,7 +752,6 @@
     }
 
     async function submitComment(issueNumber, comment, token) {
-        // Оптимистичное добавление комментария
         const commentsDiv = document.getElementById(`comments-${issueNumber}`);
         const cacheKey = `comments_${issueNumber}`;
         const currentComments = commentsCache.get(cacheKey) || [];
@@ -795,11 +762,10 @@
             body: comment,
             created_at: new Date().toISOString()
         };
-        const newComments = [tempComment, ...currentComments];
+        const newComments = [...currentComments, tempComment]; // добавляем в конец
         commentsCache.set(cacheKey, newComments);
         renderComments(commentsDiv, newComments);
 
-        // Обновляем счётчик комментариев в футере
         const item = document.querySelector(`.feedback-item[data-issue-number="${issueNumber}"]`);
         if (item) {
             const commentsSpan = item.querySelector('.feedback-item-footer span:last-child');
@@ -820,8 +786,7 @@
             });
             if (response.ok) {
                 const realComment = await response.json();
-                // Заменяем временный на реальный
-                const updated = commentsCache.get(cacheKey).map(c => c.id === tempComment.id ? realComment : c);
+                const updated = newComments.map(c => c.id === tempComment.id ? realComment : c);
                 commentsCache.set(cacheKey, updated);
                 renderComments(commentsDiv, updated);
             } else {
@@ -829,7 +794,6 @@
             }
         } catch (error) {
             console.error('Error posting comment:', error);
-            // Откат
             const rolledBack = commentsCache.get(cacheKey).filter(c => c.id !== tempComment.id);
             commentsCache.set(cacheKey, rolledBack);
             renderComments(commentsDiv, rolledBack);
