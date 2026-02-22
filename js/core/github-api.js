@@ -1,14 +1,13 @@
 // github-api.js — унифицированные методы для работы с GitHub API
+// Добавлена проверка reactionId в removeReaction
 
 (function() {
     const { CONFIG } = GithubCore;
 
-    // Получение токена
     function getToken() {
         return localStorage.getItem('github_token');
     }
 
-    // Безопасный fetch с авторизацией
     async function githubFetch(url, options = {}) {
         const token = getToken();
         const headers = {
@@ -101,11 +100,12 @@
     }
 
     async function removeReaction(issueNumber, reactionId) {
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions/${reactionId}`;
+        const id = parseInt(reactionId, 10);
+        if (isNaN(id)) throw new Error('Invalid reaction ID');
+        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions/${id}`;
         await githubFetch(url, { method: 'DELETE' });
     }
 
-    // Экспорт
     window.GithubAPI = {
         getToken,
         fetch: githubFetch,
