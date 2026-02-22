@@ -97,17 +97,35 @@
                 try { await addComment(item.id, comment); const updated = await loadComments(item.id); renderComments(commentsDiv, updated); input.value = ''; } catch { alert('Ошибка'); } finally { input.disabled = false; e.target.disabled = false; }
             });
             if (actionButtons.innerHTML) {
-                actionButtons.querySelector('.edit-issue')?.addEventListener('click', (e) => { e.stopPropagation(); closeModal(); document.removeEventListener('keydown', escHandler); openEditorModal('edit', { number: item.id, title: issue.title, body: issue.body, game: item.game }); });
+                actionButtons.querySelector('.edit-issue')?.addEventListener('click', (e) => { e.stopPropagation(); closeModal(); document.removeEventListener('keydown', escHandler); 
+                    // Determine post type
+                    let postType = 'feedback';
+                    if (item.labels?.includes('type:news')) postType = 'news';
+                    else if (item.labels?.includes('type:update')) postType = 'update';
+                    openEditorModal('edit', { number: item.id, title: issue.title, body: issue.body, game: item.game }, postType);
+                });
                 actionButtons.querySelector('.close-issue')?.addEventListener('click', async (e) => {
-                    e.stopPropagation(); if (!confirm('Закрыть?')) return; try { await closeIssue(item.id); closeModal(); document.removeEventListener('keydown', escHandler); if (window.refreshNewsFeed) window.refreshNewsFeed(); if (window.refreshGameUpdates) window.refreshGameUpdates(item.game); } catch { alert('Ошибка'); }
+                    e.stopPropagation(); if (!confirm('Закрыть?')) return; try { await closeIssue(item.id); closeModal(); document.removeEventListener('keydown', escHandler); if (window.refreshNewsFeed) window.refreshNewsFeed(); if (window.refreshGameUpdates && item.game) window.refreshGameUpdates(item.game); } catch { alert('Ошибка'); }
                 });
             }
         } catch (err) { container.innerHTML = '<p class="error-message">Ошибка загрузки</p>'; }
     }
 
-    function openEditorModal(mode, data) {
+    // Enhanced editor modal with type support
+    function openEditorModal(mode, data, postType = 'feedback') {
         const modal = document.createElement('div'); modal.className = 'modal modal-fullscreen';
-        modal.innerHTML = `<div class="modal-content modal-content-full"><div class="modal-header"><h2>${mode==='edit'?'Редактирование':'Новое сообщение'}</h2><button class="modal-close"><i class="fas fa-times"></i></button></div><div class="modal-body"><div class="feedback-form"><input type="text" id="modal-title" class="feedback-input" placeholder="Заголовок" value="${GithubCore.escapeHtml(data.title||'')}"><select id="modal-category" class="feedback-select"><option value="idea">💡 Идея</option><option value="bug">🐛 Баг</option><option value="review">⭐ Отзыв</option></select><div id="modal-editor-toolbar"></div><textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(data.body||'')}</textarea><div class="preview-area" id="modal-preview-area"></div><div class="button-group"><button class="button button-secondary" id="modal-cancel">Отмена</button><button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button></div></div></div></div>`;
+        // Build inner HTML based on postType
+        let categoryHtml = '';
+        if (postType === 'feedback') {
+            categoryHtml = `<select id="modal-category" class="feedback-select">
+                <option value="idea">💡 Идея</option>
+                <option value="bug">🐛 Баг</option>
+                <option value="review">⭐ Отзыв</option>
+            </select>`;
+        }
+        // For updates, we don't show game select; game is taken from page (data attribute)
+        // For news, no game.
+        modal.innerHTML = `<div class="modal-content modal-content-full"><div class="modal-header"><h2>${mode==='edit'?'Редактирование':'Новое сообщение'}</h2><button class="modal-close"><i class="fas fa-times"></i></button></div><div class="modal-body"><div class="feedback-form"><input type="text" id="modal-title" class="feedback-input" placeholder="Заголовок" value="${GithubCore.escapeHtml(data.title||'')}">${categoryHtml}<div id="modal-editor-toolbar"></div><textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(data.body||'')}</textarea><div class="preview-area" id="modal-preview-area" style="display:none;"></div><div class="button-group"><button class="button button-secondary" id="modal-cancel">Отмена</button><button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button></div></div></div></div>`;
         document.body.appendChild(modal); document.body.style.overflow = 'hidden';
         const closeModal = () => { modal.remove(); document.body.style.overflow = ''; };
         modal.querySelector('.modal-close').addEventListener('click', closeModal);
@@ -126,16 +144,28 @@
         document.getElementById('modal-cancel').addEventListener('click', closeModal);
         document.getElementById('modal-submit').addEventListener('click', async () => {
             const title = document.getElementById('modal-title').value.trim();
-            const category = document.getElementById('modal-category').value;
             const body = document.getElementById('modal-body').value;
             if (!title || !body.trim()) { alert('Заполните всё'); return; }
+            let category = 'idea';
+            if (postType === 'feedback') {
+                category = document.getElementById('modal-category').value;
+            }
             const btn = document.getElementById('modal-submit'); btn.disabled = true; btn.textContent = 'Сохранение...';
             try {
-                if (mode === 'edit') await GithubAPI.updateIssue(data.number, { title, body, labels: [`game:${data.game}`,`type:${category}`] });
-                else await GithubAPI.createIssue(title, body, [`game:${data.game}`,`type:${category}`]);
+                let labels;
+                if (postType === 'feedback') {
+                    labels = [`game:${data.game}`, `type:${category}`];
+                } else if (postType === 'news') {
+                    labels = ['type:news'];
+                } else { // update
+                    labels = ['type:update', `game:${data.game}`];
+                }
+                if (mode === 'edit') await GithubAPI.updateIssue(data.number, { title, body, labels });
+                else await GithubAPI.createIssue(title, body, labels);
                 closeModal(); document.removeEventListener('keydown', escHandler);
-                if (window.refreshNewsFeed) window.refreshNewsFeed();
-                if (window.refreshGameUpdates && data.game) window.refreshGameUpdates(data.game);
+                if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
+                if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
+                if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
             } catch (err) { alert('Ошибка: '+err.message); } finally { btn.disabled = false; btn.textContent = mode==='edit'?'Сохранить':'Опубликовать'; }
         });
     }

@@ -36,7 +36,13 @@
 
     async function renderFeedbackInterface() {
         container.innerHTML = `
-            <div class="feedback-header"><h2 data-lang="feedbackTitle">Идеи, баги и отзывы</h2>${currentUser ? '<button class="button" id="toggle-form-btn" data-lang="feedbackNewBtn">Оставить сообщение</button>' : ''}</div>
+            <div class="feedback-header">
+                <div>
+                    <h2 data-lang="feedbackTitle">Идеи, баги и отзывы</h2>
+                    <p class="text-secondary" style="margin:4px 0 0; font-size:14px;">Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.</p>
+                </div>
+                ${currentUser ? '<button class="button" id="toggle-form-btn"><i class="fab fa-github"></i> + Оставить сообщение</button>' : ''}
+            </div>
             <div class="feedback-tabs">
                 <button class="feedback-tab active" data-tab="all">Все</button>
                 <button class="feedback-tab" data-tab="idea">💡 Идеи</button>
@@ -46,7 +52,7 @@
             <div class="feedback-list" id="feedback-list"><div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div></div>
             <div style="text-align:center;margin-top:20px;" id="load-more-container"><button class="button" id="load-more" style="display:none;" data-lang="feedbackLoadMore">Загрузить ещё</button></div>
         `;
-        if (currentUser) document.getElementById('toggle-form-btn').addEventListener('click', () => openEditorModal('new', { game: currentGame }));
+        if (currentUser) document.getElementById('toggle-form-btn').addEventListener('click', () => openEditorModal('new', { game: currentGame }, 'feedback'));
         document.querySelectorAll('.feedback-tab').forEach(tab => tab.addEventListener('click', (e) => {
             document.querySelectorAll('.feedback-tab').forEach(t => t.classList.remove('active'));
             e.target.classList.add('active');
