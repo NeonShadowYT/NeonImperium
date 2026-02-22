@@ -125,21 +125,26 @@
         const textarea = document.getElementById('feedback-body');
         const toolbarContainer = document.getElementById('feedback-editor-toolbar');
 
-        const toolbar = Editor.createEditorToolbar(textarea, {
-            previewId: 'preview-btn-feedback',
-            previewAreaId: 'preview-area-feedback',
-            onPreview: () => {
-                const previewArea = document.getElementById('preview-area-feedback');
-                const body = textarea.value;
-                if (!body.trim()) {
-                    previewArea.style.display = 'none';
-                    return;
+        // Проверяем наличие Editor
+        if (typeof Editor !== 'undefined') {
+            const toolbar = Editor.createEditorToolbar(textarea, {
+                previewId: 'preview-btn-feedback',
+                previewAreaId: 'preview-area-feedback',
+                onPreview: () => {
+                    const previewArea = document.getElementById('preview-area-feedback');
+                    const body = textarea.value;
+                    if (!body.trim()) {
+                        previewArea.style.display = 'none';
+                        return;
+                    }
+                    previewArea.innerHTML = renderMarkdown(body);
+                    previewArea.style.display = 'block';
                 }
-                previewArea.innerHTML = renderMarkdown(body);
-                previewArea.style.display = 'block';
-            }
-        });
-        toolbarContainer.appendChild(toolbar);
+            });
+            toolbarContainer.appendChild(toolbar);
+        } else {
+            console.warn('Editor module not loaded. Markdown toolbar will not be available.');
+        }
 
         document.getElementById('feedback-cancel').addEventListener('click', () => {
             document.querySelector('.feedback-form-wrapper').style.display = 'none';
