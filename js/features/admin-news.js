@@ -5,7 +5,7 @@
     const { createIssue } = GithubAPI;
     const { isAdmin, getCurrentUser } = GithubAuth;
 
-    const RATE_LIMIT = 60 * 1000; // 1 минута
+    const RATE_LIMIT = 60 * 1000;
     const GAMES = [
         { id: 'starve-neon', name: 'Starve Neon' },
         { id: 'alpha-01', name: 'Alpha 01' },
@@ -82,29 +82,13 @@
             `;
         }
 
-        const toolbar = `
-            <div class="editor-toolbar" style="display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap;">
-                <button type="button" class="editor-btn" data-tag="**" data-placeholder="жирный текст"><i class="fas fa-bold"></i></button>
-                <button type="button" class="editor-btn" data-tag="*" data-placeholder="курсив"><i class="fas fa-italic"></i></button>
-                <button type="button" class="editor-btn" data-tag="### " data-placeholder="Заголовок"><i class="fas fa-heading"></i></button>
-                <button type="button" class="editor-btn" data-tag="> " data-placeholder="цитата"><i class="fas fa-quote-right"></i></button>
-                <button type="button" class="editor-btn" data-tag="\`" data-placeholder="код" data-wrap="true"><i class="fas fa-code"></i></button>
-                <button type="button" class="editor-btn" data-tag="[" data-placeholder="текст](url)" data-link="true"><i class="fas fa-link"></i></button>
-                <button type="button" class="editor-btn" data-tag="- " data-placeholder="элемент списка"><i class="fas fa-list-ul"></i></button>
-                <button type="button" class="editor-btn" data-tag="1. " data-placeholder="элемент списка"><i class="fas fa-list-ol"></i></button>
-                <button type="button" class="editor-btn" data-tag="![](" data-placeholder="url картинки)"><i class="fas fa-image"></i></button>
-                <button type="button" class="editor-btn" data-spoiler="true"><i class="fas fa-chevron-down"></i> Спойлер</button>
-                <button type="button" class="editor-btn" id="preview-btn"><i class="fas fa-eye"></i> Предпросмотр</button>
-            </div>
-        `;
-
         form.innerHTML = `
             <h3>${type === 'news' ? 'Новая новость' : 'Новое обновление'}</h3>
             <input type="text" id="admin-post-title" placeholder="Заголовок" required class="feedback-input">
             ${gameSelectHtml}
-            ${toolbar}
+            <div id="admin-editor-toolbar"></div>
             <textarea id="admin-post-body" placeholder="Текст (поддерживается Markdown, можно вставлять изображения)" rows="10" required class="feedback-textarea"></textarea>
-            <div class="preview-area" id="preview-area" style="display: none; background: var(--bg-primary); border-radius: 16px; padding: 16px; margin-top: 10px;"></div>
+            <div class="preview-area" id="preview-area-admin" style="display: none; background: var(--bg-primary); border-radius: 16px; padding: 16px; margin-top: 10px;"></div>
             <div class="button-group">
                 <button class="button button-secondary" id="admin-post-cancel">Отмена</button>
                 <button class="button" id="admin-post-submit">Опубликовать</button>
@@ -115,87 +99,26 @@
         parent.parentNode.insertBefore(form, parent.nextSibling);
 
         const textarea = document.getElementById('admin-post-body');
-        document.querySelectorAll('.editor-btn[data-tag]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const tag = btn.dataset.tag;
-                const placeholder = btn.dataset.placeholder || '';
-                const wrap = btn.dataset.wrap === 'true';
-                const isLink = btn.dataset.link === 'true';
-                insertMarkdown(textarea, tag, placeholder, wrap, isLink);
-            });
-        });
+        const toolbarContainer = document.getElementById('admin-editor-toolbar');
 
-        document.querySelector('[data-spoiler="true"]').addEventListener('click', (e) => {
-            e.preventDefault();
-            insertSpoiler(textarea);
-        });
-
-        document.getElementById('preview-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            const previewArea = document.getElementById('preview-area');
-            const body = textarea.value.trim();
-            if (!body) {
-                previewArea.style.display = 'none';
-                return;
+        const toolbar = Editor.createEditorToolbar(textarea, {
+            previewId: 'preview-btn-admin',
+            previewAreaId: 'preview-area-admin',
+            onPreview: () => {
+                const previewArea = document.getElementById('preview-area-admin');
+                const body = textarea.value;
+                if (!body.trim()) {
+                    previewArea.style.display = 'none';
+                    return;
+                }
+                previewArea.innerHTML = GithubCore.renderMarkdown(body);
+                previewArea.style.display = 'block';
             }
-            previewArea.innerHTML = GithubCore.renderMarkdown(body);
-            previewArea.style.display = 'block';
         });
+        toolbarContainer.appendChild(toolbar);
 
         document.getElementById('admin-post-cancel').addEventListener('click', () => form.remove());
         document.getElementById('admin-post-submit').addEventListener('click', () => submitPost(type));
-    }
-
-    function insertMarkdown(textarea, tag, placeholder, wrap = false, isLink = false) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        const selected = text.substring(start, end);
-
-        let insertion;
-        if (isLink) {
-            const url = prompt('Введите URL:', 'https://');
-            if (!url) return;
-            const text = prompt('Введите текст ссылки:', selected || 'ссылка');
-            insertion = `[${text}](${url})`;
-        } else if (tag === '![](') {
-            const url = prompt('Введите URL изображения:', 'https://');
-            if (!url) return;
-            const alt = prompt('Введите описание изображения (alt):', 'image');
-            insertion = `![${alt}](${url})`;
-        } else if (wrap) {
-            if (selected) {
-                insertion = tag + selected + tag;
-            } else {
-                insertion = tag + placeholder + tag;
-            }
-        } else {
-            if (selected) {
-                insertion = tag + selected;
-            } else {
-                insertion = tag + placeholder;
-            }
-        }
-
-        const newText = text.substring(0, start) + insertion + text.substring(end);
-        textarea.value = newText;
-        textarea.focus();
-        textarea.setSelectionRange(start + insertion.length, start + insertion.length);
-    }
-
-    function insertSpoiler(textarea) {
-        const summary = prompt('Заголовок спойлера:', 'Спойлер');
-        if (summary === null) return;
-        const content = prompt('Содержимое спойлера (можно оставить пустым):', '');
-        const spoiler = `\n<details><summary>${summary}</summary>\n\n${content || '...'}\n\n</details>\n`;
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        const newText = text.substring(0, start) + spoiler + text.substring(end);
-        textarea.value = newText;
-        textarea.focus();
-        textarea.setSelectionRange(start + spoiler.length, start + spoiler.length);
     }
 
     async function submitPost(type) {
@@ -207,7 +130,8 @@
         }
 
         const title = document.getElementById('admin-post-title').value.trim();
-        const body = document.getElementById('admin-post-body').value.trim();
+        const bodyRaw = document.getElementById('admin-post-body').value;
+        const bodyTrimmed = bodyRaw.trim();
         let game = null;
         if (type === 'update') {
             game = document.getElementById('admin-post-game').value;
@@ -217,7 +141,7 @@
             }
         }
 
-        if (!title || !body) {
+        if (!title || !bodyTrimmed) {
             alert('Заполните заголовок и текст');
             return;
         }
@@ -229,7 +153,7 @@
         submitBtn.textContent = 'Публикация...';
 
         try {
-            await createIssue(title, body, labels);
+            await createIssue(title, bodyRaw, labels);
             localStorage.setItem('last_post_time', Date.now().toString());
 
             cacheRemove('posts_news+update');

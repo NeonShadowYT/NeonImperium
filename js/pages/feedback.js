@@ -1,7 +1,7 @@
 // feedback.js — обратная связь для страниц игр
 
 (function() {
-    const { cacheGet, cacheSet, cacheRemove, escapeHtml } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown } = GithubCore;
     const { loadIssues, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
     const { renderReactions, renderComments } = UIFeedback;
 
@@ -101,23 +101,10 @@
                         <option value="review" data-lang="feedbackCategoryReview">⭐ Отзыв</option>
                     </select>
 
-                    <!-- Панель инструментов Markdown -->
-                    <div class="editor-toolbar">
-                        <button type="button" class="editor-btn" data-tag="**" data-placeholder="жирный текст"><i class="fas fa-bold"></i></button>
-                        <button type="button" class="editor-btn" data-tag="*" data-placeholder="курсив"><i class="fas fa-italic"></i></button>
-                        <button type="button" class="editor-btn" data-tag="### " data-placeholder="Заголовок"><i class="fas fa-heading"></i></button>
-                        <button type="button" class="editor-btn" data-tag="> " data-placeholder="цитата"><i class="fas fa-quote-right"></i></button>
-                        <button type="button" class="editor-btn" data-tag="\`" data-placeholder="код" data-wrap="true"><i class="fas fa-code"></i></button>
-                        <button type="button" class="editor-btn" data-tag="[" data-placeholder="текст](url)" data-link="true"><i class="fas fa-link"></i></button>
-                        <button type="button" class="editor-btn" data-tag="- " data-placeholder="элемент списка"><i class="fas fa-list-ul"></i></button>
-                        <button type="button" class="editor-btn" data-tag="1. " data-placeholder="элемент списка"><i class="fas fa-list-ol"></i></button>
-                        <button type="button" class="editor-btn" data-tag="![](" data-placeholder="url картинки)"><i class="fas fa-image"></i></button>
-                        <button type="button" class="editor-btn" data-spoiler="true"><i class="fas fa-chevron-down"></i> Спойлер</button>
-                        <button type="button" class="editor-btn" id="preview-btn-feedback"><i class="fas fa-eye"></i> Предпросмотр</button>
-                    </div>
+                    <div id="feedback-editor-toolbar"></div>
 
                     <textarea id="feedback-body" class="feedback-textarea" data-lang="feedbackBodyPlaceholder" placeholder="Подробное описание..." rows="6"></textarea>
-                    <div class="preview-area" id="preview-area-feedback" style="display: none;"></div>
+                    <div class="preview-area" id="preview-area-feedback" style="display: none; background: var(--bg-primary); border-radius: 16px; padding: 16px; margin-top: 10px;"></div>
 
                     <div class="button-group">
                         <button class="button button-secondary" id="feedback-cancel" data-lang="feedbackCancel">Отмена</button>
@@ -135,35 +122,24 @@
             </div>
         `;
 
-        // Инициализация редактора
         const textarea = document.getElementById('feedback-body');
-        document.querySelectorAll('.editor-btn[data-tag]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const tag = btn.dataset.tag;
-                const placeholder = btn.dataset.placeholder || '';
-                const wrap = btn.dataset.wrap === 'true';
-                const isLink = btn.dataset.link === 'true';
-                insertMarkdown(textarea, tag, placeholder, wrap, isLink);
-            });
-        });
+        const toolbarContainer = document.getElementById('feedback-editor-toolbar');
 
-        document.querySelector('[data-spoiler="true"]').addEventListener('click', (e) => {
-            e.preventDefault();
-            insertSpoiler(textarea);
-        });
-
-        document.getElementById('preview-btn-feedback').addEventListener('click', (e) => {
-            e.preventDefault();
-            const previewArea = document.getElementById('preview-area-feedback');
-            const body = textarea.value.trim();
-            if (!body) {
-                previewArea.style.display = 'none';
-                return;
+        const toolbar = Editor.createEditorToolbar(textarea, {
+            previewId: 'preview-btn-feedback',
+            previewAreaId: 'preview-area-feedback',
+            onPreview: () => {
+                const previewArea = document.getElementById('preview-area-feedback');
+                const body = textarea.value;
+                if (!body.trim()) {
+                    previewArea.style.display = 'none';
+                    return;
+                }
+                previewArea.innerHTML = renderMarkdown(body);
+                previewArea.style.display = 'block';
             }
-            previewArea.innerHTML = GithubCore.renderMarkdown(body);
-            previewArea.style.display = 'block';
         });
+        toolbarContainer.appendChild(toolbar);
 
         document.getElementById('feedback-cancel').addEventListener('click', () => {
             document.querySelector('.feedback-form-wrapper').style.display = 'none';
@@ -195,58 +171,6 @@
         });
 
         await loadIssuesPage(1, true);
-    }
-
-    // Вспомогательные функции для вставки Markdown
-    function insertMarkdown(textarea, tag, placeholder, wrap = false, isLink = false) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        const selected = text.substring(start, end);
-
-        let insertion;
-        if (isLink) {
-            const url = prompt('Введите URL:', 'https://');
-            if (!url) return;
-            const text = prompt('Введите текст ссылки:', selected || 'ссылка');
-            insertion = `[${text}](${url})`;
-        } else if (tag === '![](') {
-            const url = prompt('Введите URL изображения:', 'https://');
-            if (!url) return;
-            const alt = prompt('Введите описание изображения (alt):', 'image');
-            insertion = `![${alt}](${url})`;
-        } else if (wrap) {
-            if (selected) {
-                insertion = tag + selected + tag;
-            } else {
-                insertion = tag + placeholder + tag;
-            }
-        } else {
-            if (selected) {
-                insertion = tag + selected;
-            } else {
-                insertion = tag + placeholder;
-            }
-        }
-
-        const newText = text.substring(0, start) + insertion + text.substring(end);
-        textarea.value = newText;
-        textarea.focus();
-        textarea.setSelectionRange(start + insertion.length, start + insertion.length);
-    }
-
-    function insertSpoiler(textarea) {
-        const summary = prompt('Заголовок спойлера:', 'Спойлер');
-        if (summary === null) return;
-        const content = prompt('Содержимое спойлера (можно оставить пустым):', '');
-        const spoiler = `\n<details><summary>${summary}</summary>\n\n${content || '...'}\n\n</details>\n`;
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        const newText = text.substring(0, start) + spoiler + text.substring(end);
-        textarea.value = newText;
-        textarea.focus();
-        textarea.setSelectionRange(start + spoiler.length, start + spoiler.length);
     }
 
     async function loadIssuesPage(page, reset = false) {
@@ -384,10 +308,9 @@
                 await addReaction(num, content);
                 const updated = await loadReactions(num);
                 reactionsCache.set(`reactions_${num}`, updated);
-                // Не перерисовываем весь контейнер, ui-feedback сам обновит
+                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
             } catch (err) {
                 console.error('Failed to add reaction', err);
-                // Восстанавливаем из кеша
                 const updated = await loadReactions(num);
                 reactionsCache.set(`reactions_${num}`, updated);
                 renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
@@ -399,6 +322,7 @@
                 await removeReaction(num, reactionId);
                 const updated = await loadReactions(num);
                 reactionsCache.set(`reactions_${num}`, updated);
+                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
             } catch (err) {
                 console.error('Failed to remove reaction', err);
                 const updated = await loadReactions(num);
@@ -411,7 +335,6 @@
     }
 
     function attachEventHandlers() {
-        // Раскрытие/сворачивание
         document.querySelectorAll('.feedback-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 if (e.target.closest('button') || e.target.closest('.reaction-button') ||
@@ -442,7 +365,6 @@
             });
         });
 
-        // Отправка комментария (оптимистично)
         document.querySelectorAll('.comment-submit').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -481,7 +403,6 @@
             });
         });
 
-        // Редактирование
         document.querySelectorAll('.edit-issue').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -494,17 +415,14 @@
             });
         });
 
-        // Закрытие (удаление) issue
         document.querySelectorAll('.close-issue').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 if (!confirm('Вы уверены, что хотите закрыть это сообщение?')) return;
                 const issueItem = e.target.closest('.feedback-item');
                 const issueNumber = issueItem.dataset.issueNumber;
-                // Оптимистичное скрытие
                 issueItem.style.opacity = '0.5';
-                const closeBtn = btn;
-                closeBtn.disabled = true;
+                btn.disabled = true;
                 try {
                     await closeIssue(issueNumber);
                     cacheRemove(`issues_${currentGame}_page_1`);
@@ -512,7 +430,7 @@
                 } catch (err) {
                     console.error('Failed to close issue', err);
                     issueItem.style.opacity = '1';
-                    closeBtn.disabled = false;
+                    btn.disabled = false;
                     alert('Не удалось закрыть сообщение');
                 }
             });
@@ -548,26 +466,26 @@
         if (!editingIssue) return;
         const title = document.getElementById('feedback-title').value.trim();
         const category = document.getElementById('feedback-category').value;
-        const body = document.getElementById('feedback-body').value.trim();
+        const bodyRaw = document.getElementById('feedback-body').value;
+        const bodyTrimmed = bodyRaw.trim();
 
-        if (!title || !body) {
+        if (!title || !bodyTrimmed) {
             alert('Заполните заголовок и описание');
             return;
         }
 
-        // Оптимистичное обновление карточки
         const issueItem = document.querySelector(`.feedback-item[data-issue-number="${editingIssue.number}"]`);
         const titleEl = issueItem.querySelector('.feedback-item-title');
         const previewEl = issueItem.querySelector('.feedback-item-preview');
         const oldTitle = titleEl.textContent;
         const oldPreview = previewEl.textContent;
         titleEl.textContent = title;
-        previewEl.textContent = body.substring(0, 120) + (body.length > 120 ? '…' : '');
+        previewEl.textContent = bodyTrimmed.substring(0, 120) + (bodyTrimmed.length > 120 ? '…' : '');
 
         try {
             await updateIssue(editingIssue.number, {
                 title: title,
-                body: body,
+                body: bodyRaw,
                 labels: [`game:${currentGame}`, `type:${category}`]
             });
             document.querySelector('.feedback-form-wrapper').style.display = 'none';
@@ -576,7 +494,6 @@
             await loadIssuesPage(1, true);
         } catch (error) {
             console.error('Update error:', error);
-            // Откат
             titleEl.textContent = oldTitle;
             previewEl.textContent = oldPreview;
             alert('Не удалось обновить сообщение');
@@ -586,14 +503,14 @@
     async function submitNewIssue() {
         const title = document.getElementById('feedback-title').value.trim();
         const category = document.getElementById('feedback-category').value;
-        const body = document.getElementById('feedback-body').value.trim();
+        const bodyRaw = document.getElementById('feedback-body').value;
+        const bodyTrimmed = bodyRaw.trim();
 
-        if (!title || !body) {
+        if (!title || !bodyTrimmed) {
             alert('Заполните заголовок и описание');
             return;
         }
 
-        // Оптимистичное добавление карточки
         const tempId = 'temp-' + Date.now();
         const tempCard = document.createElement('div');
         tempCard.className = 'feedback-item temp';
@@ -606,7 +523,7 @@
                     <span class="feedback-label">#...</span>
                 </div>
             </div>
-            <div class="feedback-item-preview">${escapeHtml(body.substring(0, 120))}...</div>
+            <div class="feedback-item-preview">${escapeHtml(bodyTrimmed.substring(0, 120))}...</div>
             <div class="reactions-container"></div>
             <div class="feedback-item-footer">
                 <span><i class="fas fa-user"></i> ${escapeHtml(currentUser)}</span>
@@ -618,7 +535,7 @@
         list.insertBefore(tempCard, list.firstChild);
 
         try {
-            await createIssue(title, body, [`game:${currentGame}`, `type:${category}`]);
+            await createIssue(title, bodyRaw, [`game:${currentGame}`, `type:${category}`]);
             document.getElementById('feedback-title').value = '';
             document.getElementById('feedback-body').value = '';
             document.querySelector('.feedback-form-wrapper').style.display = 'none';
