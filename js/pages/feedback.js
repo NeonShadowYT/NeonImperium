@@ -1,12 +1,13 @@
-// feedback.js — обратная связь для страниц игр с модальными окнами и проверкой авторизации
+// feedback.js — обратная связь для страниц игр с модальными окнами
 
 (function() {
     const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown } = GithubCore;
-    const { loadIssues, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
+    const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
     const { renderReactions, renderComments } = UIFeedback;
     const { isAdmin, getCurrentUser } = GithubAuth;
 
     const ITEMS_PER_PAGE = 10;
+    const REQUEST_TOKEN_KEY = 'last_request_token';
 
     let currentGame = '';
     let currentTab = 'all';
@@ -17,6 +18,7 @@
     let displayedIssues = [];
     let container, feedbackSection;
     let currentUser = null;
+    let editingIssue = null;
     let token = null;
 
     const commentsCache = new Map();
@@ -61,15 +63,31 @@
         if (token && currentUser) {
             renderFeedbackInterface();
         } else {
-            renderFeedbackInterface(true); // передаём флаг, что пользователь неавторизован
+            renderLoginPrompt();
         }
     }
 
-    async function renderFeedbackInterface(isGuest = false) {
+    function renderLoginPrompt() {
+        container.innerHTML = `
+            <div class="login-prompt">
+                <i class="fab fa-github"></i>
+                <h3 data-lang="feedbackLoginPrompt">Войдите через GitHub, чтобы участвовать</h3>
+                <p class="text-secondary" data-lang="feedbackTokenNote">
+                    Ваш токен останется только у вас в браузере.
+                </p>
+                <button class="button" id="feedback-login-btn" data-lang="feedbackLoginBtn">Войти</button>
+            </div>
+        `;
+        document.getElementById('feedback-login-btn').addEventListener('click', () => {
+            window.dispatchEvent(new CustomEvent('github-login-requested'));
+        });
+    }
+
+    async function renderFeedbackInterface() {
         container.innerHTML = `
             <div class="feedback-header">
                 <h2 data-lang="feedbackTitle">Идеи, баги и отзывы</h2>
-                ${!isGuest ? `<button class="button" id="toggle-form-btn" data-lang="feedbackNewBtn">Оставить сообщение</button>` : ''}
+                ${currentUser ? `<button class="button" id="toggle-form-btn" data-lang="feedbackNewBtn">Оставить сообщение</button>` : ''}
             </div>
 
             <div class="feedback-tabs">
@@ -88,7 +106,7 @@
             </div>
         `;
 
-        if (!isGuest) {
+        if (currentUser) {
             document.getElementById('toggle-form-btn').addEventListener('click', () => {
                 openEditorModal('new');
             });
@@ -183,6 +201,7 @@
         }
 
         listEl.innerHTML = issues.map(issue => {
+            const isAuthor = currentUser && issue.user.login === currentUser;
             const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
             const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
 
@@ -234,7 +253,10 @@
         modal.className = 'modal modal-fullscreen';
         modal.innerHTML = `
             <div class="modal-content modal-content-full">
-                <button class="modal-close"><i class="fas fa-times"></i></button>
+                <div class="modal-header">
+                    <h2>${escapeHtml(issue.title)}</h2>
+                    <button class="modal-close"><i class="fas fa-times"></i></button>
+                </div>
                 <div class="modal-body" id="modal-feedback-body">
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
                 </div>
@@ -252,7 +274,7 @@
         modal.addEventListener('click', (e) => {
             if (e.target === modal) closeModal();
         });
-        // Закрытие по Escape
+
         const escHandler = (e) => {
             if (e.key === 'Escape') {
                 closeModal();
@@ -279,12 +301,10 @@
             const commentForm = document.createElement('div');
             commentForm.className = 'comment-form';
             commentForm.dataset.issue = issue.number;
-            if (currentUser) {
-                commentForm.innerHTML = `
-                    <input type="text" class="comment-input" placeholder="Написать комментарий...">
-                    <button class="button comment-submit">Отправить</button>
-                `;
-            }
+            commentForm.innerHTML = `
+                <input type="text" class="comment-input" placeholder="Написать комментарий...">
+                <button class="button comment-submit">Отправить</button>
+            `;
 
             // Кнопки для автора и администраторов
             const actionButtons = document.createElement('div');
@@ -307,14 +327,22 @@
             // Реакции
             const reactions = await loadReactions(issue.number);
             const handleAdd = async (num, content) => {
-                await addReaction(num, content);
-                const updated = await loadReactions(num);
-                renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                try {
+                    await addReaction(num, content);
+                    const updated = await loadReactions(num);
+                    renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                } catch (err) {
+                    console.error('Failed to add reaction', err);
+                }
             };
             const handleRemove = async (num, reactionId) => {
-                await removeReaction(num, reactionId);
-                const updated = await loadReactions(num);
-                renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                try {
+                    await removeReaction(num, reactionId);
+                    const updated = await loadReactions(num);
+                    renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                } catch (err) {
+                    console.error('Failed to remove reaction', err);
+                }
             };
             renderReactions(reactionsDiv, issue.number, reactions, currentUser, handleAdd, handleRemove);
 
@@ -323,28 +351,26 @@
             renderComments(commentsDiv, comments);
 
             // Обработчик отправки комментария
-            if (currentUser) {
-                commentForm.querySelector('.comment-submit').addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    const input = commentForm.querySelector('.comment-input');
-                    const comment = input.value.trim();
-                    if (!comment) return;
+            commentForm.querySelector('.comment-submit')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const input = commentForm.querySelector('.comment-input');
+                const comment = input.value.trim();
+                if (!comment) return;
 
-                    input.disabled = true;
-                    e.target.disabled = true;
-                    try {
-                        await addComment(issue.number, comment);
-                        const updatedComments = await loadComments(issue.number);
-                        renderComments(commentsDiv, updatedComments);
-                        input.value = '';
-                    } catch (err) {
-                        alert('Ошибка при отправке комментария');
-                    } finally {
-                        input.disabled = false;
-                        e.target.disabled = false;
-                    }
-                });
-            }
+                input.disabled = true;
+                e.target.disabled = true;
+                try {
+                    await addComment(issue.number, comment);
+                    const updatedComments = await loadComments(issue.number);
+                    renderComments(commentsDiv, updatedComments);
+                    input.value = '';
+                } catch (err) {
+                    alert('Ошибка при отправке комментария');
+                } finally {
+                    input.disabled = false;
+                    e.target.disabled = false;
+                }
+            });
 
             // Обработчики для кнопок
             if (isAuthor || isAdmin()) {
@@ -377,14 +403,20 @@
     }
 
     function openEditorModal(mode, issue = null) {
+        const requestToken = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem(REQUEST_TOKEN_KEY, requestToken);
+
         const modal = document.createElement('div');
         modal.className = 'modal modal-fullscreen';
         modal.innerHTML = `
             <div class="modal-content modal-content-full">
-                <button class="modal-close"><i class="fas fa-times"></i></button>
+                <div class="modal-header">
+                    <h2>${mode === 'edit' ? 'Редактирование' : 'Новое сообщение'}</h2>
+                    <button class="modal-close"><i class="fas fa-times"></i></button>
+                </div>
                 <div class="modal-body" id="modal-editor-body">
                     <div class="feedback-form" id="feedback-form-modal">
-                        <h3>${mode === 'edit' ? 'Редактирование' : 'Новое сообщение'}</h3>
+                        <input type="hidden" id="modal-request-token" value="${requestToken}">
                         <input type="text" id="modal-feedback-title" class="feedback-input" placeholder="Заголовок" value="${issue ? escapeHtml(issue.title) : ''}">
                         <select id="modal-feedback-category" class="feedback-select">
                             <option value="idea" ${issue && issue.labels.find(l => l.name === 'type:idea') ? 'selected' : ''}>💡 Идея</option>
@@ -414,6 +446,7 @@
         modal.addEventListener('click', (e) => {
             if (e.target === modal) closeModal();
         });
+
         const escHandler = (e) => {
             if (e.key === 'Escape') {
                 closeModal();
@@ -443,11 +476,15 @@
             toolbarContainer.appendChild(toolbar);
         }
 
-        document.getElementById('modal-cancel').addEventListener('click', () => {
-            closeModal();
-            document.removeEventListener('keydown', escHandler);
-        });
+        document.getElementById('modal-cancel').addEventListener('click', closeModal);
         document.getElementById('modal-submit').addEventListener('click', async () => {
+            const currentToken = document.getElementById('modal-request-token').value;
+            if (currentToken !== localStorage.getItem(REQUEST_TOKEN_KEY)) {
+                alert('Запрос уже обрабатывается');
+                return;
+            }
+            localStorage.removeItem(REQUEST_TOKEN_KEY);
+
             const title = document.getElementById('modal-feedback-title').value.trim();
             const category = document.getElementById('modal-feedback-category').value;
             const body = document.getElementById('modal-feedback-body').value;

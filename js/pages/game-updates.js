@@ -50,7 +50,7 @@
 
         container.innerHTML = '';
         const grid = document.createElement('div');
-        grid.className = 'projects-grid'; // используем ту же сетку
+        grid.className = 'projects-grid';
         container.appendChild(grid);
 
         posts.forEach(post => {
@@ -61,11 +61,11 @@
 
     function createUpdateCard(post) {
         const card = document.createElement('div');
-        card.className = 'project-card-link';
+        card.className = 'project-card-link no-tilt';
         card.style.cursor = 'pointer';
 
         const inner = document.createElement('div');
-        inner.className = 'project-card tilt-card';
+        inner.className = 'project-card';
 
         const imgMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
         const thumbnail = imgMatch ? imgMatch[1] : DEFAULT_IMAGE;
@@ -117,7 +117,10 @@
         modal.className = 'modal modal-fullscreen';
         modal.innerHTML = `
             <div class="modal-content modal-content-full">
-                <button class="modal-close"><i class="fas fa-times"></i></button>
+                <div class="modal-header">
+                    <h2>${escapeHtml(post.title)}</h2>
+                    <button class="modal-close"><i class="fas fa-times"></i></button>
+                </div>
                 <div class="modal-body" id="modal-update-body">
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
                 </div>
@@ -135,6 +138,14 @@
         modal.addEventListener('click', (e) => {
             if (e.target === modal) closeModal();
         });
+
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
 
         const container = document.getElementById('modal-update-body');
         const currentUser = getCurrentUser();
@@ -179,14 +190,22 @@
             // Реакции
             const reactions = await loadReactions(post.number);
             const handleAdd = async (num, content) => {
-                await addReaction(num, content);
-                const updated = await loadReactions(num);
-                renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                try {
+                    await addReaction(num, content);
+                    const updated = await loadReactions(num);
+                    renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                } catch (err) {
+                    console.error('Failed to add reaction', err);
+                }
             };
             const handleRemove = async (num, reactionId) => {
-                await removeReaction(num, reactionId);
-                const updated = await loadReactions(num);
-                renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                try {
+                    await removeReaction(num, reactionId);
+                    const updated = await loadReactions(num);
+                    renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                } catch (err) {
+                    console.error('Failed to remove reaction', err);
+                }
             };
             renderReactions(reactionsDiv, post.number, reactions, currentUser, handleAdd, handleRemove);
 
@@ -221,6 +240,7 @@
                 actionButtons.querySelector('.edit-issue').addEventListener('click', (e) => {
                     e.stopPropagation();
                     closeModal();
+                    document.removeEventListener('keydown', escHandler);
                     window.AdminNews.openEditForm('update', {
                         number: post.number,
                         title: issue.title,
@@ -235,6 +255,7 @@
                     try {
                         await closeIssue(post.number);
                         closeModal();
+                        document.removeEventListener('keydown', escHandler);
                         refreshGameUpdates(post.game);
                     } catch (err) {
                         alert('Ошибка при закрытии');

@@ -11,7 +11,7 @@
         { id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' },
         { id: 'UCQKVSv62dLsK3QnfIke24uQ', name: 'Golden Creeper' }
     ];
-    const PROXY_URL = 'https://api.allorigins.win/get?url=';
+    const YT_FALLBACK_PROXY = 'https://api.allorigins.win/get?url=';
     const DEFAULT_IMAGE = 'images/default-news.jpg';
     const RETRY_COOLDOWN = 60000;
 
@@ -140,11 +140,12 @@
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
 
-        const promises = YT_CHANNELS.map(channel => fetchChannelFeed(channel));
+        const promises = YT_CHANNELS.map(channel => fetchChannelFeedWithFallback(channel));
         const results = await Promise.allSettled(promises);
         const videos = results
             .filter(r => r.status === 'fulfilled')
             .flatMap(r => r.value)
+            .filter(v => v && v.id) // отфильтровываем пустые результаты
             .sort((a, b) => b.published - a.published)
             .slice(0, 10);
 
@@ -156,34 +157,70 @@
         return videos;
     }
 
-    async function fetchChannelFeed(channel) {
+    async function fetchChannelFeedWithFallback(channel) {
+        // Попытка 1: RSS через прокси
         try {
-            const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`;
-            const response = await fetch(PROXY_URL + encodeURIComponent(url));
+            return await fetchChannelFeedRSS(channel);
+        } catch (rssError) {
+            console.warn(`RSS failed for ${channel.id}, trying fallback`, rssError);
+            // Попытка 2: Используем yt-dlp прокси (если доступен)
+            try {
+                return await fetchChannelFeedYtDlp(channel);
+            } catch (ytdlpError) {
+                console.warn(`yt-dlp fallback also failed for ${channel.id}`, ytdlpError);
+                return []; // возвращаем пустой массив, чтобы не ломать всё
+            }
+        }
+    }
+
+    async function fetchChannelFeedRSS(channel) {
+        const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`;
+        const response = await fetch(YT_FALLBACK_PROXY + encodeURIComponent(url));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(data.contents, 'text/xml');
+        const entries = Array.from(xml.querySelectorAll('entry'));
+        return entries.map(entry => {
+            const title = entry.querySelector('title')?.textContent || 'Без названия';
+            const videoId = entry.getElementsByTagNameNS('*', 'videoId')[0]?.textContent || '';
+            const published = new Date(entry.querySelector('published')?.textContent || Date.now());
+            const author = entry.querySelector('author name')?.textContent || channel.name;
+            const mediaGroup = entry.getElementsByTagNameNS('*', 'group')[0];
+            const thumbnail = mediaGroup?.getElementsByTagNameNS('*', 'thumbnail')[0]?.getAttribute('url') || '';
+            return {
+                type: 'video',
+                id: videoId,
+                title,
+                author,
+                date: published,
+                published,
+                thumbnail,
+                channel: channel.name
+            };
+        });
+    }
+
+    async function fetchChannelFeedYtDlp(channel) {
+        // Используем публичный прокси-сервис для yt-dlp (например, invidious)
+        // В реальном проекте лучше поднять свой прокси или использовать библиотеку на сервере
+        const INVIOUS_URL = 'https://inv.riverside.rocks/api/v1/channels/';
+        try {
+            const response = await fetch(`${INVIOUS_URL}${channel.id}/videos`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-            const parser = new DOMParser();
-            const xml = parser.parseFromString(data.contents, 'text/xml');
-            const entries = Array.from(xml.querySelectorAll('entry'));
-            return entries.map(entry => {
-                const title = entry.querySelector('title')?.textContent || 'Без названия';
-                const videoId = entry.getElementsByTagNameNS('*', 'videoId')[0]?.textContent || '';
-                const published = new Date(entry.querySelector('published')?.textContent || Date.now());
-                const author = entry.querySelector('author name')?.textContent || channel.name;
-                const mediaGroup = entry.getElementsByTagNameNS('*', 'group')[0];
-                const thumbnail = mediaGroup?.getElementsByTagNameNS('*', 'thumbnail')[0]?.getAttribute('url') || '';
-                return {
-                    type: 'video',
-                    id: videoId,
-                    title,
-                    author,
-                    date: published,
-                    thumbnail,
-                    channel: channel.name
-                };
-            });
-        } catch (err) {
-            console.warn('Ошибка загрузки канала', channel.id, err);
+            return data.map(video => ({
+                type: 'video',
+                id: video.videoId,
+                title: video.title,
+                author: video.author,
+                date: new Date(video.published * 1000),
+                published: new Date(video.published * 1000),
+                thumbnail: video.videoThumbnails.find(t => t.quality === 'medium')?.url || '',
+                channel: channel.name
+            }));
+        } catch (e) {
+            console.warn('Invidious fallback failed', e);
             return [];
         }
     }
@@ -228,7 +265,7 @@
         card.style.cursor = 'pointer';
 
         const inner = document.createElement('div');
-        inner.className = 'project-card tilt-card';
+        inner.className = 'project-card tilt-card'; // tilt-card оставлен для видео, если нужно
 
         const imgWrapper = document.createElement('div');
         imgWrapper.className = 'image-wrapper';
@@ -268,11 +305,11 @@
 
     function createPostCard(post) {
         const card = document.createElement('div');
-        card.className = 'project-card-link';
+        card.className = 'project-card-link no-tilt'; // убираем tilt эффект
         card.style.cursor = 'pointer';
 
         const inner = document.createElement('div');
-        inner.className = 'project-card tilt-card';
+        inner.className = 'project-card'; // убрали tilt-card
 
         const imgMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
         const thumbnail = imgMatch ? imgMatch[1] : DEFAULT_IMAGE;
@@ -325,14 +362,17 @@
         modal.className = 'modal modal-fullscreen';
         modal.innerHTML = `
             <div class="modal-content modal-content-full">
-                <button class="modal-close"><i class="fas fa-times"></i></button>
+                <div class="modal-header">
+                    <h2>${escapeHtml(post.title)}</h2>
+                    <button class="modal-close"><i class="fas fa-times"></i></button>
+                </div>
                 <div class="modal-body" id="modal-post-body">
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
-        document.body.style.overflow = 'hidden'; // запрещаем прокрутку фона
+        document.body.style.overflow = 'hidden';
 
         const closeModal = () => {
             modal.remove();
@@ -343,6 +383,15 @@
         modal.addEventListener('click', (e) => {
             if (e.target === modal) closeModal();
         });
+
+        // Добавляем обработку клавиши Escape
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
 
         const container = document.getElementById('modal-post-body');
 
@@ -387,14 +436,22 @@
             // Реакции
             const reactions = await loadReactions(post.id);
             const handleAdd = async (num, content) => {
-                await addReaction(num, content);
-                const updated = await loadReactions(num);
-                renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                try {
+                    await addReaction(num, content);
+                    const updated = await loadReactions(num);
+                    renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                } catch (err) {
+                    console.error('Failed to add reaction', err);
+                }
             };
             const handleRemove = async (num, reactionId) => {
-                await removeReaction(num, reactionId);
-                const updated = await loadReactions(num);
-                renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                try {
+                    await removeReaction(num, reactionId);
+                    const updated = await loadReactions(num);
+                    renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+                } catch (err) {
+                    console.error('Failed to remove reaction', err);
+                }
             };
             renderReactions(reactionsDiv, post.id, reactions, currentUser, handleAdd, handleRemove);
 
@@ -429,6 +486,7 @@
                 adminActions.querySelector('.edit-issue').addEventListener('click', (e) => {
                     e.stopPropagation();
                     closeModal();
+                    document.removeEventListener('keydown', escHandler);
                     const type = post.labels.includes('type:news') ? 'news' : 'update';
                     window.AdminNews.openEditForm(type, {
                         number: post.id,
@@ -444,6 +502,7 @@
                     try {
                         await closeIssue(post.id);
                         closeModal();
+                        document.removeEventListener('keydown', escHandler);
                         refreshNewsFeed();
                     } catch (err) {
                         alert('Ошибка при закрытии');
