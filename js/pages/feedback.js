@@ -136,7 +136,7 @@
 
         document.getElementById('feedback-submit').addEventListener('click', () => {
             if (editingIssue) {
-                updateIssue();
+                updateExistingIssue();
             } else {
                 submitNewIssue();
             }
@@ -452,7 +452,7 @@
         document.getElementById('feedback-category').value = typeLabel;
     }
 
-    async function updateIssue() {
+    async function updateExistingIssue() {
         if (!editingIssue) return;
         const title = document.getElementById('feedback-title').value.trim();
         const category = document.getElementById('feedback-category').value;

@@ -1,4 +1,5 @@
 // news-feed.js — лента новостей на главной (смесь видео и постов)
+// Поддерживает постепенную загрузку: сначала показывает видео, потом посты
 
 (function() {
     const { cacheGet, cacheSet, renderMarkdown, escapeHtml, CONFIG } = GithubCore;
@@ -13,34 +14,58 @@
     const PROXY_URL = 'https://api.allorigins.win/get?url=';
     const DEFAULT_IMAGE = 'images/default-news.jpg';
 
+    let container;
+    let videosLoaded = false;
+    let postsLoaded = false;
+    let videos = [];
+    let posts = [];
+
     document.addEventListener('DOMContentLoaded', () => {
-        const newsFeed = document.getElementById('news-feed');
-        if (newsFeed) loadNewsFeed(newsFeed);
+        container = document.getElementById('news-feed');
+        if (container) {
+            loadNewsFeed();
+        }
     });
 
     window.refreshNewsFeed = () => {
-        const newsFeed = document.getElementById('news-feed');
-        if (newsFeed) loadNewsFeed(newsFeed);
+        if (container) loadNewsFeed();
     };
 
-    async function loadNewsFeed(container) {
+    async function loadNewsFeed() {
         container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка...</p></div>`;
 
-        const [videos, posts] = await Promise.all([
-            loadYouTubeVideos(),
-            loadNewsPosts()
-        ]);
+        // Запускаем загрузку параллельно
+        Promise.allSettled([loadYouTubeVideos(), loadNewsPosts()]).then(results => {
+            // Видео загружены
+            if (results[0].status === 'fulfilled') {
+                videos = results[0].value;
+                videosLoaded = true;
+            } else {
+                console.warn('Failed to load videos', results[0].reason);
+            }
+            // Посты загружены
+            if (results[1].status === 'fulfilled') {
+                posts = results[1].value;
+                postsLoaded = true;
+            } else {
+                console.warn('Failed to load posts', results[1].reason);
+            }
+            renderMixed();
+        });
+    }
 
-        const mixed = [...videos, ...posts].sort((a, b) => b.date - a.date);
-        const latest = mixed.slice(0, 6);
+    function renderMixed() {
+        const mixed = [...(videosLoaded ? videos : []), ...(postsLoaded ? posts : [])]
+            .sort((a, b) => b.date - a.date)
+            .slice(0, 6);
 
-        if (latest.length === 0) {
+        if (mixed.length === 0) {
             container.innerHTML = `<p class="text-secondary">Нет новостей.</p>`;
             return;
         }
 
         container.innerHTML = '';
-        latest.forEach(item => {
+        mixed.forEach(item => {
             if (item.type === 'video') {
                 container.appendChild(createVideoCard(item));
             } else {
@@ -269,22 +294,20 @@
             const reactions = await loadReactions(issueNumber);
             const currentUser = GithubAuth.getCurrentUser();
 
-            renderReactions(
-                reactionsDiv,
-                issueNumber,
-                reactions,
-                currentUser,
-                async (num, content) => {
-                    await addReaction(num, content);
-                    const updated = await loadReactions(num);
-                    renderReactions(reactionsDiv, num, updated, currentUser, arguments.callee, arguments.callee);
-                },
-                async (num, reactionId) => {
-                    await removeReaction(num, reactionId);
-                    const updated = await loadReactions(num);
-                    renderReactions(reactionsDiv, num, updated, currentUser, arguments.callee, arguments.callee);
-                }
-            );
+            // Определяем функции-колбэки, чтобы избежать arguments.callee
+            const addReactionHandler = async (num, content) => {
+                await addReaction(num, content);
+                const updated = await loadReactions(num);
+                renderReactions(reactionsDiv, num, updated, currentUser, addReactionHandler, removeReactionHandler);
+            };
+
+            const removeReactionHandler = async (num, reactionId) => {
+                await removeReaction(num, reactionId);
+                const updated = await loadReactions(num);
+                renderReactions(reactionsDiv, num, updated, currentUser, addReactionHandler, removeReactionHandler);
+            };
+
+            renderReactions(reactionsDiv, issueNumber, reactions, currentUser, addReactionHandler, removeReactionHandler);
         } catch (err) {
             console.error('Ошибка загрузки деталей поста', err);
             container.innerHTML = '<p class="error-message">Не удалось загрузить содержимое.</p>';

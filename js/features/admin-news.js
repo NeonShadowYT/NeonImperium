@@ -12,16 +12,18 @@
         { id: 'gc-adven', name: 'ГК Адвенчур' }
     ];
 
-    document.addEventListener('DOMContentLoaded', () => {
+    // Пытаемся отрисовать панели сразу, если админ уже авторизован
+    function tryRenderPanels() {
         if (isAdmin()) {
             renderAdminPanels();
         }
-    });
+    }
 
-    window.addEventListener('github-login-success', () => {
-        if (isAdmin()) renderAdminPanels();
-    });
+    // Пробуем при загрузке скрипта
+    tryRenderPanels();
 
+    // И при последующих событиях
+    window.addEventListener('github-login-success', tryRenderPanels);
     window.addEventListener('github-logout', () => {
         document.querySelectorAll('.admin-panel').forEach(el => el.remove());
     });
