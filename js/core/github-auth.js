@@ -288,4 +288,16 @@
         e.stopPropagation();
         profileContainer.classList.toggle('active');
     }
+
+    window.GithubAuth = {
+        getCurrentUser: () => {
+            const profile = document.querySelector('.nav-profile');
+            return profile ? profile.dataset.githubLogin : null;
+        },
+        getToken: () => localStorage.getItem('github_token'),
+        isAdmin: () => {
+            const user = window.GithubAuth.getCurrentUser();
+            return user && GithubCore.CONFIG.ALLOWED_AUTHORS.includes(user);
+        }
+    };
 })();
