@@ -1,5 +1,5 @@
 // news-feed.js — лента новостей на главной (сначала посты, потом видео)
-// Улучшена обработка ошибок, рендер происходит при появлении любых данных
+// Добавлена кнопка повтора при ошибке и ограничение на частоту нажатий
 
 (function() {
     const { cacheGet, cacheSet, renderMarkdown, escapeHtml, CONFIG } = GithubCore;
@@ -13,12 +13,15 @@
     ];
     const PROXY_URL = 'https://api.allorigins.win/get?url=';
     const DEFAULT_IMAGE = 'images/default-news.jpg';
+    const RETRY_COOLDOWN = 60000; // 1 минута
 
     let container;
     let posts = [];
     let videos = [];
     let postsLoaded = false;
     let videosLoaded = false;
+    let postsError = false;
+    let videosError = false;
 
     document.addEventListener('DOMContentLoaded', () => {
         container = document.getElementById('news-feed');
@@ -29,11 +32,12 @@
 
     window.refreshNewsFeed = () => {
         if (container) {
-            // Сбрасываем состояние
             posts = [];
             videos = [];
             postsLoaded = false;
             videosLoaded = false;
+            postsError = false;
+            videosError = false;
             loadNewsFeed();
         }
     };
@@ -41,47 +45,69 @@
     async function loadNewsFeed() {
         container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>`;
 
-        // Загружаем посты (сначала показываем их)
+        // Загружаем посты
         loadPosts().then(p => {
             posts = p;
             postsLoaded = true;
+            postsError = false;
             renderMixed();
         }).catch(err => {
             console.warn('Posts failed', err);
-            postsLoaded = true; // чтобы рендер всё равно произошёл
+            postsLoaded = true;
+            postsError = true;
             renderMixed();
         });
 
-        // Загружаем видео (могут быть медленными или ошибочными)
+        // Загружаем видео
         loadVideos().then(v => {
             videos = v;
             videosLoaded = true;
+            videosError = false;
             renderMixed();
         }).catch(err => {
             console.warn('Videos failed', err);
             videosLoaded = true;
+            videosError = true;
             renderMixed();
         });
     }
 
     function renderMixed() {
-        // Если ни один источник ещё не готов, ничего не делаем
         if (!postsLoaded && !videosLoaded) return;
+
+        // Если оба источника не дали данных и были ошибки, показываем кнопку повтора
+        if (postsError && videosError && posts.length === 0 && videos.length === 0) {
+            container.innerHTML = `
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Не удалось загрузить новости.</p>
+                    <button class="button" id="retry-news-feed">Повторить</button>
+                </div>
+            `;
+            document.getElementById('retry-news-feed')?.addEventListener('click', () => {
+                const lastRetry = localStorage.getItem('news_retry_time');
+                if (lastRetry && Date.now() - parseInt(lastRetry) < RETRY_COOLDOWN) {
+                    const remaining = Math.ceil((RETRY_COOLDOWN - (Date.now() - parseInt(lastRetry))) / 1000);
+                    alert(`Повтор доступен через ${remaining} сек.`);
+                    return;
+                }
+                localStorage.setItem('news_retry_time', Date.now().toString());
+                refreshNewsFeed();
+            });
+            return;
+        }
 
         const mixed = [...posts, ...videos].sort((a, b) => b.date - a.date).slice(0, 6);
 
-        // Если контейнер пуст или там только спиннер, очищаем
         if (container.querySelector('.loading-spinner')) {
             container.innerHTML = '';
         }
 
-        // Если нет элементов, показываем заглушку
         if (mixed.length === 0) {
             container.innerHTML = `<p class="text-secondary">Нет новостей.</p>`;
             return;
         }
 
-        // Добавляем только те карточки, которых ещё нет
         const existingIds = new Set();
         container.querySelectorAll('[data-news-id]').forEach(el => {
             existingIds.add(el.dataset.newsId);

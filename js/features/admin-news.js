@@ -12,38 +12,38 @@
         { id: 'gc-adven', name: 'ГК Адвенчур' }
     ];
 
-    // Функция для рендера панелей
     function renderAdminPanels() {
         if (!isAdmin()) return;
 
+        // Панель для новостей на главной
         const newsSection = document.getElementById('news-section');
         if (newsSection && !newsSection.querySelector('.admin-panel')) {
             const panel = createAdminPanel('news');
             newsSection.appendChild(panel);
         }
 
+        // Панель для обновлений на странице игры
         const updatesContainer = document.getElementById('game-updates');
         if (updatesContainer && updatesContainer.dataset.game) {
             const game = updatesContainer.dataset.game;
-            const parentSection = updatesContainer.closest('.card');
-            if (parentSection && !parentSection.querySelector('.admin-panel')) {
+            // Проверяем, нет ли уже панели рядом
+            if (!document.querySelector('.admin-panel[data-for="updates"]')) {
                 const panel = createAdminPanel('update', game);
-                parentSection.appendChild(panel);
+                panel.dataset.for = 'updates';
+                // Вставляем после контейнера обновлений
+                updatesContainer.parentNode.insertBefore(panel, updatesContainer.nextSibling);
             }
         }
     }
 
-    // Пытаемся сразу при загрузке скрипта
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            // Даём время github-auth.js отрисовать профиль
             setTimeout(renderAdminPanels, 100);
         });
     } else {
         setTimeout(renderAdminPanels, 100);
     }
 
-    // Слушаем события авторизации
     window.addEventListener('github-login-success', renderAdminPanels);
     window.addEventListener('github-logout', () => {
         document.querySelectorAll('.admin-panel').forEach(el => el.remove());

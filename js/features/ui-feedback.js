@@ -38,6 +38,12 @@
 
     // Рендер контейнера реакций
     function renderReactions(container, issueNumber, reactions, currentUser, onAdd, onRemove) {
+        // Проверка, что container — DOM-элемент
+        if (!container || typeof container.querySelectorAll !== 'function') {
+            console.warn('renderReactions: container is not a valid element');
+            return;
+        }
+
         const grouped = groupReactions(reactions, currentUser);
         const visible = grouped.slice(0, 3);
         const hiddenCount = grouped.length - 3;
@@ -92,6 +98,9 @@
 
     // Показать меню выбора реакции
     function showReactionMenu(relativeTo, issueNumber, callback) {
+        // Удаляем все старые меню, чтобы не было дубликатов
+        document.querySelectorAll('.reaction-menu').forEach(menu => menu.remove());
+
         const menu = document.createElement('div');
         menu.className = 'reaction-menu';
         Object.assign(menu.style, {

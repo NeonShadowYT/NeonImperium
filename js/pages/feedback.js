@@ -1,12 +1,10 @@
-// feedback.js — обратная связь для страниц игр (использует общие модули)
+// feedback.js — обратная связь для страниц игр (исправлена передача колбэков реакций)
 
 (function() {
-    // Используем глобальные объекты
     const { cacheGet, cacheSet, cacheRemove, escapeHtml } = GithubCore;
     const { loadIssues, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
     const { renderReactions, renderComments } = UIFeedback;
 
-    // Конфигурация
     const ITEMS_PER_PAGE = 10;
 
     let currentGame = '';
@@ -21,11 +19,9 @@
     let editingIssue = null;
     let token = null;
 
-    // Кеши (in-memory) для комментариев и реакций
     const commentsCache = new Map();
     const reactionsCache = new Map();
 
-    // Инициализация при загрузке DOM
     document.addEventListener('DOMContentLoaded', init);
 
     function init() {
@@ -41,7 +37,6 @@
         container = feedbackSection.querySelector('.feedback-container');
         if (!container) return;
 
-        // Слушаем события авторизации
         window.addEventListener('github-login-success', (e) => {
             currentUser = e.detail.login;
             token = localStorage.getItem('github_token');
@@ -56,7 +51,6 @@
             checkAuthAndRender();
         });
 
-        // Проверим текущее состояние
         token = localStorage.getItem('github_token');
         const profile = document.querySelector('.nav-profile');
         currentUser = profile ? profile.dataset.githubLogin : null;
@@ -123,12 +117,6 @@
             </div>
         `;
 
-        // Обработчики кнопок
-        const toggleBtn = document.getElementById('toggle-form-btn');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', toggleForm);
-        }
-
         document.getElementById('feedback-cancel').addEventListener('click', () => {
             document.querySelector('.feedback-form-wrapper').style.display = 'none';
             editingIssue = null;
@@ -158,21 +146,7 @@
             }
         });
 
-        // Загружаем первую страницу
         await loadIssuesPage(1, true);
-    }
-
-    function toggleForm() {
-        const wrapper = document.querySelector('.feedback-form-wrapper');
-        if (wrapper.style.display === 'none') {
-            wrapper.style.display = 'block';
-            editingIssue = null;
-            document.getElementById('feedback-title').value = '';
-            document.getElementById('feedback-body').value = '';
-            document.getElementById('feedback-category').value = 'idea';
-        } else {
-            wrapper.style.display = 'none';
-        }
     }
 
     async function loadIssuesPage(page, reset = false) {
@@ -186,14 +160,12 @@
             if (cached) {
                 issues = cached;
             } else {
-                // Загружаем с API
                 issues = await loadIssues({
                     labels: `game:${currentGame}`,
                     state: 'open',
                     per_page: ITEMS_PER_PAGE,
                     page: page
                 });
-                // Проверяем, есть ли следующая страница (по количеству полученных)
                 hasMorePages = issues.length === ITEMS_PER_PAGE;
                 cacheSet(cacheKey, issues);
             }
@@ -284,7 +256,6 @@
             </div>`;
         }).join('');
 
-        // Загружаем реакции для каждого issue
         issues.forEach(issue => {
             const container = document.querySelector(`.reactions-container[data-target-id="${issue.number}"]`);
             if (container) {
@@ -308,27 +279,22 @@
             }
         }
 
-        renderReactions(
-            container,
-            issueNumber,
-            reactions,
-            currentUser,
-            async (num, content) => {
-                // add reaction
-                const newReaction = await addReaction(num, content);
-                // обновляем кеш и перерисовываем
-                const updated = await loadReactions(num);
-                reactionsCache.set(`reactions_${num}`, updated);
-                renderReactions(container, num, updated, currentUser, arguments.callee, arguments.callee);
-            },
-            async (num, reactionId) => {
-                // remove reaction
-                await removeReaction(num, reactionId);
-                const updated = await loadReactions(num);
-                reactionsCache.set(`reactions_${num}`, updated);
-                renderReactions(container, num, updated, currentUser, arguments.callee, arguments.callee);
-            }
-        );
+        // Создаём функции-обработчики, которые будут обновлять реакции после добавления/удаления
+        const handleAdd = async (num, content) => {
+            await addReaction(num, content);
+            const updated = await loadReactions(num);
+            reactionsCache.set(`reactions_${num}`, updated);
+            renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
+        };
+
+        const handleRemove = async (num, reactionId) => {
+            await removeReaction(num, reactionId);
+            const updated = await loadReactions(num);
+            reactionsCache.set(`reactions_${num}`, updated);
+            renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
+        };
+
+        renderReactions(container, issueNumber, reactions, currentUser, handleAdd, handleRemove);
     }
 
     function attachEventHandlers() {
@@ -471,7 +437,6 @@
             });
             document.querySelector('.feedback-form-wrapper').style.display = 'none';
             editingIssue = null;
-            // Очищаем кеш и перезагружаем
             cacheRemove(`issues_${currentGame}_page_1`);
             await loadIssuesPage(1, true);
         } catch (error) {
@@ -495,7 +460,6 @@
             document.getElementById('feedback-title').value = '';
             document.getElementById('feedback-body').value = '';
             document.querySelector('.feedback-form-wrapper').style.display = 'none';
-            // Очищаем кеш и перезагружаем
             cacheRemove(`issues_${currentGame}_page_1`);
             await loadIssuesPage(1, true);
         } catch (error) {

@@ -1,4 +1,5 @@
 // github-auth.js — обновлён с инструкцией и событием, добавлена обработка ошибок
+// Заменён пункт "Очистить токен" на "Очистить кеш" в неавторизованном меню
 
 (function() {
     const CONFIG = {
@@ -216,8 +217,8 @@
                     <i class="fas fa-info-circle"></i> <span data-lang="githubWhy">Зачем это нужно?</span>
                 </div>
                 <div class="profile-dropdown-divider"></div>
-                <div class="profile-dropdown-item" data-action="clear-token">
-                    <i class="fas fa-trash-alt"></i> <span data-lang="githubClearToken">Очистить токен</span>
+                <div class="profile-dropdown-item" data-action="clear-cache">
+                    <i class="fas fa-trash-alt"></i> <span data-lang="githubClearCache">Очистить кеш</span>
                 </div>
             </div>
         `;
@@ -233,8 +234,8 @@
                 <div class="profile-dropdown-item" data-action="login">
                     <i class="fab fa-github"></i> <span data-lang="githubRetry">Попробовать снова</span>
                 </div>
-                <div class="profile-dropdown-item" data-action="clear-token">
-                    <i class="fas fa-trash-alt"></i> <span data-lang="githubClearToken">Очистить токен</span>
+                <div class="profile-dropdown-item" data-action="clear-cache">
+                    <i class="fas fa-trash-alt"></i> <span data-lang="githubClearCache">Очистить кеш</span>
                 </div>
             </div>
         `;
@@ -285,11 +286,7 @@
                 delete profileContainer.dataset.githubLogin;
                 showNotLoggedIn();
                 break;
-            case 'clear-token':
-                localStorage.removeItem(TOKEN_KEY);
-                showNotLoggedIn();
-                modal.classList.add('active');
-                break;
+            // case 'clear-token' удалён, теперь используется clear-cache везде
         }
     }
 
@@ -301,11 +298,9 @@
             return;
         }
 
-        // Очищаем sessionStorage (кеш данных)
         sessionStorage.clear();
         localStorage.setItem(LAST_CLEAR_KEY, Date.now().toString());
 
-        // Обновляем страницу, чтобы перезагрузить данные
         location.reload();
     }
 
