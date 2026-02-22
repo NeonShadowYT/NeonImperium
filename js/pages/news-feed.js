@@ -1,5 +1,4 @@
-// news-feed.js — лента новостей на главной (сначала посты, потом видео)
-// Улучшена обработка ошибок и кнопка повтора
+// news-feed.js — лента новостей на главной
 
 (function() {
     const { cacheGet, cacheSet, renderMarkdown, escapeHtml, CONFIG } = GithubCore;

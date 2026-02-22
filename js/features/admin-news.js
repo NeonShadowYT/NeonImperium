@@ -18,14 +18,12 @@
             return;
         }
 
-        // Панель для новостей на главной
         const newsSection = document.getElementById('news-section');
         if (newsSection && !newsSection.querySelector('.admin-panel')) {
             const panel = createAdminPanel('news');
             newsSection.appendChild(panel);
         }
 
-        // Панель для обновлений на странице игры
         const updatesContainer = document.getElementById('game-updates');
         if (updatesContainer && updatesContainer.dataset.game) {
             const game = updatesContainer.dataset.game;
@@ -71,13 +69,13 @@
 
         const form = document.createElement('div');
         form.id = 'admin-post-form';
-        form.className = 'feedback-form';
+        form.className = 'feedback-form'; // используем стили фидбека
         form.style.marginTop = '20px';
 
         let gameSelectHtml = '';
         if (type === 'update') {
             gameSelectHtml = `
-                <select id="admin-post-game" required>
+                <select id="admin-post-game" required class="feedback-select">
                     <option value="">Выберите игру</option>
                     ${GAMES.map(g => `<option value="${g.id}" ${g.id === game ? 'selected' : ''}>${g.name}</option>`).join('')}
                 </select>
@@ -86,22 +84,22 @@
 
         const toolbar = `
             <div class="editor-toolbar" style="display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap;">
-                <button type="button" class="editor-btn" data-tag="**" data-placeholder="жирный текст"><i class="fas fa-bold"></i></button>
-                <button type="button" class="editor-btn" data-tag="*" data-placeholder="курсив"><i class="fas fa-italic"></i></button>
-                <button type="button" class="editor-btn" data-tag="### " data-placeholder="Заголовок"><i class="fas fa-heading"></i></button>
-                <button type="button" class="editor-btn" data-tag="- " data-placeholder="элемент списка"><i class="fas fa-list-ul"></i></button>
-                <button type="button" class="editor-btn" data-tag="1. " data-placeholder="элемент списка"><i class="fas fa-list-ol"></i></button>
-                <button type="button" class="editor-btn" data-tag="![](" data-placeholder="url картинки)"><i class="fas fa-image"></i></button>
-                <button type="button" class="editor-btn" id="preview-btn"><i class="fas fa-eye"></i> Предпросмотр</button>
+                <button type="button" class="editor-btn button-small" data-tag="**" data-placeholder="жирный текст"><i class="fas fa-bold"></i></button>
+                <button type="button" class="editor-btn button-small" data-tag="*" data-placeholder="курсив"><i class="fas fa-italic"></i></button>
+                <button type="button" class="editor-btn button-small" data-tag="### " data-placeholder="Заголовок"><i class="fas fa-heading"></i></button>
+                <button type="button" class="editor-btn button-small" data-tag="- " data-placeholder="элемент списка"><i class="fas fa-list-ul"></i></button>
+                <button type="button" class="editor-btn button-small" data-tag="1. " data-placeholder="элемент списка"><i class="fas fa-list-ol"></i></button>
+                <button type="button" class="editor-btn button-small" data-tag="![](" data-placeholder="url картинки)"><i class="fas fa-image"></i></button>
+                <button type="button" class="button-small" id="preview-btn"><i class="fas fa-eye"></i> Предпросмотр</button>
             </div>
         `;
 
         form.innerHTML = `
             <h3>${type === 'news' ? 'Новая новость' : 'Новое обновление'}</h3>
-            <input type="text" id="admin-post-title" placeholder="Заголовок" required>
+            <input type="text" id="admin-post-title" placeholder="Заголовок" required class="feedback-input">
             ${gameSelectHtml}
             ${toolbar}
-            <textarea id="admin-post-body" placeholder="Текст (поддерживается Markdown, можно вставлять изображения)" rows="10" required></textarea>
+            <textarea id="admin-post-body" placeholder="Текст (поддерживается Markdown, можно вставлять изображения)" rows="10" required class="feedback-textarea"></textarea>
             <div class="preview-area" id="preview-area" style="display: none; background: var(--bg-primary); border-radius: 16px; padding: 16px; margin-top: 10px;"></div>
             <div class="button-group">
                 <button class="button button-secondary" id="admin-post-cancel">Отмена</button>

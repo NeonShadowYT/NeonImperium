@@ -12,7 +12,6 @@
         { content: 'eyes', emoji: '👀' }
     ];
 
-    // Группировка реакций
     function groupReactions(reactions, currentUser) {
         const grouped = {};
         REACTION_TYPES.forEach(type => {
@@ -36,7 +35,6 @@
         return Object.values(grouped).filter(g => g.count > 0).sort((a, b) => b.count - a.count);
     }
 
-    // Рендер контейнера реакций
     function renderReactions(container, issueNumber, reactions, currentUser, onAdd, onRemove) {
         if (!container || typeof container.querySelectorAll !== 'function') {
             console.warn('renderReactions: container is not a valid element');
@@ -65,35 +63,59 @@
 
         container.innerHTML = html;
 
-        // Обработчики
         container.querySelectorAll('.reaction-button').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const content = btn.dataset.content;
                 const reactionId = btn.dataset.reactionId;
                 const isActive = btn.classList.contains('active');
+                const countSpan = btn.querySelector('.reaction-count');
+                const oldCount = parseInt(countSpan.textContent, 10);
+                const wasVisible = btn.style.display !== 'none';
 
                 if (isActive && reactionId) {
-                    // Оптимистичное удаление: сразу убираем активный класс и уменьшаем счётчик
-                    const countSpan = btn.querySelector('.reaction-count');
-                    const currentCount = parseInt(countSpan.textContent, 10);
+                    // Оптимистичное удаление
                     btn.classList.remove('active');
-                    countSpan.textContent = currentCount - 1;
-                    if (currentCount - 1 === 0) {
+                    countSpan.textContent = oldCount - 1;
+                    if (oldCount - 1 === 0) {
                         btn.style.display = 'none';
                     }
-                    // Вызываем колбэк удаления, но не ждём
-                    onRemove(issueNumber, parseInt(reactionId, 10)).catch(err => {
+                    try {
+                        await onRemove(issueNumber, parseInt(reactionId, 10));
+                        // После успеха ничего не делаем, кеш обновится в feedback.js
+                    } catch (err) {
                         console.error('Failed to remove reaction, reverting', err);
-                        // В случае ошибки возвращаем как было
+                        // Откат
                         btn.classList.add('active');
-                        countSpan.textContent = currentCount;
-                        btn.style.display = '';
-                    });
+                        countSpan.textContent = oldCount;
+                        btn.style.display = wasVisible ? '' : 'none';
+                    }
                 } else {
-                    // Показываем меню выбора реакции
                     showReactionMenu(container, issueNumber, async (selectedContent) => {
-                        await onAdd(issueNumber, selectedContent);
+                        // Оптимистичное добавление (создаём временную кнопку)
+                        const tempId = 'temp-' + Date.now();
+                        const tempBtn = document.createElement('button');
+                        tempBtn.className = 'reaction-button active';
+                        tempBtn.dataset.content = selectedContent;
+                        tempBtn.dataset.reactionId = tempId;
+                        tempBtn.innerHTML = `<span class="reaction-emoji">${REACTION_TYPES.find(t => t.content === selectedContent).emoji}</span><span class="reaction-count">1</span>`;
+                        // Вставляем перед кнопкой "+"
+                        const addBtn = container.querySelector('.reaction-add-btn');
+                        if (addBtn) {
+                            container.insertBefore(tempBtn, addBtn);
+                        } else {
+                            container.appendChild(tempBtn);
+                        }
+                        try {
+                            await onAdd(issueNumber, selectedContent);
+                            // После успеха перезагрузим реакции, чтобы получить реальный ID
+                            const updated = await GithubAPI.loadReactions(issueNumber);
+                            renderReactions(container, issueNumber, updated, currentUser, onAdd, onRemove);
+                        } catch (err) {
+                            console.error('Failed to add reaction', err);
+                            // Удаляем временную кнопку
+                            tempBtn.remove();
+                        }
                     });
                 }
             });
@@ -104,13 +126,25 @@
             addBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 showReactionMenu(container, issueNumber, async (selectedContent) => {
-                    await onAdd(issueNumber, selectedContent);
+                    // Оптимистичное добавление (аналогично)
+                    const tempBtn = document.createElement('button');
+                    tempBtn.className = 'reaction-button active';
+                    tempBtn.dataset.content = selectedContent;
+                    tempBtn.dataset.reactionId = 'temp';
+                    tempBtn.innerHTML = `<span class="reaction-emoji">${REACTION_TYPES.find(t => t.content === selectedContent).emoji}</span><span class="reaction-count">1</span>`;
+                    container.insertBefore(tempBtn, addBtn);
+                    try {
+                        await onAdd(issueNumber, selectedContent);
+                        const updated = await GithubAPI.loadReactions(issueNumber);
+                        renderReactions(container, issueNumber, updated, currentUser, onAdd, onRemove);
+                    } catch (err) {
+                        tempBtn.remove();
+                    }
                 });
             });
         }
     }
 
-    // Показать меню выбора реакции
     function showReactionMenu(relativeTo, issueNumber, callback) {
         document.querySelectorAll('.reaction-menu').forEach(menu => menu.remove());
 
@@ -167,7 +201,6 @@
         }, 100);
     }
 
-    // Рендер комментариев (простой)
     function renderComments(container, comments) {
         container.innerHTML = comments.map(c => `
             <div class="comment" data-comment-id="${c.id}">
@@ -180,7 +213,6 @@
         `).join('');
     }
 
-    // Экспорт
     window.UIFeedback = {
         renderReactions,
         showReactionMenu,

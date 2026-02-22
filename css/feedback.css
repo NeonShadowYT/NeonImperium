@@ -403,6 +403,56 @@
     background: var(--bg-inner-gradient);
 }
 
+/* Стили для формы администратора */
+.feedback-input, .feedback-select, .feedback-textarea {
+    width: 100%;
+    padding: 12px 18px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 40px;
+    color: var(--text-primary);
+    font-family: 'Russo One', sans-serif;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+.feedback-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='white'><path d='M7 10l5 5 5-5z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+}
+.feedback-textarea {
+    border-radius: 24px;
+    min-height: 150px;
+    resize: vertical;
+}
+.editor-btn.button-small {
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+.editor-btn.button-small:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+#preview-btn.button-small {
+    background: var(--accent);
+    color: white;
+    border: none;
+}
+#preview-area {
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+}
+
 @media (max-width: 600px) {
     .feedback-header {
         flex-direction: column;

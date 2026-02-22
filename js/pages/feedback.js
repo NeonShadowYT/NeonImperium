@@ -1,4 +1,4 @@
-// feedback.js — обратная связь для страниц игр (использует общие модули)
+// feedback.js — обратная связь для страниц игр
 
 (function() {
     const { cacheGet, cacheSet, cacheRemove, escapeHtml } = GithubCore;
@@ -281,15 +281,15 @@
 
         const handleAdd = async (num, content) => {
             try {
-                await addReaction(num, content);
+                const newReaction = await addReaction(num, content);
                 const updated = await loadReactions(num);
                 reactionsCache.set(`reactions_${num}`, updated);
-                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
+                // Не перерисовываем, так как ui-feedback уже добавил временную кнопку
+                // Но после успеха мы перерисуем, чтобы получить реальный ID (см. ui-feedback)
             } catch (err) {
                 console.error('Failed to add reaction', err);
                 const updated = await loadReactions(num);
                 reactionsCache.set(`reactions_${num}`, updated);
-                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
             }
         };
 
@@ -298,12 +298,10 @@
                 await removeReaction(num, reactionId);
                 const updated = await loadReactions(num);
                 reactionsCache.set(`reactions_${num}`, updated);
-                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
             } catch (err) {
                 console.error('Failed to remove reaction', err);
                 const updated = await loadReactions(num);
                 reactionsCache.set(`reactions_${num}`, updated);
-                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
             }
         };
 
@@ -311,7 +309,6 @@
     }
 
     function attachEventHandlers() {
-        // Раскрытие/сворачивание
         document.querySelectorAll('.feedback-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 if (e.target.closest('button') || e.target.closest('.reaction-button') ||
@@ -342,7 +339,6 @@
             });
         });
 
-        // Отправка комментария
         document.querySelectorAll('.comment-submit').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -352,17 +348,31 @@
                 const comment = input.value.trim();
                 if (!comment) return;
 
+                // Оптимистичное добавление комментария
+                const commentsDiv = document.getElementById(`comments-${issueNumber}`);
+                const tempComment = document.createElement('div');
+                tempComment.className = 'comment temp';
+                tempComment.innerHTML = `
+                    <div class="comment-meta">
+                        <span class="comment-author">${escapeHtml(currentUser)}</span>
+                        <span>только что</span>
+                    </div>
+                    <div>${escapeHtml(comment)} <em>(отправка...)</em></div>
+                `;
+                commentsDiv.appendChild(tempComment);
+                input.value = '';
                 btn.disabled = true;
+
                 try {
-                    await addComment(issueNumber, comment);
-                    input.value = '';
-                    const commentsDiv = document.getElementById(`comments-${issueNumber}`);
-                    await loadAndRenderComments(issueNumber, commentsDiv);
-                    const item = document.querySelector(`.feedback-item[data-issue-number="${issueNumber}"]`);
-                    const commentsSpan = item.querySelector('.feedback-item-footer span:last-child');
-                    const current = parseInt(commentsSpan.textContent.match(/\d+/)[0]) || 0;
-                    commentsSpan.innerHTML = `<i class="fas fa-comment"></i> ${current + 1}`;
+                    const newComment = await addComment(issueNumber, comment);
+                    // Обновляем кеш
+                    const updatedComments = await loadComments(issueNumber);
+                    commentsCache.set(`comments_${issueNumber}`, updatedComments);
+                    // Заменяем временный комментарий на реальный
+                    renderComments(commentsDiv, updatedComments);
                 } catch (err) {
+                    console.error('Failed to add comment', err);
+                    tempComment.remove();
                     alert('Не удалось отправить комментарий');
                 } finally {
                     btn.disabled = false;
@@ -370,7 +380,6 @@
             });
         });
 
-        // Редактирование
         document.querySelectorAll('.edit-issue').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -383,18 +392,24 @@
             });
         });
 
-        // Закрытие (удаление) issue
         document.querySelectorAll('.close-issue').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 if (!confirm('Вы уверены, что хотите закрыть это сообщение?')) return;
                 const issueItem = e.target.closest('.feedback-item');
                 const issueNumber = issueItem.dataset.issueNumber;
+                // Оптимистичное скрытие
+                issueItem.style.opacity = '0.5';
+                const closeBtn = btn;
+                closeBtn.disabled = true;
                 try {
                     await closeIssue(issueNumber);
                     cacheRemove(`issues_${currentGame}_page_1`);
                     await loadIssuesPage(1, true);
                 } catch (err) {
+                    console.error('Failed to close issue', err);
+                    issueItem.style.opacity = '1';
+                    closeBtn.disabled = false;
                     alert('Не удалось закрыть сообщение');
                 }
             });
@@ -437,6 +452,15 @@
             return;
         }
 
+        // Оптимистичное обновление карточки
+        const issueItem = document.querySelector(`.feedback-item[data-issue-number="${editingIssue.number}"]`);
+        const titleEl = issueItem.querySelector('.feedback-item-title');
+        const previewEl = issueItem.querySelector('.feedback-item-preview');
+        const oldTitle = titleEl.textContent;
+        const oldPreview = previewEl.textContent;
+        titleEl.textContent = title;
+        previewEl.textContent = body.substring(0, 120) + (body.length > 120 ? '…' : '');
+
         try {
             await updateIssue(editingIssue.number, {
                 title: title,
@@ -449,6 +473,9 @@
             await loadIssuesPage(1, true);
         } catch (error) {
             console.error('Update error:', error);
+            // Откат
+            titleEl.textContent = oldTitle;
+            previewEl.textContent = oldPreview;
             alert('Не удалось обновить сообщение');
         }
     }
@@ -463,8 +490,32 @@
             return;
         }
 
+        // Оптимистичное добавление карточки
+        const tempId = 'temp-' + Date.now();
+        const tempCard = document.createElement('div');
+        tempCard.className = 'feedback-item temp';
+        tempCard.dataset.issueNumber = tempId;
+        tempCard.innerHTML = `
+            <div class="feedback-item-header">
+                <h4 class="feedback-item-title">${escapeHtml(title)}</h4>
+                <div class="feedback-item-meta">
+                    <span class="feedback-label type-${category}">${category}</span>
+                    <span class="feedback-label">#...</span>
+                </div>
+            </div>
+            <div class="feedback-item-preview">${escapeHtml(body.substring(0, 120))}...</div>
+            <div class="reactions-container"></div>
+            <div class="feedback-item-footer">
+                <span><i class="fas fa-user"></i> ${escapeHtml(currentUser)}</span>
+                <span><i class="fas fa-calendar-alt"></i> только что</span>
+                <span><i class="fas fa-comment"></i> 0</span>
+            </div>
+        `;
+        const list = document.getElementById('feedback-list');
+        list.insertBefore(tempCard, list.firstChild);
+
         try {
-            await createIssue(title, body, [`game:${currentGame}`, `type:${category}`]);
+            const newIssue = await createIssue(title, body, [`game:${currentGame}`, `type:${category}`]);
             document.getElementById('feedback-title').value = '';
             document.getElementById('feedback-body').value = '';
             document.querySelector('.feedback-form-wrapper').style.display = 'none';
@@ -472,6 +523,7 @@
             await loadIssuesPage(1, true);
         } catch (error) {
             console.error('Error creating issue:', error);
+            tempCard.remove();
             alert('Не удалось создать сообщение');
         }
     }

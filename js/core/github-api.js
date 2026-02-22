@@ -1,5 +1,4 @@
 // github-api.js — унифицированные методы для работы с GitHub API
-// Добавлена проверка reactionId в removeReaction
 
 (function() {
     const { CONFIG } = GithubCore;
