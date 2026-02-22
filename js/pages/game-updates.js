@@ -1,4 +1,4 @@
-// game-updates.js — блок обновлений на страницах игр
+// game-updates.js — блок обновлений на страницах игр с модальными окнами
 
 (function() {
     const { cacheGet, cacheSet, renderMarkdown, escapeHtml, CONFIG } = GithubCore;
@@ -49,9 +49,13 @@
         }
 
         container.innerHTML = '';
+        const grid = document.createElement('div');
+        grid.className = 'projects-grid'; // используем ту же сетку
+        container.appendChild(grid);
+
         posts.forEach(post => {
             const card = createUpdateCard(post);
-            container.appendChild(card);
+            grid.appendChild(card);
         });
     }
 
@@ -100,37 +104,40 @@
 
         card.appendChild(inner);
 
-        const detailsDiv = document.createElement('div');
-        detailsDiv.className = 'feedback-item-details';
-        detailsDiv.style.display = 'none';
-        detailsDiv.style.marginTop = '20px';
-        detailsDiv.style.paddingTop = '20px';
-        detailsDiv.style.borderTop = '1px solid var(--border)';
-        card.appendChild(detailsDiv);
-
-        card.addEventListener('click', async (e) => {
-            if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
-
-            if (detailsDiv.style.display === 'none') {
-                // Закрываем другие раскрытые карточки
-                document.querySelectorAll('#game-updates .feedback-item-details[style*="display: block"]').forEach(el => {
-                    el.style.display = 'none';
-                });
-
-                if (!detailsDiv.hasChildNodes()) {
-                    await loadUpdateDetails(post, detailsDiv);
-                }
-                detailsDiv.style.display = 'block';
-            } else {
-                detailsDiv.style.display = 'none';
-            }
+        card.addEventListener('click', (e) => {
+            e.preventDefault();
+            openUpdateModal(post);
         });
 
         return card;
     }
 
-    async function loadUpdateDetails(post, container) {
-        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>`;
+    async function openUpdateModal(post) {
+        const modal = document.createElement('div');
+        modal.className = 'modal modal-fullscreen';
+        modal.innerHTML = `
+            <div class="modal-content modal-content-full">
+                <button class="modal-close"><i class="fas fa-times"></i></button>
+                <div class="modal-body" id="modal-update-body">
+                    <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden';
+
+        const closeModal = () => {
+            modal.remove();
+            document.body.style.overflow = '';
+        };
+
+        modal.querySelector('.modal-close').addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+
+        const container = document.getElementById('modal-update-body');
+        const currentUser = getCurrentUser();
 
         try {
             const issue = await loadIssue(post.number);
@@ -143,7 +150,7 @@
 
             const commentsDiv = document.createElement('div');
             commentsDiv.className = 'feedback-comments';
-            commentsDiv.id = `comments-${post.number}`;
+            commentsDiv.id = `modal-comments-${post.number}`;
 
             const commentForm = document.createElement('div');
             commentForm.className = 'comment-form';
@@ -153,11 +160,10 @@
                 <button class="button comment-submit">Отправить</button>
             `;
 
-            // Кнопки для администраторов
-            const adminActions = document.createElement('div');
-            adminActions.className = 'feedback-item-actions';
+            const actionButtons = document.createElement('div');
+            actionButtons.className = 'feedback-item-actions';
             if (isAdmin()) {
-                adminActions.innerHTML = `
+                actionButtons.innerHTML = `
                     <button class="edit-issue" title="Редактировать"><i class="fas fa-edit"></i></button>
                     <button class="close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>
                 `;
@@ -166,14 +172,12 @@
             container.innerHTML = '';
             container.appendChild(bodyDiv);
             container.appendChild(reactionsDiv);
-            if (isAdmin()) container.appendChild(adminActions);
+            if (isAdmin()) container.appendChild(actionButtons);
             container.appendChild(commentsDiv);
-            container.appendChild(commentForm);
+            if (currentUser) container.appendChild(commentForm);
 
             // Реакции
             const reactions = await loadReactions(post.number);
-            const currentUser = getCurrentUser();
-
             const handleAdd = async (num, content) => {
                 await addReaction(num, content);
                 const updated = await loadReactions(num);
@@ -184,7 +188,6 @@
                 const updated = await loadReactions(num);
                 renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
             };
-
             renderReactions(reactionsDiv, post.number, reactions, currentUser, handleAdd, handleRemove);
 
             // Комментарии
@@ -192,7 +195,7 @@
             renderComments(commentsDiv, comments);
 
             // Обработчик отправки комментария
-            commentForm.querySelector('.comment-submit').addEventListener('click', async (e) => {
+            commentForm.querySelector('.comment-submit')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const input = commentForm.querySelector('.comment-input');
                 const comment = input.value.trim();
@@ -215,8 +218,9 @@
 
             // Обработчики для администраторов
             if (isAdmin()) {
-                adminActions.querySelector('.edit-issue').addEventListener('click', (e) => {
+                actionButtons.querySelector('.edit-issue').addEventListener('click', (e) => {
                     e.stopPropagation();
+                    closeModal();
                     window.AdminNews.openEditForm('update', {
                         number: post.number,
                         title: issue.title,
@@ -225,12 +229,13 @@
                     });
                 });
 
-                adminActions.querySelector('.close-issue').addEventListener('click', async (e) => {
+                actionButtons.querySelector('.close-issue').addEventListener('click', async (e) => {
                     e.stopPropagation();
                     if (!confirm('Вы уверены, что хотите закрыть это обновление?')) return;
                     try {
                         await closeIssue(post.number);
-                        container.closest('.project-card-link').remove(); // удаляем карточку
+                        closeModal();
+                        refreshGameUpdates(post.game);
                     } catch (err) {
                         alert('Ошибка при закрытии');
                     }

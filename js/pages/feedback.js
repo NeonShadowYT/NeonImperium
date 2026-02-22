@@ -1,4 +1,4 @@
-// feedback.js — обратная связь для страниц игр
+// feedback.js — обратная связь для страниц игр с модальными окнами и проверкой авторизации
 
 (function() {
     const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown } = GithubCore;
@@ -17,7 +17,6 @@
     let displayedIssues = [];
     let container, feedbackSection;
     let currentUser = null;
-    let editingIssue = null;
     let token = null;
 
     const commentsCache = new Map();
@@ -62,31 +61,15 @@
         if (token && currentUser) {
             renderFeedbackInterface();
         } else {
-            renderLoginPrompt();
+            renderFeedbackInterface(true); // передаём флаг, что пользователь неавторизован
         }
     }
 
-    function renderLoginPrompt() {
-        container.innerHTML = `
-            <div class="login-prompt">
-                <i class="fab fa-github"></i>
-                <h3 data-lang="feedbackLoginPrompt">Войдите через GitHub, чтобы участвовать</h3>
-                <p class="text-secondary" data-lang="feedbackTokenNote">
-                    Ваш токен останется только у вас в браузере.
-                </p>
-                <button class="button" id="feedback-login-btn" data-lang="feedbackLoginBtn">Войти</button>
-            </div>
-        `;
-        document.getElementById('feedback-login-btn').addEventListener('click', () => {
-            window.dispatchEvent(new CustomEvent('github-login-requested'));
-        });
-    }
-
-    async function renderFeedbackInterface() {
+    async function renderFeedbackInterface(isGuest = false) {
         container.innerHTML = `
             <div class="feedback-header">
                 <h2 data-lang="feedbackTitle">Идеи, баги и отзывы</h2>
-                <button class="button" id="toggle-form-btn" data-lang="feedbackNewBtn">Оставить сообщение</button>
+                ${!isGuest ? `<button class="button" id="toggle-form-btn" data-lang="feedbackNewBtn">Оставить сообщение</button>` : ''}
             </div>
 
             <div class="feedback-tabs">
@@ -94,28 +77,6 @@
                 <button class="feedback-tab" data-tab="idea" data-lang="feedbackTabIdea">💡 Идеи</button>
                 <button class="feedback-tab" data-tab="bug" data-lang="feedbackTabBug">🐛 Баги</button>
                 <button class="feedback-tab" data-tab="review" data-lang="feedbackTabReview">⭐ Отзывы</button>
-            </div>
-
-            <div class="feedback-form-wrapper" style="display: none;">
-                <div class="feedback-form" id="feedback-form">
-                    <h3 data-lang="feedbackFormTitle">Оставить сообщение</h3>
-                    <input type="text" id="feedback-title" class="feedback-input" data-lang="feedbackTitlePlaceholder" placeholder="Заголовок">
-                    <select id="feedback-category" class="feedback-select">
-                        <option value="idea" data-lang="feedbackCategoryIdea">💡 Идея</option>
-                        <option value="bug" data-lang="feedbackCategoryBug">🐛 Баг</option>
-                        <option value="review" data-lang="feedbackCategoryReview">⭐ Отзыв</option>
-                    </select>
-
-                    <div id="feedback-editor-toolbar"></div>
-
-                    <textarea id="feedback-body" class="feedback-textarea" data-lang="feedbackBodyPlaceholder" placeholder="Подробное описание..." rows="6"></textarea>
-                    <div class="preview-area" id="preview-area-feedback" style="display: none; background: var(--bg-primary); border-radius: 16px; padding: 16px; margin-top: 10px;"></div>
-
-                    <div class="button-group">
-                        <button class="button button-secondary" id="feedback-cancel" data-lang="feedbackCancel">Отмена</button>
-                        <button class="button" id="feedback-submit" data-lang="feedbackSubmitBtn">Отправить</button>
-                    </div>
-                </div>
             </div>
 
             <div class="feedback-list" id="feedback-list">
@@ -127,47 +88,11 @@
             </div>
         `;
 
-        const textarea = document.getElementById('feedback-body');
-        const toolbarContainer = document.getElementById('feedback-editor-toolbar');
-
-        if (typeof Editor !== 'undefined') {
-            const toolbar = Editor.createEditorToolbar(textarea, {
-                previewId: 'preview-btn-feedback',
-                previewAreaId: 'preview-area-feedback',
-                onPreview: () => {
-                    const previewArea = document.getElementById('preview-area-feedback');
-                    const body = textarea.value;
-                    if (!body.trim()) {
-                        previewArea.style.display = 'none';
-                        return;
-                    }
-                    previewArea.innerHTML = renderMarkdown(body);
-                    previewArea.style.display = 'block';
-                }
+        if (!isGuest) {
+            document.getElementById('toggle-form-btn').addEventListener('click', () => {
+                openEditorModal('new');
             });
-            toolbarContainer.appendChild(toolbar);
         }
-
-        document.getElementById('toggle-form-btn').addEventListener('click', () => {
-            document.querySelector('.feedback-form-wrapper').style.display = 'block';
-            editingIssue = null;
-            document.getElementById('feedback-title').value = '';
-            document.getElementById('feedback-body').value = '';
-            document.getElementById('feedback-category').value = 'idea';
-        });
-
-        document.getElementById('feedback-cancel').addEventListener('click', () => {
-            document.querySelector('.feedback-form-wrapper').style.display = 'none';
-            editingIssue = null;
-        });
-
-        document.getElementById('feedback-submit').addEventListener('click', () => {
-            if (editingIssue) {
-                updateExistingIssue();
-            } else {
-                submitNewIssue();
-            }
-        });
 
         document.querySelectorAll('.feedback-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
@@ -258,8 +183,6 @@
         }
 
         listEl.innerHTML = issues.map(issue => {
-            const isAuthor = currentUser && issue.user.login === currentUser;
-            const canEdit = isAuthor || isAdmin(); // администратор тоже может
             const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
             const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
 
@@ -280,30 +203,285 @@
                     <span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span>
                     <span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span>
                     <span><i class="fas fa-comment"></i> ${issue.comments}</span>
-                    ${canEdit ? `
-                    <div class="feedback-item-actions">
-                        <button class="edit-issue" title="Редактировать"><i class="fas fa-edit"></i></button>
-                        <button class="close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>
-                    </div>` : ''}
-                </div>
-                <div class="feedback-item-details" style="display: none;">
-                    <div class="feedback-comments" id="comments-${issue.number}"></div>
-                    <div class="comment-form" data-issue="${issue.number}">
-                        <input type="text" class="comment-input" data-lang="feedbackAddComment" placeholder="Написать комментарий...">
-                        <button class="button comment-submit" data-lang="feedbackSendBtn">Отправить</button>
-                    </div>
                 </div>
             </div>`;
         }).join('');
 
         issues.forEach(issue => {
-            const container = document.querySelector(`.reactions-container[data-target-id="${issue.number}"]`);
-            if (container) {
-                loadAndRenderReactions(issue.number, container);
+            const reactionsContainer = document.querySelector(`.reactions-container[data-target-id="${issue.number}"]`);
+            if (reactionsContainer) {
+                loadAndRenderReactions(issue.number, reactionsContainer);
             }
         });
 
         attachEventHandlers();
+    }
+
+    function attachEventHandlers() {
+        document.querySelectorAll('.feedback-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
+
+                const issueNumber = item.dataset.issueNumber;
+                const issue = allIssues.find(i => i.number == issueNumber);
+                if (issue) openFeedbackModal(issue);
+            });
+        });
+    }
+
+    async function openFeedbackModal(issue) {
+        const modal = document.createElement('div');
+        modal.className = 'modal modal-fullscreen';
+        modal.innerHTML = `
+            <div class="modal-content modal-content-full">
+                <button class="modal-close"><i class="fas fa-times"></i></button>
+                <div class="modal-body" id="modal-feedback-body">
+                    <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden';
+
+        const closeModal = () => {
+            modal.remove();
+            document.body.style.overflow = '';
+        };
+
+        modal.querySelector('.modal-close').addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+        // Закрытие по Escape
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+
+        const container = document.getElementById('modal-feedback-body');
+
+        try {
+            const fullIssue = await loadIssue(issue.number);
+            const bodyDiv = document.createElement('div');
+            bodyDiv.className = 'spoiler-content';
+            bodyDiv.innerHTML = renderMarkdown(fullIssue.body);
+
+            const reactionsDiv = document.createElement('div');
+            reactionsDiv.className = 'reactions-container';
+
+            const commentsDiv = document.createElement('div');
+            commentsDiv.className = 'feedback-comments';
+            commentsDiv.id = `modal-comments-${issue.number}`;
+
+            const commentForm = document.createElement('div');
+            commentForm.className = 'comment-form';
+            commentForm.dataset.issue = issue.number;
+            if (currentUser) {
+                commentForm.innerHTML = `
+                    <input type="text" class="comment-input" placeholder="Написать комментарий...">
+                    <button class="button comment-submit">Отправить</button>
+                `;
+            }
+
+            // Кнопки для автора и администраторов
+            const actionButtons = document.createElement('div');
+            actionButtons.className = 'feedback-item-actions';
+            const isAuthor = currentUser && fullIssue.user.login === currentUser;
+            if (isAuthor || isAdmin()) {
+                actionButtons.innerHTML = `
+                    <button class="edit-issue" title="Редактировать"><i class="fas fa-edit"></i></button>
+                    <button class="close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>
+                `;
+            }
+
+            container.innerHTML = '';
+            container.appendChild(bodyDiv);
+            container.appendChild(reactionsDiv);
+            if (isAuthor || isAdmin()) container.appendChild(actionButtons);
+            container.appendChild(commentsDiv);
+            if (currentUser) container.appendChild(commentForm);
+
+            // Реакции
+            const reactions = await loadReactions(issue.number);
+            const handleAdd = async (num, content) => {
+                await addReaction(num, content);
+                const updated = await loadReactions(num);
+                renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+            };
+            const handleRemove = async (num, reactionId) => {
+                await removeReaction(num, reactionId);
+                const updated = await loadReactions(num);
+                renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
+            };
+            renderReactions(reactionsDiv, issue.number, reactions, currentUser, handleAdd, handleRemove);
+
+            // Комментарии
+            const comments = await loadComments(issue.number);
+            renderComments(commentsDiv, comments);
+
+            // Обработчик отправки комментария
+            if (currentUser) {
+                commentForm.querySelector('.comment-submit').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const input = commentForm.querySelector('.comment-input');
+                    const comment = input.value.trim();
+                    if (!comment) return;
+
+                    input.disabled = true;
+                    e.target.disabled = true;
+                    try {
+                        await addComment(issue.number, comment);
+                        const updatedComments = await loadComments(issue.number);
+                        renderComments(commentsDiv, updatedComments);
+                        input.value = '';
+                    } catch (err) {
+                        alert('Ошибка при отправке комментария');
+                    } finally {
+                        input.disabled = false;
+                        e.target.disabled = false;
+                    }
+                });
+            }
+
+            // Обработчики для кнопок
+            if (isAuthor || isAdmin()) {
+                actionButtons.querySelector('.edit-issue').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    closeModal();
+                    document.removeEventListener('keydown', escHandler);
+                    openEditorModal('edit', fullIssue);
+                });
+
+                actionButtons.querySelector('.close-issue').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (!confirm('Вы уверены, что хотите закрыть это сообщение?')) return;
+                    try {
+                        await closeIssue(issue.number);
+                        closeModal();
+                        document.removeEventListener('keydown', escHandler);
+                        cacheRemove(`issues_${currentGame}_page_1`);
+                        await loadIssuesPage(1, true);
+                    } catch (err) {
+                        alert('Ошибка при закрытии');
+                    }
+                });
+            }
+
+        } catch (err) {
+            console.error('Ошибка загрузки деталей', err);
+            container.innerHTML = '<p class="error-message">Не удалось загрузить содержимое.</p>';
+        }
+    }
+
+    function openEditorModal(mode, issue = null) {
+        const modal = document.createElement('div');
+        modal.className = 'modal modal-fullscreen';
+        modal.innerHTML = `
+            <div class="modal-content modal-content-full">
+                <button class="modal-close"><i class="fas fa-times"></i></button>
+                <div class="modal-body" id="modal-editor-body">
+                    <div class="feedback-form" id="feedback-form-modal">
+                        <h3>${mode === 'edit' ? 'Редактирование' : 'Новое сообщение'}</h3>
+                        <input type="text" id="modal-feedback-title" class="feedback-input" placeholder="Заголовок" value="${issue ? escapeHtml(issue.title) : ''}">
+                        <select id="modal-feedback-category" class="feedback-select">
+                            <option value="idea" ${issue && issue.labels.find(l => l.name === 'type:idea') ? 'selected' : ''}>💡 Идея</option>
+                            <option value="bug" ${issue && issue.labels.find(l => l.name === 'type:bug') ? 'selected' : ''}>🐛 Баг</option>
+                            <option value="review" ${issue && issue.labels.find(l => l.name === 'type:review') ? 'selected' : ''}>⭐ Отзыв</option>
+                        </select>
+                        <div id="modal-editor-toolbar"></div>
+                        <textarea id="modal-feedback-body" class="feedback-textarea" placeholder="Подробное описание..." rows="10">${issue ? escapeHtml(issue.body) : ''}</textarea>
+                        <div class="preview-area" id="modal-preview-area" style="display: none;"></div>
+                        <div class="button-group">
+                            <button class="button button-secondary" id="modal-cancel">Отмена</button>
+                            <button class="button" id="modal-submit">${mode === 'edit' ? 'Сохранить' : 'Опубликовать'}</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden';
+
+        const closeModal = () => {
+            modal.remove();
+            document.body.style.overflow = '';
+        };
+
+        modal.querySelector('.modal-close').addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+
+        const textarea = document.getElementById('modal-feedback-body');
+        const toolbarContainer = document.getElementById('modal-editor-toolbar');
+
+        if (typeof Editor !== 'undefined') {
+            const toolbar = Editor.createEditorToolbar(textarea, {
+                previewId: 'modal-preview-btn',
+                previewAreaId: 'modal-preview-area',
+                onPreview: () => {
+                    const previewArea = document.getElementById('modal-preview-area');
+                    const body = textarea.value;
+                    if (!body.trim()) {
+                        previewArea.style.display = 'none';
+                        return;
+                    }
+                    previewArea.innerHTML = renderMarkdown(body);
+                    previewArea.style.display = 'block';
+                }
+            });
+            toolbarContainer.appendChild(toolbar);
+        }
+
+        document.getElementById('modal-cancel').addEventListener('click', () => {
+            closeModal();
+            document.removeEventListener('keydown', escHandler);
+        });
+        document.getElementById('modal-submit').addEventListener('click', async () => {
+            const title = document.getElementById('modal-feedback-title').value.trim();
+            const category = document.getElementById('modal-feedback-category').value;
+            const body = document.getElementById('modal-feedback-body').value;
+
+            if (!title || !body.trim()) {
+                alert('Заполните заголовок и описание');
+                return;
+            }
+
+            const submitBtn = document.getElementById('modal-submit');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Сохранение...';
+
+            try {
+                if (mode === 'edit' && issue) {
+                    await updateIssue(issue.number, {
+                        title: title,
+                        body: body,
+                        labels: [`game:${currentGame}`, `type:${category}`]
+                    });
+                } else {
+                    await createIssue(title, body, [`game:${currentGame}`, `type:${category}`]);
+                }
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+                cacheRemove(`issues_${currentGame}_page_1`);
+                await loadIssuesPage(1, true);
+            } catch (err) {
+                console.error(err);
+                alert('Ошибка: ' + err.message);
+                submitBtn.disabled = false;
+                submitBtn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
+            }
+        });
     }
 
     async function loadAndRenderReactions(issueNumber, container) {
@@ -350,158 +528,6 @@
         renderReactions(container, issueNumber, reactions, currentUser, handleAdd, handleRemove);
     }
 
-    function attachEventHandlers() {
-        document.querySelectorAll('.feedback-item').forEach(item => {
-            item.addEventListener('click', async (e) => {
-                if (e.target.closest('button') || e.target.closest('.reaction-button') ||
-                    e.target.closest('.reaction-add-btn') || e.target.closest('.comment-input') ||
-                    e.target.closest('.comment-submit')) return;
-
-                const details = item.querySelector('.feedback-item-details');
-                const expanded = item.classList.contains('expanded');
-
-                document.querySelectorAll('.feedback-item.expanded').forEach(el => {
-                    if (el !== item) {
-                        el.classList.remove('expanded');
-                        el.querySelector('.feedback-item-details').style.display = 'none';
-                    }
-                });
-
-                if (expanded) {
-                    item.classList.remove('expanded');
-                    details.style.display = 'none';
-                } else {
-                    item.classList.add('expanded');
-                    details.style.display = 'block';
-                    const issueNumber = item.dataset.issueNumber;
-                    // Если детали ещё не загружены, загружаем
-                    if (!item.querySelector('.feedback-item-actions-admin')) {
-                        await loadFeedbackDetails(issueNumber, item);
-                    }
-                }
-            });
-        });
-
-        document.querySelectorAll('.comment-submit').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const form = e.target.closest('.comment-form');
-                const issueNumber = form.dataset.issue;
-                const input = form.querySelector('.comment-input');
-                const comment = input.value.trim();
-                if (!comment) return;
-
-                const commentsDiv = document.getElementById(`comments-${issueNumber}`);
-                const tempComment = document.createElement('div');
-                tempComment.className = 'comment temp';
-                tempComment.innerHTML = `
-                    <div class="comment-meta">
-                        <span class="comment-author">${escapeHtml(currentUser)}</span>
-                        <span>только что</span>
-                    </div>
-                    <div>${escapeHtml(comment)} <em>(отправка...)</em></div>
-                `;
-                commentsDiv.appendChild(tempComment);
-                input.value = '';
-                btn.disabled = true;
-
-                try {
-                    await addComment(issueNumber, comment);
-                    const updatedComments = await loadComments(issueNumber);
-                    commentsCache.set(`comments_${issueNumber}`, updatedComments);
-                    renderComments(commentsDiv, updatedComments);
-                } catch (err) {
-                    console.error('Failed to add comment', err);
-                    tempComment.remove();
-                    alert('Не удалось отправить комментарий');
-                } finally {
-                    btn.disabled = false;
-                }
-            });
-        });
-
-        document.querySelectorAll('.edit-issue').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const issueItem = e.target.closest('.feedback-item');
-                const issueNumber = issueItem.dataset.issueNumber;
-                const issue = allIssues.find(i => i.number == issueNumber);
-                if (issue && (issue.user.login === currentUser || isAdmin())) {
-                    startEditing(issue);
-                }
-            });
-        });
-
-        document.querySelectorAll('.close-issue').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (!confirm('Вы уверены, что хотите закрыть это сообщение?')) return;
-                const issueItem = e.target.closest('.feedback-item');
-                const issueNumber = issueItem.dataset.issueNumber;
-                issueItem.style.opacity = '0.5';
-                btn.disabled = true;
-                try {
-                    await closeIssue(issueNumber);
-                    cacheRemove(`issues_${currentGame}_page_1`);
-                    await loadIssuesPage(1, true);
-                } catch (err) {
-                    console.error('Failed to close issue', err);
-                    issueItem.style.opacity = '1';
-                    btn.disabled = false;
-                    alert('Не удалось закрыть сообщение');
-                }
-            });
-        });
-    }
-
-    // Новая функция для загрузки дополнительных деталей (комментарии, реакции, админ-кнопки)
-    async function loadFeedbackDetails(issueNumber, issueItem) {
-        const detailsDiv = issueItem.querySelector('.feedback-item-details');
-        if (!detailsDiv) return;
-
-        // Загружаем комментарии, если их нет
-        const commentsDiv = document.getElementById(`comments-${issueNumber}`);
-        if (commentsDiv && !commentsDiv.hasChildNodes()) {
-            await loadAndRenderComments(issueNumber, commentsDiv);
-        }
-
-        // Добавляем панель администратора, если нужно и её ещё нет
-        if (isAdmin() && !detailsDiv.querySelector('.feedback-item-actions-admin')) {
-            const adminActions = document.createElement('div');
-            adminActions.className = 'feedback-item-actions-admin';
-            adminActions.style.marginTop = '10px';
-            adminActions.style.display = 'flex';
-            adminActions.style.gap = '10px';
-            adminActions.innerHTML = `
-                <button class="button-small edit-issue-admin">Редактировать</button>
-                <button class="button-small close-issue-admin">Закрыть</button>
-            `;
-            detailsDiv.appendChild(adminActions);
-
-            adminActions.querySelector('.edit-issue-admin').addEventListener('click', (e) => {
-                e.stopPropagation();
-                const issue = allIssues.find(i => i.number == issueNumber);
-                if (issue) startEditing(issue);
-            });
-
-            adminActions.querySelector('.close-issue-admin').addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (!confirm('Вы уверены, что хотите закрыть это сообщение?')) return;
-                issueItem.style.opacity = '0.5';
-                e.target.disabled = true;
-                try {
-                    await closeIssue(issueNumber);
-                    cacheRemove(`issues_${currentGame}_page_1`);
-                    await loadIssuesPage(1, true);
-                } catch (err) {
-                    issueItem.style.opacity = '1';
-                    e.target.disabled = false;
-                    alert('Ошибка при закрытии');
-                }
-            });
-        }
-    }
-
     async function loadAndRenderComments(issueNumber, container) {
         const cacheKey = `comments_${issueNumber}`;
         let comments = commentsCache.get(cacheKey);
@@ -516,100 +542,5 @@
             }
         }
         renderComments(container, comments);
-    }
-
-    function startEditing(issue) {
-        editingIssue = issue;
-        document.querySelector('.feedback-form-wrapper').style.display = 'block';
-        document.getElementById('feedback-title').value = issue.title;
-        document.getElementById('feedback-body').value = issue.body;
-        const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
-        document.getElementById('feedback-category').value = typeLabel;
-    }
-
-    async function updateExistingIssue() {
-        if (!editingIssue) return;
-        const title = document.getElementById('feedback-title').value.trim();
-        const category = document.getElementById('feedback-category').value;
-        const bodyRaw = document.getElementById('feedback-body').value;
-        const bodyTrimmed = bodyRaw.trim();
-
-        if (!title || !bodyTrimmed) {
-            alert('Заполните заголовок и описание');
-            return;
-        }
-
-        const issueItem = document.querySelector(`.feedback-item[data-issue-number="${editingIssue.number}"]`);
-        const titleEl = issueItem.querySelector('.feedback-item-title');
-        const previewEl = issueItem.querySelector('.feedback-item-preview');
-        const oldTitle = titleEl.textContent;
-        const oldPreview = previewEl.textContent;
-        titleEl.textContent = title;
-        previewEl.textContent = bodyTrimmed.substring(0, 120) + (bodyTrimmed.length > 120 ? '…' : '');
-
-        try {
-            await updateIssue(editingIssue.number, {
-                title: title,
-                body: bodyRaw,
-                labels: [`game:${currentGame}`, `type:${category}`]
-            });
-            document.querySelector('.feedback-form-wrapper').style.display = 'none';
-            editingIssue = null;
-            cacheRemove(`issues_${currentGame}_page_1`);
-            await loadIssuesPage(1, true);
-        } catch (error) {
-            console.error('Update error:', error);
-            titleEl.textContent = oldTitle;
-            previewEl.textContent = oldPreview;
-            alert('Не удалось обновить сообщение');
-        }
-    }
-
-    async function submitNewIssue() {
-        const title = document.getElementById('feedback-title').value.trim();
-        const category = document.getElementById('feedback-category').value;
-        const bodyRaw = document.getElementById('feedback-body').value;
-        const bodyTrimmed = bodyRaw.trim();
-
-        if (!title || !bodyTrimmed) {
-            alert('Заполните заголовок и описание');
-            return;
-        }
-
-        const tempId = 'temp-' + Date.now();
-        const tempCard = document.createElement('div');
-        tempCard.className = 'feedback-item temp';
-        tempCard.dataset.issueNumber = tempId;
-        tempCard.innerHTML = `
-            <div class="feedback-item-header">
-                <h4 class="feedback-item-title">${escapeHtml(title)}</h4>
-                <div class="feedback-item-meta">
-                    <span class="feedback-label type-${category}">${category}</span>
-                    <span class="feedback-label">#...</span>
-                </div>
-            </div>
-            <div class="feedback-item-preview">${escapeHtml(bodyTrimmed.substring(0, 120))}...</div>
-            <div class="reactions-container"></div>
-            <div class="feedback-item-footer">
-                <span><i class="fas fa-user"></i> ${escapeHtml(currentUser)}</span>
-                <span><i class="fas fa-calendar-alt"></i> только что</span>
-                <span><i class="fas fa-comment"></i> 0</span>
-            </div>
-        `;
-        const list = document.getElementById('feedback-list');
-        list.insertBefore(tempCard, list.firstChild);
-
-        try {
-            await createIssue(title, bodyRaw, [`game:${currentGame}`, `type:${category}`]);
-            document.getElementById('feedback-title').value = '';
-            document.getElementById('feedback-body').value = '';
-            document.querySelector('.feedback-form-wrapper').style.display = 'none';
-            cacheRemove(`issues_${currentGame}_page_1`);
-            await loadIssuesPage(1, true);
-        } catch (error) {
-            console.error('Error creating issue:', error);
-            tempCard.remove();
-            alert('Не удалось создать сообщение');
-        }
     }
 })();

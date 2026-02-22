@@ -45,103 +45,103 @@
         const visible = grouped.slice(0, 3);
         const hiddenCount = grouped.length - 3;
 
-        let html = visible.map(g => `
+        let html = visible.map(g => {
+            // Если пользователь не авторизован, делаем кнопки неактивными (только для просмотра)
+            const disabledAttr = !currentUser ? ' disabled' : '';
+            return `
             <button class="reaction-button ${g.userReacted ? 'active' : ''}" 
                     data-content="${g.content}" 
                     data-reaction-id="${g.userReactionId || ''}"
-                    data-count="${g.count}">
+                    data-count="${g.count}"${disabledAttr}>
                 <span class="reaction-emoji">${g.emoji}</span>
                 <span class="reaction-count">${g.count}</span>
             </button>
-        `).join('');
+        `}).join('');
 
-        if (hiddenCount > 0) {
-            html += `<button class="reaction-add-btn" data-more><span>+${hiddenCount}</span></button>`;
-        } else if (currentUser) {
-            html += `<button class="reaction-add-btn" data-add><span>+</span></button>`;
+        if (currentUser) {
+            if (hiddenCount > 0) {
+                html += `<button class="reaction-add-btn" data-more><span>+${hiddenCount}</span></button>`;
+            } else {
+                html += `<button class="reaction-add-btn" data-add><span>+</span></button>`;
+            }
         }
 
         container.innerHTML = html;
 
-        container.querySelectorAll('.reaction-button').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const content = btn.dataset.content;
-                const reactionId = btn.dataset.reactionId;
-                const isActive = btn.classList.contains('active');
-                const countSpan = btn.querySelector('.reaction-count');
-                const oldCount = parseInt(countSpan.textContent, 10);
-                const wasVisible = btn.style.display !== 'none';
+        // Добавляем обработчики только если есть пользователь
+        if (currentUser) {
+            container.querySelectorAll('.reaction-button:not([disabled])').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const content = btn.dataset.content;
+                    const reactionId = btn.dataset.reactionId;
+                    const isActive = btn.classList.contains('active');
+                    const countSpan = btn.querySelector('.reaction-count');
+                    const oldCount = parseInt(countSpan.textContent, 10);
+                    const wasVisible = btn.style.display !== 'none';
 
-                if (isActive && reactionId) {
-                    // Оптимистичное удаление
-                    btn.classList.remove('active');
-                    countSpan.textContent = oldCount - 1;
-                    if (oldCount - 1 === 0) {
-                        btn.style.display = 'none';
-                    }
-                    try {
-                        await onRemove(issueNumber, parseInt(reactionId, 10));
-                        // После успеха ничего не делаем, кеш обновится в feedback.js
-                    } catch (err) {
-                        console.error('Failed to remove reaction, reverting', err);
-                        // Откат
-                        btn.classList.add('active');
-                        countSpan.textContent = oldCount;
-                        btn.style.display = wasVisible ? '' : 'none';
-                    }
-                } else {
-                    showReactionMenu(container, issueNumber, async (selectedContent) => {
-                        // Оптимистичное добавление (создаём временную кнопку)
-                        const tempId = 'temp-' + Date.now();
-                        const tempBtn = document.createElement('button');
-                        tempBtn.className = 'reaction-button active';
-                        tempBtn.dataset.content = selectedContent;
-                        tempBtn.dataset.reactionId = tempId;
-                        tempBtn.innerHTML = `<span class="reaction-emoji">${REACTION_TYPES.find(t => t.content === selectedContent).emoji}</span><span class="reaction-count">1</span>`;
-                        // Вставляем перед кнопкой "+"
-                        const addBtn = container.querySelector('.reaction-add-btn');
-                        if (addBtn) {
-                            container.insertBefore(tempBtn, addBtn);
-                        } else {
-                            container.appendChild(tempBtn);
+                    if (isActive && reactionId) {
+                        // Оптимистичное удаление
+                        btn.classList.remove('active');
+                        countSpan.textContent = oldCount - 1;
+                        if (oldCount - 1 === 0) {
+                            btn.style.display = 'none';
                         }
                         try {
-                            await onAdd(issueNumber, selectedContent);
-                            // После успеха перезагрузим реакции, чтобы получить реальный ID
-                            const updated = await GithubAPI.loadReactions(issueNumber);
-                            renderReactions(container, issueNumber, updated, currentUser, onAdd, onRemove);
+                            await onRemove(issueNumber, parseInt(reactionId, 10));
                         } catch (err) {
-                            console.error('Failed to add reaction', err);
-                            // Удаляем временную кнопку
-                            tempBtn.remove();
+                            console.error('Failed to remove reaction, reverting', err);
+                            btn.classList.add('active');
+                            countSpan.textContent = oldCount;
+                            btn.style.display = wasVisible ? '' : 'none';
                         }
-                    });
-                }
-            });
-        });
-
-        const addBtn = container.querySelector('[data-add], [data-more]');
-        if (addBtn) {
-            addBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                showReactionMenu(container, issueNumber, async (selectedContent) => {
-                    // Оптимистичное добавление (аналогично)
-                    const tempBtn = document.createElement('button');
-                    tempBtn.className = 'reaction-button active';
-                    tempBtn.dataset.content = selectedContent;
-                    tempBtn.dataset.reactionId = 'temp';
-                    tempBtn.innerHTML = `<span class="reaction-emoji">${REACTION_TYPES.find(t => t.content === selectedContent).emoji}</span><span class="reaction-count">1</span>`;
-                    container.insertBefore(tempBtn, addBtn);
-                    try {
-                        await onAdd(issueNumber, selectedContent);
-                        const updated = await GithubAPI.loadReactions(issueNumber);
-                        renderReactions(container, issueNumber, updated, currentUser, onAdd, onRemove);
-                    } catch (err) {
-                        tempBtn.remove();
+                    } else {
+                        showReactionMenu(container, issueNumber, async (selectedContent) => {
+                            const tempBtn = document.createElement('button');
+                            tempBtn.className = 'reaction-button active';
+                            tempBtn.dataset.content = selectedContent;
+                            tempBtn.dataset.reactionId = 'temp';
+                            tempBtn.innerHTML = `<span class="reaction-emoji">${REACTION_TYPES.find(t => t.content === selectedContent).emoji}</span><span class="reaction-count">1</span>`;
+                            const addBtn = container.querySelector('.reaction-add-btn');
+                            if (addBtn) {
+                                container.insertBefore(tempBtn, addBtn);
+                            } else {
+                                container.appendChild(tempBtn);
+                            }
+                            try {
+                                await onAdd(issueNumber, selectedContent);
+                                const updated = await GithubAPI.loadReactions(issueNumber);
+                                renderReactions(container, issueNumber, updated, currentUser, onAdd, onRemove);
+                            } catch (err) {
+                                console.error('Failed to add reaction', err);
+                                tempBtn.remove();
+                            }
+                        });
                     }
                 });
             });
+
+            const addBtn = container.querySelector('[data-add], [data-more]');
+            if (addBtn) {
+                addBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showReactionMenu(container, issueNumber, async (selectedContent) => {
+                        const tempBtn = document.createElement('button');
+                        tempBtn.className = 'reaction-button active';
+                        tempBtn.dataset.content = selectedContent;
+                        tempBtn.dataset.reactionId = 'temp';
+                        tempBtn.innerHTML = `<span class="reaction-emoji">${REACTION_TYPES.find(t => t.content === selectedContent).emoji}</span><span class="reaction-count">1</span>`;
+                        container.insertBefore(tempBtn, addBtn);
+                        try {
+                            await onAdd(issueNumber, selectedContent);
+                            const updated = await GithubAPI.loadReactions(issueNumber);
+                            renderReactions(container, issueNumber, updated, currentUser, onAdd, onRemove);
+                        } catch (err) {
+                            tempBtn.remove();
+                        }
+                    });
+                });
+            }
         }
     }
 

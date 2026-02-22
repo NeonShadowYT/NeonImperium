@@ -1,4 +1,4 @@
-// news-feed.js — лента новостей на главной (type:news и type:update)
+// news-feed.js — лента новостей на главной с модальными окнами
 
 (function() {
     const { cacheGet, cacheSet, renderMarkdown, escapeHtml, CONFIG } = GithubCore;
@@ -56,30 +56,42 @@
     async function loadNewsFeed() {
         container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>`;
 
+        // Сначала загружаем посты (они критичны)
         try {
             posts = await loadPosts();
             postsLoaded = true;
             postsError = false;
         } catch (err) {
             console.warn('Posts failed', err);
+            posts = [];
             postsLoaded = true;
             postsError = true;
         }
 
+        // Отображаем то, что есть (только посты)
+        renderMixed();
+
+        // Затем асинхронно загружаем видео
+        loadVideosAsync();
+    }
+
+    async function loadVideosAsync() {
         try {
             videos = await loadVideos();
             videosLoaded = true;
             videosError = false;
         } catch (err) {
             console.warn('Videos failed', err);
+            videos = [];
             videosLoaded = true;
             videosError = true;
         }
-
+        // Перерисовываем уже с видео
         renderMixed();
     }
 
     function renderMixed() {
+        // Проверка на наличие ошибок и пустоту
         if (postsLoaded && videosLoaded && posts.length === 0 && videos.length === 0) {
             container.innerHTML = `
                 <div class="error-message">
@@ -112,28 +124,68 @@
             return;
         }
 
-        const existingIds = new Set();
-        container.querySelectorAll('[data-news-id]').forEach(el => {
-            existingIds.add(el.dataset.newsId);
-        });
+        // Создаём сетку карточек
+        const grid = document.createElement('div');
+        grid.className = 'projects-grid'; // используем ту же сетку, что и для проектов
+        container.appendChild(grid);
 
         mixed.forEach(item => {
-            const id = item.type === 'video' ? `yt-${item.id}` : `post-${item.id}`;
-            if (!existingIds.has(id)) {
-                const card = item.type === 'video' ? createVideoCard(item) : createPostCard(item);
-                card.dataset.newsId = id;
-                container.appendChild(card);
-                existingIds.add(id);
-            }
+            const card = item.type === 'video' ? createVideoCard(item) : createPostCard(item);
+            grid.appendChild(card);
         });
     }
 
     async function loadVideos() {
-        // без изменений
+        const cacheKey = 'youtube_videos';
+        const cached = cacheGet(cacheKey);
+        if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
+
+        const promises = YT_CHANNELS.map(channel => fetchChannelFeed(channel));
+        const results = await Promise.allSettled(promises);
+        const videos = results
+            .filter(r => r.status === 'fulfilled')
+            .flatMap(r => r.value)
+            .sort((a, b) => b.published - a.published)
+            .slice(0, 10);
+
+        const serialized = videos.map(v => ({
+            ...v,
+            date: v.published.toISOString()
+        }));
+        cacheSet(cacheKey, serialized);
+        return videos;
     }
 
     async function fetchChannelFeed(channel) {
-        // без изменений
+        try {
+            const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`;
+            const response = await fetch(PROXY_URL + encodeURIComponent(url));
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(data.contents, 'text/xml');
+            const entries = Array.from(xml.querySelectorAll('entry'));
+            return entries.map(entry => {
+                const title = entry.querySelector('title')?.textContent || 'Без названия';
+                const videoId = entry.getElementsByTagNameNS('*', 'videoId')[0]?.textContent || '';
+                const published = new Date(entry.querySelector('published')?.textContent || Date.now());
+                const author = entry.querySelector('author name')?.textContent || channel.name;
+                const mediaGroup = entry.getElementsByTagNameNS('*', 'group')[0];
+                const thumbnail = mediaGroup?.getElementsByTagNameNS('*', 'thumbnail')[0]?.getAttribute('url') || '';
+                return {
+                    type: 'video',
+                    id: videoId,
+                    title,
+                    author,
+                    date: published,
+                    thumbnail,
+                    channel: channel.name
+                };
+            });
+        } catch (err) {
+            console.warn('Ошибка загрузки канала', channel.id, err);
+            return [];
+        }
     }
 
     async function loadPosts() {
@@ -171,7 +223,47 @@
     }
 
     function createVideoCard(video) {
-        // без изменений
+        const card = document.createElement('div');
+        card.className = 'project-card-link';
+        card.style.cursor = 'pointer';
+
+        const inner = document.createElement('div');
+        inner.className = 'project-card tilt-card';
+
+        const imgWrapper = document.createElement('div');
+        imgWrapper.className = 'image-wrapper';
+        const img = document.createElement('img');
+        img.src = video.thumbnail;
+        img.alt = video.title;
+        img.loading = 'lazy';
+        img.className = 'project-image';
+        imgWrapper.appendChild(img);
+
+        const title = document.createElement('h3');
+        title.textContent = video.title.length > 70 ? video.title.substring(0, 70) + '…' : video.title;
+
+        const meta = document.createElement('p');
+        meta.className = 'text-secondary';
+        meta.style.fontSize = '12px';
+        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
+
+        const button = document.createElement('span');
+        button.className = 'button';
+        button.innerHTML = '<i class="fas fa-play"></i> Смотреть';
+
+        inner.appendChild(imgWrapper);
+        inner.appendChild(title);
+        inner.appendChild(meta);
+        inner.appendChild(button);
+
+        card.appendChild(inner);
+
+        card.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank');
+        });
+
+        return card;
     }
 
     function createPostCard(post) {
@@ -219,36 +311,40 @@
 
         card.appendChild(inner);
 
-        const detailsDiv = document.createElement('div');
-        detailsDiv.className = 'feedback-item-details';
-        detailsDiv.style.display = 'none';
-        detailsDiv.style.marginTop = '20px';
-        detailsDiv.style.paddingTop = '20px';
-        detailsDiv.style.borderTop = '1px solid var(--border)';
-        card.appendChild(detailsDiv);
-
-        card.addEventListener('click', async (e) => {
-            if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
-
-            if (detailsDiv.style.display === 'none') {
-                document.querySelectorAll('#news-feed .feedback-item-details[style*="display: block"]').forEach(el => {
-                    el.style.display = 'none';
-                });
-
-                if (!detailsDiv.hasChildNodes()) {
-                    await loadPostDetails(post, detailsDiv);
-                }
-                detailsDiv.style.display = 'block';
-            } else {
-                detailsDiv.style.display = 'none';
-            }
+        card.addEventListener('click', (e) => {
+            e.preventDefault();
+            openPostModal(post);
         });
 
         return card;
     }
 
-    async function loadPostDetails(post, container) {
-        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>`;
+    async function openPostModal(post) {
+        // Создаём модальное окно
+        const modal = document.createElement('div');
+        modal.className = 'modal modal-fullscreen';
+        modal.innerHTML = `
+            <div class="modal-content modal-content-full">
+                <button class="modal-close"><i class="fas fa-times"></i></button>
+                <div class="modal-body" id="modal-post-body">
+                    <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden'; // запрещаем прокрутку фона
+
+        const closeModal = () => {
+            modal.remove();
+            document.body.style.overflow = '';
+        };
+
+        modal.querySelector('.modal-close').addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+
+        const container = document.getElementById('modal-post-body');
 
         try {
             const issue = await loadIssue(post.id);
@@ -261,7 +357,7 @@
 
             const commentsDiv = document.createElement('div');
             commentsDiv.className = 'feedback-comments';
-            commentsDiv.id = `comments-${post.id}`;
+            commentsDiv.id = `modal-comments-${post.id}`;
 
             const commentForm = document.createElement('div');
             commentForm.className = 'comment-form';
@@ -271,7 +367,7 @@
                 <button class="button comment-submit">Отправить</button>
             `;
 
-            // Кнопки для администраторов
+            // Кнопки для администраторов (только иконки)
             const adminActions = document.createElement('div');
             adminActions.className = 'feedback-item-actions';
             if (isAdmin()) {
@@ -286,12 +382,10 @@
             container.appendChild(reactionsDiv);
             if (isAdmin()) container.appendChild(adminActions);
             container.appendChild(commentsDiv);
-            container.appendChild(commentForm);
+            if (currentUser) container.appendChild(commentForm); // форму только для авторизованных
 
             // Реакции
             const reactions = await loadReactions(post.id);
-            const currentUser = getCurrentUser();
-
             const handleAdd = async (num, content) => {
                 await addReaction(num, content);
                 const updated = await loadReactions(num);
@@ -302,7 +396,6 @@
                 const updated = await loadReactions(num);
                 renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove);
             };
-
             renderReactions(reactionsDiv, post.id, reactions, currentUser, handleAdd, handleRemove);
 
             // Комментарии
@@ -310,7 +403,7 @@
             renderComments(commentsDiv, comments);
 
             // Обработчик отправки комментария
-            commentForm.querySelector('.comment-submit').addEventListener('click', async (e) => {
+            commentForm.querySelector('.comment-submit')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const input = commentForm.querySelector('.comment-input');
                 const comment = input.value.trim();
@@ -335,7 +428,7 @@
             if (isAdmin()) {
                 adminActions.querySelector('.edit-issue').addEventListener('click', (e) => {
                     e.stopPropagation();
-                    // Определяем тип поста
+                    closeModal();
                     const type = post.labels.includes('type:news') ? 'news' : 'update';
                     window.AdminNews.openEditForm(type, {
                         number: post.id,
@@ -350,7 +443,8 @@
                     if (!confirm('Вы уверены, что хотите закрыть это сообщение?')) return;
                     try {
                         await closeIssue(post.id);
-                        container.closest('.project-card-link').remove(); // удаляем карточку
+                        closeModal();
+                        refreshNewsFeed();
                     } catch (err) {
                         alert('Ошибка при закрытии');
                     }
