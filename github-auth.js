@@ -61,25 +61,25 @@
         modal.innerHTML = `
             <div class="modal-content">
                 <h3><i class="fab fa-github"></i> Вход через GitHub</h3>
-                <div class="modal-instructions" style="max-height: 300px; overflow-y: auto; padding-right: 10px;">
-                    <p><strong>🔒 Это безопасно:</strong></p>
-                    <ul style="text-align: left; margin: 10px 0 20px 20px; color: var(--text-secondary);">
-                        <li>Ваш токен хранится только в вашем браузере (localStorage).</li>
-                        <li>Токен передаётся напрямую в GitHub API — мы его не видим.</li>
-                        <li>Вы можете в любой момент выйти — токен удалится.</li>
-                        <li>Токен имеет доступ только к issues этого репозитория.</li>
-                    </ul>
-                    <p><strong>📝 Как получить токен:</strong></p>
-                    <ol style="text-align: left; margin: 10px 0 20px 20px; color: var(--text-secondary);">
-                        <li>Перейдите в <a href="https://github.com/settings/tokens?type=beta" target="_blank">Fine-grained tokens</a> (новая вкладка).</li>
-                        <li>Нажмите "Generate new token".</li>
-                        <li>Укажите имя (например, "Neon Imperium").</li>
-                        <li>В "Repository access" выберите "Only select repositories" и отметьте <strong>${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}</strong>.</li>
-                        <li>В "Permissions" найдите "Issues" и выберите "Access: Read and write".</li>
-                        <li>Создайте токен и скопируйте его.</li>
-                        <li>Вставьте токен в поле ниже и нажмите "Войти".</li>
-                    </ol>
-                </div>
+                <div class="modal-instructions" style="max-height: 350px; overflow-y: auto; padding-right: 10px;">
+    							<p><strong>🔒 Безопасно и прозрачно:</strong> токен хранится в вашем браузере и передаётся только в GitHub API.</p>
+    
+   							 <p><strong>📝 Как получить токен (простой способ):</strong></p>
+    							<ol style="text-align: left; margin: 10px 0 20px 20px;">
+        					<li>Перейдите в <a href="https://github.com/settings/tokens" target="_blank">Personal access tokens (classic)</a>.</li>
+       					 <li>Нажмите "Generate new token (classic)".</li>
+        					<li>Дайте имя, выберите срок (например, 30 дней).</li>
+       					 <li>В разделе "Select scopes" отметьте только <strong>repo</strong>.</li>
+        					<li>Скопируйте токен и вставьте сюда.</li>
+    							</ol>
+    
+    							<p class="text-secondary" style="font-size: 12px; background: var(--bg-primary); padding: 8px; border-radius: 8px;">
+        						⚠️ Classic токен даёт доступ ко всем вашим репозиториям. Это нормально для участия в обсуждениях. 
+Если хотите максимальной безопасности, создайте отдельный аккаунт для этого сайта.
+    							</p>
+
+    							<p><strong>🔐 Альтернатива (для продвинутых):</strong> Если репозиторий будет перенесён в организацию, можно использовать fine-grained токены с доступом только к одному репозиторию. Следите за новостями.</p>
+									</div>
                 <input type="text" id="github-token-input" placeholder="github_pat_xxx..." autocomplete="off">
                 <div class="modal-buttons">
                     <button class="button" id="modal-cancel">Отмена</button>
