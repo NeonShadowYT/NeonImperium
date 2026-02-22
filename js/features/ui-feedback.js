@@ -1,4 +1,5 @@
 // ui-feedback.js — общие компоненты для реакций и комментариев
+// Добавлен optimistic update при удалении реакции
 
 (function() {
     const REACTION_TYPES = [
@@ -12,7 +13,6 @@
         { content: 'eyes', emoji: '👀' }
     ];
 
-    // Группировка реакций
     function groupReactions(reactions, currentUser) {
         const grouped = {};
         REACTION_TYPES.forEach(type => {
@@ -36,9 +36,7 @@
         return Object.values(grouped).filter(g => g.count > 0).sort((a, b) => b.count - a.count);
     }
 
-    // Рендер контейнера реакций
     function renderReactions(container, issueNumber, reactions, currentUser, onAdd, onRemove) {
-        // Проверка, что container — DOM-элемент
         if (!container || typeof container.querySelectorAll !== 'function') {
             console.warn('renderReactions: container is not a valid element');
             return;
@@ -51,7 +49,8 @@
         let html = visible.map(g => `
             <button class="reaction-button ${g.userReacted ? 'active' : ''}" 
                     data-content="${g.content}" 
-                    data-reaction-id="${g.userReactionId || ''}">
+                    data-reaction-id="${g.userReactionId || ''}"
+                    data-count="${g.count}">
                 <span class="reaction-emoji">${g.emoji}</span>
                 <span class="reaction-count">${g.count}</span>
             </button>
@@ -74,11 +73,28 @@
                 const isActive = btn.classList.contains('active');
 
                 if (isActive && reactionId) {
-                    // Удаление
-                    await onRemove(issueNumber, parseInt(reactionId));
+                    // Оптимистичное удаление: сразу убираем активный класс и уменьшаем счётчик
+                    const countSpan = btn.querySelector('.reaction-count');
+                    const currentCount = parseInt(countSpan.textContent, 10);
+                    btn.classList.remove('active');
+                    countSpan.textContent = currentCount - 1;
+                    // Если после удаления счётчик стал 0, можно скрыть кнопку, но пока оставим
+                    if (currentCount - 1 === 0) {
+                        btn.style.display = 'none';
+                    }
+                    // Вызываем колбэк удаления, но не ждём
+                    onRemove(issueNumber, parseInt(reactionId, 10)).catch(err => {
+                        console.error('Failed to remove reaction, reverting', err);
+                        // В случае ошибки возвращаем как было
+                        btn.classList.add('active');
+                        countSpan.textContent = currentCount;
+                        btn.style.display = '';
+                    });
                 } else {
                     // Показываем меню выбора реакции
                     showReactionMenu(container, issueNumber, async (selectedContent) => {
+                        // Оптимистичное добавление: создаём временную кнопку или увеличиваем счётчик существующей
+                        // Для простоты пока не делаем, оставляем как есть (ждём ответа)
                         await onAdd(issueNumber, selectedContent);
                     });
                 }
@@ -96,9 +112,7 @@
         }
     }
 
-    // Показать меню выбора реакции
     function showReactionMenu(relativeTo, issueNumber, callback) {
-        // Удаляем все старые меню, чтобы не было дубликатов
         document.querySelectorAll('.reaction-menu').forEach(menu => menu.remove());
 
         const menu = document.createElement('div');
@@ -154,7 +168,6 @@
         }, 100);
     }
 
-    // Рендер комментариев (простой)
     function renderComments(container, comments) {
         container.innerHTML = comments.map(c => `
             <div class="comment" data-comment-id="${c.id}">
@@ -167,7 +180,6 @@
         `).join('');
     }
 
-    // Экспорт
     window.UIFeedback = {
         renderReactions,
         showReactionMenu,
