@@ -59,25 +59,25 @@
         modal.className = 'modal';
         modal.innerHTML = `
             <div class="modal-content">
-                <h3><i class="fab fa-github"></i> Вход через GitHub</h3>
+                <h3><i class="fab fa-github"></i> <span data-lang="githubLoginTitle">Вход через GitHub</span></h3>
                 <div class="modal-instructions" style="max-height: 350px; overflow-y: auto; padding-right: 10px;">
-                    <p><strong>🔒 Безопасно и прозрачно:</strong> токен хранится в вашем браузере и передаётся только в GitHub API.</p>
-                    <p><strong>📝 Как получить токен (простой способ):</strong></p>
+                    <p><strong>🔒 <span data-lang="githubSecure">Безопасно и прозрачно:</span></strong> <span data-lang="githubTokenNote">токен хранится в вашем браузере и передаётся только в GitHub API.</span></p>
+                    <p><strong>📝 <span data-lang="githubHowTo">Как получить токен (простой способ):</span></strong></p>
                     <ol style="text-align: left; margin: 10px 0 20px 20px;">
-                        <li>Перейдите в <a href="https://github.com/settings/tokens" target="_blank">Personal access tokens (classic)</a>.</li>
-                        <li>Нажмите "Generate new token (classic)".</li>
-                        <li>Дайте имя, выберите срок (например, 30 дней).</li>
-                        <li>В разделе "Select scopes" отметьте только <strong>repo</strong>.</li>
-                        <li>Скопируйте токен и вставьте сюда.</li>
+                        <li><span data-lang="githubStep1">Перейдите в </span><a href="https://github.com/settings/tokens" target="_blank">Personal access tokens (classic)</a>.</li>
+                        <li><span data-lang="githubStep2">Нажмите "Generate new token (classic)".</span></li>
+                        <li><span data-lang="githubStep3">Дайте имя, выберите срок (например, 30 дней).</span></li>
+                        <li><span data-lang="githubStep4">В разделе "Select scopes" отметьте только </span><strong>repo</strong>.</li>
+                        <li><span data-lang="githubStep5">Скопируйте токен и вставьте сюда.</span></li>
                     </ol>
                     <p class="text-secondary" style="font-size: 12px; background: var(--bg-primary); padding: 8px; border-radius: 8px;">
-                        ⚠️ Classic токен даёт доступ ко всем вашим репозиториям. Это нормально для участия в обсуждениях.
+                        ⚠️ <span data-lang="githubWarning">Classic токен даёт доступ ко всем вашим репозиториям. Это нормально для участия в обсуждениях.</span>
                     </p>
                 </div>
                 <input type="text" id="github-token-input" placeholder="github_pat_xxx..." autocomplete="off">
                 <div class="modal-buttons">
-                    <button class="button" id="modal-cancel">Отмена</button>
-                    <button class="button" id="modal-submit">Войти</button>
+                    <button class="button" id="modal-cancel" data-lang="feedbackCancel">Отмена</button>
+                    <button class="button" id="modal-submit" data-lang="githubLoginBtn">Войти</button>
                 </div>
             </div>
         `;
@@ -91,7 +91,6 @@
         document.getElementById('modal-cancel').addEventListener('click', () => {
             modal.classList.remove('active');
             tokenInput.value = '';
-            // Убираем сообщение об ошибке, если было
             const errorMsg = modal.querySelector('.error-message');
             if (errorMsg) errorMsg.remove();
         });
@@ -135,7 +134,6 @@
 
             renderProfile(userData, token);
             modal.classList.remove('active');
-            // Убираем сообщение об ошибке, если было
             const errorMsg = modal.querySelector('.error-message');
             if (errorMsg) errorMsg.remove();
 
@@ -155,9 +153,10 @@
                     errorMsg.style.color = '#f44336';
                     errorMsg.style.borderRadius = '8px';
                     errorMsg.style.textAlign = 'center';
+                    errorMsg.setAttribute('data-lang', 'githubAuthError');
+                    errorMsg.textContent = 'Ошибка авторизации. Проверьте токен или попробуйте снова.';
                     modal.querySelector('.modal-content').insertBefore(errorMsg, tokenInput);
                 }
-                errorMsg.innerHTML = 'Ошибка авторизации. Проверьте токен или попробуйте снова.';
                 tokenInput.value = '';
                 tokenInput.focus();
             }, 500);
@@ -174,14 +173,14 @@
             <i class="fas fa-chevron-right nav-profile-chevron"></i>
             <div class="profile-dropdown">
                 <div class="profile-dropdown-item" data-action="profile">
-                    <i class="fas fa-user"></i> Профиль (${login})
+                    <i class="fas fa-user"></i> <span data-lang="githubProfile">Профиль</span> (${login})
                 </div>
                 <div class="profile-dropdown-item" data-action="token-info">
-                    <i class="fas fa-key"></i> Токен активен
+                    <i class="fas fa-key"></i> <span data-lang="githubTokenActive">Токен активен</span>
                 </div>
                 <div class="profile-dropdown-divider"></div>
                 <div class="profile-dropdown-item" data-action="logout">
-                    <i class="fas fa-sign-out-alt"></i> Выйти
+                    <i class="fas fa-sign-out-alt"></i> <span data-lang="githubLogout">Выйти</span>
                 </div>
             </div>
         `;
@@ -201,18 +200,18 @@
 
     function showNotLoggedIn() {
         profileContainer.innerHTML = `
-            <span class="nav-profile-login placeholder">Войти</span>
+            <span class="nav-profile-login placeholder" data-lang="githubLogin">Войти</span>
             <i class="fas fa-chevron-right nav-profile-chevron"></i>
             <div class="profile-dropdown">
                 <div class="profile-dropdown-item" data-action="login">
-                    <i class="fab fa-github"></i> Войти через GitHub
+                    <i class="fab fa-github"></i> <span data-lang="githubLoginVia">Войти через GitHub</span>
                 </div>
                 <div class="profile-dropdown-item" data-action="about">
-                    <i class="fas fa-info-circle"></i> Зачем это нужно?
+                    <i class="fas fa-info-circle"></i> <span data-lang="githubWhy">Зачем это нужно?</span>
                 </div>
                 <div class="profile-dropdown-divider"></div>
                 <div class="profile-dropdown-item" data-action="clear-token">
-                    <i class="fas fa-trash-alt"></i> Очистить токен
+                    <i class="fas fa-trash-alt"></i> <span data-lang="githubClearToken">Очистить токен</span>
                 </div>
             </div>
         `;
@@ -222,14 +221,14 @@
 
     function showLoginError() {
         profileContainer.innerHTML = `
-            <span class="nav-profile-login placeholder">Ошибка</span>
+            <span class="nav-profile-login placeholder" data-lang="githubError">Ошибка</span>
             <i class="fas fa-exclamation-triangle" style="color: #f44336;"></i>
             <div class="profile-dropdown">
                 <div class="profile-dropdown-item" data-action="login">
-                    <i class="fab fa-github"></i> Попробовать снова
+                    <i class="fab fa-github"></i> <span data-lang="githubRetry">Попробовать снова</span>
                 </div>
                 <div class="profile-dropdown-item" data-action="clear-token">
-                    <i class="fas fa-trash-alt"></i> Очистить токен
+                    <i class="fas fa-trash-alt"></i> <span data-lang="githubClearToken">Очистить токен</span>
                 </div>
             </div>
         `;

@@ -30,6 +30,7 @@
     let currentUser = null;
     let editingIssue = null;
     let reactionsCache = new Map();
+    let processingReaction = false; // защита от спама
 
     document.addEventListener('DOMContentLoaded', init);
 
@@ -80,10 +81,10 @@
             <div class="login-prompt">
                 <i class="fab fa-github"></i>
                 <h3 data-lang="feedbackLoginPrompt">Войдите через GitHub, чтобы участвовать</h3>
-                <p class="text-secondary">
+                <p class="text-secondary" data-lang="feedbackTokenNote">
                     Ваш токен останется только у вас в браузере.
                 </p>
-                <button class="button" id="feedback-login-btn">Войти</button>
+                <button class="button" id="feedback-login-btn" data-lang="feedbackLoginBtn">Войти</button>
             </div>
         `;
 
@@ -97,28 +98,27 @@
     }
 
     async function renderFeedbackInterface(token, currentUser) {
-        // Очищаем контейнер, но оставляем заголовок и описание в HTML
         container.innerHTML = `
             <div class="feedback-tabs">
-                <button class="feedback-tab active" data-tab="all">Все</button>
-                <button class="feedback-tab" data-tab="idea">💡 Идеи</button>
-                <button class="feedback-tab" data-tab="bug">🐛 Баги</button>
-                <button class="feedback-tab" data-tab="review">⭐ Отзывы</button>
+                <button class="feedback-tab active" data-tab="all" data-lang="feedbackTabAll">Все</button>
+                <button class="feedback-tab" data-tab="idea" data-lang="feedbackTabIdea">💡 Идеи</button>
+                <button class="feedback-tab" data-tab="bug" data-lang="feedbackTabBug">🐛 Баги</button>
+                <button class="feedback-tab" data-tab="review" data-lang="feedbackTabReview">⭐ Отзывы</button>
             </div>
 
             <div class="feedback-form-wrapper" style="display: none;">
                 <div class="feedback-form" id="feedback-form">
                     <h3 data-lang="feedbackFormTitle">Оставить сообщение</h3>
-                    <input type="text" id="feedback-title" placeholder="Заголовок">
+                    <input type="text" id="feedback-title" data-lang="feedbackTitlePlaceholder" placeholder="Заголовок">
                     <select id="feedback-category">
-                        <option value="idea">💡 Идея</option>
-                        <option value="bug">🐛 Баг</option>
-                        <option value="review">⭐ Отзыв</option>
+                        <option value="idea" data-lang="feedbackCategoryIdea">💡 Идея</option>
+                        <option value="bug" data-lang="feedbackCategoryBug">🐛 Баг</option>
+                        <option value="review" data-lang="feedbackCategoryReview">⭐ Отзыв</option>
                     </select>
-                    <textarea id="feedback-body" placeholder="Подробное описание..."></textarea>
+                    <textarea id="feedback-body" data-lang="feedbackBodyPlaceholder" placeholder="Подробное описание..."></textarea>
                     <div class="button-group">
-                        <button class="button button-secondary" id="feedback-cancel">Отмена</button>
-                        <button class="button" id="feedback-submit">Отправить</button>
+                        <button class="button button-secondary" id="feedback-cancel" data-lang="feedbackCancel">Отмена</button>
+                        <button class="button" id="feedback-submit" data-lang="feedbackSubmitBtn">Отправить</button>
                     </div>
                 </div>
             </div>
@@ -128,11 +128,10 @@
             </div>
 
             <div style="text-align: center; margin-top: 20px;" id="load-more-container">
-                <button class="button" id="load-more" style="display: none;">Загрузить ещё</button>
+                <button class="button" id="load-more" style="display: none;" data-lang="feedbackLoadMore">Загрузить ещё</button>
             </div>
         `;
 
-        // Кнопка "Оставить сообщение" находится в HTML, вешаем на неё обработчик
         const toggleBtn = document.getElementById('toggle-form-btn');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', () => {
@@ -222,7 +221,8 @@
             document.getElementById('feedback-list').innerHTML = `
                 <div class="error-message">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <p>Ошибка загрузки. <button class="button-small" id="retry-feedback">Повторить</button></p>
+                    <p data-lang="feedbackLoadError">Ошибка загрузки.</p>
+                    <button class="button-small" id="retry-feedback" data-lang="feedbackRetry">Повторить</button>
                 </div>
             `;
             document.getElementById('retry-feedback')?.addEventListener('click', () => {
@@ -251,7 +251,7 @@
         if (!listEl) return;
 
         if (issues.length === 0) {
-            listEl.innerHTML = `<p class="text-secondary" style="text-align: center;">Пока нет сообщений. Будьте первым!</p>`;
+            listEl.innerHTML = `<p class="text-secondary" style="text-align: center;" data-lang="feedbackNoItems">Пока нет сообщений. Будьте первым!</p>`;
             return;
         }
 
@@ -286,14 +286,13 @@
                 <div class="feedback-item-details" style="display: none;">
                     <div class="feedback-comments" id="comments-${issue.number}"></div>
                     <div class="comment-form" data-issue="${issue.number}">
-                        <input type="text" placeholder="Написать комментарий..." class="comment-input">
-                        <button class="button-small comment-submit">Отправить</button>
+                        <input type="text" class="comment-input" data-lang="feedbackAddComment" placeholder="Написать комментарий...">
+                        <button class="button comment-submit" data-lang="feedbackSendBtn">Отправить</button>
                     </div>
                 </div>
             </div>`;
         }).join('');
 
-        // Загружаем реакции для всех отображаемых issues
         issues.forEach(issue => {
             if (!reactionsCache.has(`issue_${issue.number}`)) {
                 loadReactions('issue', issue.number, token);
@@ -306,7 +305,10 @@
     function attachEventHandlers(token) {
         document.querySelectorAll('.feedback-item').forEach(item => {
             item.addEventListener('click', (e) => {
-                if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
+                // Если клик на кнопке или внутри поля ввода/кнопки комментария — не закрываем
+                if (e.target.closest('button') || e.target.closest('.reaction-button') || 
+                    e.target.closest('.reaction-add-btn') || e.target.closest('.comment-input') ||
+                    e.target.closest('.comment-submit')) return;
                 
                 document.querySelectorAll('.feedback-item.expanded').forEach(el => {
                     if (el !== item) {
@@ -331,15 +333,17 @@
         });
 
         document.querySelectorAll('.comment-submit').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const form = e.target.closest('.comment-form');
                 const issueNumber = form.dataset.issue;
                 const input = form.querySelector('.comment-input');
                 const comment = input.value.trim();
                 if (comment) {
-                    submitComment(issueNumber, comment, token);
+                    btn.disabled = true;
+                    await submitComment(issueNumber, comment, token);
                     input.value = '';
+                    btn.disabled = false;
                 }
             });
         });
@@ -366,7 +370,6 @@
             });
         });
 
-        // Обработчики реакций
         document.querySelectorAll('.reaction-button').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -380,7 +383,6 @@
             });
         });
 
-        // Обработчик кнопки добавления реакции (+)
         document.querySelectorAll('.reaction-add-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -393,7 +395,6 @@
     }
 
     function showReactionMenu(container, targetType, targetId, token) {
-        // Создаём временное меню
         const menu = document.createElement('div');
         menu.className = 'reaction-menu';
         menu.style.position = 'absolute';
@@ -427,17 +428,15 @@
             menu.appendChild(btn);
         });
 
-        // Позиционируем меню рядом с кнопкой +
         const rect = container.getBoundingClientRect();
         menu.style.left = rect.left + 'px';
         menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
         document.body.appendChild(menu);
 
-        // Закрытие по клику вне меню
         setTimeout(() => {
             const closeMenu = (e) => {
                 if (!menu.contains(e.target)) {
-                    document.body.removeChild(menu);
+                    if (document.body.contains(menu)) document.body.removeChild(menu);
                     document.removeEventListener('click', closeMenu);
                 }
             };
@@ -446,17 +445,11 @@
     }
 
     async function loadReactions(targetType, targetId, token) {
+        if (targetType !== 'issue') return;
         const cacheKey = `${targetType}_${targetId}`;
         
         try {
-            let url;
-            if (targetType === 'issue') {
-                url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions`;
-            } else {
-                // Не загружаем реакции для комментариев
-                return;
-            }
-            
+            const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions`;
             const response = await fetch(url, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -467,12 +460,8 @@
             if (response.ok) {
                 const reactions = await response.json();
                 reactionsCache.set(cacheKey, reactions);
-                
-                // Обновляем отображение контейнера реакций
                 const container = document.querySelector(`.reactions-container[data-target-type="${targetType}"][data-target-id="${targetId}"]`);
-                if (container) {
-                    updateReactionsContainer(container, targetType, targetId);
-                }
+                if (container) updateReactionsContainer(container, targetType, targetId);
             }
         } catch (error) {
             console.error('Error loading reactions:', error);
@@ -484,7 +473,6 @@
         const reactions = reactionsCache.get(cacheKey) || [];
         const currentUserLogin = currentUser;
 
-        // Группируем реакции по типу
         const grouped = {};
         REACTION_TYPES.forEach(type => {
             grouped[type.content] = {
@@ -504,7 +492,6 @@
             }
         });
 
-        // Сортируем по убыванию количества, отфильтровываем нулевые
         let sorted = Object.values(grouped)
             .filter(g => g.count > 0)
             .sort((a, b) => b.count - a.count);
@@ -514,32 +501,30 @@
         const visible = sorted.slice(0, showCount);
         const hiddenCount = totalTypes - showCount;
 
-        // Генерируем HTML для видимых кнопок
-        let html = visible.map(g => `
-            <button class="reaction-button ${g.userReacted ? 'active' : ''}" 
-                    data-target-type="${targetType}" 
-                    data-target-id="${targetId}" 
-                    data-content="${g.content}">
-                <span class="reaction-emoji">${g.emoji}</span>
-                <span class="reaction-count">${g.count}</span>
-            </button>
-        `).join('');
-
-        // Если есть скрытые типы, добавляем кнопку "+"
-        if (hiddenCount > 0) {
-            html += `
-                <button class="reaction-add-btn" title="Добавить реакцию">
-                    <span>+${hiddenCount}</span>
-                </button>
-            `;
-        } else if (totalTypes === 0 && currentUser) {
-            // Если нет реакций, показываем только кнопку "+" для добавления
+        let html = '';
+        if (totalTypes === 0 && currentUser) {
+            // Нет реакций, показываем только кнопку +
             html = `<button class="reaction-add-btn" title="Добавить реакцию"><span>+</span></button>`;
+        } else {
+            html = visible.map(g => `
+                <button class="reaction-button ${g.userReacted ? 'active' : ''}" 
+                        data-target-type="${targetType}" 
+                        data-target-id="${targetId}" 
+                        data-content="${g.content}">
+                    <span class="reaction-emoji">${g.emoji}</span>
+                    <span class="reaction-count">${g.count}</span>
+                </button>
+            `).join('');
+            if (hiddenCount > 0) {
+                html += `<button class="reaction-add-btn" title="Добавить реакцию"><span>+${hiddenCount}</span></button>`;
+            } else if (currentUser) {
+                // Если есть место для ещё одной реакции (меньше 3 типов), показываем пустую +
+                html += `<button class="reaction-add-btn" title="Добавить реакцию"><span>+</span></button>`;
+            }
         }
 
         container.innerHTML = html;
 
-        // Навешиваем обработчики на новые кнопки
         container.querySelectorAll('.reaction-button').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -563,24 +548,20 @@
             alert('Войдите через GitHub, чтобы ставить реакции');
             return;
         }
-
-        // Не обрабатываем реакции для комментариев (на всякий случай)
         if (targetType !== 'issue') return;
-        
+        if (processingReaction) return; // защита от спама
+        processingReaction = true;
+
         try {
             const cacheKey = `${targetType}_${targetId}`;
             const reactions = reactionsCache.get(cacheKey) || [];
 
             if (isActive) {
-                // Находим ID реакции пользователя
                 const userReaction = reactions.find(r => 
                     r.content === content && r.user && r.user.login === currentUser
                 );
-                
                 if (userReaction) {
-                    // Удаляем реакцию
                     const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions/${userReaction.id}`;
-                    
                     const response = await fetch(url, {
                         method: 'DELETE',
                         headers: {
@@ -588,9 +569,7 @@
                             'Accept': 'application/vnd.github.v3+json'
                         }
                     });
-                    
                     if (response.status === 204) {
-                        // Обновляем кеш: убираем эту реакцию
                         const updatedReactions = reactions.filter(r => r.id !== userReaction.id);
                         reactionsCache.set(cacheKey, updatedReactions);
                         const container = document.querySelector(`.reactions-container[data-target-type="${targetType}"][data-target-id="${targetId}"]`);
@@ -598,9 +577,7 @@
                     }
                 }
             } else {
-                // Создаём реакцию
                 const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions`;
-                
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {
@@ -610,15 +587,15 @@
                     },
                     body: JSON.stringify({ content })
                 });
-                
                 if (response.ok || response.status === 200) {
-                    // Перезагружаем реакции, чтобы получить полный список с ID
                     await loadReactions(targetType, targetId, token);
                 }
             }
         } catch (error) {
             console.error('Error handling reaction:', error);
             alert('Не удалось поставить реакцию. Попробуйте позже.');
+        } finally {
+            processingReaction = false;
         }
     }
 
@@ -771,7 +748,7 @@
                 body: JSON.stringify({ body: comment })
             });
             if (response.ok) {
-                loadComments(issueNumber, token);
+                await loadComments(issueNumber, token);
                 const item = document.querySelector(`.feedback-item[data-issue-number="${issueNumber}"]`);
                 if (item) {
                     const commentsSpan = item.querySelector('.feedback-item-footer span:last-child');

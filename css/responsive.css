@@ -37,6 +37,12 @@
     .small-projects-container {
         grid-template-columns: 1fr;
     }
+    .small-projects-container .project-card-link {
+        width: 100%;
+    }
+    .small-projects-container .project-card {
+        width: 100%;
+    }
     .header-content {
         flex-direction: column;
         padding: 20px;
@@ -65,6 +71,12 @@
     }
     .card {
         margin-bottom: 16px;
+    }
+    /* Исправление фона шапки на мобильных */
+    .game-header {
+        background-size: cover !important;
+        background-repeat: no-repeat !important;
+        background-position: center !important;
     }
 }
 

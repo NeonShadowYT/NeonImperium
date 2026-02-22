@@ -41,7 +41,7 @@ const translations = {
         downloadBtn: "Скачать",
         feedbackTitle: "Идеи, баги и отзывы",
         feedbackDesc: "Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.",
-        feedbackNewBtn: "Оставить сообщение", // новый ключ
+        feedbackNewBtn: "Оставить сообщение",
         feedbackLoading: "Загрузка обратной связи...",
         feedbackLoginPrompt: "Войдите через GitHub, чтобы участвовать в обсуждениях",
         feedbackLoginBtn: "Войти",
@@ -58,6 +58,14 @@ const translations = {
         feedbackSendBtn: "Отправить",
         feedbackLoadMore: "Загрузить ещё",
         feedbackNoItems: "Пока нет сообщений. Будьте первым!",
+        feedbackCancel: "Отмена",
+        feedbackTabAll: "Все",
+        feedbackTabIdea: "💡 Идеи",
+        feedbackTabBug: "🐛 Баги",
+        feedbackTabReview: "⭐ Отзывы",
+        feedbackLoadError: "Ошибка загрузки.",
+        feedbackRetry: "Повторить",
+        feedbackTokenNote: "Ваш токен останется только у вас в браузере.",
         
         // Starve Neon
         starveDownloadNote: "Версия 0.13.7 · Обновление от 31.12.2025",
@@ -244,7 +252,7 @@ const translations = {
         downloadBtn: "Download",
         feedbackTitle: "Ideas, bugs & feedback",
         feedbackDesc: "Share your thoughts, report bugs, or suggest improvements.",
-        feedbackNewBtn: "Leave a message", // new key
+        feedbackNewBtn: "Leave a message",
         feedbackLoading: "Loading feedback...",
         feedbackLoginPrompt: "Sign in with GitHub to participate",
         feedbackLoginBtn: "Sign in",
@@ -261,6 +269,14 @@ const translations = {
         feedbackSendBtn: "Send",
         feedbackLoadMore: "Load more",
         feedbackNoItems: "No messages yet. Be the first!",
+        feedbackCancel: "Cancel",
+        feedbackTabAll: "All",
+        feedbackTabIdea: "💡 Ideas",
+        feedbackTabBug: "🐛 Bugs",
+        feedbackTabReview: "⭐ Reviews",
+        feedbackLoadError: "Loading error.",
+        feedbackRetry: "Retry",
+        feedbackTokenNote: "Your token stays only in your browser.",
         
         // Starve Neon
         starveDownloadNote: "Version 0.13.7 · Update 2025-12-31",
