@@ -1,5 +1,4 @@
 // ui-feedback.js — общие компоненты для реакций и комментариев
-// Добавлен optimistic update при удалении реакции
 
 (function() {
     const REACTION_TYPES = [
@@ -13,6 +12,7 @@
         { content: 'eyes', emoji: '👀' }
     ];
 
+    // Группировка реакций
     function groupReactions(reactions, currentUser) {
         const grouped = {};
         REACTION_TYPES.forEach(type => {
@@ -36,6 +36,7 @@
         return Object.values(grouped).filter(g => g.count > 0).sort((a, b) => b.count - a.count);
     }
 
+    // Рендер контейнера реакций
     function renderReactions(container, issueNumber, reactions, currentUser, onAdd, onRemove) {
         if (!container || typeof container.querySelectorAll !== 'function') {
             console.warn('renderReactions: container is not a valid element');
@@ -78,7 +79,6 @@
                     const currentCount = parseInt(countSpan.textContent, 10);
                     btn.classList.remove('active');
                     countSpan.textContent = currentCount - 1;
-                    // Если после удаления счётчик стал 0, можно скрыть кнопку, но пока оставим
                     if (currentCount - 1 === 0) {
                         btn.style.display = 'none';
                     }
@@ -93,8 +93,6 @@
                 } else {
                     // Показываем меню выбора реакции
                     showReactionMenu(container, issueNumber, async (selectedContent) => {
-                        // Оптимистичное добавление: создаём временную кнопку или увеличиваем счётчик существующей
-                        // Для простоты пока не делаем, оставляем как есть (ждём ответа)
                         await onAdd(issueNumber, selectedContent);
                     });
                 }
@@ -112,6 +110,7 @@
         }
     }
 
+    // Показать меню выбора реакции
     function showReactionMenu(relativeTo, issueNumber, callback) {
         document.querySelectorAll('.reaction-menu').forEach(menu => menu.remove());
 
@@ -168,6 +167,7 @@
         }, 100);
     }
 
+    // Рендер комментариев (простой)
     function renderComments(container, comments) {
         container.innerHTML = comments.map(c => `
             <div class="comment" data-comment-id="${c.id}">
@@ -180,6 +180,7 @@
         `).join('');
     }
 
+    // Экспорт
     window.UIFeedback = {
         renderReactions,
         showReactionMenu,

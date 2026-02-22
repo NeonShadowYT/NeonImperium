@@ -13,7 +13,10 @@
     ];
 
     function renderAdminPanels() {
-        if (!isAdmin()) return;
+        if (!isAdmin()) {
+            document.querySelectorAll('.admin-panel').forEach(el => el.remove());
+            return;
+        }
 
         // Панель для новостей на главной
         const newsSection = document.getElementById('news-section');
@@ -26,25 +29,23 @@
         const updatesContainer = document.getElementById('game-updates');
         if (updatesContainer && updatesContainer.dataset.game) {
             const game = updatesContainer.dataset.game;
-            // Проверяем, нет ли уже панели рядом
-            if (!document.querySelector('.admin-panel[data-for="updates"]')) {
+            const existingPanel = document.querySelector(`.admin-panel[data-for="updates-${game}"]`);
+            if (!existingPanel) {
                 const panel = createAdminPanel('update', game);
-                panel.dataset.for = 'updates';
-                // Вставляем после контейнера обновлений
+                panel.dataset.for = `updates-${game}`;
                 updatesContainer.parentNode.insertBefore(panel, updatesContainer.nextSibling);
             }
         }
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(renderAdminPanels, 100);
-        });
-    } else {
-        setTimeout(renderAdminPanels, 100);
-    }
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(renderAdminPanels, 200);
+    });
 
-    window.addEventListener('github-login-success', renderAdminPanels);
+    window.addEventListener('github-login-success', () => {
+        setTimeout(renderAdminPanels, 100);
+    });
+
     window.addEventListener('github-logout', () => {
         document.querySelectorAll('.admin-panel').forEach(el => el.remove());
     });
@@ -197,13 +198,11 @@
             await createIssue(title, body, labels);
             localStorage.setItem('last_post_time', Date.now().toString());
 
-            // Очищаем кеш
             cacheRemove('posts_news+update');
             if (type === 'update') {
                 cacheRemove(`game_updates_${game}`);
             }
 
-            // Обновляем интерфейс
             if (window.refreshNewsFeed) window.refreshNewsFeed();
             if (type === 'update' && window.refreshGameUpdates) {
                 window.refreshGameUpdates(game);

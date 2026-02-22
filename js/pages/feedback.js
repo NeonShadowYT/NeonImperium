@@ -1,4 +1,4 @@
-// feedback.js — обратная связь для страниц игр (исправлена передача колбэков реакций)
+// feedback.js — обратная связь для страниц игр (использует общие модули)
 
 (function() {
     const { cacheGet, cacheSet, cacheRemove, escapeHtml } = GithubCore;
@@ -279,19 +279,32 @@
             }
         }
 
-        // Создаём функции-обработчики, которые будут обновлять реакции после добавления/удаления
         const handleAdd = async (num, content) => {
-            await addReaction(num, content);
-            const updated = await loadReactions(num);
-            reactionsCache.set(`reactions_${num}`, updated);
-            renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
+            try {
+                await addReaction(num, content);
+                const updated = await loadReactions(num);
+                reactionsCache.set(`reactions_${num}`, updated);
+                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
+            } catch (err) {
+                console.error('Failed to add reaction', err);
+                const updated = await loadReactions(num);
+                reactionsCache.set(`reactions_${num}`, updated);
+                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
+            }
         };
 
         const handleRemove = async (num, reactionId) => {
-            await removeReaction(num, reactionId);
-            const updated = await loadReactions(num);
-            reactionsCache.set(`reactions_${num}`, updated);
-            renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
+            try {
+                await removeReaction(num, reactionId);
+                const updated = await loadReactions(num);
+                reactionsCache.set(`reactions_${num}`, updated);
+                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
+            } catch (err) {
+                console.error('Failed to remove reaction', err);
+                const updated = await loadReactions(num);
+                reactionsCache.set(`reactions_${num}`, updated);
+                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
+            }
         };
 
         renderReactions(container, issueNumber, reactions, currentUser, handleAdd, handleRemove);
@@ -308,7 +321,6 @@
                 const details = item.querySelector('.feedback-item-details');
                 const expanded = item.classList.contains('expanded');
 
-                // Закрываем все другие
                 document.querySelectorAll('.feedback-item.expanded').forEach(el => {
                     if (el !== item) {
                         el.classList.remove('expanded');
@@ -323,7 +335,6 @@
                     item.classList.add('expanded');
                     details.style.display = 'block';
                     const issueNumber = item.dataset.issueNumber;
-                    // Загружаем комментарии, если ещё не загружены
                     if (!item.querySelector('.comment')) {
                         loadAndRenderComments(issueNumber, document.getElementById(`comments-${issueNumber}`));
                     }
@@ -345,10 +356,8 @@
                 try {
                     await addComment(issueNumber, comment);
                     input.value = '';
-                    // Обновляем комментарии
                     const commentsDiv = document.getElementById(`comments-${issueNumber}`);
                     await loadAndRenderComments(issueNumber, commentsDiv);
-                    // Увеличиваем счётчик комментариев
                     const item = document.querySelector(`.feedback-item[data-issue-number="${issueNumber}"]`);
                     const commentsSpan = item.querySelector('.feedback-item-footer span:last-child');
                     const current = parseInt(commentsSpan.textContent.match(/\d+/)[0]) || 0;
@@ -383,7 +392,6 @@
                 const issueNumber = issueItem.dataset.issueNumber;
                 try {
                     await closeIssue(issueNumber);
-                    // Очищаем кеш и перезагружаем
                     cacheRemove(`issues_${currentGame}_page_1`);
                     await loadIssuesPage(1, true);
                 } catch (err) {

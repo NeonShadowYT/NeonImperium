@@ -1,5 +1,5 @@
 // news-feed.js — лента новостей на главной (сначала посты, потом видео)
-// Добавлена кнопка повтора при ошибке и ограничение на частоту нажатий
+// Улучшена обработка ошибок и кнопка повтора
 
 (function() {
     const { cacheGet, cacheSet, renderMarkdown, escapeHtml, CONFIG } = GithubCore;
@@ -45,38 +45,32 @@
     async function loadNewsFeed() {
         container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>`;
 
-        // Загружаем посты
-        loadPosts().then(p => {
-            posts = p;
+        try {
+            posts = await loadPosts();
             postsLoaded = true;
             postsError = false;
-            renderMixed();
-        }).catch(err => {
+        } catch (err) {
             console.warn('Posts failed', err);
             postsLoaded = true;
             postsError = true;
-            renderMixed();
-        });
+        }
 
-        // Загружаем видео
-        loadVideos().then(v => {
-            videos = v;
+        try {
+            videos = await loadVideos();
             videosLoaded = true;
             videosError = false;
-            renderMixed();
-        }).catch(err => {
+        } catch (err) {
             console.warn('Videos failed', err);
             videosLoaded = true;
             videosError = true;
-            renderMixed();
-        });
+        }
+
+        renderMixed();
     }
 
     function renderMixed() {
-        if (!postsLoaded && !videosLoaded) return;
-
-        // Если оба источника не дали данных и были ошибки, показываем кнопку повтора
-        if (postsError && videosError && posts.length === 0 && videos.length === 0) {
+        // Если оба источника загружены, но ни одного элемента нет — показываем кнопку повтора
+        if (postsLoaded && videosLoaded && posts.length === 0 && videos.length === 0) {
             container.innerHTML = `
                 <div class="error-message">
                     <i class="fas fa-exclamation-triangle"></i>
@@ -182,14 +176,12 @@
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
 
-        // Загружаем новости и обновления отдельно (OR)
         const [newsIssues, updateIssues] = await Promise.all([
             loadIssues({ labels: 'news', per_page: 20 }),
             loadIssues({ labels: 'update', per_page: 20 })
         ]);
 
         const allIssues = [...newsIssues, ...updateIssues];
-        // Убираем дубликаты по номеру
         const unique = {};
         allIssues.forEach(issue => unique[issue.number] = issue);
         const issues = Object.values(unique);
@@ -257,7 +249,6 @@
         const inner = document.createElement('div');
         inner.className = 'project-card tilt-card';
 
-        // Поиск первого изображения в теле для превью
         const imgMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
         const thumbnail = imgMatch ? imgMatch[1] : DEFAULT_IMAGE;
 
@@ -295,7 +286,6 @@
 
         card.appendChild(inner);
 
-        // Контейнер для раскрытого содержимого
         const detailsDiv = document.createElement('div');
         detailsDiv.className = 'feedback-item-details';
         detailsDiv.style.display = 'none';
@@ -308,7 +298,6 @@
             if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
 
             if (detailsDiv.style.display === 'none') {
-                // Закрываем другие раскрытые карточки
                 document.querySelectorAll('#news-feed .feedback-item-details[style*="display: block"]').forEach(el => {
                     el.style.display = 'none';
                 });
@@ -346,7 +335,6 @@
 
             const addReactionHandler = async (num, content) => {
                 await addReaction(num, content);
-                // после добавления перезагружаем реакции
                 const updated = await loadReactions(num);
                 renderReactions(reactionsDiv, num, updated, currentUser, addReactionHandler, removeReactionHandler);
             };
