@@ -94,13 +94,31 @@
             <div class="feedback-form-wrapper" style="display: none;">
                 <div class="feedback-form" id="feedback-form">
                     <h3 data-lang="feedbackFormTitle">Оставить сообщение</h3>
-                    <input type="text" id="feedback-title" data-lang="feedbackTitlePlaceholder" placeholder="Заголовок">
-                    <select id="feedback-category">
+                    <input type="text" id="feedback-title" class="feedback-input" data-lang="feedbackTitlePlaceholder" placeholder="Заголовок">
+                    <select id="feedback-category" class="feedback-select">
                         <option value="idea" data-lang="feedbackCategoryIdea">💡 Идея</option>
                         <option value="bug" data-lang="feedbackCategoryBug">🐛 Баг</option>
                         <option value="review" data-lang="feedbackCategoryReview">⭐ Отзыв</option>
                     </select>
-                    <textarea id="feedback-body" data-lang="feedbackBodyPlaceholder" placeholder="Подробное описание..."></textarea>
+
+                    <!-- Панель инструментов Markdown -->
+                    <div class="editor-toolbar">
+                        <button type="button" class="editor-btn" data-tag="**" data-placeholder="жирный текст"><i class="fas fa-bold"></i></button>
+                        <button type="button" class="editor-btn" data-tag="*" data-placeholder="курсив"><i class="fas fa-italic"></i></button>
+                        <button type="button" class="editor-btn" data-tag="### " data-placeholder="Заголовок"><i class="fas fa-heading"></i></button>
+                        <button type="button" class="editor-btn" data-tag="> " data-placeholder="цитата"><i class="fas fa-quote-right"></i></button>
+                        <button type="button" class="editor-btn" data-tag="\`" data-placeholder="код" data-wrap="true"><i class="fas fa-code"></i></button>
+                        <button type="button" class="editor-btn" data-tag="[" data-placeholder="текст](url)" data-link="true"><i class="fas fa-link"></i></button>
+                        <button type="button" class="editor-btn" data-tag="- " data-placeholder="элемент списка"><i class="fas fa-list-ul"></i></button>
+                        <button type="button" class="editor-btn" data-tag="1. " data-placeholder="элемент списка"><i class="fas fa-list-ol"></i></button>
+                        <button type="button" class="editor-btn" data-tag="![](" data-placeholder="url картинки)"><i class="fas fa-image"></i></button>
+                        <button type="button" class="editor-btn" data-spoiler="true"><i class="fas fa-chevron-down"></i> Спойлер</button>
+                        <button type="button" class="editor-btn" id="preview-btn-feedback"><i class="fas fa-eye"></i> Предпросмотр</button>
+                    </div>
+
+                    <textarea id="feedback-body" class="feedback-textarea" data-lang="feedbackBodyPlaceholder" placeholder="Подробное описание..." rows="6"></textarea>
+                    <div class="preview-area" id="preview-area-feedback" style="display: none;"></div>
+
                     <div class="button-group">
                         <button class="button button-secondary" id="feedback-cancel" data-lang="feedbackCancel">Отмена</button>
                         <button class="button" id="feedback-submit" data-lang="feedbackSubmitBtn">Отправить</button>
@@ -116,6 +134,36 @@
                 <button class="button" id="load-more" style="display: none;" data-lang="feedbackLoadMore">Загрузить ещё</button>
             </div>
         `;
+
+        // Инициализация редактора
+        const textarea = document.getElementById('feedback-body');
+        document.querySelectorAll('.editor-btn[data-tag]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tag = btn.dataset.tag;
+                const placeholder = btn.dataset.placeholder || '';
+                const wrap = btn.dataset.wrap === 'true';
+                const isLink = btn.dataset.link === 'true';
+                insertMarkdown(textarea, tag, placeholder, wrap, isLink);
+            });
+        });
+
+        document.querySelector('[data-spoiler="true"]').addEventListener('click', (e) => {
+            e.preventDefault();
+            insertSpoiler(textarea);
+        });
+
+        document.getElementById('preview-btn-feedback').addEventListener('click', (e) => {
+            e.preventDefault();
+            const previewArea = document.getElementById('preview-area-feedback');
+            const body = textarea.value.trim();
+            if (!body) {
+                previewArea.style.display = 'none';
+                return;
+            }
+            previewArea.innerHTML = GithubCore.renderMarkdown(body);
+            previewArea.style.display = 'block';
+        });
 
         document.getElementById('feedback-cancel').addEventListener('click', () => {
             document.querySelector('.feedback-form-wrapper').style.display = 'none';
@@ -147,6 +195,58 @@
         });
 
         await loadIssuesPage(1, true);
+    }
+
+    // Вспомогательные функции для вставки Markdown
+    function insertMarkdown(textarea, tag, placeholder, wrap = false, isLink = false) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const selected = text.substring(start, end);
+
+        let insertion;
+        if (isLink) {
+            const url = prompt('Введите URL:', 'https://');
+            if (!url) return;
+            const text = prompt('Введите текст ссылки:', selected || 'ссылка');
+            insertion = `[${text}](${url})`;
+        } else if (tag === '![](') {
+            const url = prompt('Введите URL изображения:', 'https://');
+            if (!url) return;
+            const alt = prompt('Введите описание изображения (alt):', 'image');
+            insertion = `![${alt}](${url})`;
+        } else if (wrap) {
+            if (selected) {
+                insertion = tag + selected + tag;
+            } else {
+                insertion = tag + placeholder + tag;
+            }
+        } else {
+            if (selected) {
+                insertion = tag + selected;
+            } else {
+                insertion = tag + placeholder;
+            }
+        }
+
+        const newText = text.substring(0, start) + insertion + text.substring(end);
+        textarea.value = newText;
+        textarea.focus();
+        textarea.setSelectionRange(start + insertion.length, start + insertion.length);
+    }
+
+    function insertSpoiler(textarea) {
+        const summary = prompt('Заголовок спойлера:', 'Спойлер');
+        if (summary === null) return;
+        const content = prompt('Содержимое спойлера (можно оставить пустым):', '');
+        const spoiler = `\n<details><summary>${summary}</summary>\n\n${content || '...'}\n\n</details>\n`;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const newText = text.substring(0, start) + spoiler + text.substring(end);
+        textarea.value = newText;
+        textarea.focus();
+        textarea.setSelectionRange(start + spoiler.length, start + spoiler.length);
     }
 
     async function loadIssuesPage(page, reset = false) {
@@ -281,15 +381,16 @@
 
         const handleAdd = async (num, content) => {
             try {
-                const newReaction = await addReaction(num, content);
+                await addReaction(num, content);
                 const updated = await loadReactions(num);
                 reactionsCache.set(`reactions_${num}`, updated);
-                // Не перерисовываем, так как ui-feedback уже добавил временную кнопку
-                // Но после успеха мы перерисуем, чтобы получить реальный ID (см. ui-feedback)
+                // Не перерисовываем весь контейнер, ui-feedback сам обновит
             } catch (err) {
                 console.error('Failed to add reaction', err);
+                // Восстанавливаем из кеша
                 const updated = await loadReactions(num);
                 reactionsCache.set(`reactions_${num}`, updated);
+                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
             }
         };
 
@@ -302,6 +403,7 @@
                 console.error('Failed to remove reaction', err);
                 const updated = await loadReactions(num);
                 reactionsCache.set(`reactions_${num}`, updated);
+                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove);
             }
         };
 
@@ -309,6 +411,7 @@
     }
 
     function attachEventHandlers() {
+        // Раскрытие/сворачивание
         document.querySelectorAll('.feedback-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 if (e.target.closest('button') || e.target.closest('.reaction-button') ||
@@ -339,6 +442,7 @@
             });
         });
 
+        // Отправка комментария (оптимистично)
         document.querySelectorAll('.comment-submit').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -348,7 +452,6 @@
                 const comment = input.value.trim();
                 if (!comment) return;
 
-                // Оптимистичное добавление комментария
                 const commentsDiv = document.getElementById(`comments-${issueNumber}`);
                 const tempComment = document.createElement('div');
                 tempComment.className = 'comment temp';
@@ -364,11 +467,9 @@
                 btn.disabled = true;
 
                 try {
-                    const newComment = await addComment(issueNumber, comment);
-                    // Обновляем кеш
+                    await addComment(issueNumber, comment);
                     const updatedComments = await loadComments(issueNumber);
                     commentsCache.set(`comments_${issueNumber}`, updatedComments);
-                    // Заменяем временный комментарий на реальный
                     renderComments(commentsDiv, updatedComments);
                 } catch (err) {
                     console.error('Failed to add comment', err);
@@ -380,6 +481,7 @@
             });
         });
 
+        // Редактирование
         document.querySelectorAll('.edit-issue').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -392,6 +494,7 @@
             });
         });
 
+        // Закрытие (удаление) issue
         document.querySelectorAll('.close-issue').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -515,7 +618,7 @@
         list.insertBefore(tempCard, list.firstChild);
 
         try {
-            const newIssue = await createIssue(title, body, [`game:${currentGame}`, `type:${category}`]);
+            await createIssue(title, body, [`game:${currentGame}`, `type:${category}`]);
             document.getElementById('feedback-title').value = '';
             document.getElementById('feedback-body').value = '';
             document.querySelector('.feedback-form-wrapper').style.display = 'none';

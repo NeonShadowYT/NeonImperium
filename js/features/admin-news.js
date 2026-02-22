@@ -69,7 +69,7 @@
 
         const form = document.createElement('div');
         form.id = 'admin-post-form';
-        form.className = 'feedback-form'; // используем стили фидбека
+        form.className = 'feedback-form';
         form.style.marginTop = '20px';
 
         let gameSelectHtml = '';
@@ -84,13 +84,17 @@
 
         const toolbar = `
             <div class="editor-toolbar" style="display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap;">
-                <button type="button" class="editor-btn button-small" data-tag="**" data-placeholder="жирный текст"><i class="fas fa-bold"></i></button>
-                <button type="button" class="editor-btn button-small" data-tag="*" data-placeholder="курсив"><i class="fas fa-italic"></i></button>
-                <button type="button" class="editor-btn button-small" data-tag="### " data-placeholder="Заголовок"><i class="fas fa-heading"></i></button>
-                <button type="button" class="editor-btn button-small" data-tag="- " data-placeholder="элемент списка"><i class="fas fa-list-ul"></i></button>
-                <button type="button" class="editor-btn button-small" data-tag="1. " data-placeholder="элемент списка"><i class="fas fa-list-ol"></i></button>
-                <button type="button" class="editor-btn button-small" data-tag="![](" data-placeholder="url картинки)"><i class="fas fa-image"></i></button>
-                <button type="button" class="button-small" id="preview-btn"><i class="fas fa-eye"></i> Предпросмотр</button>
+                <button type="button" class="editor-btn" data-tag="**" data-placeholder="жирный текст"><i class="fas fa-bold"></i></button>
+                <button type="button" class="editor-btn" data-tag="*" data-placeholder="курсив"><i class="fas fa-italic"></i></button>
+                <button type="button" class="editor-btn" data-tag="### " data-placeholder="Заголовок"><i class="fas fa-heading"></i></button>
+                <button type="button" class="editor-btn" data-tag="> " data-placeholder="цитата"><i class="fas fa-quote-right"></i></button>
+                <button type="button" class="editor-btn" data-tag="\`" data-placeholder="код" data-wrap="true"><i class="fas fa-code"></i></button>
+                <button type="button" class="editor-btn" data-tag="[" data-placeholder="текст](url)" data-link="true"><i class="fas fa-link"></i></button>
+                <button type="button" class="editor-btn" data-tag="- " data-placeholder="элемент списка"><i class="fas fa-list-ul"></i></button>
+                <button type="button" class="editor-btn" data-tag="1. " data-placeholder="элемент списка"><i class="fas fa-list-ol"></i></button>
+                <button type="button" class="editor-btn" data-tag="![](" data-placeholder="url картинки)"><i class="fas fa-image"></i></button>
+                <button type="button" class="editor-btn" data-spoiler="true"><i class="fas fa-chevron-down"></i> Спойлер</button>
+                <button type="button" class="editor-btn" id="preview-btn"><i class="fas fa-eye"></i> Предпросмотр</button>
             </div>
         `;
 
@@ -116,8 +120,15 @@
                 e.preventDefault();
                 const tag = btn.dataset.tag;
                 const placeholder = btn.dataset.placeholder || '';
-                insertMarkdown(textarea, tag, placeholder);
+                const wrap = btn.dataset.wrap === 'true';
+                const isLink = btn.dataset.link === 'true';
+                insertMarkdown(textarea, tag, placeholder, wrap, isLink);
             });
+        });
+
+        document.querySelector('[data-spoiler="true"]').addEventListener('click', (e) => {
+            e.preventDefault();
+            insertSpoiler(textarea);
         });
 
         document.getElementById('preview-btn').addEventListener('click', (e) => {
@@ -136,23 +147,34 @@
         document.getElementById('admin-post-submit').addEventListener('click', () => submitPost(type));
     }
 
-    function insertMarkdown(textarea, tag, placeholder) {
+    function insertMarkdown(textarea, tag, placeholder, wrap = false, isLink = false) {
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
         const text = textarea.value;
         const selected = text.substring(start, end);
 
         let insertion;
-        if (tag === '![](') {
+        if (isLink) {
+            const url = prompt('Введите URL:', 'https://');
+            if (!url) return;
+            const text = prompt('Введите текст ссылки:', selected || 'ссылка');
+            insertion = `[${text}](${url})`;
+        } else if (tag === '![](') {
             const url = prompt('Введите URL изображения:', 'https://');
             if (!url) return;
             const alt = prompt('Введите описание изображения (alt):', 'image');
             insertion = `![${alt}](${url})`;
+        } else if (wrap) {
+            if (selected) {
+                insertion = tag + selected + tag;
+            } else {
+                insertion = tag + placeholder + tag;
+            }
         } else {
             if (selected) {
-                insertion = tag + selected + (tag.startsWith('*') ? tag : '');
+                insertion = tag + selected;
             } else {
-                insertion = tag + placeholder + (tag.startsWith('*') ? tag : '');
+                insertion = tag + placeholder;
             }
         }
 
@@ -160,6 +182,20 @@
         textarea.value = newText;
         textarea.focus();
         textarea.setSelectionRange(start + insertion.length, start + insertion.length);
+    }
+
+    function insertSpoiler(textarea) {
+        const summary = prompt('Заголовок спойлера:', 'Спойлер');
+        if (summary === null) return;
+        const content = prompt('Содержимое спойлера (можно оставить пустым):', '');
+        const spoiler = `\n<details><summary>${summary}</summary>\n\n${content || '...'}\n\n</details>\n`;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const newText = text.substring(0, start) + spoiler + text.substring(end);
+        textarea.value = newText;
+        textarea.focus();
+        textarea.setSelectionRange(start + spoiler.length, start + spoiler.length);
     }
 
     async function submitPost(type) {
