@@ -39,24 +39,25 @@ const translations = {
         updatesTitle: "Обновления",
         polls: "Опросы",
         downloadBtn: "Скачать",
-				feedbackTitle: "Идеи, баги и отзывы",
-				feedbackDesc: "Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.",
-				feedbackLoading: "Загрузка обратной связи...",
-				feedbackLoginPrompt: "Войдите через GitHub, чтобы участвовать в обсуждениях",
-				feedbackLoginBtn: "Войти",
-				feedbackFormTitle: "Оставить сообщение",
-				feedbackTitlePlaceholder: "Заголовок",
-				feedbackBodyPlaceholder: "Подробное описание...",
-				feedbackCategoryLabel: "Категория",
-				feedbackCategoryIdea: "💡 Идея",
-				feedbackCategoryBug: "🐛 Баг",
-				feedbackCategoryReview: "⭐ Отзыв",
-				feedbackSubmitBtn: "Отправить",
-				feedbackComments: "Комментарии",
-				feedbackAddComment: "Написать комментарий...",
-				feedbackSendBtn: "Отправить",
-				feedbackLoadMore: "Загрузить ещё",
-				feedbackNoItems: "Пока нет сообщений. Будьте первым!",
+        feedbackTitle: "Идеи, баги и отзывы",
+        feedbackDesc: "Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.",
+        feedbackNewBtn: "Оставить сообщение", // новый ключ
+        feedbackLoading: "Загрузка обратной связи...",
+        feedbackLoginPrompt: "Войдите через GitHub, чтобы участвовать в обсуждениях",
+        feedbackLoginBtn: "Войти",
+        feedbackFormTitle: "Оставить сообщение",
+        feedbackTitlePlaceholder: "Заголовок",
+        feedbackBodyPlaceholder: "Подробное описание...",
+        feedbackCategoryLabel: "Категория",
+        feedbackCategoryIdea: "💡 Идея",
+        feedbackCategoryBug: "🐛 Баг",
+        feedbackCategoryReview: "⭐ Отзыв",
+        feedbackSubmitBtn: "Отправить",
+        feedbackComments: "Комментарии",
+        feedbackAddComment: "Написать комментарий...",
+        feedbackSendBtn: "Отправить",
+        feedbackLoadMore: "Загрузить ещё",
+        feedbackNoItems: "Пока нет сообщений. Будьте первым!",
         
         // Starve Neon
         starveDownloadNote: "Версия 0.13.7 · Обновление от 31.12.2025",
@@ -147,7 +148,7 @@ const translations = {
         notFoundDesc: "Запрашиваемая страница не существует или была перемещена.",
         backHome: "Вернуться на главную",
         
-        // Лицензионное соглашение (новые ключи)
+        // Лицензионное соглашение
         licenseTitle: "Лицензионное соглашение",
         licenseLastUpdate: "Последнее обновление: 21 февраля 2026 г.",
         licenseAllowedTitle: "Разрешено",
@@ -170,7 +171,6 @@ const translations = {
         licenseBack: "← Вернуться к игре",
         allRightsReserved: "Все права защищены.",
         
-        // Разделы лицензии (подробные)
         licenseSection1Title: "1. Общие положения",
         licenseSection1Text: "Настоящее Лицензионное соглашение (далее — «Соглашение») заключается между вами (далее — «Пользователь») и разработчиками игр Neon Imperium (далее — «Правообладатель») и регулирует порядок использования игр: Starve Neon, Alpha 01, ГК Адвенчур, а также всех связанных с ними материалов, обновлений и дополнений.",
         licenseSection1Text2: "Устанавливая, копируя или иным образом используя игру, Пользователь выражает своё полное согласие с условиями настоящего Соглашения. Если Пользователь не принимает условия Соглашения, он обязан незамедлительно удалить все копии игры и не использовать её.",
@@ -242,24 +242,25 @@ const translations = {
         updatesTitle: "Updates",
         polls: "Polls",
         downloadBtn: "Download",
-				feedbackTitle: "Ideas, bugs & feedback",
-				feedbackDesc: "Share your thoughts, report bugs, or suggest improvements.",
-				feedbackLoading: "Loading feedback...",
-				feedbackLoginPrompt: "Sign in with GitHub to participate",
-				feedbackLoginBtn: "Sign in",
-				feedbackFormTitle: "Leave a message",
-				feedbackTitlePlaceholder: "Title",
-				feedbackBodyPlaceholder: "Detailed description...",
-				feedbackCategoryLabel: "Category",
-				feedbackCategoryIdea: "💡 Idea",
-				feedbackCategoryBug: "🐛 Bug",
-				feedbackCategoryReview: "⭐ Review",
-				feedbackSubmitBtn: "Submit",
-				feedbackComments: "Comments",
-				feedbackAddComment: "Write a comment...",
-				feedbackSendBtn: "Send",
-				feedbackLoadMore: "Load more",
-				feedbackNoItems: "No messages yet. Be the first!",
+        feedbackTitle: "Ideas, bugs & feedback",
+        feedbackDesc: "Share your thoughts, report bugs, or suggest improvements.",
+        feedbackNewBtn: "Leave a message", // new key
+        feedbackLoading: "Loading feedback...",
+        feedbackLoginPrompt: "Sign in with GitHub to participate",
+        feedbackLoginBtn: "Sign in",
+        feedbackFormTitle: "Leave a message",
+        feedbackTitlePlaceholder: "Title",
+        feedbackBodyPlaceholder: "Detailed description...",
+        feedbackCategoryLabel: "Category",
+        feedbackCategoryIdea: "💡 Idea",
+        feedbackCategoryBug: "🐛 Bug",
+        feedbackCategoryReview: "⭐ Review",
+        feedbackSubmitBtn: "Submit",
+        feedbackComments: "Comments",
+        feedbackAddComment: "Write a comment...",
+        feedbackSendBtn: "Send",
+        feedbackLoadMore: "Load more",
+        feedbackNoItems: "No messages yet. Be the first!",
         
         // Starve Neon
         starveDownloadNote: "Version 0.13.7 · Update 2025-12-31",
@@ -350,7 +351,7 @@ const translations = {
         notFoundDesc: "The requested page does not exist or has been moved.",
         backHome: "Back to home",
         
-        // License Agreement (new keys)
+        // License Agreement
         licenseTitle: "License Agreement",
         licenseLastUpdate: "Last updated: February 21, 2026",
         licenseAllowedTitle: "Allowed",
@@ -426,12 +427,10 @@ function setLanguage(lang) {
     localStorage.setItem('preferredLanguage', lang);
 }
 
-// ==================== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ====================
 document.addEventListener('DOMContentLoaded', () => {
     const savedLang = localStorage.getItem('preferredLanguage') || 'ru';
     setLanguage(savedLang);
     
-    // Обработчики для кнопок языка
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             setLanguage(btn.dataset.langCode);

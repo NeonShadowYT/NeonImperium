@@ -4,7 +4,7 @@
     margin-top: 24px;
 }
 
-/* Заголовок и кнопка открытия формы */
+/* Заголовок и кнопка открытия формы (теперь в HTML) */
 .feedback-header {
     display: flex;
     align-items: center;
@@ -23,7 +23,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    font-family: 'Russo One', sans-serif; /* добавлено */
+    font-family: 'Russo One', sans-serif;
 }
 
 /* Вкладки */
@@ -96,7 +96,7 @@
     min-width: 120px;
     border-radius: 40px;
     padding: 10px 24px;
-    font-family: 'Russo One', sans-serif; /* добавлено */
+    font-family: 'Russo One', sans-serif;
 }
 .feedback-form .button-secondary {
     background: transparent;
@@ -171,6 +171,7 @@
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+    line-clamp: 2; /* стандартное свойство для совместимости */
     overflow: hidden;
 }
 
@@ -258,7 +259,7 @@
     padding: 8px 18px;
     border-radius: 40px;
     white-space: nowrap;
-    font-family: 'Russo One', sans-serif; /* добавлено */
+    font-family: 'Russo One', sans-serif;
 }
 
 /* Состояния загрузки и ошибок */
@@ -296,7 +297,7 @@
     color: var(--text-secondary);
 }
 .login-prompt .button {
-    font-family: 'Russo One', sans-serif; /* добавлено */
+    font-family: 'Russo One', sans-serif;
 }
 
 /* Reactions */
@@ -308,6 +309,10 @@
     padding: 8px 0;
     border-top: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
+    min-height: 32px; /* чтобы не схлопывался полностью */
+}
+.reactions-container:empty {
+    display: none;
 }
 
 .reaction-button {
@@ -345,6 +350,52 @@
     font-weight: bold;
     min-width: 18px;
     text-align: center;
+}
+
+.reaction-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--text-secondary);
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.reaction-add-btn:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+/* Временное меню выбора реакций */
+.reaction-menu {
+    position: absolute;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    padding: 5px;
+    display: flex;
+    gap: 5px;
+    box-shadow: var(--shadow);
+    z-index: 1000;
+}
+.reaction-menu-btn {
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 20px;
+    transition: background 0.2s;
+}
+.reaction-menu-btn:hover {
+    background: var(--bg-inner-gradient);
 }
 
 /* Адаптивность */

@@ -4,7 +4,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const newsFeed = document.getElementById('news-feed');
     if (!newsFeed) return;
 
-    // ID каналов: Neon Shadow, Оборотень, Golden Creeper
     const channelIds = [
         'UC2pH2qNfh2sEAeYEGs1k_Lg', // Neon Shadow
         'UCxuByf9jKs6ijiJyrMKBzdA', // Оборотень
@@ -14,7 +13,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const rssUrls = channelIds.map(id => `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`);
     const proxyUrl = 'https://api.allorigins.win/get?url=';
 
-    // Функция загрузки одного канала
     async function fetchChannelFeed(url) {
         try {
             const response = await fetch(proxyUrl + encodeURIComponent(url));
@@ -25,38 +23,28 @@ document.addEventListener('DOMContentLoaded', function() {
             return Array.from(xml.querySelectorAll('entry'));
         } catch (error) {
             console.warn('Ошибка загрузки ленты:', url, error);
-            return []; // Возвращаем пустой массив, чтобы не ломать общую загрузку
+            return [];
         }
     }
 
-    // Основная функция загрузки всех каналов
     async function loadAllFeeds() {
-        // Показываем спиннер
         newsFeed.innerHTML = `<div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
             <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);"></i>
             <p style="margin-top: 10px;" data-lang="newsLoading">Загрузка новостей...</p>
         </div>`;
 
-        // Загружаем все каналы параллельно
         const results = await Promise.all(rssUrls.map(url => fetchChannelFeed(url)));
         const allEntries = results.flat();
 
         if (allEntries.length === 0) {
-            // Ничего не загрузилось — показываем ошибку с кнопкой повтора
             showError('Не удалось загрузить новости. Проверьте подключение к интернету.', true);
             return;
         }
 
-        // Преобразуем entry в объекты с нужными полями
         const videos = allEntries.map(entry => parseEntry(entry));
-
-        // Сортируем по дате (от новых к старым)
         videos.sort((a, b) => new Date(b.published) - new Date(a.published));
-
-        // Оставляем только первые 6 самых свежих
         const latestVideos = videos.slice(0, 6);
 
-        // Очищаем контейнер и строим карточки
         newsFeed.innerHTML = '';
         latestVideos.forEach(video => {
             const card = createVideoCard(video);
@@ -64,7 +52,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Парсинг одного entry в удобный объект
     function parseEntry(entry) {
         const getNS = (tag) => {
             const nsTag = entry.getElementsByTagNameNS('*', tag)[0];
@@ -80,7 +67,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return { title, videoId, published, author, thumbnailUrl };
     }
 
-    // Создание DOM-карточки из объекта video
     function createVideoCard(video) {
         const { title, videoId, published, author, thumbnailUrl } = video;
 
@@ -130,7 +116,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return card;
     }
 
-    // Функция отображения ошибки с опциональной кнопкой повтора
     function showError(message, showRetry = false) {
         const errorDiv = document.createElement('div');
         errorDiv.className = 'card';
@@ -152,6 +137,5 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Запускаем загрузку
     loadAllFeeds();
 });

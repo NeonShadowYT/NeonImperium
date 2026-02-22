@@ -1,4 +1,4 @@
-// feedback.js — с поддержкой реакций
+// feedback.js — с поддержкой реакций, исправлен дубляж заголовка, улучшены реакции
 
 (function() {
     const CONFIG = {
@@ -8,7 +8,6 @@
         ITEMS_PER_PAGE: 10
     };
 
-    // Доступные типы реакций (из документации GitHub API)
     const REACTION_TYPES = [
         { content: '+1', emoji: '👍' },
         { content: '-1', emoji: '👎' },
@@ -30,8 +29,6 @@
     let container, feedbackSection;
     let currentUser = null;
     let editingIssue = null;
-
-    // Кеш реакций для быстрого доступа
     let reactionsCache = new Map();
 
     document.addEventListener('DOMContentLoaded', init);
@@ -100,12 +97,8 @@
     }
 
     async function renderFeedbackInterface(token, currentUser) {
+        // Очищаем контейнер, но оставляем заголовок и описание в HTML
         container.innerHTML = `
-            <div class="feedback-header">
-                <h2><i class="fab fa-github"></i> <span data-lang="feedbackTitle">Идеи, баги и отзывы</span></h2>
-                <button class="button" id="toggle-form-btn"><i class="fas fa-plus"></i> <span data-lang="feedbackNewBtn">Оставить сообщение</span></button>
-            </div>
-
             <div class="feedback-tabs">
                 <button class="feedback-tab active" data-tab="all">Все</button>
                 <button class="feedback-tab" data-tab="idea">💡 Идеи</button>
@@ -139,18 +132,22 @@
             </div>
         `;
 
-        document.getElementById('toggle-form-btn').addEventListener('click', () => {
-            const wrapper = document.querySelector('.feedback-form-wrapper');
-            if (wrapper.style.display === 'none') {
-                wrapper.style.display = 'block';
-                editingIssue = null;
-                document.getElementById('feedback-title').value = '';
-                document.getElementById('feedback-body').value = '';
-                document.getElementById('feedback-category').value = 'idea';
-            } else {
-                wrapper.style.display = 'none';
-            }
-        });
+        // Кнопка "Оставить сообщение" находится в HTML, вешаем на неё обработчик
+        const toggleBtn = document.getElementById('toggle-form-btn');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                const wrapper = document.querySelector('.feedback-form-wrapper');
+                if (wrapper.style.display === 'none') {
+                    wrapper.style.display = 'block';
+                    editingIssue = null;
+                    document.getElementById('feedback-title').value = '';
+                    document.getElementById('feedback-body').value = '';
+                    document.getElementById('feedback-category').value = 'idea';
+                } else {
+                    wrapper.style.display = 'none';
+                }
+            });
+        }
 
         document.getElementById('feedback-cancel').addEventListener('click', () => {
             document.querySelector('.feedback-form-wrapper').style.display = 'none';
@@ -225,9 +222,12 @@
             document.getElementById('feedback-list').innerHTML = `
                 <div class="error-message">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <p>Ошибка загрузки. <button class="button-small" onclick="location.reload()">Повторить</button></p>
+                    <p>Ошибка загрузки. <button class="button-small" id="retry-feedback">Повторить</button></p>
                 </div>
             `;
+            document.getElementById('retry-feedback')?.addEventListener('click', () => {
+                loadIssues(token, 1, true, currentUser);
+            });
         } finally {
             isLoading = false;
             const loadMoreBtn = document.getElementById('load-more');
@@ -260,11 +260,6 @@
             const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
             const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
             
-            // Получаем реакции из кеша или инициализируем
-            if (!reactionsCache.has(`issue_${issue.number}`)) {
-                reactionsCache.set(`issue_${issue.number}`, []);
-            }
-            
             return `
             <div class="feedback-item" data-issue-number="${issue.number}" data-issue-id="${issue.id}">
                 <div class="feedback-item-header">
@@ -277,9 +272,7 @@
                 <div class="feedback-item-preview">
                     ${escapeHtml(preview).replace(/\n/g, ' ')}
                 </div>
-                <div class="reactions-container" data-target-type="issue" data-target-id="${issue.number}">
-                    ${renderReactionButtons('issue', issue.number, currentUser)}
-                </div>
+                <div class="reactions-container" data-target-type="issue" data-target-id="${issue.number}"></div>
                 <div class="feedback-item-footer">
                     <span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span>
                     <span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span>
@@ -307,10 +300,13 @@
             }
         });
 
-        // Обработчики
+        attachEventHandlers(token);
+    }
+
+    function attachEventHandlers(token) {
         document.querySelectorAll('.feedback-item').forEach(item => {
             item.addEventListener('click', (e) => {
-                if (e.target.closest('button') || e.target.closest('.reaction-button')) return;
+                if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
                 
                 document.querySelectorAll('.feedback-item.expanded').forEach(el => {
                     if (el !== item) {
@@ -383,43 +379,70 @@
                 handleReaction(targetType, targetId, content, isActive, token);
             });
         });
+
+        // Обработчик кнопки добавления реакции (+)
+        document.querySelectorAll('.reaction-add-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const container = e.currentTarget.closest('.reactions-container');
+                const targetType = container.dataset.targetType;
+                const targetId = container.dataset.targetId;
+                showReactionMenu(container, targetType, targetId, token);
+            });
+        });
     }
 
-    function renderReactionButtons(targetType, targetId, currentUser) {
-        const cacheKey = `${targetType}_${targetId}`;
-        const reactions = reactionsCache.get(cacheKey) || [];
-        
-        // Группируем реакции по типу
-        const grouped = {};
+    function showReactionMenu(container, targetType, targetId, token) {
+        // Создаём временное меню
+        const menu = document.createElement('div');
+        menu.className = 'reaction-menu';
+        menu.style.position = 'absolute';
+        menu.style.background = 'var(--bg-card)';
+        menu.style.border = '1px solid var(--border)';
+        menu.style.borderRadius = '30px';
+        menu.style.padding = '5px';
+        menu.style.display = 'flex';
+        menu.style.gap = '5px';
+        menu.style.zIndex = '1000';
+        menu.style.boxShadow = 'var(--shadow)';
+
         REACTION_TYPES.forEach(type => {
-            grouped[type.content] = {
-                count: 0,
-                userReacted: false
+            const btn = document.createElement('button');
+            btn.className = 'reaction-menu-btn';
+            btn.innerHTML = type.emoji;
+            btn.style.background = 'transparent';
+            btn.style.border = 'none';
+            btn.style.fontSize = '20px';
+            btn.style.cursor = 'pointer';
+            btn.style.padding = '5px 10px';
+            btn.style.borderRadius = '20px';
+            btn.style.transition = 'background 0.2s';
+            btn.onmouseover = () => btn.style.background = 'var(--bg-inner-gradient)';
+            btn.onmouseout = () => btn.style.background = 'transparent';
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                handleReaction(targetType, targetId, type.content, false, token);
+                document.body.removeChild(menu);
             };
+            menu.appendChild(btn);
         });
-        
-        reactions.forEach(r => {
-            if (grouped[r.content]) {
-                grouped[r.content].count++;
-                if (currentUser && r.user && r.user.login === currentUser) {
-                    grouped[r.content].userReacted = true;
+
+        // Позиционируем меню рядом с кнопкой +
+        const rect = container.getBoundingClientRect();
+        menu.style.left = rect.left + 'px';
+        menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+        document.body.appendChild(menu);
+
+        // Закрытие по клику вне меню
+        setTimeout(() => {
+            const closeMenu = (e) => {
+                if (!menu.contains(e.target)) {
+                    document.body.removeChild(menu);
+                    document.removeEventListener('click', closeMenu);
                 }
-            }
-        });
-        
-        return REACTION_TYPES.map(type => {
-            const data = grouped[type.content];
-            const activeClass = data.userReacted ? 'active' : '';
-            return `
-                <button class="reaction-button ${activeClass}" 
-                        data-target-type="${targetType}" 
-                        data-target-id="${targetId}" 
-                        data-content="${type.content}">
-                    <span class="reaction-emoji">${type.emoji}</span>
-                    <span class="reaction-count">${data.count}</span>
-                </button>
-            `;
-        }).join('');
+            };
+            document.addEventListener('click', closeMenu);
+        }, 100);
     }
 
     async function loadReactions(targetType, targetId, token) {
@@ -430,7 +453,8 @@
             if (targetType === 'issue') {
                 url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions`;
             } else {
-                url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${targetId}/reactions`;
+                // Не загружаем реакции для комментариев
+                return;
             }
             
             const response = await fetch(url, {
@@ -444,14 +468,93 @@
                 const reactions = await response.json();
                 reactionsCache.set(cacheKey, reactions);
                 
-                // Обновляем отображение кнопок
+                // Обновляем отображение контейнера реакций
                 const container = document.querySelector(`.reactions-container[data-target-type="${targetType}"][data-target-id="${targetId}"]`);
                 if (container) {
-                    container.innerHTML = renderReactionButtons(targetType, targetId, currentUser);
+                    updateReactionsContainer(container, targetType, targetId);
                 }
             }
         } catch (error) {
             console.error('Error loading reactions:', error);
+        }
+    }
+
+    function updateReactionsContainer(container, targetType, targetId) {
+        const cacheKey = `${targetType}_${targetId}`;
+        const reactions = reactionsCache.get(cacheKey) || [];
+        const currentUserLogin = currentUser;
+
+        // Группируем реакции по типу
+        const grouped = {};
+        REACTION_TYPES.forEach(type => {
+            grouped[type.content] = {
+                content: type.content,
+                emoji: type.emoji,
+                count: 0,
+                userReacted: false
+            };
+        });
+        
+        reactions.forEach(r => {
+            if (grouped[r.content]) {
+                grouped[r.content].count++;
+                if (currentUserLogin && r.user && r.user.login === currentUserLogin) {
+                    grouped[r.content].userReacted = true;
+                }
+            }
+        });
+
+        // Сортируем по убыванию количества, отфильтровываем нулевые
+        let sorted = Object.values(grouped)
+            .filter(g => g.count > 0)
+            .sort((a, b) => b.count - a.count);
+
+        const totalTypes = sorted.length;
+        const showCount = Math.min(3, totalTypes);
+        const visible = sorted.slice(0, showCount);
+        const hiddenCount = totalTypes - showCount;
+
+        // Генерируем HTML для видимых кнопок
+        let html = visible.map(g => `
+            <button class="reaction-button ${g.userReacted ? 'active' : ''}" 
+                    data-target-type="${targetType}" 
+                    data-target-id="${targetId}" 
+                    data-content="${g.content}">
+                <span class="reaction-emoji">${g.emoji}</span>
+                <span class="reaction-count">${g.count}</span>
+            </button>
+        `).join('');
+
+        // Если есть скрытые типы, добавляем кнопку "+"
+        if (hiddenCount > 0) {
+            html += `
+                <button class="reaction-add-btn" title="Добавить реакцию">
+                    <span>+${hiddenCount}</span>
+                </button>
+            `;
+        } else if (totalTypes === 0 && currentUser) {
+            // Если нет реакций, показываем только кнопку "+" для добавления
+            html = `<button class="reaction-add-btn" title="Добавить реакцию"><span>+</span></button>`;
+        }
+
+        container.innerHTML = html;
+
+        // Навешиваем обработчики на новые кнопки
+        container.querySelectorAll('.reaction-button').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const content = btn.dataset.content;
+                const isActive = btn.classList.contains('active');
+                handleReaction(targetType, targetId, content, isActive, token);
+            });
+        });
+
+        const addBtn = container.querySelector('.reaction-add-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showReactionMenu(container, targetType, targetId, token);
+            });
         }
     }
 
@@ -460,24 +563,23 @@
             alert('Войдите через GitHub, чтобы ставить реакции');
             return;
         }
+
+        // Не обрабатываем реакции для комментариев (на всякий случай)
+        if (targetType !== 'issue') return;
         
         try {
+            const cacheKey = `${targetType}_${targetId}`;
+            const reactions = reactionsCache.get(cacheKey) || [];
+
             if (isActive) {
                 // Находим ID реакции пользователя
-                const cacheKey = `${targetType}_${targetId}`;
-                const reactions = reactionsCache.get(cacheKey) || [];
                 const userReaction = reactions.find(r => 
                     r.content === content && r.user && r.user.login === currentUser
                 );
                 
                 if (userReaction) {
                     // Удаляем реакцию
-                    let url;
-                    if (targetType === 'issue') {
-                        url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions/${userReaction.id}`;
-                    } else {
-                        url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${targetId}/reactions/${userReaction.id}`;
-                    }
+                    const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions/${userReaction.id}`;
                     
                     const response = await fetch(url, {
                         method: 'DELETE',
@@ -488,18 +590,16 @@
                     });
                     
                     if (response.status === 204) {
-                        // Перезагружаем реакции
-                        await loadReactions(targetType, targetId, token);
+                        // Обновляем кеш: убираем эту реакцию
+                        const updatedReactions = reactions.filter(r => r.id !== userReaction.id);
+                        reactionsCache.set(cacheKey, updatedReactions);
+                        const container = document.querySelector(`.reactions-container[data-target-type="${targetType}"][data-target-id="${targetId}"]`);
+                        if (container) updateReactionsContainer(container, targetType, targetId);
                     }
                 }
             } else {
                 // Создаём реакцию
-                let url;
-                if (targetType === 'issue') {
-                    url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions`;
-                } else {
-                    url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${targetId}/reactions`;
-                }
+                const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${targetId}/reactions`;
                 
                 const response = await fetch(url, {
                     method: 'POST',
@@ -512,7 +612,7 @@
                 });
                 
                 if (response.ok || response.status === 200) {
-                    // Перезагружаем реакции
+                    // Перезагружаем реакции, чтобы получить полный список с ID
                     await loadReactions(targetType, targetId, token);
                 }
             }
@@ -644,11 +744,6 @@
             const comments = await response.json();
             
             commentsDiv.innerHTML = comments.map(c => {
-                // Инициализируем кеш для комментариев
-                if (!reactionsCache.has(`comment_${c.id}`)) {
-                    reactionsCache.set(`comment_${c.id}`, []);
-                }
-                
                 return `
                     <div class="comment" data-comment-id="${c.id}">
                         <div class="comment-meta">
@@ -656,19 +751,9 @@
                             <span>${new Date(c.created_at).toLocaleString()}</span>
                         </div>
                         <div>${escapeHtml(c.body).replace(/\n/g, '<br>')}</div>
-                        <div class="reactions-container" data-target-type="comment" data-target-id="${c.id}">
-                            ${renderReactionButtons('comment', c.id, currentUser)}
-                        </div>
                     </div>
                 `;
             }).join('');
-            
-            // Загружаем реакции для комментариев
-            comments.forEach(c => {
-                if (!reactionsCache.has(`comment_${c.id}`)) {
-                    loadReactions('comment', c.id, token);
-                }
-            });
             
         } catch (error) {
             console.error('Error loading comments:', error);
