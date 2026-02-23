@@ -586,22 +586,10 @@
 
         const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
 
-        // Ищем элементы внутри модального окна
-        const titleInput = modal.querySelector('#modal-title');
+        // Инициализация редактора (не зависит от клика)
         const bodyTextarea = modal.querySelector('#modal-body');
-        const submitBtn = modal.querySelector('#modal-submit');
         const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
-        const categorySelect = modal.querySelector('#modal-category');
-
-        if (!titleInput || !bodyTextarea || !submitBtn) {
-            console.error('One of modal elements not found');
-            UIUtils.showToast('Ошибка создания формы', 'error');
-            closeModal();
-            return;
-        }
-
-        // Инициализация редактора
-        if (window.Editor) {
+        if (window.Editor && bodyTextarea) {
             const toolbar = Editor.createEditorToolbar(bodyTextarea, { 
                 previewAreaId: 'modal-preview-area', 
                 onPreview: () => {
@@ -632,9 +620,27 @@
             UIUtils.showToast('Редактор не загружен, попробуйте обновить страницу', 'error');
         }
 
+        const submitBtn = modal.querySelector('#modal-submit');
+        if (!submitBtn) {
+            console.error('submit button not found');
+            UIUtils.showToast('Ошибка создания формы', 'error');
+            closeModal();
+            return;
+        }
+
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            console.log('Submit clicked'); // отладка
+            console.log('Submit clicked');
+
+            // Ищем элементы заново внутри модалки на момент клика
+            const titleInput = modal.querySelector('#modal-title');
+            const bodyTextarea = modal.querySelector('#modal-body');
+            const categorySelect = modal.querySelector('#modal-category');
+
+            if (!titleInput || !bodyTextarea) {
+                UIUtils.showToast('Ошибка: элементы формы не найдены', 'error');
+                return;
+            }
 
             const title = titleInput.value.trim();
             let body = bodyTextarea.value;
