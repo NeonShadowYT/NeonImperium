@@ -685,13 +685,21 @@
                 } else if (postType === 'news') {
                     labels = ['type:news'];
                 } else { // update
-                    if (!data.game) {
-                        UIUtils.showToast('Ошибка: не указана игра', 'error');
+                    if (!data.game || data.game.trim() === '') {
+                        UIUtils.showToast('Ошибка: не указана игра для обновления', 'error');
                         btn.disabled = false;
                         btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
                         return;
                     }
                     labels = ['type:update', `game:${data.game}`];
+                }
+
+                // Дополнительная проверка, что массив меток не пуст
+                if (labels.length === 0) {
+                    UIUtils.showToast('Ошибка: не заданы метки для обращения', 'error');
+                    btn.disabled = false;
+                    btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
+                    return;
                 }
 
                 if (mode === 'edit') {
