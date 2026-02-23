@@ -209,13 +209,10 @@
                 await addReaction(num, content); 
                 window.reactionsListCache.delete(`list_reactions_${num}`);
                 if (window.UIFeedback) window.UIFeedback.invalidateCache(num);
-                // Небольшая задержка для синхронизации GitHub
-                await new Promise(resolve => setTimeout(resolve, 300));
-                const updated = await loadReactions(num);
-                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); 
-                UIUtils.showToast('Реакция добавлена', 'success');
+                // Не перезагружаем, только инвалидируем кеш
             } catch (err) { 
                 UIUtils.showToast('Ошибка при добавлении реакции', 'error');
+                throw err; // для оптимистичного отката
             }
         };
         const handleRemove = async (num, reactionId) => { 
@@ -223,12 +220,9 @@
                 await removeReaction(num, reactionId); 
                 window.reactionsListCache.delete(`list_reactions_${num}`);
                 if (window.UIFeedback) window.UIFeedback.invalidateCache(num);
-                await new Promise(resolve => setTimeout(resolve, 300));
-                const updated = await loadReactions(num);
-                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); 
-                UIUtils.showToast('Реакция убрана', 'success');
             } catch (err) { 
                 UIUtils.showToast('Ошибка при удалении реакции', 'error');
+                throw err;
             }
         };
         renderReactions(container, issueNumber, reactions, currentUser, handleAdd, handleRemove);

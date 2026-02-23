@@ -65,21 +65,24 @@
                 const oldCount = parseInt(countSpan.textContent, 10);
 
                 if (isActive && reactionId) {
+                    // Оптимистичное удаление
                     btn.classList.remove('active');
                     countSpan.textContent = oldCount - 1;
-                    if (oldCount - 1 === 0) btn.style.display = 'none';
+                    const wasZero = oldCount - 1 === 0;
+                    if (wasZero) btn.style.display = 'none';
                     try {
                         await onRemove(issueNumber, parseInt(reactionId, 10));
-                        UIUtils.showToast('Реакция убрана', 'success');
-                        invalidateCache(issueNumber);
+                        // Успех: ничего не делаем, кнопка уже обновлена
                     } catch (err) {
+                        // Ошибка: откатываем
                         UIUtils.showToast('Ошибка при удалении реакции', 'error');
                         btn.classList.add('active');
                         countSpan.textContent = oldCount;
-                        btn.style.display = '';
+                        if (wasZero) btn.style.display = '';
                     }
                 } else {
                     showReactionMenu(btn, issueNumber, async (selected) => {
+                        // Оптимистичное добавление: создаём временную кнопку
                         const tempBtn = document.createElement('button');
                         tempBtn.className = 'reaction-button active';
                         tempBtn.dataset.content = selected;
@@ -87,16 +90,22 @@
                         const emoji = REACTION_TYPES.find(t => t.content === selected).emoji;
                         tempBtn.innerHTML = `<span class="reaction-emoji">${emoji}</span><span class="reaction-count">1</span>`;
                         tempBtn.setAttribute('aria-label', `${emoji} (1)`);
-                        const addBtn = container.querySelector('.reaction-add-btn');
-                        if (addBtn) container.insertBefore(tempBtn, addBtn);
-                        else container.appendChild(tempBtn);
+                        // Вставляем перед кнопкой "ещё" или добавляем в конец
+                        const addBtn = container.querySelector('[data-add],[data-more]');
+                        if (addBtn && addBtn.parentNode === container) {
+                            container.insertBefore(tempBtn, addBtn);
+                        } else {
+                            container.appendChild(tempBtn);
+                        }
                         try {
                             await onAdd(issueNumber, selected);
-                            UIUtils.showToast('Реакция добавлена', 'success');
-                            invalidateCache(issueNumber);
+                            // Успех: заменяем временный ID на настоящий (если нужно)
+                            // Но мы не знаем настоящий ID, поэтому просто оставляем кнопку
+                            // При следующем рендере (если он случится) данные обновятся
                         } catch (err) {
+                            // Ошибка: удаляем временную кнопку
                             UIUtils.showToast('Ошибка при добавлении реакции', 'error');
-                            tempBtn.remove();
+                            if (tempBtn.parentNode) tempBtn.remove();
                         }
                     });
                 }
@@ -108,6 +117,7 @@
             addBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 showReactionMenu(addBtn, issueNumber, async (selected) => {
+                    // Оптимистичное добавление
                     const tempBtn = document.createElement('button');
                     tempBtn.className = 'reaction-button active';
                     tempBtn.dataset.content = selected;
@@ -118,11 +128,9 @@
                     container.insertBefore(tempBtn, addBtn);
                     try {
                         await onAdd(issueNumber, selected);
-                        UIUtils.showToast('Реакция добавлена', 'success');
-                        invalidateCache(issueNumber);
                     } catch (err) {
                         UIUtils.showToast('Ошибка при добавлении реакции', 'error');
-                        tempBtn.remove();
+                        if (tempBtn.parentNode) tempBtn.remove();
                     }
                 });
             });
@@ -148,7 +156,7 @@
             boxShadow: 'var(--shadow)'
         });
 
-        REACTION_TYPES.forEach((type, index) => {
+        REACTION_TYPES.forEach(type => {
             const btn = document.createElement('button');
             btn.className = 'reaction-menu-btn';
             btn.innerHTML = type.emoji;
@@ -261,27 +269,19 @@
             try { 
                 await GithubAPI.addReaction(num, content); 
                 invalidateCache(num);
-                // Задержка для синхронизации GitHub
-                await new Promise(resolve => setTimeout(resolve, 300));
-                const updated = await GithubAPI.loadReactions(num); 
-                setCached(`reactions_${num}`, updated, reactionsCache);
-                renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove); 
-                UIUtils.showToast('Реакция добавлена', 'success');
+                // Не перезагружаем, только инвалидируем кеш
             } catch (err) {
                 UIUtils.showToast('Ошибка при добавлении реакции', 'error');
+                throw err;
             }
         };
         const handleRemove = async (num, reactionId) => { 
             try { 
                 await GithubAPI.removeReaction(num, reactionId); 
                 invalidateCache(num);
-                await new Promise(resolve => setTimeout(resolve, 300));
-                const updated = await GithubAPI.loadReactions(num); 
-                setCached(`reactions_${num}`, updated, reactionsCache);
-                renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove); 
-                UIUtils.showToast('Реакция убрана', 'success');
             } catch (err) {
                 UIUtils.showToast('Ошибка при удалении реакции', 'error');
+                throw err;
             }
         };
         renderReactions(reactionsDiv, item.id, reactions, currentUser, handleAdd, handleRemove);
@@ -453,7 +453,6 @@
                 <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(data.body||'')}</textarea>
                 <div class="preview-area" id="modal-preview-area" style="display:none;"></div>
                 <div class="button-group">
-                    <!-- кнопка отмены удалена -->
                     <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                 </div>
             </div>
