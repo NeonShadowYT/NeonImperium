@@ -13,10 +13,8 @@
 
         const newsSection = document.getElementById('news-section');
         if (newsSection) {
-            // Ищем заголовок, созданный news-feed.js, или добавляем кнопку рядом с ним
             let header = newsSection.querySelector('.news-header');
             if (!header) {
-                // Если заголовка нет (редкий случай), создаём простой
                 header = document.createElement('div');
                 header.className = 'news-header';
                 header.style.display = 'flex';
@@ -28,7 +26,6 @@
                 header.appendChild(title);
                 newsSection.prepend(header);
             }
-            // Добавляем кнопку админа, если её ещё нет
             if (!header.querySelector('.admin-news-btn')) {
                 const btn = document.createElement('button');
                 btn.className = 'button admin-news-btn';
@@ -41,7 +38,12 @@
 
         const updatesContainer = document.getElementById('game-updates');
         if (updatesContainer && updatesContainer.dataset.game) {
-            const game = updatesContainer.dataset.game;
+            // Обрезаем пробелы, чтобы избежать пустых меток
+            const game = String(updatesContainer.dataset.game).trim();
+            if (!game) {
+                console.warn('admin-news.js: data-game пустой или содержит только пробелы');
+                return;
+            }
             const parent = updatesContainer.parentNode;
             let header = parent.querySelector('.updates-header');
             if (!header) {
