@@ -116,7 +116,7 @@
         closeIssue,
         loadComments,
         addComment,
-        deleteComment,  // добавлено
+        deleteComment,
         loadReactions,
         addReaction,
         removeReaction

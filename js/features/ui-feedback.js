@@ -299,33 +299,22 @@
     async function renderPoll(container, issueNumber, pollData) {
         const currentUser = GithubAuth.getCurrentUser();
         
-        // Загружаем комментарии (с возможным использованием кеша)
-        let comments = [];
-        try {
-            comments = await loadCommentsWithCache(issueNumber);
-        } catch (err) {
-            UIUtils.showToast('Ошибка загрузки комментариев для опроса', 'error');
-            container.innerHTML = '<p class="error-message">Не удалось загрузить опрос</p>';
-            return;
-        }
+        // Загружаем все комментарии к issue
+        const comments = await GithubAPI.loadComments(issueNumber);
+        // Фильтруем комментарии, содержащие !vote индекс
+        const voteComments = comments.filter(c => /^!vote \d+$/.test(c.body.trim()));
         
-        // Парсим голоса из комментариев, которые начинаются с !vote
-        const voteComments = comments.filter(c => c.body && c.body.startsWith('!vote '));
-        const votes = voteComments.map(c => {
-            const match = c.body.match(/^!vote (\d+)/);
-            if (match) return { optionIndex: parseInt(match[1], 10), user: c.user.login, id: c.id };
-            return null;
-        }).filter(v => v !== null && v.optionIndex >= 0 && v.optionIndex < pollData.options.length);
-        
-        // Подсчет голосов
+        // Подсчёт голосов
         const voteCounts = pollData.options.map((_, index) => {
-            const count = votes.filter(v => v.optionIndex === index).length;
-            const userVote = currentUser ? votes.find(v => v.user === currentUser && v.optionIndex === index) : null;
-            return { count, userReacted: !!userVote, userVoteId: userVote ? userVote.id : null };
+            const count = voteComments.filter(c => c.body.trim() === `!vote ${index}`).length;
+            return count;
         });
         
-        const totalVotes = voteCounts.reduce((sum, v) => sum + v.count, 0);
+        const totalVotes = voteCounts.reduce((sum, v) => sum + v, 0);
         
+        // Проверяем, голосовал ли текущий пользователь
+        const userVoted = currentUser ? voteComments.some(c => c.user.login === currentUser) : false;
+
         const pollDiv = document.createElement('div');
         pollDiv.className = 'poll card';
         pollDiv.dataset.issue = issueNumber;
@@ -333,75 +322,58 @@
         
         let html = `<h3>📊 ${GithubCore.escapeHtml(pollData.question)}</h3>`;
         
-        const hasVoted = voteCounts.some(v => v.userReacted);
-        
-        if (hasVoted || !currentUser) {
-            html += '<div class="poll-results">';
-            pollData.options.forEach((option, index) => {
-                const count = voteCounts[index].count;
-                const percent = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-                html += `
-                    <div class="poll-result">
-                        <div class="poll-option-text">${GithubCore.escapeHtml(option)}</div>
-                        <div class="progress-bar">
-                            <div style="width: ${percent}%;">${percent}% (${count})</div>
-                        </div>
+        // Всегда показываем результаты (даже если пользователь не голосовал, кнопки будут ниже)
+        html += '<div class="poll-results">';
+        pollData.options.forEach((option, index) => {
+            const count = voteCounts[index];
+            const percent = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+            html += `
+                <div class="poll-result">
+                    <div class="poll-option-text">${GithubCore.escapeHtml(option)}</div>
+                    <div class="progress-bar">
+                        <div style="width: ${percent}%;">${percent}% (${count})</div>
                     </div>
-                `;
-            });
-            html += '</div>';
-            if (hasVoted) {
-                html += '<p class="text-secondary small">Вы уже проголосовали</p>';
-            }
-        } else {
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        // Если пользователь авторизован и ещё не голосовал, показываем кнопки
+        if (currentUser && !userVoted) {
             html += '<div class="poll-vote">';
             pollData.options.forEach((option, index) => {
                 html += `<button class="button poll-vote-btn" data-option="${index}">${GithubCore.escapeHtml(option)}</button>`;
             });
             html += '</div>';
+        } else if (userVoted) {
+            html += '<p class="text-secondary small">Вы уже проголосовали</p>';
         }
         
         pollDiv.innerHTML = html;
         container.innerHTML = '';
         container.appendChild(pollDiv);
         
-        if (!hasVoted && currentUser) {
-            const btns = pollDiv.querySelectorAll('.poll-vote-btn');
-            for (const btn of btns) {
+        // Обработчики для кнопок голосования (только если они есть)
+        if (currentUser && !userVoted) {
+            pollDiv.querySelectorAll('.poll-vote-btn').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const optionIndex = btn.dataset.option;
                     
-                    // Отключаем кнопку, чтобы избежать двойного клика
                     btn.disabled = true;
                     
                     try {
-                        // Проверяем, есть ли уже голос от этого пользователя (на случай двойного клика или если интерфейс не обновился)
-                        const existingVote = votes.find(v => v.user === currentUser);
-                        if (existingVote) {
-                            // Удаляем предыдущий комментарий с голосом
-                            await GithubAPI.deleteComment(existingVote.id);
-                            // Инвалидируем кеш комментариев
-                            invalidateCache(issueNumber);
-                        }
-                        
-                        // Отправляем новый комментарий с голосом
-                        const commentBody = `!vote ${optionIndex}`;
-                        await GithubAPI.addComment(issueNumber, commentBody);
-                        
+                        // Добавляем комментарий с голосом
+                        await GithubAPI.addComment(issueNumber, `!vote ${optionIndex}`);
                         UIUtils.showToast('Голос учтён', 'success');
-                        
-                        // Инвалидируем кеш и перерисовываем опрос
-                        invalidateCache(issueNumber);
+                        // Перерисовываем опрос, чтобы показать результаты и скрыть кнопки
                         await renderPoll(container, issueNumber, pollData);
-                        
                     } catch (err) {
-                        console.error('Vote error:', err);
                         UIUtils.showToast('Ошибка при голосовании', 'error');
                         btn.disabled = false;
                     }
                 });
-            }
+            });
         }
     }
 
@@ -661,7 +633,6 @@
 
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            console.log('Submit clicked'); // отладка
 
             const titleInput = modal.querySelector('#modal-input-title');
             const bodyTextarea = modal.querySelector('#modal-body');
