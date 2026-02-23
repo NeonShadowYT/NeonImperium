@@ -1,4 +1,4 @@
-// ui-utils.js – общие компоненты интерфейса: тосты, модалки
+// ui-utils.js – общие компоненты интерфейса: тосты, модалки, предупреждение при уходе
 
 (function() {
     // Показывает временное уведомление (тост)
@@ -46,14 +46,13 @@
         let modalClass = 'modal';
         let contentClass = 'modal-content';
         if (size === 'full') {
-            modalClass += ' modal-fullscreen';   // используем класс из feedback.css
+            modalClass += ' modal-fullscreen';
             contentClass += ' modal-content-full';
         }
         modal.className = modalClass;
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
         modal.setAttribute('aria-labelledby', 'modal-header-title');
-        // ИСПРАВЛЕНИЕ: изменён id заголовка на modal-header-title
         modal.innerHTML = `
             <div class="${contentClass}">
                 <div class="modal-header">
@@ -65,7 +64,6 @@
         `;
         document.body.appendChild(modal);
         document.body.style.overflow = 'hidden';
-        // Активируем модальное окно (делаем видимым)
         modal.classList.add('active');
 
         const closeModal = () => {
@@ -90,5 +88,13 @@
         return { modal, closeModal };
     }
 
-    window.UIUtils = { showToast, createModal };
+    // Функция для подтверждения перед уходом со страницы (используется в редакторе)
+    function confirmBeforeUnload(event) {
+        if (window.editorHasUnsavedChanges) {
+            event.preventDefault();
+            event.returnValue = ''; // Стандартное сообщение браузера
+        }
+    }
+
+    window.UIUtils = { showToast, createModal, confirmBeforeUnload };
 })();

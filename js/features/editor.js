@@ -1,4 +1,4 @@
-// editor.js — унифицированный Markdown-редактор с шаблонами
+// editor.js — унифицированный Markdown-редактор с шаблонами и расширенными инструментами
 
 (function() {
     // База шаблонов
@@ -110,31 +110,32 @@
             action: (textarea) => insertCard(textarea)
         },
         
-        // Alert блоки
-        alertNote: { 
-            name: 'Note', 
-            icon: 'fas fa-info-circle',
-            action: (textarea) => insertAlert(textarea, 'NOTE')
+        // Иконки (Font Awesome)
+        icon: {
+            name: 'Иконка',
+            icon: 'fas fa-icons',
+            action: (textarea) => insertIcon(textarea)
         },
-        alertTip: { 
-            name: 'Tip', 
-            icon: 'fas fa-lightbulb',
-            action: (textarea) => insertAlert(textarea, 'TIP')
+
+        // Цвет текста
+        color: {
+            name: 'Цвет текста',
+            icon: 'fas fa-palette',
+            action: (textarea) => insertColor(textarea, 'color')
         },
-        alertImportant: { 
-            name: 'Important', 
-            icon: 'fas fa-exclamation',
-            action: (textarea) => insertAlert(textarea, 'IMPORTANT')
+
+        // Цвет фона
+        bgcolor: {
+            name: 'Цвет фона',
+            icon: 'fas fa-fill-drip',
+            action: (textarea) => insertColor(textarea, 'background-color')
         },
-        alertWarning: { 
-            name: 'Warning', 
-            icon: 'fas fa-exclamation-triangle',
-            action: (textarea) => insertAlert(textarea, 'WARNING')
-        },
-        alertCaution: { 
-            name: 'Caution', 
-            icon: 'fas fa-bolt',
-            action: (textarea) => insertAlert(textarea, 'CAUTION')
+
+        // Кастомный CSS класс
+        class: {
+            name: 'CSS класс',
+            icon: 'fas fa-code',
+            action: (textarea) => insertClass(textarea)
         }
     };
 
@@ -194,7 +195,6 @@
         const url = prompt('Введите ссылку на YouTube видео:', 'https://youtu.be/...');
         if (!url) return;
         
-        // Пытаемся извлечь ID видео
         let videoId = '';
         const patterns = [
             /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
@@ -224,32 +224,22 @@
         insertAtCursor(textarea, spoiler);
     }
 
-    function insertAlert(textarea, type) {
-        const text = prompt(`Текст для блока ${type}:`, '');
-        if (text === null) return;
-        const alertBlock = `\n> [!${type}]\n> ${text}\n`;
-        insertAtCursor(textarea, alertBlock);
-    }
-
     function insertTable(textarea) {
         const rows = prompt('Количество строк:', '3');
         const cols = prompt('Количество столбцов:', '2');
         if (!rows || !cols) return;
         
         let table = '\n';
-        // Заголовок
         for (let i = 0; i < parseInt(cols); i++) {
             table += `| Заголовок ${i+1} `;
         }
         table += '|\n';
         
-        // Разделитель
         for (let i = 0; i < parseInt(cols); i++) {
             table += '|-------------';
         }
         table += '|\n';
         
-        // Ячейки
         for (let r = 0; r < parseInt(rows); r++) {
             for (let c = 0; c < parseInt(cols); c++) {
                 table += `| Ячейка ${r+1}-${c+1} `;
@@ -300,6 +290,37 @@
         insertAtCursor(textarea, pollComment);
     }
 
+    // Новые инструменты
+    function insertIcon(textarea) {
+        const icon = prompt('Введите название иконки Font Awesome (например, "fa-heart"):', 'fa-heart');
+        if (!icon) return;
+        insertAtCursor(textarea, `<i class="fas ${icon}"></i>`);
+    }
+
+    function insertColor(textarea, styleProp) {
+        const color = prompt(`Введите цвет (например, red, #ff0000):`, 'red');
+        if (!color) return;
+        const selected = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
+        if (selected) {
+            // Оборачиваем выделенный текст в span с цветом
+            insertAtCursor(textarea, `<span style="${styleProp}: ${color};">${selected}</span>`);
+        } else {
+            // Вставляем span с цветом и плейсхолдером
+            insertAtCursor(textarea, `<span style="${styleProp}: ${color};">текст</span>`);
+        }
+    }
+
+    function insertClass(textarea) {
+        const className = prompt('Введите имя CSS класса:', 'my-class');
+        if (!className) return;
+        const selected = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
+        if (selected) {
+            insertAtCursor(textarea, `<span class="${className}">${selected}</span>`);
+        } else {
+            insertAtCursor(textarea, `<span class="${className}">текст</span>`);
+        }
+    }
+
     // Создание панели инструментов
     function createEditorToolbar(textarea, options = {}) {
         const toolbar = document.createElement('div');
@@ -323,7 +344,9 @@
             'Медиа': ['link', 'image', 'youtube'],
             'Код': ['code', 'codeblock'],
             'Блоки': ['spoiler', 'table', 'poll', 'progress', 'card'],
-            'Alert': ['alertNote', 'alertTip', 'alertImportant', 'alertWarning', 'alertCaution']
+            'Иконки': ['icon'],
+            'Цвет': ['color', 'bgcolor'],
+            'Классы': ['class']
         };
 
         for (const [groupName, templateKeys] of Object.entries(groups)) {
@@ -387,11 +410,13 @@
         insertImage,
         insertYouTube,
         insertSpoiler,
-        insertAlert,
         insertTable,
         insertCodeBlock,
         insertProgressBar,
         insertCard,
-        insertPoll
+        insertPoll,
+        insertIcon,
+        insertColor,
+        insertClass
     };
 })();

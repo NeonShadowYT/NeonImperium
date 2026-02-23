@@ -385,7 +385,7 @@
         }
     }
 
-    // --- Функции для опросов (новая реализация на комментариях) ---
+    // --- Функции для опросов (новая реализация) ---
 
     function extractPollFromBody(body) {
         const regex = /<!-- poll: (.*?) -->/g;
@@ -398,6 +398,22 @@
             }
         }
         return null;
+    }
+
+    // Рендеринг тела поста (используется и в модалке, и в предпросмотре)
+    async function renderPostBody(container, body, issueNumber) {
+        // Рендерим Markdown
+        let html = GithubCore.renderMarkdown(body);
+        container.innerHTML = html;
+
+        // Обрабатываем опросы
+        const pollData = extractPollFromBody(body);
+        if (pollData && issueNumber) {
+            const pollContainer = document.createElement('div');
+            pollContainer.className = 'poll-container';
+            container.appendChild(pollContainer);
+            await renderPoll(pollContainer, issueNumber, pollData);
+        }
     }
 
     async function renderPoll(container, issueNumber, pollData) {
@@ -426,38 +442,47 @@
         
         let html = `<h3>📊 ${GithubCore.escapeHtml(pollData.question)}</h3>`;
         
-        // Всегда показываем результаты
-        html += '<div class="poll-results">';
+        // Всегда показываем варианты
+        html += '<div class="poll-options">';
         pollData.options.forEach((option, index) => {
             const count = voteCounts[index];
             const percent = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-            html += `
-                <div class="poll-result">
-                    <div class="poll-option-text">${GithubCore.escapeHtml(option)}</div>
-                    <div class="progress-bar">
-                        <div style="width: ${percent}%; text-align: center;">${percent}% (${count})</div>
-                    </div>
-                </div>
-            `;
+
+            html += `<div class="poll-option" data-index="${index}">`;
+            html += `<div class="poll-option-text">${GithubCore.escapeHtml(option)}</div>`;
+
+            // Если пользователь проголосовал (или не зарегистрирован, но мы показываем результаты? по условию: скрываем проценты до голоса)
+            // По новым правилам: если пользователь не зарегистрирован, показываем только приглашение, без кнопок и процентов.
+            // Если зарегистрирован, но не голосовал, показываем кнопки, проценты НЕ показываем.
+            // Если проголосовал, показываем проценты и скрываем кнопки.
+            
+            if (!currentUser) {
+                // Не зарегистрирован: показываем только текст, без процентов и кнопок
+                // Ниже добавим приглашение
+            } else if (!userVoted) {
+                // Зарегистрирован, но не голосовал: показываем кнопку, без процентов
+                html += `<button class="button poll-vote-btn" data-option="${index}">Голосовать</button>`;
+            } else {
+                // Проголосовал: показываем прогресс-бар с процентами
+                html += `<div class="progress-bar"><div style="width: ${percent}%; text-align: center;">${percent}% (${count})</div></div>`;
+            }
+
+            html += '</div>';
         });
         html += '</div>';
-        
-        // Если пользователь авторизован и ещё не голосовал, показываем кнопки
-        if (currentUser && !userVoted) {
-            html += '<div class="poll-vote">';
-            pollData.options.forEach((option, index) => {
-                html += `<button class="button poll-vote-btn" data-option="${index}">${GithubCore.escapeHtml(option)}</button>`;
-            });
-            html += '</div>';
-        } else if (userVoted) {
-            html += '<p class="text-secondary small">Вы уже проголосовали</p>';
+
+        // Если пользователь не зарегистрирован, показываем сообщение
+        if (!currentUser) {
+            html += '<p class="text-secondary small" style="margin-top:15px;"><i class="fas fa-info-circle"></i> Чтобы участвовать в опросе, <a href="#" id="poll-login-link">войдите в аккаунт</a>.</p>';
+        } else if (!userVoted) {
+            html += '<p class="text-secondary small" style="margin-top:10px;">Вы ещё не голосовали. Нажмите на кнопку варианта, чтобы отдать голос.</p>';
         }
-        
+
         pollDiv.innerHTML = html;
         container.innerHTML = '';
         container.appendChild(pollDiv);
-        
-        // Обработчики для кнопок голосования (только если они есть)
+
+        // Обработчики для кнопок голосования
         if (currentUser && !userVoted) {
             pollDiv.querySelectorAll('.poll-vote-btn').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
@@ -470,13 +495,23 @@
                         // Добавляем комментарий с голосом
                         await GithubAPI.addComment(issueNumber, `!vote ${optionIndex}`);
                         UIUtils.showToast('Голос учтён', 'success');
-                        // Перерисовываем опрос, чтобы показать результаты и скрыть кнопки
+                        // Мгновенно обновляем опрос (без перезагрузки страницы)
+                        // Перерисовываем опрос с новыми данными
                         await renderPoll(container, issueNumber, pollData);
                     } catch (err) {
                         UIUtils.showToast('Ошибка при голосовании', 'error');
                         btn.disabled = false;
                     }
                 });
+            });
+        }
+
+        // Обработчик ссылки для входа
+        const loginLink = pollDiv.querySelector('#poll-login-link');
+        if (loginLink) {
+            loginLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                window.dispatchEvent(new CustomEvent('github-login-requested'));
             });
         }
     }
@@ -644,18 +679,8 @@
             `;
             container.appendChild(header);
 
-            const bodyDiv = document.createElement('div'); bodyDiv.className = 'spoiler-content'; 
-            bodyDiv.innerHTML = GithubCore.renderMarkdown(issue.body);
-            container.appendChild(bodyDiv);
-
-            // Обработка опроса
-            const pollData = extractPollFromBody(issue.body);
-            if (pollData) {
-                const pollContainer = document.createElement('div');
-                pollContainer.className = 'poll-container';
-                container.appendChild(pollContainer);
-                await renderPoll(pollContainer, item.id, pollData);
-            }
+            // Рендерим тело поста
+            await renderPostBody(container, issue.body, item.id);
 
             await loadReactionsAndComments(container, item, currentUser, issue);
             if (currentUser) setupCommentForm(container, item, currentUser);
@@ -695,60 +720,76 @@
 
         const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
 
+        // Отслеживаем изменения в полях для предупреждения при закрытии
+        let hasChanges = false;
+        const titleInput = modal.querySelector('#modal-input-title');
+        const bodyTextarea = modal.querySelector('#modal-body');
+        const categorySelect = modal.querySelector('#modal-category');
+
+        const checkChanges = () => {
+            const currentTitle = titleInput.value.trim();
+            const currentBody = bodyTextarea.value.trim();
+            const originalTitle = (data.title || '').trim();
+            const originalBody = (data.body || '').trim();
+            hasChanges = (currentTitle !== originalTitle) || (currentBody !== originalBody);
+        };
+
+        titleInput.addEventListener('input', checkChanges);
+        bodyTextarea.addEventListener('input', checkChanges);
+        if (categorySelect) {
+            categorySelect.addEventListener('change', checkChanges);
+        }
+
+        // Перехватываем попытку закрыть модалку
+        const originalClose = closeModal;
+        const closeWithCheck = () => {
+            if (hasChanges) {
+                if (confirm('У вас есть несохранённые изменения. Вы действительно хотите закрыть?')) {
+                    originalClose();
+                }
+            } else {
+                originalClose();
+            }
+        };
+
+        // Заменяем обработчик на кнопке закрытия
+        const closeBtn = modal.querySelector('.modal-close');
+        if (closeBtn) {
+            closeBtn.replaceWith(closeBtn.cloneNode(true));
+            modal.querySelector('.modal-close').addEventListener('click', closeWithCheck);
+        }
+
+        // Перехватываем клик по фону
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                e.preventDefault();
+                closeWithCheck();
+            }
+        });
+
         // Инициализация редактора
         if (window.Editor) {
-            const bodyTextarea = modal.querySelector('#modal-body');
             const toolbar = Editor.createEditorToolbar(bodyTextarea, { 
-                previewAreaId: 'modal-preview-area', 
+                previewAreaId: 'modal-preview-area',
                 onPreview: () => {
                     const preview = modal.querySelector('#modal-preview-area');
                     if (!preview) return;
-                    let body = bodyTextarea.value;
-                    const pollRegex = /<!-- poll: (.*?) -->/g;
-                    body = body.replace(pollRegex, (match, p1) => {
-                        try {
-                            const pollData = JSON.parse(p1);
-                            const optionsHtml = pollData.options.map(opt => `<div>• ${GithubCore.escapeHtml(opt)}</div>`).join('');
-                            return `<div class="poll-preview"><strong>📊 Опрос: ${GithubCore.escapeHtml(pollData.question)}</strong>${optionsHtml}</div>`;
-                        } catch {
-                            return '<div class="poll-preview error">[Ошибка опроса]</div>';
-                        }
-                    });
-                    preview.innerHTML = window.GithubCore?.renderMarkdown(body) || body;
-                    preview.style.display = body.trim() ? 'block' : 'none';
+                    // Используем renderPostBody для предпросмотра, но без issueNumber (опросы не будут интерактивными)
+                    preview.innerHTML = ''; // очистим
+                    renderPostBody(preview, bodyTextarea.value, null); // null issueNumber – опросы не активны
+                    preview.style.display = bodyTextarea.value.trim() ? 'block' : 'none';
                 }
             });
             const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
             if (toolbarContainer) {
                 toolbarContainer.appendChild(toolbar);
-            } else {
-                console.error('toolbar container not found');
             }
-        } else {
-            console.error('Editor not loaded');
-            UIUtils.showToast('Редактор не загружен, попробуйте обновить страницу', 'error');
         }
 
         // Обработчик отправки
         const submitBtn = modal.querySelector('#modal-submit');
-        if (!submitBtn) {
-            console.error('submit button not found');
-            UIUtils.showToast('Ошибка: кнопка отправки не найдена', 'error');
-            return;
-        }
-
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-
-            const titleInput = modal.querySelector('#modal-input-title');
-            const bodyTextarea = modal.querySelector('#modal-body');
-            const categorySelect = modal.querySelector('#modal-category');
-
-            if (!titleInput || !bodyTextarea) {
-                console.error('Modal elements missing');
-                UIUtils.showToast('Ошибка: элементы формы не найдены', 'error');
-                return;
-            }
 
             const title = titleInput.value.trim();
             let body = bodyTextarea.value;
@@ -800,20 +841,13 @@
                     labels = ['type:update', `game:${data.game}`];
                 }
 
-                if (labels.length === 0) {
-                    UIUtils.showToast('Ошибка: не заданы метки для обращения', 'error');
-                    btn.disabled = false;
-                    btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
-                    return;
-                }
-
                 if (mode === 'edit') {
                     await GithubAPI.updateIssue(data.number, { title, body, labels });
                 } else {
                     await GithubAPI.createIssue(title, body, labels);
                 }
 
-                closeModal();
+                closeWithCheck(); // используем проверку, но изменений уже нет
                 if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
                 if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
                 if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
@@ -834,6 +868,7 @@
         renderComments, 
         openFullModal, 
         openEditorModal, 
+        renderPostBody,
         REACTION_TYPES,
         invalidateCache 
     };

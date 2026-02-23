@@ -1,4 +1,4 @@
-// feedback.js — обратная связь для страниц игр с кешированием реакций и карточками в сетке
+// feedback.js — обратная связь для страниц игр с бесконечной прокруткой и лимитом DOM-элементов
 
 (function() {
     const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
@@ -7,12 +7,14 @@
     const { isAdmin, getCurrentUser } = GithubAuth;
 
     const ITEMS_PER_PAGE = 10;
-    const REACTIONS_CACHE_TTL = 5 * 60 * 1000; // 5 минут
-    window.reactionsListCache = window.reactionsListCache || new Map();
+    const MAX_DISPLAY_ITEMS = 30; // максимальное количество карточек в DOM (для экономии памяти)
+    const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
 
     let currentGame = '', currentTab = 'all', currentPage = 1, hasMorePages = true, isLoading = false;
-    let allIssues = [], displayedIssues = [], container, feedbackSection;
+    let allIssues = [], displayedIssues = [], container, feedbackSection, gridContainer;
     let currentUser = null, currentAbort = null;
+    let observer = null; // Intersection Observer для бесконечной прокрутки
+    let sentinel = null; // элемент-триггер в конце списка
 
     document.addEventListener('DOMContentLoaded', init);
     function init() {
@@ -55,10 +57,8 @@
                 <button class="feedback-tab" data-tab="bug" role="tab" aria-selected="false" aria-controls="feedback-panel">🐛 Баги</button>
                 <button class="feedback-tab" data-tab="review" role="tab" aria-selected="false" aria-controls="feedback-panel">⭐ Отзывы</button>
             </div>
-            <div class="projects-grid" id="feedback-panel" role="tabpanel" aria-labelledby="active-tab">
-                <div class="loading-spinner" style="grid-column: 1/-1;"><i class="fas fa-circle-notch fa-spin"></i></div>
-            </div>
-            <div style="text-align:center;margin-top:20px;" id="load-more-container"><button class="button" id="load-more" style="display:none;" data-lang="feedbackLoadMore">Загрузить ещё</button></div>
+            <div class="projects-grid" id="feedback-panel" role="tabpanel" aria-labelledby="active-tab"></div>
+            <div id="sentinel" style="height: 10px; margin-top: 10px;"></div>
         `;
 
         if (currentUser) {
@@ -78,9 +78,11 @@
                 currentTab = e.target.dataset.tab;
                 currentPage = 1;
                 allIssues = [];
-                const loadMoreBtn = document.getElementById('load-more');
-                if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+                displayedIssues = [];
+                gridContainer = document.getElementById('feedback-panel');
+                if (gridContainer) gridContainer.innerHTML = '';
                 if (currentAbort) currentAbort.controller.abort();
+                if (observer) observer.disconnect();
                 loadIssuesPage(1, true);
             });
 
@@ -101,9 +103,17 @@
             });
         });
 
-        document.getElementById('load-more').addEventListener('click', () => {
-            if (!isLoading && hasMorePages) loadIssuesPage(currentPage + 1, false);
-        });
+        gridContainer = document.getElementById('feedback-panel');
+        sentinel = document.getElementById('sentinel');
+
+        // Настраиваем Intersection Observer для подгрузки
+        observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && !isLoading && hasMorePages) {
+                loadIssuesPage(currentPage + 1, false);
+            }
+        }, { threshold: 0.1 });
+
+        observer.observe(sentinel);
 
         await loadIssuesPage(1, true);
     }
@@ -128,67 +138,141 @@
             if (reset) allIssues = deduplicateByNumber(issues);
             else allIssues = deduplicateByNumber([...allIssues, ...issues]);
             currentPage = page;
-            filterAndDisplayIssues();
+            filterAndDisplayIssues(reset);
         } catch (error) {
             if (error.name === 'AbortError') return;
-            document.getElementById('feedback-panel').innerHTML = `<div class="error-message" style="grid-column:1/-1;"><i class="fas fa-exclamation-triangle"></i><p data-lang="feedbackLoadError">Ошибка загрузки.</p><button class="button-small" id="retry-feedback" data-lang="feedbackRetry">Повторить</button></div>`;
-            document.getElementById('retry-feedback')?.addEventListener('click', () => loadIssuesPage(1, true));
+            UIUtils.showToast('Ошибка загрузки', 'error');
         } finally {
             clearTimeout(timeoutId);
             if (currentAbort?.controller === controller) currentAbort = null;
             isLoading = false;
-            const loadMoreBtn = document.getElementById('load-more');
-            if (loadMoreBtn) loadMoreBtn.style.display = hasMorePages ? 'inline-block' : 'none';
         }
     }
 
-    function filterAndDisplayIssues() {
+    function filterAndDisplayIssues(reset = false) {
         let filtered = allIssues.filter(issue => issue.state === 'open');
         if (currentTab !== 'all') filtered = filtered.filter(issue => issue.labels.some(l => l.name === `type:${currentTab}`));
         displayedIssues = filtered;
-        renderIssuesList(displayedIssues);
+
+        // Ограничиваем количество отображаемых в DOM элементов (для производительности)
+        let issuesToRender = displayedIssues;
+        if (displayedIssues.length > MAX_DISPLAY_ITEMS) {
+            // Показываем последние MAX_DISPLAY_ITEMS (самые новые)
+            issuesToRender = displayedIssues.slice(-MAX_DISPLAY_ITEMS);
+        }
+
+        if (reset) {
+            gridContainer.innerHTML = '';
+        }
+
+        renderIssuesList(issuesToRender, reset);
     }
 
-    function renderIssuesList(issues) {
-        const grid = document.getElementById('feedback-panel');
-        if (!grid) return;
-        if (issues.length === 0) {
-            grid.innerHTML = `<p class="text-secondary" style="grid-column:1/-1; text-align:center;" data-lang="feedbackNoItems">Пока нет сообщений. Будьте первым!</p>`;
-            return;
+    function renderIssuesList(issues, reset) {
+        if (reset) {
+            gridContainer.innerHTML = '';
         }
-        grid.innerHTML = issues.map(issue => {
-            const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
-            const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : '⭐';
-            const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
-            const date = new Date(issue.created_at).toLocaleDateString();
-            return `
-                <div class="project-card-link" data-issue-number="${issue.number}" data-issue-id="${issue.id}" style="cursor: pointer;">
-                    <div class="project-card">
-                        <div class="image-wrapper" style="display: flex; align-items: center; justify-content: center; background: var(--bg-primary); font-size: 48px;">
-                            ${typeIcon}
-                        </div>
-                        <h3>${escapeHtml(issue.title)}</h3>
-                        <p class="text-secondary" style="font-size: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${escapeHtml(preview).replace(/\n/g,' ')}</p>
-                        <div class="reactions-container" data-target-type="issue" data-target-id="${issue.number}" style="margin: 8px 0;"></div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-secondary);">
-                            <span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span>
-                            <span><i class="fas fa-calendar-alt"></i> ${date}</span>
-                            <span><i class="fas fa-comment"></i> ${issue.comments}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
+
+        // Создаём карточки для новых элементов (тех, которых ещё нет в DOM)
+        // Для простоты будем добавлять все issues в конец. Если общее количество превысит лимит, удалим старые.
         issues.forEach(issue => {
-            const reactionsContainer = document.querySelector(`.reactions-container[data-target-id="${issue.number}"]`);
-            if (reactionsContainer) loadAndRenderReactionsWithCache(issue.number, reactionsContainer);
+            // Проверяем, есть ли уже такая карточка (по номеру)
+            if (document.querySelector(`.project-card-link[data-issue-number="${issue.number}"]`)) return;
+
+            const card = createIssueCard(issue);
+            gridContainer.appendChild(card);
         });
-        attachEventHandlers();
+
+        // Если общее количество карточек превысило MAX_DISPLAY_ITEMS, удаляем лишние сверху
+        const cards = gridContainer.querySelectorAll('.project-card-link');
+        if (cards.length > MAX_DISPLAY_ITEMS) {
+            const toRemove = cards.length - MAX_DISPLAY_ITEMS;
+            for (let i = 0; i < toRemove; i++) {
+                cards[i].remove();
+            }
+        }
+    }
+
+    function createIssueCard(issue) {
+        const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
+        const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : '⭐';
+        const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
+        const date = new Date(issue.created_at).toLocaleDateString();
+
+        const cardLink = document.createElement('div');
+        cardLink.className = 'project-card-link';
+        cardLink.dataset.issueNumber = issue.number;
+        cardLink.dataset.issueId = issue.id;
+        cardLink.style.cursor = 'pointer';
+
+        const card = document.createElement('div');
+        card.className = 'project-card';
+
+        const imageWrapper = document.createElement('div');
+        imageWrapper.className = 'image-wrapper';
+        imageWrapper.style.display = 'flex';
+        imageWrapper.style.alignItems = 'center';
+        imageWrapper.style.justifyContent = 'center';
+        imageWrapper.style.background = 'var(--bg-primary)';
+        imageWrapper.style.fontSize = '48px';
+        imageWrapper.textContent = typeIcon;
+
+        const title = document.createElement('h3');
+        title.textContent = issue.title.length > 70 ? issue.title.substring(0,70)+'…' : issue.title;
+
+        const previewP = document.createElement('p');
+        previewP.className = 'text-secondary';
+        previewP.style.fontSize = '13px';
+        previewP.style.overflow = 'hidden';
+        previewP.style.display = '-webkit-box';
+        previewP.style.webkitLineClamp = '2';
+        previewP.style.webkitBoxOrient = 'vertical';
+        previewP.textContent = preview.replace(/\n/g,' ');
+
+        const reactionsDiv = document.createElement('div');
+        reactionsDiv.className = 'reactions-container';
+        reactionsDiv.dataset.targetType = 'issue';
+        reactionsDiv.dataset.targetId = issue.number;
+
+        const footer = document.createElement('div');
+        footer.style.display = 'flex';
+        footer.style.justifyContent = 'space-between';
+        footer.style.alignItems = 'center';
+        footer.style.fontSize = '12px';
+        footer.style.color = 'var(--text-secondary)';
+        footer.innerHTML = `
+            <span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span>
+            <span><i class="fas fa-calendar-alt"></i> ${date}</span>
+            <span><i class="fas fa-comment"></i> ${issue.comments}</span>
+        `;
+
+        card.append(imageWrapper, title, previewP, reactionsDiv, footer);
+        cardLink.appendChild(card);
+
+        // Загружаем реакции
+        loadAndRenderReactionsWithCache(issue.number, reactionsDiv);
+
+        // Обработчик клика на карточку
+        cardLink.addEventListener('click', (e) => {
+            if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
+            openFullModal({
+                type: 'issue',
+                id: issue.number,
+                title: issue.title,
+                body: issue.body,
+                author: issue.user.login,
+                date: new Date(issue.created_at),
+                game: currentGame,
+                labels: issue.labels.map(l => l.name)
+            });
+        });
+
+        return cardLink;
     }
 
     async function loadAndRenderReactionsWithCache(issueNumber, container) {
         const cacheKey = `list_reactions_${issueNumber}`;
-        const cached = window.reactionsListCache.get(cacheKey);
+        const cached = window.reactionsListCache?.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < REACTIONS_CACHE_TTL) {
             renderReactionsFromCache(cached.data, container, issueNumber);
             return;
@@ -196,6 +280,7 @@
 
         try {
             const reactions = await loadReactions(issueNumber);
+            if (!window.reactionsListCache) window.reactionsListCache = new Map();
             window.reactionsListCache.set(cacheKey, { data: reactions, timestamp: Date.now() });
             renderReactionsFromCache(reactions, container, issueNumber);
         } catch (err) {
@@ -207,7 +292,7 @@
         const handleAdd = async (num, content) => { 
             try { 
                 await addReaction(num, content); 
-                window.reactionsListCache.delete(`list_reactions_${num}`);
+                if (window.reactionsListCache) window.reactionsListCache.delete(`list_reactions_${num}`);
                 if (window.UIFeedback) window.UIFeedback.invalidateCache(num);
             } catch (err) { 
                 UIUtils.showToast('Ошибка при добавлении реакции', 'error');
@@ -217,7 +302,7 @@
         const handleRemove = async (num, reactionId) => { 
             try { 
                 await removeReaction(num, reactionId); 
-                window.reactionsListCache.delete(`list_reactions_${num}`);
+                if (window.reactionsListCache) window.reactionsListCache.delete(`list_reactions_${num}`);
                 if (window.UIFeedback) window.UIFeedback.invalidateCache(num);
             } catch (err) { 
                 UIUtils.showToast('Ошибка при удалении реакции', 'error');
@@ -225,25 +310,5 @@
             }
         };
         renderReactions(container, issueNumber, reactions, currentUser, handleAdd, handleRemove);
-    }
-
-    function attachEventHandlers() {
-        document.querySelectorAll('.project-card-link[data-issue-number]').forEach(item => {
-            item.addEventListener('click', (e) => {
-                if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
-                const issueNumber = item.dataset.issueNumber;
-                const issue = allIssues.find(i => i.number == issueNumber);
-                if (issue) openFullModal({ 
-                    type: 'issue', 
-                    id: issueNumber, 
-                    title: issue.title, 
-                    body: issue.body, 
-                    author: issue.user.login, 
-                    date: new Date(issue.created_at), 
-                    game: currentGame, 
-                    labels: issue.labels.map(l => l.name) 
-                });
-            });
-        });
     }
 })();

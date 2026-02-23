@@ -1,4 +1,4 @@
-/* cards.css — обновлён, удалён .tilt-card, добавлены переменные */
+/* cards.css — удалены все will-change для экономии памяти */
 
 :root {
     --border-radius-card: 20px;
@@ -107,7 +107,6 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    will-change: transform;
 }
 .project-card-link:hover .project-card { border-color: var(--accent); }
 .image-wrapper {
@@ -123,7 +122,6 @@
     height: 100%;
     object-fit: cover;
     transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
 }
 .project-card-link:hover .project-image { transform: scale(1.05); }
 .project-card h3 {
@@ -156,7 +154,6 @@
     align-items: center;
     text-align: center;
     transition: border-color var(--transition-default), transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
 }
 .profile-card-link:hover .profile-card { border-color: var(--accent); }
 .avatar-wrapper {
@@ -178,7 +175,6 @@
     object-fit: cover;
     object-position: center;
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
 }
 .profile-name {
     color: var(--text-primary);
@@ -232,14 +228,12 @@
     padding: 20px;
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
 }
 .feature-icon {
     font-size: 32px;
     display: block;
     margin-bottom: 10px;
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
 }
 .feature-item h3 {
     margin: 0 0 8px;
@@ -252,7 +246,6 @@
     border-radius: var(--border-radius-inner);
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
 }
 .features-extra h3 {
     margin: 0 0 15px;
@@ -284,7 +277,6 @@
     padding: 12px;
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color var(--transition-default);
-    will-change: transform;
 }
 .video-card:hover { border-color: var(--accent); }
 .video-thumbnail {
@@ -295,7 +287,6 @@
     margin-bottom: 10px;
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
 }
 .video-card h4 {
     font-size: 16px;
@@ -322,7 +313,6 @@
     border-radius: var(--border-radius-inner);
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
 }
 .req-label {
     display: block;
@@ -337,7 +327,6 @@
     margin-top: 24px;
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
 }
 .consumption-table {
     width: 100%;
@@ -362,7 +351,6 @@
     margin-bottom: 20px;
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
 }
 .update-card h3 {
     margin: 0 0 15px;

@@ -1,5 +1,5 @@
 // news-feed.js — лента новостей на главной (новости + обновления) с видео
-// Упрощённое получение видео через RSS2JSON (без Invidious)
+// Теперь отображает только 6 самых новых элементов (посты и видео, смешанные)
 
 (function() {
     const { cacheGet, cacheSet, escapeHtml, renderMarkdown, CONFIG, deduplicateByNumber, createAbortable, stripHtml } = GithubCore;
@@ -14,7 +14,6 @@
         { id: 'UCcuqf3fNtZ2UP5MO89kVKLw', name: 'Mitmi' }
     ];
     const DEFAULT_IMAGE = 'images/default-news.jpg';
-    const RETRY_COOLDOWN = 60000;
 
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
     let currentUser = null, currentAbort = null;
@@ -66,11 +65,10 @@
             if (err.name === 'AbortError') return;
             posts = []; postsLoaded = true;
         }
-        renderMixed();
+        // Пытаемся загрузить видео параллельно, но не ждём
         loadVideosAsync();
     }
 
-    // --- НОВАЯ функция загрузки видео через RSS2JSON ---
     async function loadVideosAsync() {
         if (videoLoading) return;
         videoLoading = true;
@@ -84,12 +82,12 @@
             videoError = true;
         } finally {
             videoLoading = false;
-            renderMixed();
+            renderMixed(); // при загрузке видео перерисовываем
         }
     }
 
     async function loadVideosFromRSS2JSON() {
-        const cacheKey = 'youtube_videos_rss2json_v2';
+        const cacheKey = 'youtube_videos_rss2json_v3';
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
 
@@ -105,12 +103,10 @@
                 const data = await response.json();
                 if (data.status !== 'ok') continue;
 
-                // items содержит до 25 последних видео
-                const videosFromChannel = data.items.slice(0, 9).map(item => {
+                const videosFromChannel = (data.items || []).slice(0, 9).map(item => {
                     const link = item.link;
                     let videoId = null;
                     try {
-                        // Извлекаем ID из ссылки (работает для youtu.be и youtube.com)
                         const url = new URL(link);
                         if (url.hostname === 'youtu.be') {
                             videoId = url.pathname.slice(1);
@@ -127,16 +123,15 @@
                         title: item.title,
                         author: channel.name,
                         date: new Date(item.pubDate),
-                        published: new Date(item.pubDate),
-                        thumbnail: item.thumbnail || '',
+                        thumbnail: item.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
                         channel: channel.name
                     };
                 }).filter(v => v !== null);
                 allVideos.push(...videosFromChannel);
             }
 
-            // Сортируем все видео по дате (свежие сверху) и оставляем 10
-            const sorted = allVideos.sort((a, b) => b.date - a.date).slice(0, 10);
+            // Сортируем все видео по дате и берём 20, чтобы потом смешать с постами
+            const sorted = allVideos.sort((a, b) => b.date - a.date).slice(0, 20);
             const serialized = sorted.map(v => ({ ...v, date: v.date.toISOString() }));
             cacheSet(cacheKey, serialized);
             return sorted;
@@ -151,25 +146,29 @@
         }
     }
 
-    // --- Остальные функции остаются без изменений ---
     async function loadPosts() {
-        const cacheKey = 'posts_news+update_v2';
+        const cacheKey = 'posts_news+update_v3';
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
 
         const { controller, timeoutId } = createAbortable(10000);
         currentAbort = { controller };
         try {
+            // Загружаем по 15 штук каждого типа, чтобы потом отобрать свежие
             const [newsIssues, updateIssues] = await Promise.all([
-                loadIssues({ labels: 'type:news', per_page: 20, signal: controller.signal }),
-                loadIssues({ labels: 'type:update', per_page: 20, signal: controller.signal })
+                loadIssues({ labels: 'type:news', per_page: 15, signal: controller.signal }),
+                loadIssues({ labels: 'type:update', per_page: 15, signal: controller.signal })
             ]);
             const allIssues = deduplicateByNumber([...newsIssues, ...updateIssues]);
             const posts = allIssues
                 .filter(issue => CONFIG.ALLOWED_AUTHORS.includes(issue.user.login))
                 .map(issue => ({
-                    type: 'post', number: issue.number, title: issue.title, body: issue.body,
-                    author: issue.user.login, date: new Date(issue.created_at),
+                    type: 'post',
+                    number: issue.number,
+                    title: issue.title,
+                    body: issue.body,
+                    author: issue.user.login,
+                    date: new Date(issue.created_at),
                     labels: issue.labels.map(l => l.name),
                     game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
                 }));
@@ -193,54 +192,32 @@
             return;
         }
 
+        // Объединяем посты и видео, сортируем по дате (новые сверху)
+        let allItems = [...posts];
+        if (videosLoaded) {
+            allItems = allItems.concat(videos);
+        }
+        // Сортируем по убыванию даты
+        allItems.sort((a, b) => b.date - a.date);
+        // Берём только первые 6
+        const itemsToShow = allItems.slice(0, 6);
+
         const grid = document.createElement('div'); grid.className = 'projects-grid';
         
-        posts.slice(0, 9).forEach(post => {
-            grid.appendChild(createPostCard(post));
-        });
-
-        if (videoLoading) {
-            for (let i = 0; i < 3; i++) {
-                grid.appendChild(createSkeletonCard());
-            }
-        } else if (videoError && videos.length === 0) {
-            const errorCard = document.createElement('div');
-            errorCard.className = 'project-card';
-            errorCard.style.display = 'flex';
-            errorCard.style.flexDirection = 'column';
-            errorCard.style.alignItems = 'center';
-            errorCard.style.justifyContent = 'center';
-            errorCard.style.minHeight = '200px';
-            errorCard.innerHTML = `
-                <p class="text-secondary">Не удалось загрузить видео</p>
-                <button class="button small" id="retry-videos">Повторить</button>
-            `;
-            grid.appendChild(errorCard);
-            setTimeout(() => {
-                document.getElementById('retry-videos')?.addEventListener('click', () => {
-                    loadVideosAsync();
-                });
-            }, 0);
+        if (itemsToShow.length === 0) {
+            grid.innerHTML = '<p class="text-secondary" style="grid-column:1/-1; text-align:center;">Пока нет новостей</p>';
         } else {
-            videos.slice(0, 3).forEach(video => {
-                grid.appendChild(createVideoCard(video));
+            itemsToShow.forEach(item => {
+                if (item.type === 'video') {
+                    grid.appendChild(createVideoCard(item));
+                } else {
+                    grid.appendChild(createPostCard(item));
+                }
             });
         }
 
         container.innerHTML = '';
         container.appendChild(grid);
-    }
-
-    function createSkeletonCard() {
-        const card = document.createElement('div'); card.className = 'project-card';
-        card.style.background = 'var(--bg-inner-gradient)';
-        card.style.opacity = '0.5';
-        card.innerHTML = `
-            <div class="image-wrapper" style="background: var(--border);"></div>
-            <div style="height: 20px; width: 80%; background: var(--border); margin: 10px 0;"></div>
-            <div style="height: 14px; width: 60%; background: var(--border);"></div>
-        `;
-        return card;
     }
 
     function createVideoCard(video) {
