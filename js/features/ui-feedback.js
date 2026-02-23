@@ -362,7 +362,7 @@
             const issue = await GithubAPI.loadIssue(item.id);
             container.innerHTML = '';
 
-            // Header с метаданными
+            // Header
             const header = document.createElement('div');
             header.className = 'modal-post-header';
             header.style.cssText = `
@@ -374,7 +374,6 @@
                 border-bottom: 1px solid var(--border);
                 flex-wrap: wrap;
             `;
-            // Определяем тип для иконки
             let typeIcon = '';
             if (item.labels?.includes('type:news')) typeIcon = '📰';
             else if (item.labels?.includes('type:update')) typeIcon = '🔄';
@@ -395,23 +394,21 @@
             `;
             container.appendChild(header);
 
-            // Тело поста
             const bodyDiv = document.createElement('div'); bodyDiv.className = 'spoiler-content'; 
             bodyDiv.innerHTML = GithubCore.renderMarkdown(issue.body);
             container.appendChild(bodyDiv);
 
             await loadReactionsAndComments(container, item, currentUser, issue);
-
             if (currentUser) setupCommentForm(container, item, currentUser);
-
             setupAdminActions(container, item, issue, currentUser, closeModal, escHandler);
 
         } catch (err) {
-            if (err.name === 'AbortError') {
-                container.innerHTML = '<p class="error-message">Запрос отменён (таймаут). Попробуйте позже.</p>';
-            } else {
-                container.innerHTML = '<p class="error-message">Не удалось загрузить содержимое.</p>';
-            }
+            // Если ошибка, показываем сообщение и закрываем модалку через 2 секунды
+            container.innerHTML = '<p class="error-message">Не удалось загрузить содержимое. Закрытие...</p>';
+            setTimeout(() => {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+            }, 2000);
         }
     }
 

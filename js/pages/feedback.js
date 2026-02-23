@@ -1,4 +1,4 @@
-// feedback.js — обратная связь для страниц игр с кешированием реакций и карточками в стиле проектов
+// feedback.js — обратная связь для страниц игр с кешированием реакций и карточками в сетке
 
 (function() {
     const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
@@ -8,7 +8,7 @@
 
     const ITEMS_PER_PAGE = 10;
     const REACTIONS_CACHE_TTL = 5 * 60 * 1000; // 5 минут
-    const reactionsListCache = new Map(); // кеш для реакций в списке
+    const reactionsListCache = new Map();
 
     let currentGame = '', currentTab = 'all', currentPage = 1, hasMorePages = true, isLoading = false;
     let allIssues = [], displayedIssues = [], container, feedbackSection;
@@ -42,20 +42,21 @@
     async function renderFeedbackInterface() {
         container.innerHTML = `
             <div class="feedback-header">
-                <div>
-                    <h2 data-lang="feedbackTitle">Идеи, баги и отзывы</h2>
-                    <p class="text-secondary" style="margin:4px 0 0; font-size:14px;">Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.</p>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fab fa-github" style="font-size: 28px; color: var(--accent);"></i>
+                    <h2 data-lang="feedbackTitle" style="margin: 0;">Идеи, баги и отзывы</h2>
                 </div>
-                ${currentUser ? '<button class="button" id="toggle-form-btn"><i class="fab fa-github"></i> + Оставить сообщение</button>' : ''}
+                ${currentUser ? '<button class="button" id="toggle-form-btn">+ Оставить сообщение</button>' : ''}
             </div>
+            <p class="text-secondary" style="margin:4px 0 20px; font-size:14px;" data-lang="feedbackDesc">Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.</p>
             <div class="feedback-tabs" role="tablist" aria-label="Категории обратной связи">
                 <button class="feedback-tab active" data-tab="all" role="tab" aria-selected="true" aria-controls="feedback-panel">Все</button>
                 <button class="feedback-tab" data-tab="idea" role="tab" aria-selected="false" aria-controls="feedback-panel">💡 Идеи</button>
                 <button class="feedback-tab" data-tab="bug" role="tab" aria-selected="false" aria-controls="feedback-panel">🐛 Баги</button>
                 <button class="feedback-tab" data-tab="review" role="tab" aria-selected="false" aria-controls="feedback-panel">⭐ Отзывы</button>
             </div>
-            <div class="feedback-list" id="feedback-panel" role="tabpanel" aria-labelledby="active-tab">
-                <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
+            <div class="projects-grid" id="feedback-panel" role="tabpanel" aria-labelledby="active-tab">
+                <div class="loading-spinner" style="grid-column: 1/-1;"><i class="fas fa-circle-notch fa-spin"></i></div>
             </div>
             <div style="text-align:center;margin-top:20px;" id="load-more-container"><button class="button" id="load-more" style="display:none;" data-lang="feedbackLoadMore">Загрузить ещё</button></div>
         `;
@@ -130,7 +131,7 @@
             filterAndDisplayIssues();
         } catch (error) {
             if (error.name === 'AbortError') return;
-            document.getElementById('feedback-list').innerHTML = `<div class="error-message"><i class="fas fa-exclamation-triangle"></i><p data-lang="feedbackLoadError">Ошибка загрузки.</p><button class="button-small" id="retry-feedback" data-lang="feedbackRetry">Повторить</button></div>`;
+            document.getElementById('feedback-panel').innerHTML = `<div class="error-message" style="grid-column:1/-1;"><i class="fas fa-exclamation-triangle"></i><p data-lang="feedbackLoadError">Ошибка загрузки.</p><button class="button-small" id="retry-feedback" data-lang="feedbackRetry">Повторить</button></div>`;
             document.getElementById('retry-feedback')?.addEventListener('click', () => loadIssuesPage(1, true));
         } finally {
             clearTimeout(timeoutId);
@@ -149,13 +150,13 @@
     }
 
     function renderIssuesList(issues) {
-        const listEl = document.getElementById('feedback-list');
-        if (!listEl) return;
+        const grid = document.getElementById('feedback-panel');
+        if (!grid) return;
         if (issues.length === 0) {
-            listEl.innerHTML = `<p class="text-secondary" style="text-align:center;" data-lang="feedbackNoItems">Пока нет сообщений. Будьте первым!</p>`;
+            grid.innerHTML = `<p class="text-secondary" style="grid-column:1/-1; text-align:center;" data-lang="feedbackNoItems">Пока нет сообщений. Будьте первым!</p>`;
             return;
         }
-        listEl.innerHTML = issues.map(issue => {
+        grid.innerHTML = issues.map(issue => {
             const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
             const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : '⭐';
             const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
@@ -185,7 +186,6 @@
         attachEventHandlers();
     }
 
-    // Функция загрузки реакций с кешированием для списка
     async function loadAndRenderReactionsWithCache(issueNumber, container) {
         const cacheKey = `list_reactions_${issueNumber}`;
         const cached = reactionsListCache.get(cacheKey);
