@@ -34,10 +34,8 @@
     // Группировка только для обычных реакций (не голосований)
     function groupReactions(reactions, currentUser) {
         const grouped = {};
-        // Инициализируем только обычные типы
         REACTION_TYPES.forEach(type => { grouped[type.content] = { content: type.content, emoji: type.emoji, count: 0, userReacted: false, userReactionId: null }; });
         reactions.forEach(r => {
-            // Игнорируем реакции голосований
             if (r.content.startsWith('vote:')) return;
             if (grouped[r.content]) {
                 grouped[r.content].count++;
@@ -308,79 +306,68 @@
             const content = `vote:${index}`;
             const reactions = voteReactions.filter(r => r.content === content);
             const count = reactions.length;
-            const userReacted = currentUser ? reactions.some(r => r.user && r.user.login === currentUser) : false;
-            const reactionId = userReacted ? reactions.find(r => r.user && r.user.login === currentUser).id : null;
+            const userReacted = currentUser ? reactions.some(r => r.user.login === currentUser) : false;
+            const reactionId = userReacted ? reactions.find(r => r.user.login === currentUser).id : null;
             return { count, userReacted, reactionId };
         });
         
         const totalVotes = voteCounts.reduce((sum, v) => sum + v.count, 0);
         
         const pollDiv = document.createElement('div');
-        pollDiv.className = 'poll-container';
+        pollDiv.className = 'poll card';
         pollDiv.dataset.issue = issueNumber;
         pollDiv.dataset.options = JSON.stringify(pollData.options);
         
-        // Заголовок и описание опроса (можно задать в редакторе отдельно, но здесь простой вариант)
-        let html = '<div class="poll-title">📊 Опрос</div>';
-        if (pollData.description) {
-            html += `<div class="poll-description">${GithubCore.escapeHtml(pollData.description)}</div>`;
-        }
+        let html = `<h3>📊 ${GithubCore.escapeHtml(pollData.question)}</h3>`;
         
-        html += '<div class="poll-options">';
-        pollData.options.forEach((option, index) => {
-            const count = voteCounts[index].count;
-            const percent = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-            html += `
-                <div class="poll-option" data-option="${index}">
-                    <span class="poll-option-text">${GithubCore.escapeHtml(option)}</span>
-                    <div class="progress-bar">
-                        <div style="width: ${percent}%;">${percent}% (${count})</div>
-                    </div>
-                </div>
-            `;
-        });
-        html += '</div>';
-        
-        // Если пользователь ещё не голосовал, показываем кнопки
         const hasVoted = voteCounts.some(v => v.userReacted);
-        if (currentUser && !hasVoted) {
-            html += '<div class="poll-vote-buttons">';
+        
+        if (hasVoted || !currentUser) {
+            html += '<div class="poll-results">';
             pollData.options.forEach((option, index) => {
-                html += `<button class="button small poll-vote-btn" data-option="${index}">${GithubCore.escapeHtml(option)}</button>`;
+                const count = voteCounts[index].count;
+                const percent = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+                html += `
+                    <div class="poll-result">
+                        <div class="poll-option-text">${GithubCore.escapeHtml(option)}</div>
+                        <div class="progress-bar">
+                            <div style="width: ${percent}%;">${percent}% (${count})</div>
+                        </div>
+                    </div>
+                `;
             });
             html += '</div>';
-        } else if (currentUser && hasVoted) {
-            // Можно показать сообщение, что уже голосовали
-            html += '<p class="text-secondary" style="text-align:center;">Вы уже проголосовали</p>';
+            if (hasVoted) {
+                html += '<p class="text-secondary small">Вы уже проголосовали</p>';
+            }
         } else {
-            html += '<p class="text-secondary" style="text-align:center;">Войдите, чтобы голосовать</p>';
+            html += '<div class="poll-vote">';
+            pollData.options.forEach((option, index) => {
+                html += `<button class="button poll-vote-btn" data-option="${index}">${GithubCore.escapeHtml(option)}</button>`;
+            });
+            html += '</div>';
         }
         
         pollDiv.innerHTML = html;
-        container.innerHTML = ''; // очищаем контейнер перед вставкой
+        container.innerHTML = '';
         container.appendChild(pollDiv);
         
-        if (currentUser && !hasVoted) {
+        if (!hasVoted && currentUser) {
             pollDiv.querySelectorAll('.poll-vote-btn').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const optionIndex = btn.dataset.option;
                     const content = `vote:${optionIndex}`;
                     
-                    // Блокировка
-                    const lockKey = `${issueNumber}_${content}`;
-                    if (reactionLocks.has(lockKey)) return;
-                    reactionLocks.set(lockKey, true);
+                    btn.disabled = true;
                     
                     try {
                         await GithubAPI.addReaction(issueNumber, content);
                         UIUtils.showToast('Голос учтён', 'success');
-                        // Перерендериваем опрос с актуальными данными
                         await renderPoll(container, issueNumber, pollData);
                     } catch (err) {
-                        UIUtils.showToast('Ошибка голосования', 'error');
-                    } finally {
-                        reactionLocks.delete(lockKey);
+                        UIUtils.showToast('Ошибка при голосовании', 'error');
+                        btn.disabled = false;
                     }
                 });
             });
@@ -556,7 +543,7 @@
             const pollData = extractPollFromBody(issue.body);
             if (pollData) {
                 const pollContainer = document.createElement('div');
-                pollContainer.className = 'poll-container-wrapper';
+                pollContainer.className = 'poll-container';
                 container.appendChild(pollContainer);
                 await renderPoll(pollContainer, item.id, pollData);
             }
@@ -566,7 +553,6 @@
             setupAdminActions(container, item, issue, currentUser, closeModal, escHandler);
 
         } catch (err) {
-            console.error(err);
             container.innerHTML = '<p class="error-message">Не удалось загрузить содержимое. Закрытие...</p>';
             setTimeout(() => {
                 closeModal();
@@ -601,49 +587,108 @@
         const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
 
         const textarea = document.getElementById('modal-body');
+        if (!textarea) {
+            console.error('textarea not found');
+            UIUtils.showToast('Ошибка инициализации редактора', 'error');
+            return;
+        }
+
         if (window.Editor) {
             const toolbar = Editor.createEditorToolbar(textarea, { previewAreaId: 'modal-preview-area', onPreview: () => {
                 const preview = document.getElementById('modal-preview-area');
+                if (!preview) return;
                 let body = textarea.value;
-                // В предпросмотре можно показать заглушку для опроса
-                const pollMatch = extractPollFromBody(body);
-                if (pollMatch) {
-                    // Заменяем комментарий на простой HTML для предпросмотра
-                    const options = pollMatch.options.map((opt, i) => `<div>${i+1}. ${opt}</div>`).join('');
-                    body = body.replace(/<!-- poll: .*? -->/, `<div class="poll-preview"><b>Опрос:</b> ${options}</div>`);
-                }
-                preview.innerHTML = GithubCore.renderMarkdown(body);
+                const pollRegex = /<!-- poll: (.*?) -->/g;
+                body = body.replace(pollRegex, (match, p1) => {
+                    try {
+                        const pollData = JSON.parse(p1);
+                        const optionsHtml = pollData.options.map(opt => `<div>• ${GithubCore.escapeHtml(opt)}</div>`).join('');
+                        return `<div class="poll-preview"><strong>📊 Опрос: ${GithubCore.escapeHtml(pollData.question)}</strong>${optionsHtml}</div>`;
+                    } catch {
+                        return '<div class="poll-preview error">[Ошибка опроса]</div>';
+                    }
+                });
+                preview.innerHTML = window.GithubCore?.renderMarkdown(body) || body;
                 preview.style.display = body.trim() ? 'block' : 'none';
             }});
-            document.getElementById('modal-editor-toolbar').appendChild(toolbar);
+            const toolbarContainer = document.getElementById('modal-editor-toolbar');
+            if (toolbarContainer) {
+                toolbarContainer.appendChild(toolbar);
+            } else {
+                console.error('toolbar container not found');
+            }
         }
 
-        document.getElementById('modal-submit').addEventListener('click', async () => {
-            const title = document.getElementById('modal-title').value.trim();
-            let body = document.getElementById('modal-body').value;
-            if (!title || !body.trim()) { UIUtils.showToast('Заполните заголовок и описание', 'error'); return; }
+        const submitBtn = document.getElementById('modal-submit');
+        if (!submitBtn) {
+            console.error('submit button not found');
+            UIUtils.showToast('Ошибка: кнопка отправки не найдена', 'error');
+            return;
+        }
+
+        submitBtn.addEventListener('click', async () => {
+            const titleInput = document.getElementById('modal-title');
+            const bodyTextarea = document.getElementById('modal-body');
+            if (!titleInput || !bodyTextarea) {
+                UIUtils.showToast('Ошибка: поля не найдены', 'error');
+                return;
+            }
+            const title = titleInput.value.trim();
+            let body = bodyTextarea.value;
+            if (!title) {
+                UIUtils.showToast('Заполните заголовок', 'error');
+                titleInput.focus();
+                return;
+            }
+            if (!body.trim()) {
+                UIUtils.showToast('Заполните описание', 'error');
+                bodyTextarea.focus();
+                return;
+            }
             
-            // Проверка на несколько опросов
             const pollMatches = body.match(/<!-- poll: .*? -->/g);
             if (pollMatches && pollMatches.length > 1) {
                 if (!confirm('Обнаружено несколько блоков опроса. Будут сохранены только первые. Продолжить?')) return;
-                // Оставляем только первый
                 const first = pollMatches[0];
-                body = body.replace(/<!-- poll: .*? -->/g, ''); // удаляем все
-                body = first + '\n' + body; // вставляем первый обратно
+                body = body.replace(/<!-- poll: .*? -->/g, '');
+                body = first + '\n' + body;
             }
             
             let category = 'idea';
-            if (postType === 'feedback') category = document.getElementById('modal-category').value;
-            const btn = document.getElementById('modal-submit'); btn.disabled = true; btn.textContent = 'Сохранение...';
+            if (postType === 'feedback') {
+                const categorySelect = document.getElementById('modal-category');
+                if (categorySelect) category = categorySelect.value;
+            }
+            const btn = submitBtn;
+            btn.disabled = true;
+            btn.textContent = 'Сохранение...';
             try {
                 let labels;
-                if (postType === 'feedback') labels = [`game:${data.game}`, `type:${category}`];
-                else if (postType === 'news') labels = ['type:news'];
-                else labels = ['type:update', `game:${data.game}`];
+                if (postType === 'feedback') {
+                    if (!data.game) {
+                        UIUtils.showToast('Ошибка: не указана игра', 'error');
+                        btn.disabled = false;
+                        btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
+                        return;
+                    }
+                    labels = [`game:${data.game}`, `type:${category}`];
+                } else if (postType === 'news') {
+                    labels = ['type:news'];
+                } else {
+                    if (!data.game) {
+                        UIUtils.showToast('Ошибка: не указана игра', 'error');
+                        btn.disabled = false;
+                        btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
+                        return;
+                    }
+                    labels = ['type:update', `game:${data.game}`];
+                }
 
-                if (mode === 'edit') await GithubAPI.updateIssue(data.number, { title, body, labels });
-                else await GithubAPI.createIssue(title, body, labels);
+                if (mode === 'edit') {
+                    await GithubAPI.updateIssue(data.number, { title, body, labels });
+                } else {
+                    await GithubAPI.createIssue(title, body, labels);
+                }
 
                 closeModal();
                 if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
@@ -654,7 +699,7 @@
                 UIUtils.showToast('Ошибка: ' + err.message, 'error'); 
             } finally { 
                 btn.disabled = false; 
-                btn.textContent = mode==='edit'?'Сохранить':'Опубликовать'; 
+                btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать'; 
             }
         });
     }

@@ -99,7 +99,9 @@
     }
 
     function insertPoll(textarea) {
-        const optionsInput = prompt('Введите варианты через запятую (макс. 10):', 'Вариант 1, Вариант 2, Вариант 3');
+        const question = prompt('Вопрос опроса:', 'Добавлять ли лису?');
+        if (question === null) return;
+        const optionsInput = prompt('Введите варианты через запятую (макс. 10):', 'Да, Нет');
         if (!optionsInput) return;
         const options = optionsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
         if (options.length === 0) return;
@@ -107,7 +109,8 @@
             alert('Слишком много вариантов. Будет использовано только первые 10.');
             options.splice(10);
         }
-        const pollComment = `\n<!-- poll: ${JSON.stringify({ options })} -->\n`;
+        const pollData = { question, options };
+        const pollComment = `\n<!-- poll: ${JSON.stringify(pollData)} -->\n`;
         insertAtCursor(textarea, pollComment);
     }
 
@@ -130,7 +133,7 @@
         `;
         toolbar.appendChild(baseGroup);
 
-        // Группа заголовков (используем текст вместо иконок)
+        // Группа заголовков
         const headingGroup = document.createElement('div');
         headingGroup.className = 'editor-btn-group';
         headingGroup.innerHTML = `
@@ -222,7 +225,19 @@
                             previewArea.style.display = 'none';
                             return;
                         }
-                        previewArea.innerHTML = window.GithubCore?.renderMarkdown(body) || body;
+                        // Для предпросмотра заменяем комментарий опроса на заглушку
+                        let previewBody = body;
+                        const pollRegex = /<!-- poll: (.*?) -->/g;
+                        previewBody = previewBody.replace(pollRegex, (match, p1) => {
+                            try {
+                                const pollData = JSON.parse(p1);
+                                const optionsHtml = pollData.options.map(opt => `<div>• ${GithubCore.escapeHtml(opt)}</div>`).join('');
+                                return `<div class="poll-preview"><strong>📊 Опрос: ${GithubCore.escapeHtml(pollData.question)}</strong>${optionsHtml}</div>`;
+                            } catch {
+                                return '<div class="poll-preview error">[Ошибка опроса]</div>';
+                            }
+                        });
+                        previewArea.innerHTML = window.GithubCore?.renderMarkdown(previewBody) || previewBody;
                         previewArea.style.display = 'block';
                     }
                 }

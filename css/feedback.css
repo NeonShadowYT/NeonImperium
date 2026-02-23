@@ -252,7 +252,7 @@
     border-bottom: 1px solid var(--border);
 }
 
-/* Стили для alert-блоков (GitHub-стиль) с цветными полосами */
+/* Стили для alert-блоков (GitHub-стиль) */
 .preview-area .markdown-alert {
     padding: 0.5em 1em;
     margin: 1em 0;
@@ -262,27 +262,22 @@
 .preview-area .markdown-alert-note {
     border-left-color: #0969da;
     background: #ddf4ff;
-    color: #000; /* для читаемости */
 }
 .preview-area .markdown-alert-tip {
     border-left-color: #1f883d;
     background: #dafbe1;
-    color: #000;
 }
 .preview-area .markdown-alert-important {
     border-left-color: #8250df;
     background: #fbefff;
-    color: #000;
 }
 .preview-area .markdown-alert-warning {
     border-left-color: #f0883e;
     background: #fff8c5;
-    color: #000;
 }
 .preview-area .markdown-alert-caution {
     border-left-color: #cf222e;
     background: #ffebe9;
-    color: #000;
 }
 
 /* Стили для прогресс-бара */
@@ -616,7 +611,7 @@
     display: flex;
     gap: 5px;
     box-shadow: var(--shadow);
-    z-index: 1000;
+    z-index: 10010;
 }
 .reaction-menu-btn {
     background: transparent;
@@ -629,61 +624,6 @@
 }
 .reaction-menu-btn:hover {
     background: var(--bg-inner-gradient);
-}
-
-/* Стили для опросов */
-.poll-container {
-    margin: 20px 0;
-    padding: 20px;
-    background: var(--bg-card-gradient);
-    border-radius: var(--border-radius-card);
-    border: 1px solid var(--accent);
-}
-.poll-title {
-    font-size: 20px;
-    color: var(--text-primary);
-    margin-bottom: 5px;
-}
-.poll-description {
-    font-size: 14px;
-    color: var(--text-secondary);
-    margin-bottom: 20px;
-}
-.poll-option {
-    margin-bottom: 15px;
-}
-.poll-option-text {
-    display: block;
-    font-size: 14px;
-    color: var(--text-primary);
-    margin-bottom: 4px;
-}
-.poll-option .progress-bar {
-    height: 20px;
-    background: var(--bg-primary);
-}
-.poll-option .progress-bar > div {
-    background: linear-gradient(90deg, var(--accent), var(--accent-light));
-    font-size: 12px;
-    line-height: 20px;
-    text-align: center;
-    color: white;
-    border-radius: 20px;
-}
-.poll-vote-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 15px;
-    justify-content: center;
-}
-.poll-vote-btn {
-    min-width: 100px;
-}
-.poll-vote-btn.active {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
 }
 
 /* Модальное окно на весь экран */
@@ -789,6 +729,52 @@
     pointer-events: none;
 }
 
+/* Стили для опросов */
+.poll {
+    margin: 20px 0;
+}
+.poll h3 {
+    margin-bottom: 15px;
+    color: var(--accent);
+}
+.poll-results {
+    margin: 15px 0;
+}
+.poll-result {
+    margin-bottom: 15px;
+}
+.poll-option-text {
+    font-size: 14px;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+}
+.poll-vote {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 15px 0;
+}
+.poll-vote-btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+.poll-preview {
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius-inner);
+    padding: 15px;
+    margin: 10px 0;
+}
+.poll-preview strong {
+    display: block;
+    margin-bottom: 10px;
+    color: var(--accent);
+}
+.poll-preview.error {
+    color: #f44336;
+    border-color: #f44336;
+}
+
 /* Адаптивность */
 @media (max-width: 600px) {
     .feedback-header {
@@ -870,13 +856,5 @@
     }
     .modal-body {
         padding: 20px;
-    }
-
-    /* Опросы на мобильных */
-    .poll-vote-buttons {
-        flex-direction: column;
-    }
-    .poll-vote-btn {
-        width: 100%;
     }
 }
