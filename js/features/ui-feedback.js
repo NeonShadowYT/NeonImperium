@@ -144,7 +144,7 @@
             padding: '5px',
             display: 'flex',
             gap: '5px',
-            zIndex: '10010',  // увеличен, чтобы быть выше модальных окон (10000)
+            zIndex: '10010',
             boxShadow: 'var(--shadow)'
         });
 
@@ -261,6 +261,8 @@
             try { 
                 await GithubAPI.addReaction(num, content); 
                 invalidateCache(num);
+                // Задержка для синхронизации GitHub
+                await new Promise(resolve => setTimeout(resolve, 300));
                 const updated = await GithubAPI.loadReactions(num); 
                 setCached(`reactions_${num}`, updated, reactionsCache);
                 renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove); 
@@ -273,6 +275,7 @@
             try { 
                 await GithubAPI.removeReaction(num, reactionId); 
                 invalidateCache(num);
+                await new Promise(resolve => setTimeout(resolve, 300));
                 const updated = await GithubAPI.loadReactions(num); 
                 setCached(`reactions_${num}`, updated, reactionsCache);
                 renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove); 
@@ -450,7 +453,7 @@
                 <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(data.body||'')}</textarea>
                 <div class="preview-area" id="modal-preview-area" style="display:none;"></div>
                 <div class="button-group">
-                    <!-- кнопка отмены удалена по требованию -->
+                    <!-- кнопка отмены удалена -->
                     <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                 </div>
             </div>
@@ -468,7 +471,6 @@
             document.getElementById('modal-editor-toolbar').appendChild(toolbar);
         }
 
-        // Обработчик для submit
         document.getElementById('modal-submit').addEventListener('click', async () => {
             const title = document.getElementById('modal-title').value.trim();
             const body = document.getElementById('modal-body').value;

@@ -8,7 +8,6 @@
 
     const ITEMS_PER_PAGE = 10;
     const REACTIONS_CACHE_TTL = 5 * 60 * 1000; // 5 минут
-    // Используем глобальный кеш, чтобы можно было инвалидировать из ui-feedback
     window.reactionsListCache = window.reactionsListCache || new Map();
 
     let currentGame = '', currentTab = 'all', currentPage = 1, hasMorePages = true, isLoading = false;
@@ -209,8 +208,9 @@
             try { 
                 await addReaction(num, content); 
                 window.reactionsListCache.delete(`list_reactions_${num}`);
-                // Также инвалидируем кеш модалки
                 if (window.UIFeedback) window.UIFeedback.invalidateCache(num);
+                // Небольшая задержка для синхронизации GitHub
+                await new Promise(resolve => setTimeout(resolve, 300));
                 const updated = await loadReactions(num);
                 renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); 
                 UIUtils.showToast('Реакция добавлена', 'success');
@@ -223,6 +223,7 @@
                 await removeReaction(num, reactionId); 
                 window.reactionsListCache.delete(`list_reactions_${num}`);
                 if (window.UIFeedback) window.UIFeedback.invalidateCache(num);
+                await new Promise(resolve => setTimeout(resolve, 300));
                 const updated = await loadReactions(num);
                 renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); 
                 UIUtils.showToast('Реакция убрана', 'success');
