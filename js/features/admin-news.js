@@ -13,10 +13,12 @@
 
         const newsSection = document.getElementById('news-section');
         if (newsSection) {
-            let header = newsSection.querySelector('.section-header');
+            // Ищем заголовок, созданный news-feed.js, или добавляем кнопку рядом с ним
+            let header = newsSection.querySelector('.news-header');
             if (!header) {
+                // Если заголовка нет (редкий случай), создаём простой
                 header = document.createElement('div');
-                header.className = 'section-header';
+                header.className = 'news-header';
                 header.style.display = 'flex';
                 header.style.alignItems = 'center';
                 header.style.justifyContent = 'space-between';
@@ -26,7 +28,7 @@
                 header.appendChild(title);
                 newsSection.prepend(header);
             }
-            // Проверяем, есть ли уже кнопка, чтобы не дублировать
+            // Добавляем кнопку админа, если её ещё нет
             if (!header.querySelector('.admin-news-btn')) {
                 const btn = document.createElement('button');
                 btn.className = 'button admin-news-btn';
@@ -40,17 +42,14 @@
         const updatesContainer = document.getElementById('game-updates');
         if (updatesContainer && updatesContainer.dataset.game) {
             const game = updatesContainer.dataset.game;
-            // Ищем родительский контейнер, который содержит заголовок
             const parent = updatesContainer.parentNode;
             let header = parent.querySelector('.updates-header');
             if (!header) {
-                // Пытаемся найти существующий заголовок с кнопкой опросов
                 const possibleHeader = parent.querySelector('div[style*="display: flex"]');
                 if (possibleHeader && possibleHeader.querySelector('h2')) {
                     header = possibleHeader;
                     header.classList.add('updates-header');
                 } else {
-                    // Создаём новый заголовок
                     header = document.createElement('div');
                     header.className = 'updates-header';
                     header.style.display = 'flex';
@@ -63,7 +62,6 @@
                     parent.insertBefore(header, updatesContainer);
                 }
             }
-            // Добавляем кнопку админа, если её ещё нет
             if (!header.querySelector('.admin-update-btn')) {
                 const btn = document.createElement('button');
                 btn.className = 'button admin-update-btn';

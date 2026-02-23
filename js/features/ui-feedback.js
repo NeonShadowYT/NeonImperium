@@ -69,6 +69,7 @@
                         await onRemove(issueNumber, parseInt(reactionId, 10));
                         UIUtils.showToast('Реакция убрана', 'success');
                         invalidateCache(issueNumber);
+                        dispatchReactionUpdate(issueNumber);
                     } catch (err) {
                         UIUtils.showToast('Ошибка при удалении реакции', 'error');
                         btn.classList.add('active');
@@ -91,6 +92,7 @@
                             await onAdd(issueNumber, selected);
                             UIUtils.showToast('Реакция добавлена', 'success');
                             invalidateCache(issueNumber);
+                            dispatchReactionUpdate(issueNumber);
                         } catch (err) {
                             UIUtils.showToast('Ошибка при добавлении реакции', 'error');
                             tempBtn.remove();
@@ -117,6 +119,7 @@
                         await onAdd(issueNumber, selected);
                         UIUtils.showToast('Реакция добавлена', 'success');
                         invalidateCache(issueNumber);
+                        dispatchReactionUpdate(issueNumber);
                     } catch (err) {
                         UIUtils.showToast('Ошибка при добавлении реакции', 'error');
                         tempBtn.remove();
@@ -124,6 +127,11 @@
                 });
             });
         }
+    }
+
+    function dispatchReactionUpdate(issueNumber) {
+        const event = new CustomEvent('reaction-updated', { detail: { issueNumber } });
+        window.dispatchEvent(event);
     }
 
     function showReactionMenu(relativeTo, issueNumber, callback) {
@@ -262,6 +270,7 @@
                 setCached(`reactions_${num}`, updated, reactionsCache);
                 renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove); 
                 UIUtils.showToast('Реакция добавлена', 'success');
+                dispatchReactionUpdate(num);
             } catch (err) {
                 UIUtils.showToast('Ошибка при добавлении реакции', 'error');
             }
@@ -274,6 +283,7 @@
                 setCached(`reactions_${num}`, updated, reactionsCache);
                 renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove); 
                 UIUtils.showToast('Реакция убрана', 'success');
+                dispatchReactionUpdate(num);
             } catch (err) {
                 UIUtils.showToast('Ошибка при удалении реакции', 'error');
             }
@@ -486,6 +496,7 @@
         openFullModal, 
         openEditorModal, 
         REACTION_TYPES,
-        invalidateCache 
+        invalidateCache,
+        dispatchReactionUpdate
     };
 })();

@@ -20,6 +20,24 @@
     let videoLoading = false, videoError = false;
 
     document.addEventListener('DOMContentLoaded', () => {
+        const section = document.getElementById('news-section');
+        if (!section) return;
+        // Создаём заголовок и описание, если их нет
+        let header = section.querySelector('.news-header');
+        if (!header) {
+            header = document.createElement('div');
+            header.className = 'news-header';
+            header.style.display = 'flex';
+            header.style.alignItems = 'center';
+            header.style.justifyContent = 'space-between';
+            header.style.marginBottom = '20px';
+            header.style.flexWrap = 'wrap';
+            header.style.gap = '15px';
+            const titleWrapper = document.createElement('div');
+            titleWrapper.innerHTML = '<h2 data-lang="newsTitle" style="margin: 0;">📰 Последние новости</h2><p class="text-secondary" data-lang="newsDesc" style="margin: 4px 0 0;">Свежие видео и обновления</p>';
+            header.appendChild(titleWrapper);
+            section.prepend(header);
+        }
         container = document.getElementById('news-feed');
         if (container) {
             currentUser = getCurrentUser();

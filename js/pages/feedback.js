@@ -3,7 +3,7 @@
 (function() {
     const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
     const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
-    const { renderReactions, renderComments, openFullModal, openEditorModal } = UIFeedback;
+    const { renderReactions, renderComments, openFullModal, openEditorModal, dispatchReactionUpdate } = UIFeedback;
     const { isAdmin, getCurrentUser } = GithubAuth;
 
     const ITEMS_PER_PAGE = 10;
@@ -25,6 +25,12 @@
 
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; checkAuthAndRender(); });
         window.addEventListener('github-logout', () => { currentUser = null; checkAuthAndRender(); });
+        // Слушаем обновления реакций
+        window.addEventListener('reaction-updated', (e) => {
+            const issueNumber = e.detail.issueNumber;
+            // Обновляем карточку с этим номером, если она есть на странице
+            updateReactionsForIssue(issueNumber);
+        });
         currentUser = getCurrentUser();
         checkAuthAndRender();
     }
@@ -164,7 +170,7 @@
             return `
                 <div class="project-card-link" data-issue-number="${issue.number}" data-issue-id="${issue.id}" style="cursor: pointer;">
                     <div class="project-card">
-                        <div class="image-wrapper" style="display: flex; align-items: center; justify-content: center; background: var(--bg-primary); font-size: 48px;">
+                        <div class="image-wrapper" style="display: flex; align-items: center; justify-content: center; background: var(--bg-primary); font-size: 48px; height: 180px;">
                             ${typeIcon}
                         </div>
                         <h3>${escapeHtml(issue.title)}</h3>
@@ -211,6 +217,7 @@
                 const updated = await loadReactions(num);
                 renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); 
                 UIUtils.showToast('Реакция добавлена', 'success');
+                dispatchReactionUpdate(num);
             } catch (err) { 
                 UIUtils.showToast('Ошибка при добавлении реакции', 'error');
             }
@@ -222,6 +229,7 @@
                 const updated = await loadReactions(num);
                 renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); 
                 UIUtils.showToast('Реакция убрана', 'success');
+                dispatchReactionUpdate(num);
             } catch (err) { 
                 UIUtils.showToast('Ошибка при удалении реакции', 'error');
             }
@@ -247,5 +255,15 @@
                 });
             });
         });
+    }
+
+    // Функция для обновления реакций в конкретной карточке
+    function updateReactionsForIssue(issueNumber) {
+        const container = document.querySelector(`.reactions-container[data-target-id="${issueNumber}"]`);
+        if (container) {
+            // Сбрасываем кэш и загружаем заново
+            reactionsListCache.delete(`list_reactions_${issueNumber}`);
+            loadAndRenderReactionsWithCache(issueNumber, container);
+        }
     }
 })();
