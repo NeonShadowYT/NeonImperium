@@ -1,3 +1,5 @@
+// feedback.js — обратная связь для страниц игр с кешированием реакций в списке
+
 (function() {
     const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
     const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
@@ -5,6 +7,9 @@
     const { isAdmin, getCurrentUser } = GithubAuth;
 
     const ITEMS_PER_PAGE = 10;
+    const REACTIONS_CACHE_TTL = 5 * 60 * 1000; // 5 минут
+    const reactionsListCache = new Map(); // кеш для реакций в списке
+
     let currentGame = '', currentTab = 'all', currentPage = 1, hasMorePages = true, isLoading = false;
     let allIssues = [], displayedIssues = [], container, feedbackSection;
     let currentUser = null, currentAbort = null;
@@ -43,26 +48,62 @@
                 </div>
                 ${currentUser ? '<button class="button" id="toggle-form-btn"><i class="fab fa-github"></i> + Оставить сообщение</button>' : ''}
             </div>
-            <div class="feedback-tabs">
-                <button class="feedback-tab active" data-tab="all">Все</button>
-                <button class="feedback-tab" data-tab="idea">💡 Идеи</button>
-                <button class="feedback-tab" data-tab="bug">🐛 Баги</button>
-                <button class="feedback-tab" data-tab="review">⭐ Отзывы</button>
+            <div class="feedback-tabs" role="tablist" aria-label="Категории обратной связи">
+                <button class="feedback-tab active" data-tab="all" role="tab" aria-selected="true" aria-controls="feedback-panel">Все</button>
+                <button class="feedback-tab" data-tab="idea" role="tab" aria-selected="false" aria-controls="feedback-panel">💡 Идеи</button>
+                <button class="feedback-tab" data-tab="bug" role="tab" aria-selected="false" aria-controls="feedback-panel">🐛 Баги</button>
+                <button class="feedback-tab" data-tab="review" role="tab" aria-selected="false" aria-controls="feedback-panel">⭐ Отзывы</button>
             </div>
-            <div class="feedback-list" id="feedback-list"><div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div></div>
+            <div class="feedback-list" id="feedback-panel" role="tabpanel" aria-labelledby="active-tab">
+                <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
+            </div>
             <div style="text-align:center;margin-top:20px;" id="load-more-container"><button class="button" id="load-more" style="display:none;" data-lang="feedbackLoadMore">Загрузить ещё</button></div>
         `;
-        if (currentUser) document.getElementById('toggle-form-btn').addEventListener('click', () => openEditorModal('new', { game: currentGame }, 'feedback'));
-        document.querySelectorAll('.feedback-tab').forEach(tab => tab.addEventListener('click', (e) => {
-            document.querySelectorAll('.feedback-tab').forEach(t => t.classList.remove('active'));
-            e.target.classList.add('active');
-            currentTab = e.target.dataset.tab;
-            currentPage = 1;
-            allIssues = [];
-            if (currentAbort) currentAbort.controller.abort();
-            loadIssuesPage(1, true);
-        }));
-        document.getElementById('load-more').addEventListener('click', () => { if (!isLoading && hasMorePages) loadIssuesPage(currentPage + 1, false); });
+
+        if (currentUser) {
+            document.getElementById('toggle-form-btn').addEventListener('click', () => openEditorModal('new', { game: currentGame }, 'feedback'));
+        }
+
+        const tabs = document.querySelectorAll('.feedback-tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                tabs.forEach(t => {
+                    t.classList.remove('active');
+                    t.setAttribute('aria-selected', 'false');
+                });
+                e.target.classList.add('active');
+                e.target.setAttribute('aria-selected', 'true');
+
+                currentTab = e.target.dataset.tab;
+                currentPage = 1;
+                allIssues = [];
+                const loadMoreBtn = document.getElementById('load-more');
+                if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+                if (currentAbort) currentAbort.controller.abort();
+                loadIssuesPage(1, true);
+            });
+
+            tab.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    const tabsArray = Array.from(tabs);
+                    const currentIndex = tabsArray.indexOf(e.target);
+                    let newIndex;
+                    if (e.key === 'ArrowRight') {
+                        newIndex = (currentIndex + 1) % tabsArray.length;
+                    } else {
+                        newIndex = (currentIndex - 1 + tabsArray.length) % tabsArray.length;
+                    }
+                    tabsArray[newIndex].focus();
+                    tabsArray[newIndex].click();
+                }
+            });
+        });
+
+        document.getElementById('load-more').addEventListener('click', () => {
+            if (!isLoading && hasMorePages) loadIssuesPage(currentPage + 1, false);
+        });
+
         await loadIssuesPage(1, true);
     }
 
@@ -110,17 +151,82 @@
     function renderIssuesList(issues) {
         const listEl = document.getElementById('feedback-list');
         if (!listEl) return;
-        if (issues.length === 0) { listEl.innerHTML = `<p class="text-secondary" style="text-align:center;" data-lang="feedbackNoItems">Пока нет сообщений. Будьте первым!</p>`; return; }
+        if (issues.length === 0) {
+            listEl.innerHTML = `<p class="text-secondary" style="text-align:center;" data-lang="feedbackNoItems">Пока нет сообщений. Будьте первым!</p>`;
+            return;
+        }
         listEl.innerHTML = issues.map(issue => {
             const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
             const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
-            return `<div class="feedback-item" data-issue-number="${issue.number}" data-issue-id="${issue.id}"><div class="feedback-item-header"><h4 class="feedback-item-title">${escapeHtml(issue.title)}</h4><div class="feedback-item-meta"><span class="feedback-label type-${typeLabel}">${typeLabel}</span><span class="feedback-label">#${issue.number}</span></div></div><div class="feedback-item-preview">${escapeHtml(preview).replace(/\n/g,' ')}</div><div class="reactions-container" data-target-type="issue" data-target-id="${issue.number}"></div><div class="feedback-item-footer"><span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span></div></div>`;
+            return `<div class="feedback-item" data-issue-number="${issue.number}" data-issue-id="${issue.id}">
+                <div class="feedback-item-header">
+                    <h4 class="feedback-item-title">${escapeHtml(issue.title)}</h4>
+                    <div class="feedback-item-meta">
+                        <span class="feedback-label type-${typeLabel}">${typeLabel}</span>
+                        <span class="feedback-label">#${issue.number}</span>
+                    </div>
+                </div>
+                <div class="feedback-item-preview">${escapeHtml(preview).replace(/\n/g,' ')}</div>
+                <div class="reactions-container" data-target-type="issue" data-target-id="${issue.number}"></div>
+                <div class="feedback-item-footer">
+                    <span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span>
+                    <span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span>
+                    <span><i class="fas fa-comment"></i> ${issue.comments}</span>
+                </div>
+            </div>`;
         }).join('');
         issues.forEach(issue => {
             const reactionsContainer = document.querySelector(`.reactions-container[data-target-id="${issue.number}"]`);
-            if (reactionsContainer) loadAndRenderReactions(issue.number, reactionsContainer);
+            if (reactionsContainer) loadAndRenderReactionsWithCache(issue.number, reactionsContainer);
         });
         attachEventHandlers();
+    }
+
+    // Функция загрузки реакций с кешированием для списка
+    async function loadAndRenderReactionsWithCache(issueNumber, container) {
+        const cacheKey = `list_reactions_${issueNumber}`;
+        const cached = reactionsListCache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < REACTIONS_CACHE_TTL) {
+            // Используем кешированные реакции
+            renderReactionsFromCache(cached.data, container, issueNumber);
+            return;
+        }
+
+        try {
+            const reactions = await loadReactions(issueNumber);
+            // Сохраняем в кеш
+            reactionsListCache.set(cacheKey, { data: reactions, timestamp: Date.now() });
+            renderReactionsFromCache(reactions, container, issueNumber);
+        } catch (err) {
+            UIUtils.showToast('Ошибка загрузки реакций', 'error');
+        }
+    }
+
+    function renderReactionsFromCache(reactions, container, issueNumber) {
+        const handleAdd = async (num, content) => { 
+            try { 
+                await addReaction(num, content); 
+                // Инвалидируем кеш
+                reactionsListCache.delete(`list_reactions_${num}`);
+                const updated = await loadReactions(num);
+                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); 
+                UIUtils.showToast('Реакция добавлена', 'success');
+            } catch (err) { 
+                UIUtils.showToast('Ошибка при добавлении реакции', 'error');
+            }
+        };
+        const handleRemove = async (num, reactionId) => { 
+            try { 
+                await removeReaction(num, reactionId); 
+                reactionsListCache.delete(`list_reactions_${num}`);
+                const updated = await loadReactions(num);
+                renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); 
+                UIUtils.showToast('Реакция убрана', 'success');
+            } catch (err) { 
+                UIUtils.showToast('Ошибка при удалении реакции', 'error');
+            }
+        };
+        renderReactions(container, issueNumber, reactions, currentUser, handleAdd, handleRemove);
     }
 
     function attachEventHandlers() {
@@ -129,17 +235,17 @@
                 if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
                 const issueNumber = item.dataset.issueNumber;
                 const issue = allIssues.find(i => i.number == issueNumber);
-                if (issue) openFullModal({ type: 'issue', id: issueNumber, title: issue.title, body: issue.body, author: issue.user.login, date: new Date(issue.created_at), game: currentGame, labels: issue.labels.map(l => l.name) });
+                if (issue) openFullModal({ 
+                    type: 'issue', 
+                    id: issueNumber, 
+                    title: issue.title, 
+                    body: issue.body, 
+                    author: issue.user.login, 
+                    date: new Date(issue.created_at), 
+                    game: currentGame, 
+                    labels: issue.labels.map(l => l.name) 
+                });
             });
         });
-    }
-
-    async function loadAndRenderReactions(issueNumber, container) {
-        try {
-            const reactions = await loadReactions(issueNumber);
-            const handleAdd = async (num, content) => { try { await addReaction(num, content); const updated = await loadReactions(num); renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); } catch {} };
-            const handleRemove = async (num, reactionId) => { try { await removeReaction(num, reactionId); const updated = await loadReactions(num); renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); } catch {} };
-            renderReactions(container, issueNumber, reactions, currentUser, handleAdd, handleRemove);
-        } catch {}
     }
 })();

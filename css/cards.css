@@ -1,18 +1,28 @@
+/* cards.css — обновлён, удалён .tilt-card, добавлены переменные */
+
+:root {
+    --border-radius-card: 20px;
+    --border-radius-inner: 16px;
+    --border-radius-small: 12px;
+    --transition-default: 0.2s ease;
+    --shadow-hover: 0 12px 28px rgba(0,0,0,0.8);
+}
+
 /* Карточки */
 .card {
     background: var(--bg-card-gradient);
-    border-radius: 20px;
+    border-radius: var(--border-radius-card);
     padding: 28px;
     margin-bottom: 24px;
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
-    transition: box-shadow 0.2s;
+    transition: box-shadow var(--transition-default);
 }
-.card:hover { box-shadow: 0 12px 28px rgba(0,0,0,0.8); }
+.card:hover { box-shadow: var(--shadow-hover); }
 
 /* Шапка с фоном (специфичная карточка) */
 .game-header {
-    background-size: 110%; /* увеличено, чтобы скрыть края при параллаксе */
+    background-size: 110%;
     background-position: center;
     padding: 0;
     transition: background-position 0.1s ease-out;
@@ -45,7 +55,7 @@
     max-width: 80px;
     max-height: 80px;
     object-fit: contain;
-    transition: transform 0.2s;
+    transition: transform var(--transition-default);
 }
 .header-content .game-title {
     margin-bottom: 0;
@@ -72,7 +82,7 @@
 .social-icon {
     color: white;
     font-size: 24px;
-    transition: opacity 0.2s;
+    transition: opacity var(--transition-default);
 }
 .social-icon:hover {
     opacity: 0.8;
@@ -82,18 +92,18 @@
 .project-card-link {
     display: block;
     color: inherit;
-    transition: transform 0.2s;
+    transition: transform var(--transition-default);
 }
 .project-card-link:hover {
     transform: translateY(-5px);
 }
 .project-card-link.disabled { pointer-events: none; opacity: 0.7; }
 .project-card {
-    background: var(--bg-inner-gradient); /* градиент для внутренних карточек */
-    border-radius: 16px;
+    background: var(--bg-inner-gradient);
+    border-radius: var(--border-radius-inner);
     padding: 16px;
     border: 1px solid var(--border);
-    transition: border-color 0.2s, transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: border-color var(--transition-default), transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -104,7 +114,7 @@
     width: 100%;
     height: 180px;
     overflow: hidden;
-    border-radius: 12px;
+    border-radius: var(--border-radius-small);
     margin-bottom: 12px;
     border: 1px solid var(--border);
 }
@@ -133,19 +143,19 @@
 .profile-card-link {
     flex: 1 1 150px;
     color: inherit;
-    transition: transform 0.2s;
+    transition: transform var(--transition-default);
 }
 .profile-card-link:hover { transform: translateY(-3px); }
 .profile-card {
-    background: var(--bg-inner-gradient); /* градиент для карточек профилей */
-    border-radius: 16px;
+    background: var(--bg-inner-gradient);
+    border-radius: var(--border-radius-inner);
     padding: 16px;
     border: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    transition: border-color 0.2s, transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: border-color var(--transition-default), transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
 }
 .profile-card-link:hover .profile-card { border-color: var(--accent); }
@@ -176,7 +186,7 @@
 
 /* Трейлер и разработчик */
 .trailer-card .video-embed {
-    border-radius: 12px;
+    border-radius: var(--border-radius-small);
     overflow: hidden;
     border: 1px solid var(--border);
 }
@@ -217,8 +227,8 @@
 
 /* Особенности */
 .feature-item {
-    background: var(--bg-inner-gradient); /* градиент для блоков особенностей */
-    border-radius: 16px;
+    background: var(--bg-inner-gradient);
+    border-radius: var(--border-radius-inner);
     padding: 20px;
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -229,6 +239,7 @@
     display: block;
     margin-bottom: 10px;
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
 }
 .feature-item h3 {
     margin: 0 0 8px;
@@ -238,7 +249,7 @@
     margin-top: 30px;
     padding: 20px;
     background: var(--bg-inner-gradient);
-    border-radius: 16px;
+    border-radius: var(--border-radius-inner);
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
@@ -269,10 +280,10 @@
 /* Видео карточки */
 .video-card {
     background: var(--bg-inner-gradient);
-    border-radius: 16px;
+    border-radius: var(--border-radius-inner);
     padding: 12px;
     border: 1px solid var(--border);
-    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color 0.2s;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color var(--transition-default);
     will-change: transform;
 }
 .video-card:hover { border-color: var(--accent); }
@@ -280,7 +291,7 @@
     width: 100%;
     height: 140px;
     object-fit: cover;
-    border-radius: 12px;
+    border-radius: var(--border-radius-small);
     margin-bottom: 10px;
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -308,7 +319,7 @@
     flex: 1 1 200px;
     background: var(--bg-inner-gradient);
     padding: 16px;
-    border-radius: 16px;
+    border-radius: var(--border-radius-inner);
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
@@ -321,7 +332,7 @@
 }
 .consumption-card {
     background: var(--bg-inner-gradient);
-    border-radius: 16px;
+    border-radius: var(--border-radius-inner);
     padding: 20px;
     margin-top: 24px;
     border: 1px solid var(--border);
@@ -346,7 +357,7 @@
 /* Обновления */
 .update-card {
     background: var(--bg-inner-gradient);
-    border-radius: 16px;
+    border-radius: var(--border-radius-inner);
     padding: 20px;
     margin-bottom: 20px;
     border: 1px solid var(--border);
@@ -363,7 +374,7 @@
 .spoiler {
     margin-top: 16px;
     background: var(--bg-inner-gradient);
-    border-radius: 12px;
+    border-radius: var(--border-radius-small);
     border: 1px solid var(--border);
     overflow: hidden;
 }
@@ -383,14 +394,14 @@
 .spoiler summary:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
-    border-radius: 12px;
+    border-radius: var(--border-radius-small);
 }
 .spoiler summary::before {
     content: "▶";
     margin-right: 12px;
     font-size: 12px;
     color: var(--accent);
-    transition: transform 0.2s;
+    transition: transform var(--transition-default);
 }
 .spoiler[open] summary::before { transform: rotate(90deg); }
 .spoiler-content {
@@ -412,44 +423,6 @@
     margin: 24px 0;
 }
 
-/* Tilt карточки - ограничиваем силу эффекта */
-.tilt-card {
-    transform-style: preserve-3d;
-    will-change: transform;
-    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* более плавный переход */
-}
-.tilt-card .project-image,
-.tilt-card .video-thumbnail,
-.tilt-card .game-icon,
-.tilt-card .feature-icon {
-    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
-}
-/* Для аватарок в профилях отключаем перемещение */
-.profile-card .avatar {
-    transition: none;
-}
-
-/* Умеренный эффект для карточек описания и дополнительных блоков */
-.feature-item.tilt-card:hover,
-.update-card.tilt-card:hover,
-.req-item.tilt-card:hover,
-.consumption-card.tilt-card:hover,
-.features-extra.tilt-card:hover {
-    transform: scale(1.02);
-}
-.feature-item.tilt-card:hover .feature-icon,
-.update-card.tilt-card:hover *,
-.req-item.tilt-card:hover *,
-.consumption-card.tilt-card:hover *,
-.features-extra.tilt-card:hover * {
-    transform: none;
-}
-/* Убираем изменение цвета границы при наведении на .features-extra */
-.features-extra.tilt-card:hover {
-    border-color: var(--border);
-}
-
 /* Небольшие проекты на главной */
 .small-projects-container {
     display: grid;
@@ -464,7 +437,7 @@
     display: flex;
 }
 .trailer-small iframe {
-    border-radius: 16px;
+    border-radius: var(--border-radius-inner);
     border: 1px solid var(--border);
     width: 100%;
     aspect-ratio: 16 / 9;
@@ -477,7 +450,7 @@
     flex: 1;
     width: 100%;
     margin-bottom: 8px;
-    border-radius: 12px;
+    border-radius: var(--border-radius-small);
     overflow: hidden;
 }
 .small-projects-container .project-card .image-wrapper img {
@@ -501,7 +474,7 @@
 .profile-card-link:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    border-radius: 16px;
+    border-radius: var(--border-radius-inner);
 }
 .project-card-link:focus-visible .project-card,
 .profile-card-link:focus-visible .profile-card {
@@ -512,7 +485,7 @@
 .project-card-link:hover .button {
     box-shadow: 0 0 15px var(--accent), 0 4px 8px rgba(0,0,0,0.3);
     transform: scale(1.02);
-    transition: box-shadow 0.2s, transform 0.2s;
+    transition: box-shadow var(--transition-default), transform var(--transition-default);
 }
 
 /* Прогресс-бар разработки */

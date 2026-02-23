@@ -1,3 +1,5 @@
+// admin-news.js — кнопки для админов с aria-label
+
 (function() {
     const { cacheRemove, CONFIG } = GithubCore;
     const { isAdmin } = GithubAuth;
@@ -5,11 +7,10 @@
 
     function renderAdminPanels() {
         if (!isAdmin()) {
-            document.querySelectorAll('.admin-panel').forEach(el => el.remove());
+            document.querySelectorAll('.admin-panel, .admin-news-btn, .admin-update-btn').forEach(el => el.remove());
             return;
         }
 
-        // News section – add button in header
         const newsSection = document.getElementById('news-section');
         if (newsSection) {
             let header = newsSection.querySelector('.section-header');
@@ -25,17 +26,16 @@
                 header.appendChild(title);
                 newsSection.prepend(header);
             }
-            // Remove old button if exists, then add new
             const oldBtn = header.querySelector('.admin-news-btn');
             if (oldBtn) oldBtn.remove();
             const btn = document.createElement('button');
             btn.className = 'button admin-news-btn';
             btn.innerHTML = '<i class="fas fa-plus"></i> Добавить новость';
+            btn.setAttribute('aria-label', 'Добавить новость');
             btn.addEventListener('click', () => openEditorModal('new', { game: null }, 'news'));
             header.appendChild(btn);
         }
 
-        // Game updates section – find container and add button to its header
         const updatesContainer = document.getElementById('game-updates');
         if (updatesContainer && updatesContainer.dataset.game) {
             const game = updatesContainer.dataset.game;
@@ -58,6 +58,7 @@
             const btn = document.createElement('button');
             btn.className = 'button admin-update-btn';
             btn.innerHTML = '<i class="fas fa-plus"></i> Добавить обновление';
+            btn.setAttribute('aria-label', 'Добавить обновление');
             btn.addEventListener('click', () => openEditorModal('new', { game: game }, 'update'));
             header.appendChild(btn);
         }

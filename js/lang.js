@@ -86,6 +86,7 @@ const translations = {
         githubClearCache: "Очистить кеш",
         githubError: "Ошибка",
         githubRetry: "Попробовать снова",
+        githubRevoke: "Управление токенами",
 
         // Фраза про лицензию
         licenseAccept: "Скачивая игру, вы принимаете ",
@@ -321,6 +322,7 @@ const translations = {
         githubClearCache: "Clear cache", 
         githubError: "Error",
         githubRetry: "Try again",
+        githubRevoke: "Manage tokens",
 
         licenseAccept: "By downloading the game, you accept the ",
         licenseLink: "license agreement",

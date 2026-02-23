@@ -58,6 +58,12 @@ function createAbortable(timeout = 10000) {
     return { controller, timeoutId };
 }
 
+function stripHtml(html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+}
+
 window.GithubCore = {
     CONFIG: GITHUB_CONFIG,
     cacheGet,
@@ -66,5 +72,6 @@ window.GithubCore = {
     escapeHtml,
     renderMarkdown,
     deduplicateByNumber,
-    createAbortable
+    createAbortable,
+    stripHtml
 };
