@@ -19,8 +19,7 @@
             try {
                 const errorData = await response.json();
                 errorMsg = errorData.message || errorMsg;
-            } catch {
-            }
+            } catch {}
             throw new Error(errorMsg);
         }
         return response;
@@ -78,6 +77,16 @@
         return response.json();
     }
 
+    async function updateComment(commentId, body) {
+        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${commentId}`;
+        const response = await githubFetch(url, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ body })
+        });
+        return response.json();
+    }
+
     async function deleteComment(commentId) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${commentId}`;
         await githubFetch(url, { method: 'DELETE' });
@@ -116,6 +125,7 @@
         closeIssue,
         loadComments,
         addComment,
+        updateComment,
         deleteComment,
         loadReactions,
         addReaction,
