@@ -106,7 +106,7 @@
                 if (data.status !== 'ok') continue;
 
                 // items содержит до 25 последних видео
-                const videosFromChannel = data.items.slice(0, 5).map(item => {
+                const videosFromChannel = data.items.slice(0, 9).map(item => {
                     const link = item.link;
                     let videoId = null;
                     try {
