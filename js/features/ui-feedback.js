@@ -308,26 +308,32 @@
             const content = `vote:${index}`;
             const reactions = voteReactions.filter(r => r.content === content);
             const count = reactions.length;
-            const userReacted = currentUser ? reactions.some(r => r.user.login === currentUser) : false;
-            const reactionId = userReacted ? reactions.find(r => r.user.login === currentUser).id : null;
+            const userReacted = currentUser ? reactions.some(r => r.user && r.user.login === currentUser) : false;
+            const reactionId = userReacted ? reactions.find(r => r.user && r.user.login === currentUser).id : null;
             return { count, userReacted, reactionId };
         });
         
         const totalVotes = voteCounts.reduce((sum, v) => sum + v.count, 0);
         
         const pollDiv = document.createElement('div');
-        pollDiv.className = 'poll';
+        pollDiv.className = 'poll-container';
         pollDiv.dataset.issue = issueNumber;
         pollDiv.dataset.options = JSON.stringify(pollData.options);
         
-        let html = '<div class="poll-options">';
+        // Заголовок и описание опроса (можно задать в редакторе отдельно, но здесь простой вариант)
+        let html = '<div class="poll-title">📊 Опрос</div>';
+        if (pollData.description) {
+            html += `<div class="poll-description">${GithubCore.escapeHtml(pollData.description)}</div>`;
+        }
+        
+        html += '<div class="poll-options">';
         pollData.options.forEach((option, index) => {
             const count = voteCounts[index].count;
             const percent = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
             html += `
                 <div class="poll-option" data-option="${index}">
                     <span class="poll-option-text">${GithubCore.escapeHtml(option)}</span>
-                    <div class="progress-bar" style="margin: 5px 0;">
+                    <div class="progress-bar">
                         <div style="width: ${percent}%;">${percent}% (${count})</div>
                     </div>
                 </div>
@@ -335,47 +341,46 @@
         });
         html += '</div>';
         
-        if (currentUser) {
+        // Если пользователь ещё не голосовал, показываем кнопки
+        const hasVoted = voteCounts.some(v => v.userReacted);
+        if (currentUser && !hasVoted) {
             html += '<div class="poll-vote-buttons">';
             pollData.options.forEach((option, index) => {
-                const active = voteCounts[index].userReacted ? 'active' : '';
-                html += `<button class="button small poll-vote-btn ${active}" data-option="${index}">${GithubCore.escapeHtml(option)}</button>`;
+                html += `<button class="button small poll-vote-btn" data-option="${index}">${GithubCore.escapeHtml(option)}</button>`;
             });
             html += '</div>';
+        } else if (currentUser && hasVoted) {
+            // Можно показать сообщение, что уже голосовали
+            html += '<p class="text-secondary" style="text-align:center;">Вы уже проголосовали</p>';
+        } else {
+            html += '<p class="text-secondary" style="text-align:center;">Войдите, чтобы голосовать</p>';
         }
         
         pollDiv.innerHTML = html;
         container.innerHTML = ''; // очищаем контейнер перед вставкой
         container.appendChild(pollDiv);
         
-        if (currentUser) {
+        if (currentUser && !hasVoted) {
             pollDiv.querySelectorAll('.poll-vote-btn').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const optionIndex = btn.dataset.option;
                     const content = `vote:${optionIndex}`;
                     
-                    // Находим предыдущую реакцию пользователя
-                    const prevReaction = voteReactions.find(r => r.user.login === currentUser);
-                    
-                    // Оптимистичное обновление
-                    pollDiv.querySelectorAll('.poll-vote-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
+                    // Блокировка
+                    const lockKey = `${issueNumber}_${content}`;
+                    if (reactionLocks.has(lockKey)) return;
+                    reactionLocks.set(lockKey, true);
                     
                     try {
-                        if (prevReaction && prevReaction.content !== content) {
-                            await GithubAPI.removeReaction(issueNumber, prevReaction.id);
-                        }
-                        if (!prevReaction || prevReaction.content !== content) {
-                            await GithubAPI.addReaction(issueNumber, content);
-                        }
+                        await GithubAPI.addReaction(issueNumber, content);
                         UIUtils.showToast('Голос учтён', 'success');
                         // Перерендериваем опрос с актуальными данными
                         await renderPoll(container, issueNumber, pollData);
                     } catch (err) {
                         UIUtils.showToast('Ошибка голосования', 'error');
-                        // Откат
-                        await renderPoll(container, issueNumber, pollData);
+                    } finally {
+                        reactionLocks.delete(lockKey);
                     }
                 });
             });
@@ -551,7 +556,7 @@
             const pollData = extractPollFromBody(issue.body);
             if (pollData) {
                 const pollContainer = document.createElement('div');
-                pollContainer.className = 'poll-container';
+                pollContainer.className = 'poll-container-wrapper';
                 container.appendChild(pollContainer);
                 await renderPoll(pollContainer, item.id, pollData);
             }
@@ -561,6 +566,7 @@
             setupAdminActions(container, item, issue, currentUser, closeModal, escHandler);
 
         } catch (err) {
+            console.error(err);
             container.innerHTML = '<p class="error-message">Не удалось загрузить содержимое. Закрытие...</p>';
             setTimeout(() => {
                 closeModal();

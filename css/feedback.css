@@ -252,7 +252,7 @@
     border-bottom: 1px solid var(--border);
 }
 
-/* Стили для alert-блоков (GitHub-стиль) */
+/* Стили для alert-блоков (GitHub-стиль) с цветными полосами */
 .preview-area .markdown-alert {
     padding: 0.5em 1em;
     margin: 1em 0;
@@ -262,22 +262,27 @@
 .preview-area .markdown-alert-note {
     border-left-color: #0969da;
     background: #ddf4ff;
+    color: #000; /* для читаемости */
 }
 .preview-area .markdown-alert-tip {
     border-left-color: #1f883d;
     background: #dafbe1;
+    color: #000;
 }
 .preview-area .markdown-alert-important {
     border-left-color: #8250df;
     background: #fbefff;
+    color: #000;
 }
 .preview-area .markdown-alert-warning {
     border-left-color: #f0883e;
     background: #fff8c5;
+    color: #000;
 }
 .preview-area .markdown-alert-caution {
     border-left-color: #cf222e;
     background: #ffebe9;
+    color: #000;
 }
 
 /* Стили для прогресс-бара */
@@ -626,6 +631,61 @@
     background: var(--bg-inner-gradient);
 }
 
+/* Стили для опросов */
+.poll-container {
+    margin: 20px 0;
+    padding: 20px;
+    background: var(--bg-card-gradient);
+    border-radius: var(--border-radius-card);
+    border: 1px solid var(--accent);
+}
+.poll-title {
+    font-size: 20px;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+}
+.poll-description {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+.poll-option {
+    margin-bottom: 15px;
+}
+.poll-option-text {
+    display: block;
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.poll-option .progress-bar {
+    height: 20px;
+    background: var(--bg-primary);
+}
+.poll-option .progress-bar > div {
+    background: linear-gradient(90deg, var(--accent), var(--accent-light));
+    font-size: 12px;
+    line-height: 20px;
+    text-align: center;
+    color: white;
+    border-radius: 20px;
+}
+.poll-vote-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+    justify-content: center;
+}
+.poll-vote-btn {
+    min-width: 100px;
+}
+.poll-vote-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
 /* Модальное окно на весь экран */
 .modal-fullscreen {
     position: fixed;
@@ -810,5 +870,13 @@
     }
     .modal-body {
         padding: 20px;
+    }
+
+    /* Опросы на мобильных */
+    .poll-vote-buttons {
+        flex-direction: column;
+    }
+    .poll-vote-btn {
+        width: 100%;
     }
 }
