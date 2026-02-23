@@ -4,6 +4,16 @@
     margin-top: 24px;
 }
 
+/* Убираем лишние отступы у описания и заголовка */
+.feedback-container .text-secondary {
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+.feedback-header h2 {
+    margin-top: 0;
+}
+
 .feedback-header {
     display: flex;
     align-items: center;

@@ -38,12 +38,19 @@
     function createModal(title, contentHtml, options = {}) {
         const { onClose, size = 'full', closeButton = true } = options;
         const modal = document.createElement('div');
-        modal.className = `modal modal-${size}`;
+        // Определяем классы в зависимости от размера
+        let modalClass = 'modal';
+        let contentClass = 'modal-content';
+        if (size === 'full') {
+            modalClass += ' modal-fullscreen';   // используем класс из feedback.css
+            contentClass += ' modal-content-full';
+        }
+        modal.className = modalClass;
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
         modal.setAttribute('aria-labelledby', 'modal-title');
         modal.innerHTML = `
-            <div class="modal-content">
+            <div class="${contentClass}">
                 <div class="modal-header">
                     <h2 id="modal-title">${GithubCore.escapeHtml(title)}</h2>
                     ${closeButton ? '<button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>' : ''}
@@ -53,6 +60,8 @@
         `;
         document.body.appendChild(modal);
         document.body.style.overflow = 'hidden';
+        // Активируем модальное окно (делаем видимым)
+        modal.classList.add('active');
 
         const closeModal = () => {
             modal.remove();
