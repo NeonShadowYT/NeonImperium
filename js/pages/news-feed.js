@@ -1,4 +1,5 @@
 // news-feed.js — лента новостей на главной (новости + обновления) с видео
+// Упрощённое получение видео через RSS2JSON (без Invidious)
 
 (function() {
     const { cacheGet, cacheSet, escapeHtml, renderMarkdown, CONFIG, deduplicateByNumber, createAbortable, stripHtml } = GithubCore;
@@ -69,12 +70,13 @@
         loadVideosAsync();
     }
 
+    // --- НОВАЯ функция загрузки видео через RSS2JSON ---
     async function loadVideosAsync() {
         if (videoLoading) return;
         videoLoading = true;
         videoError = false;
         try {
-            videos = await loadVideos();
+            videos = await loadVideosFromRSS2JSON();
             videosLoaded = true;
         } catch (err) {
             if (err.name === 'AbortError') return;
@@ -83,6 +85,105 @@
         } finally {
             videoLoading = false;
             renderMixed();
+        }
+    }
+
+    async function loadVideosFromRSS2JSON() {
+        const cacheKey = 'youtube_videos_rss2json_v2';
+        const cached = cacheGet(cacheKey);
+        if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
+
+        const { controller, timeoutId } = createAbortable(15000);
+        currentAbort = { controller };
+        try {
+            const allVideos = [];
+            for (const channel of YT_CHANNELS) {
+                const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`;
+                const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+                const response = await fetch(apiUrl, { signal: controller.signal });
+                if (!response.ok) continue;
+                const data = await response.json();
+                if (data.status !== 'ok') continue;
+
+                // items содержит до 25 последних видео
+                const videosFromChannel = data.items.slice(0, 5).map(item => {
+                    const link = item.link;
+                    let videoId = null;
+                    try {
+                        // Извлекаем ID из ссылки (работает для youtu.be и youtube.com)
+                        const url = new URL(link);
+                        if (url.hostname === 'youtu.be') {
+                            videoId = url.pathname.slice(1);
+                        } else {
+                            videoId = url.searchParams.get('v');
+                        }
+                    } catch (e) {
+                        return null;
+                    }
+                    if (!videoId) return null;
+                    return {
+                        type: 'video',
+                        id: videoId,
+                        title: item.title,
+                        author: channel.name,
+                        date: new Date(item.pubDate),
+                        published: new Date(item.pubDate),
+                        thumbnail: item.thumbnail || '',
+                        channel: channel.name
+                    };
+                }).filter(v => v !== null);
+                allVideos.push(...videosFromChannel);
+            }
+
+            // Сортируем все видео по дате (свежие сверху) и оставляем 10
+            const sorted = allVideos.sort((a, b) => b.date - a.date).slice(0, 10);
+            const serialized = sorted.map(v => ({ ...v, date: v.date.toISOString() }));
+            cacheSet(cacheKey, serialized);
+            return sorted;
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                UIUtils.showToast('Таймаут при загрузке видео', 'warning');
+            }
+            throw err;
+        } finally {
+            clearTimeout(timeoutId);
+            if (currentAbort?.controller === controller) currentAbort = null;
+        }
+    }
+
+    // --- Остальные функции остаются без изменений ---
+    async function loadPosts() {
+        const cacheKey = 'posts_news+update_v2';
+        const cached = cacheGet(cacheKey);
+        if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
+
+        const { controller, timeoutId } = createAbortable(10000);
+        currentAbort = { controller };
+        try {
+            const [newsIssues, updateIssues] = await Promise.all([
+                loadIssues({ labels: 'type:news', per_page: 20, signal: controller.signal }),
+                loadIssues({ labels: 'type:update', per_page: 20, signal: controller.signal })
+            ]);
+            const allIssues = deduplicateByNumber([...newsIssues, ...updateIssues]);
+            const posts = allIssues
+                .filter(issue => CONFIG.ALLOWED_AUTHORS.includes(issue.user.login))
+                .map(issue => ({
+                    type: 'post', number: issue.number, title: issue.title, body: issue.body,
+                    author: issue.user.login, date: new Date(issue.created_at),
+                    labels: issue.labels.map(l => l.name),
+                    game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
+                }));
+            const serialized = posts.map(p => ({ ...p, date: p.date.toISOString() }));
+            cacheSet(cacheKey, serialized);
+            return posts;
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                UIUtils.showToast('Таймаут при загрузке новостей', 'warning');
+            }
+            throw err;
+        } finally {
+            clearTimeout(timeoutId);
+            if (currentAbort?.controller === controller) currentAbort = null;
         }
     }
 
@@ -140,124 +241,6 @@
             <div style="height: 14px; width: 60%; background: var(--border);"></div>
         `;
         return card;
-    }
-
-    async function loadVideos() {
-        const cacheKey = 'youtube_videos_v2';
-        const cached = cacheGet(cacheKey);
-        if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
-
-        const { controller, timeoutId } = createAbortable(15000);
-        currentAbort = { controller };
-        try {
-            // Расширенный список инстансов Invidious
-            const instances = [
-                'invidious.privacyredirect.com',
-                'yewtu.be',
-                'inv.riverside.rocks',
-                'invidious.snopyta.org',
-                'vid.puffyan.us',
-                'invidious.xyz',
-                'invidious.kavin.rocks',
-                'invidious.ggc-project.de',
-                'invidious.tiekoetter.com'
-            ];
-            let videos = [];
-            for (const instance of instances) {
-                try {
-                    const fetched = await fetchFromInvidious(instance, controller.signal);
-                    if (fetched.length) { videos = fetched; break; }
-                } catch { continue; }
-            }
-            if (!videos.length) videos = await fetchViaRSS(controller.signal);
-            const serialized = videos.map(v => ({ ...v, date: v.published.toISOString() }));
-            cacheSet(cacheKey, serialized);
-            return videos;
-        } catch (err) {
-            if (err.name === 'AbortError') {
-                UIUtils.showToast('Таймаут при загрузке видео', 'warning');
-            }
-            throw err;
-        } finally {
-            clearTimeout(timeoutId);
-            if (currentAbort?.controller === controller) currentAbort = null;
-        }
-    }
-
-    async function fetchFromInvidious(instance, signal) {
-        const all = [];
-        for (const channel of YT_CHANNELS) {
-            const res = await fetch(`https://${instance}/api/v1/channels/${channel.id}/videos`, { signal });
-            if (!res.ok) continue;
-            const data = await res.json();
-            const channelVids = data.slice(0, 5).map(v => ({
-                type: 'video', id: v.videoId, title: v.title, author: channel.name,
-                date: new Date(v.published * 1000), published: new Date(v.published * 1000),
-                thumbnail: v.videoThumbnails?.find(t => t.quality === 'medium')?.url || '',
-                channel: channel.name
-            }));
-            all.push(...channelVids);
-        }
-        return all.sort((a,b) => b.date - a.date).slice(0, 10);
-    }
-
-    async function fetchViaRSS(signal) {
-        const all = [];
-        for (const channel of YT_CHANNELS) {
-            try {
-                const url = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`)}`;
-                const res = await fetch(url, { signal });
-                if (!res.ok) continue;
-                const data = await res.json();
-                const parser = new DOMParser();
-                const xml = parser.parseFromString(data.contents, 'text/xml');
-                const entries = Array.from(xml.querySelectorAll('entry')).slice(0, 3);
-                entries.forEach(entry => {
-                    const title = entry.querySelector('title')?.textContent || 'Без названия';
-                    const videoId = entry.querySelector('yt\\:videoId, videoId')?.textContent || '';
-                    const published = new Date(entry.querySelector('published')?.textContent || Date.now());
-                    const mediaGroup = entry.querySelector('media\\:group, group');
-                    const thumbnail = mediaGroup?.querySelector('media\\:thumbnail, thumbnail')?.getAttribute('url') || '';
-                    all.push({ type: 'video', id: videoId, title, author: channel.name, date: published, published, thumbnail, channel: channel.name });
-                });
-            } catch { continue; }
-        }
-        return all.sort((a,b) => b.date - a.date).slice(0, 10);
-    }
-
-    async function loadPosts() {
-        const cacheKey = 'posts_news+update_v2';
-        const cached = cacheGet(cacheKey);
-        if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
-
-        const { controller, timeoutId } = createAbortable(10000);
-        currentAbort = { controller };
-        try {
-            const [newsIssues, updateIssues] = await Promise.all([
-                loadIssues({ labels: 'type:news', per_page: 20, signal: controller.signal }),
-                loadIssues({ labels: 'type:update', per_page: 20, signal: controller.signal })
-            ]);
-            const allIssues = deduplicateByNumber([...newsIssues, ...updateIssues]);
-            const posts = allIssues
-                .filter(issue => CONFIG.ALLOWED_AUTHORS.includes(issue.user.login))
-                .map(issue => ({
-                    type: 'post', number: issue.number, title: issue.title, body: issue.body,
-                    author: issue.user.login, date: new Date(issue.created_at),
-                    labels: issue.labels.map(l => l.name),
-                    game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
-                }));
-            const serialized = posts.map(p => ({ ...p, date: p.date.toISOString() }));
-            cacheSet(cacheKey, serialized);
-            return posts;
-        } catch (err) {
-            if (err.name === 'AbortError') {
-                UIUtils.showToast('Таймаут при загрузке новостей', 'warning');
-            }
-            throw err;
-        } finally {
-            clearTimeout(timeoutId);
-            if (currentAbort?.controller === controller) currentAbort = null;
-        }
     }
 
     function createVideoCard(video) {
