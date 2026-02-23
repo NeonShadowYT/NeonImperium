@@ -37,6 +37,10 @@
     // Создаёт модальное окно с заголовком и содержимым
     function createModal(title, contentHtml, options = {}) {
         const { onClose, size = 'full', closeButton = true } = options;
+        
+        // Удаляем предыдущие модальные окна, чтобы избежать конфликтов ID
+        document.querySelectorAll('.modal-fullscreen, .modal').forEach(m => m.remove());
+        
         const modal = document.createElement('div');
         // Определяем классы в зависимости от размера
         let modalClass = 'modal';

@@ -586,21 +586,25 @@
 
         const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
 
-        const textarea = document.getElementById('modal-body');
-        if (!textarea) {
-            console.error('textarea not found');
-            UIUtils.showToast('Ошибка инициализации редактора', 'error');
+        // Проверяем, что все необходимые элементы существуют
+        const titleInput = document.getElementById('modal-title');
+        const bodyTextarea = document.getElementById('modal-body');
+        const submitBtn = document.getElementById('modal-submit');
+        if (!titleInput || !bodyTextarea || !submitBtn) {
+            console.error('One of modal elements not found');
+            UIUtils.showToast('Ошибка создания формы', 'error');
+            closeModal();
             return;
         }
 
-        // Проверяем, что Editor загружен
+        // Инициализация редактора
         if (window.Editor) {
-            const toolbar = Editor.createEditorToolbar(textarea, { 
+            const toolbar = Editor.createEditorToolbar(bodyTextarea, { 
                 previewAreaId: 'modal-preview-area', 
                 onPreview: () => {
                     const preview = document.getElementById('modal-preview-area');
                     if (!preview) return;
-                    let body = textarea.value;
+                    let body = bodyTextarea.value;
                     const pollRegex = /<!-- poll: (.*?) -->/g;
                     body = body.replace(pollRegex, (match, p1) => {
                         try {
@@ -626,23 +630,10 @@
             UIUtils.showToast('Редактор не загружен, попробуйте обновить страницу', 'error');
         }
 
-        const submitBtn = document.getElementById('modal-submit');
-        if (!submitBtn) {
-            console.error('submit button not found');
-            UIUtils.showToast('Ошибка: кнопка отправки не найдена', 'error');
-            return;
-        }
-
-        // Добавим отладочный вывод
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             console.log('Submit clicked'); // отладка
-            const titleInput = document.getElementById('modal-title');
-            const bodyTextarea = document.getElementById('modal-body');
-            if (!titleInput || !bodyTextarea) {
-                UIUtils.showToast('Ошибка: поля не найдены', 'error');
-                return;
-            }
+
             const title = titleInput.value.trim();
             let body = bodyTextarea.value;
             if (!title) {
@@ -684,7 +675,7 @@
                     labels = [`game:${data.game}`, `type:${category}`];
                 } else if (postType === 'news') {
                     labels = ['type:news'];
-                } else {
+                } else { // update
                     if (!data.game) {
                         UIUtils.showToast('Ошибка: не указана игра', 'error');
                         btn.disabled = false;
