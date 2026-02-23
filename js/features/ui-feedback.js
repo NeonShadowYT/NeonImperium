@@ -25,6 +25,10 @@
     function invalidateCache(issueNumber) {
         reactionsCache.delete(`reactions_${issueNumber}`);
         commentsCache.delete(`comments_${issueNumber}`);
+        // Также удаляем кеш списка реакций (если он есть в feedback.js)
+        if (window.reactionsListCache) {
+            window.reactionsListCache.delete(`list_reactions_${issueNumber}`);
+        }
     }
 
     function groupReactions(reactions, currentUser) {
@@ -69,7 +73,6 @@
                         await onRemove(issueNumber, parseInt(reactionId, 10));
                         UIUtils.showToast('Реакция убрана', 'success');
                         invalidateCache(issueNumber);
-                        dispatchReactionUpdate(issueNumber);
                     } catch (err) {
                         UIUtils.showToast('Ошибка при удалении реакции', 'error');
                         btn.classList.add('active');
@@ -92,7 +95,6 @@
                             await onAdd(issueNumber, selected);
                             UIUtils.showToast('Реакция добавлена', 'success');
                             invalidateCache(issueNumber);
-                            dispatchReactionUpdate(issueNumber);
                         } catch (err) {
                             UIUtils.showToast('Ошибка при добавлении реакции', 'error');
                             tempBtn.remove();
@@ -119,7 +121,6 @@
                         await onAdd(issueNumber, selected);
                         UIUtils.showToast('Реакция добавлена', 'success');
                         invalidateCache(issueNumber);
-                        dispatchReactionUpdate(issueNumber);
                     } catch (err) {
                         UIUtils.showToast('Ошибка при добавлении реакции', 'error');
                         tempBtn.remove();
@@ -127,11 +128,6 @@
                 });
             });
         }
-    }
-
-    function dispatchReactionUpdate(issueNumber) {
-        const event = new CustomEvent('reaction-updated', { detail: { issueNumber } });
-        window.dispatchEvent(event);
     }
 
     function showReactionMenu(relativeTo, issueNumber, callback) {
@@ -270,7 +266,6 @@
                 setCached(`reactions_${num}`, updated, reactionsCache);
                 renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove); 
                 UIUtils.showToast('Реакция добавлена', 'success');
-                dispatchReactionUpdate(num);
             } catch (err) {
                 UIUtils.showToast('Ошибка при добавлении реакции', 'error');
             }
@@ -283,7 +278,6 @@
                 setCached(`reactions_${num}`, updated, reactionsCache);
                 renderReactions(reactionsDiv, num, updated, currentUser, handleAdd, handleRemove); 
                 UIUtils.showToast('Реакция убрана', 'success');
-                dispatchReactionUpdate(num);
             } catch (err) {
                 UIUtils.showToast('Ошибка при удалении реакции', 'error');
             }
@@ -304,22 +298,44 @@
             const input = commentForm.querySelector('.comment-input'); 
             const comment = input.value.trim();
             if (!comment) return; 
+            
+            // Оптимистичное добавление комментария
+            const tempId = 'temp-' + Date.now();
+            const tempCommentDiv = document.createElement('div');
+            tempCommentDiv.className = 'comment';
+            tempCommentDiv.dataset.commentId = tempId;
+            tempCommentDiv.innerHTML = `
+                <div class="comment-meta">
+                    <span class="comment-author">${GithubCore.escapeHtml(currentUser)}</span>
+                    <span>только что</span>
+                </div>
+                <div>${GithubCore.escapeHtml(comment).replace(/\n/g,'<br>')}</div>
+            `;
+            const commentsDiv = container.querySelector('.feedback-comments');
+            commentsDiv.appendChild(tempCommentDiv);
+            
             input.disabled = true; 
             e.target.disabled = true;
+            
             try { 
-                await GithubAPI.addComment(item.id, comment); 
+                const newComment = await GithubAPI.addComment(item.id, comment); 
+                // Заменяем временный комментарий на настоящий
+                tempCommentDiv.dataset.commentId = newComment.id;
+                // Обновляем время и возможно другие поля (но оставляем текст)
+                const timeSpan = tempCommentDiv.querySelector('.comment-meta span:last-child');
+                timeSpan.textContent = new Date(newComment.created_at).toLocaleString();
                 invalidateCache(item.id);
+                // Обновляем кеш комментариев
                 const updated = await GithubAPI.loadComments(item.id); 
                 setCached(`comments_${item.id}`, updated, commentsCache);
-                const commentsDiv = container.querySelector('.feedback-comments');
-                renderComments(commentsDiv, updated); 
-                input.value = ''; 
                 UIUtils.showToast('Комментарий добавлен', 'success');
             } catch (err) { 
                 UIUtils.showToast('Ошибка при отправке комментария', 'error');
+                tempCommentDiv.remove(); // убираем временный комментарий
             } finally { 
                 input.disabled = false; 
                 e.target.disabled = false; 
+                input.value = '';
             }
         });
     }
@@ -458,7 +474,12 @@
             document.getElementById('modal-editor-toolbar').appendChild(toolbar);
         }
 
-        document.getElementById('modal-cancel').addEventListener('click', closeModal);
+        // Исправление: обработчик отмены использует замыкание closeModal
+        document.getElementById('modal-cancel').addEventListener('click', (e) => {
+            e.preventDefault();
+            closeModal();
+        });
+
         document.getElementById('modal-submit').addEventListener('click', async () => {
             const title = document.getElementById('modal-title').value.trim();
             const body = document.getElementById('modal-body').value;
@@ -496,7 +517,6 @@
         openFullModal, 
         openEditorModal, 
         REACTION_TYPES,
-        invalidateCache,
-        dispatchReactionUpdate
+        invalidateCache 
     };
 })();

@@ -4,7 +4,7 @@
     margin-top: 24px;
 }
 
-/* Убираем лишние отступы у описания и заголовка */
+/* Убираем верхний отступ у описания */
 .feedback-container .text-secondary {
     margin-top: 0;
     margin-bottom: 20px;

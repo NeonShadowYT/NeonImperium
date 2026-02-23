@@ -3,12 +3,13 @@
 (function() {
     const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
     const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
-    const { renderReactions, renderComments, openFullModal, openEditorModal, dispatchReactionUpdate } = UIFeedback;
+    const { renderReactions, renderComments, openFullModal, openEditorModal } = UIFeedback;
     const { isAdmin, getCurrentUser } = GithubAuth;
 
     const ITEMS_PER_PAGE = 10;
     const REACTIONS_CACHE_TTL = 5 * 60 * 1000; // 5 минут
-    const reactionsListCache = new Map();
+    // Используем глобальный кеш, чтобы можно было инвалидировать из ui-feedback
+    window.reactionsListCache = window.reactionsListCache || new Map();
 
     let currentGame = '', currentTab = 'all', currentPage = 1, hasMorePages = true, isLoading = false;
     let allIssues = [], displayedIssues = [], container, feedbackSection;
@@ -25,12 +26,6 @@
 
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; checkAuthAndRender(); });
         window.addEventListener('github-logout', () => { currentUser = null; checkAuthAndRender(); });
-        // Слушаем обновления реакций
-        window.addEventListener('reaction-updated', (e) => {
-            const issueNumber = e.detail.issueNumber;
-            // Обновляем карточку с этим номером, если она есть на странице
-            updateReactionsForIssue(issueNumber);
-        });
         currentUser = getCurrentUser();
         checkAuthAndRender();
     }
@@ -54,7 +49,7 @@
                 </div>
                 ${currentUser ? '<button class="button" id="toggle-form-btn">+ Оставить сообщение</button>' : ''}
             </div>
-            <p class="text-secondary" style="margin:4px 0 20px; font-size:14px;" data-lang="feedbackDesc">Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.</p>
+            <p class="text-secondary" style="margin:0 0 20px; font-size:14px;" data-lang="feedbackDesc">Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.</p>
             <div class="feedback-tabs" role="tablist" aria-label="Категории обратной связи">
                 <button class="feedback-tab active" data-tab="all" role="tab" aria-selected="true" aria-controls="feedback-panel">Все</button>
                 <button class="feedback-tab" data-tab="idea" role="tab" aria-selected="false" aria-controls="feedback-panel">💡 Идеи</button>
@@ -170,7 +165,7 @@
             return `
                 <div class="project-card-link" data-issue-number="${issue.number}" data-issue-id="${issue.id}" style="cursor: pointer;">
                     <div class="project-card">
-                        <div class="image-wrapper" style="display: flex; align-items: center; justify-content: center; background: var(--bg-primary); font-size: 48px; height: 180px;">
+                        <div class="image-wrapper" style="display: flex; align-items: center; justify-content: center; background: var(--bg-primary); font-size: 48px;">
                             ${typeIcon}
                         </div>
                         <h3>${escapeHtml(issue.title)}</h3>
@@ -194,7 +189,7 @@
 
     async function loadAndRenderReactionsWithCache(issueNumber, container) {
         const cacheKey = `list_reactions_${issueNumber}`;
-        const cached = reactionsListCache.get(cacheKey);
+        const cached = window.reactionsListCache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < REACTIONS_CACHE_TTL) {
             renderReactionsFromCache(cached.data, container, issueNumber);
             return;
@@ -202,7 +197,7 @@
 
         try {
             const reactions = await loadReactions(issueNumber);
-            reactionsListCache.set(cacheKey, { data: reactions, timestamp: Date.now() });
+            window.reactionsListCache.set(cacheKey, { data: reactions, timestamp: Date.now() });
             renderReactionsFromCache(reactions, container, issueNumber);
         } catch (err) {
             UIUtils.showToast('Ошибка загрузки реакций', 'error');
@@ -213,11 +208,12 @@
         const handleAdd = async (num, content) => { 
             try { 
                 await addReaction(num, content); 
-                reactionsListCache.delete(`list_reactions_${num}`);
+                window.reactionsListCache.delete(`list_reactions_${num}`);
+                // Также инвалидируем кеш модалки
+                if (window.UIFeedback) window.UIFeedback.invalidateCache(num);
                 const updated = await loadReactions(num);
                 renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); 
                 UIUtils.showToast('Реакция добавлена', 'success');
-                dispatchReactionUpdate(num);
             } catch (err) { 
                 UIUtils.showToast('Ошибка при добавлении реакции', 'error');
             }
@@ -225,11 +221,11 @@
         const handleRemove = async (num, reactionId) => { 
             try { 
                 await removeReaction(num, reactionId); 
-                reactionsListCache.delete(`list_reactions_${num}`);
+                window.reactionsListCache.delete(`list_reactions_${num}`);
+                if (window.UIFeedback) window.UIFeedback.invalidateCache(num);
                 const updated = await loadReactions(num);
                 renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); 
                 UIUtils.showToast('Реакция убрана', 'success');
-                dispatchReactionUpdate(num);
             } catch (err) { 
                 UIUtils.showToast('Ошибка при удалении реакции', 'error');
             }
@@ -255,15 +251,5 @@
                 });
             });
         });
-    }
-
-    // Функция для обновления реакций в конкретной карточке
-    function updateReactionsForIssue(issueNumber) {
-        const container = document.querySelector(`.reactions-container[data-target-id="${issueNumber}"]`);
-        if (container) {
-            // Сбрасываем кэш и загружаем заново
-            reactionsListCache.delete(`list_reactions_${issueNumber}`);
-            loadAndRenderReactionsWithCache(issueNumber, container);
-        }
     }
 })();
