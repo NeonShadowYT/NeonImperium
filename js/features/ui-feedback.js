@@ -25,7 +25,6 @@
     function invalidateCache(issueNumber) {
         reactionsCache.delete(`reactions_${issueNumber}`);
         commentsCache.delete(`comments_${issueNumber}`);
-        // Также удаляем кеш списка реакций (если он есть в feedback.js)
         if (window.reactionsListCache) {
             window.reactionsListCache.delete(`list_reactions_${issueNumber}`);
         }
@@ -145,7 +144,7 @@
             padding: '5px',
             display: 'flex',
             gap: '5px',
-            zIndex: '1000',
+            zIndex: '10010',  // увеличен, чтобы быть выше модальных окон (10000)
             boxShadow: 'var(--shadow)'
         });
 
@@ -299,7 +298,6 @@
             const comment = input.value.trim();
             if (!comment) return; 
             
-            // Оптимистичное добавление комментария
             const tempId = 'temp-' + Date.now();
             const tempCommentDiv = document.createElement('div');
             tempCommentDiv.className = 'comment';
@@ -319,19 +317,16 @@
             
             try { 
                 const newComment = await GithubAPI.addComment(item.id, comment); 
-                // Заменяем временный комментарий на настоящий
                 tempCommentDiv.dataset.commentId = newComment.id;
-                // Обновляем время и возможно другие поля (но оставляем текст)
                 const timeSpan = tempCommentDiv.querySelector('.comment-meta span:last-child');
                 timeSpan.textContent = new Date(newComment.created_at).toLocaleString();
                 invalidateCache(item.id);
-                // Обновляем кеш комментариев
                 const updated = await GithubAPI.loadComments(item.id); 
                 setCached(`comments_${item.id}`, updated, commentsCache);
                 UIUtils.showToast('Комментарий добавлен', 'success');
             } catch (err) { 
                 UIUtils.showToast('Ошибка при отправке комментария', 'error');
-                tempCommentDiv.remove(); // убираем временный комментарий
+                tempCommentDiv.remove();
             } finally { 
                 input.disabled = false; 
                 e.target.disabled = false; 
@@ -429,7 +424,6 @@
             setupAdminActions(container, item, issue, currentUser, closeModal, escHandler);
 
         } catch (err) {
-            // Если ошибка, показываем сообщение и закрываем модалку через 2 секунды
             container.innerHTML = '<p class="error-message">Не удалось загрузить содержимое. Закрытие...</p>';
             setTimeout(() => {
                 closeModal();
@@ -456,7 +450,7 @@
                 <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(data.body||'')}</textarea>
                 <div class="preview-area" id="modal-preview-area" style="display:none;"></div>
                 <div class="button-group">
-                    <button class="button button-secondary" id="modal-cancel">Отмена</button>
+                    <!-- кнопка отмены удалена по требованию -->
                     <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                 </div>
             </div>
@@ -474,12 +468,7 @@
             document.getElementById('modal-editor-toolbar').appendChild(toolbar);
         }
 
-        // Исправление: обработчик отмены использует замыкание closeModal
-        document.getElementById('modal-cancel').addEventListener('click', (e) => {
-            e.preventDefault();
-            closeModal();
-        });
-
+        // Обработчик для submit
         document.getElementById('modal-submit').addEventListener('click', async () => {
             const title = document.getElementById('modal-title').value.trim();
             const body = document.getElementById('modal-body').value;
