@@ -1,4 +1,4 @@
-// ui-feedback.js – общие компоненты с поддержкой доступности и header в модалке
+// ui-feedback.js – общие компоненты с поддержкой доступности, опросов и header в модалке
 
 (function() {
     const REACTION_TYPES = [
@@ -31,10 +31,14 @@
         }
     }
 
+    // Группировка только для обычных реакций (не голосований)
     function groupReactions(reactions, currentUser) {
         const grouped = {};
+        // Инициализируем только обычные типы
         REACTION_TYPES.forEach(type => { grouped[type.content] = { content: type.content, emoji: type.emoji, count: 0, userReacted: false, userReactionId: null }; });
         reactions.forEach(r => {
+            // Игнорируем реакции голосований
+            if (r.content.startsWith('vote:')) return;
             if (grouped[r.content]) {
                 grouped[r.content].count++;
                 if (currentUser && r.user && r.user.login === currentUser) {
@@ -56,7 +60,6 @@
         container.innerHTML = html;
         if (!currentUser) return;
 
-        // Обработчики для кнопок реакций (видимых)
         container.querySelectorAll('.reaction-button:not([disabled])').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -70,7 +73,6 @@
                 if (reactionLocks.has(lockKey)) return;
 
                 if (isActive && reactionId) {
-                    // Удаление реакции
                     reactionLocks.set(lockKey, true);
                     btn.classList.remove('active');
                     countSpan.textContent = oldCount - 1;
@@ -87,7 +89,6 @@
                         reactionLocks.delete(lockKey);
                     }
                 } else if (!isActive) {
-                    // Добавление реакции (кнопка неактивна)
                     reactionLocks.set(lockKey, true);
                     btn.classList.add('active');
                     countSpan.textContent = oldCount + 1;
@@ -106,7 +107,6 @@
             });
         });
 
-        // Обработчик для кнопки "+"
         const addBtn = container.querySelector('[data-add],[data-more]');
         if (addBtn) {
             addBtn.addEventListener('click', (e) => {
@@ -116,18 +116,15 @@
                     if (reactionLocks.has(lockKey)) return;
                     reactionLocks.set(lockKey, true);
 
-                    // Проверяем, есть ли уже кнопка с этой реакцией
                     const existingBtn = Array.from(container.querySelectorAll('.reaction-button')).find(
                         btn => btn.dataset.content === selected
                     );
 
                     if (existingBtn) {
                         if (existingBtn.classList.contains('active')) {
-                            // Уже активна – ничего не делаем
                             reactionLocks.delete(lockKey);
                             return;
                         } else {
-                            // Есть, но неактивна – инкрементируем
                             const countSpan = existingBtn.querySelector('.reaction-count');
                             const oldCount = parseInt(countSpan.textContent, 10);
                             existingBtn.classList.add('active');
@@ -145,7 +142,6 @@
                             }
                         }
                     } else {
-                        // Нет кнопки – создаём новую
                         const tempBtn = document.createElement('button');
                         tempBtn.className = 'reaction-button active';
                         tempBtn.dataset.content = selected;
@@ -284,6 +280,105 @@
         } catch (err) {
             UIUtils.showToast('Ошибка загрузки комментариев', 'error');
             throw err;
+        }
+    }
+
+    // --- Функции для опросов ---
+
+    function extractPollFromBody(body) {
+        const regex = /<!-- poll: (.*?) -->/g;
+        const match = regex.exec(body);
+        if (match) {
+            try {
+                return JSON.parse(match[1]);
+            } catch (e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    async function renderPoll(container, issueNumber, pollData) {
+        const currentUser = GithubAuth.getCurrentUser();
+        
+        const allReactions = await GithubAPI.loadReactions(issueNumber);
+        const voteReactions = allReactions.filter(r => r.content.startsWith('vote:'));
+        
+        const voteCounts = pollData.options.map((_, index) => {
+            const content = `vote:${index}`;
+            const reactions = voteReactions.filter(r => r.content === content);
+            const count = reactions.length;
+            const userReacted = currentUser ? reactions.some(r => r.user.login === currentUser) : false;
+            const reactionId = userReacted ? reactions.find(r => r.user.login === currentUser).id : null;
+            return { count, userReacted, reactionId };
+        });
+        
+        const totalVotes = voteCounts.reduce((sum, v) => sum + v.count, 0);
+        
+        const pollDiv = document.createElement('div');
+        pollDiv.className = 'poll';
+        pollDiv.dataset.issue = issueNumber;
+        pollDiv.dataset.options = JSON.stringify(pollData.options);
+        
+        let html = '<div class="poll-options">';
+        pollData.options.forEach((option, index) => {
+            const count = voteCounts[index].count;
+            const percent = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+            html += `
+                <div class="poll-option" data-option="${index}">
+                    <span class="poll-option-text">${GithubCore.escapeHtml(option)}</span>
+                    <div class="progress-bar" style="margin: 5px 0;">
+                        <div style="width: ${percent}%;">${percent}% (${count})</div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        if (currentUser) {
+            html += '<div class="poll-vote-buttons">';
+            pollData.options.forEach((option, index) => {
+                const active = voteCounts[index].userReacted ? 'active' : '';
+                html += `<button class="button small poll-vote-btn ${active}" data-option="${index}">${GithubCore.escapeHtml(option)}</button>`;
+            });
+            html += '</div>';
+        }
+        
+        pollDiv.innerHTML = html;
+        container.innerHTML = ''; // очищаем контейнер перед вставкой
+        container.appendChild(pollDiv);
+        
+        if (currentUser) {
+            pollDiv.querySelectorAll('.poll-vote-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const optionIndex = btn.dataset.option;
+                    const content = `vote:${optionIndex}`;
+                    
+                    // Находим предыдущую реакцию пользователя
+                    const prevReaction = voteReactions.find(r => r.user.login === currentUser);
+                    
+                    // Оптимистичное обновление
+                    pollDiv.querySelectorAll('.poll-vote-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    try {
+                        if (prevReaction && prevReaction.content !== content) {
+                            await GithubAPI.removeReaction(issueNumber, prevReaction.id);
+                        }
+                        if (!prevReaction || prevReaction.content !== content) {
+                            await GithubAPI.addReaction(issueNumber, content);
+                        }
+                        UIUtils.showToast('Голос учтён', 'success');
+                        // Перерендериваем опрос с актуальными данными
+                        await renderPoll(container, issueNumber, pollData);
+                    } catch (err) {
+                        UIUtils.showToast('Ошибка голосования', 'error');
+                        // Откат
+                        await renderPoll(container, issueNumber, pollData);
+                    }
+                });
+            });
         }
     }
 
@@ -452,6 +547,15 @@
             bodyDiv.innerHTML = GithubCore.renderMarkdown(issue.body);
             container.appendChild(bodyDiv);
 
+            // Обработка опроса
+            const pollData = extractPollFromBody(issue.body);
+            if (pollData) {
+                const pollContainer = document.createElement('div');
+                pollContainer.className = 'poll-container';
+                container.appendChild(pollContainer);
+                await renderPoll(pollContainer, item.id, pollData);
+            }
+
             await loadReactionsAndComments(container, item, currentUser, issue);
             if (currentUser) setupCommentForm(container, item, currentUser);
             setupAdminActions(container, item, issue, currentUser, closeModal, escHandler);
@@ -494,16 +598,35 @@
         if (window.Editor) {
             const toolbar = Editor.createEditorToolbar(textarea, { previewAreaId: 'modal-preview-area', onPreview: () => {
                 const preview = document.getElementById('modal-preview-area');
-                preview.innerHTML = GithubCore.renderMarkdown(textarea.value);
-                preview.style.display = textarea.value.trim() ? 'block' : 'none';
+                let body = textarea.value;
+                // В предпросмотре можно показать заглушку для опроса
+                const pollMatch = extractPollFromBody(body);
+                if (pollMatch) {
+                    // Заменяем комментарий на простой HTML для предпросмотра
+                    const options = pollMatch.options.map((opt, i) => `<div>${i+1}. ${opt}</div>`).join('');
+                    body = body.replace(/<!-- poll: .*? -->/, `<div class="poll-preview"><b>Опрос:</b> ${options}</div>`);
+                }
+                preview.innerHTML = GithubCore.renderMarkdown(body);
+                preview.style.display = body.trim() ? 'block' : 'none';
             }});
             document.getElementById('modal-editor-toolbar').appendChild(toolbar);
         }
 
         document.getElementById('modal-submit').addEventListener('click', async () => {
             const title = document.getElementById('modal-title').value.trim();
-            const body = document.getElementById('modal-body').value;
+            let body = document.getElementById('modal-body').value;
             if (!title || !body.trim()) { UIUtils.showToast('Заполните заголовок и описание', 'error'); return; }
+            
+            // Проверка на несколько опросов
+            const pollMatches = body.match(/<!-- poll: .*? -->/g);
+            if (pollMatches && pollMatches.length > 1) {
+                if (!confirm('Обнаружено несколько блоков опроса. Будут сохранены только первые. Продолжить?')) return;
+                // Оставляем только первый
+                const first = pollMatches[0];
+                body = body.replace(/<!-- poll: .*? -->/g, ''); // удаляем все
+                body = first + '\n' + body; // вставляем первый обратно
+            }
+            
             let category = 'idea';
             if (postType === 'feedback') category = document.getElementById('modal-category').value;
             const btn = document.getElementById('modal-submit'); btn.disabled = true; btn.textContent = 'Сохранение...';

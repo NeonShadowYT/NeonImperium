@@ -10,7 +10,7 @@
         { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
         { id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' },
         { id: 'UCQKVSv62dLsK3QnfIke24uQ', name: 'Golden Creeper' },
-        { id: 'UCcuqf3fNtZ2UP5MO89kVKLw', name: 'Новый канал' } // добавлен
+        { id: 'UCcuqf3fNtZ2UP5MO89kVKLw', name: 'Mitmi' }
     ];
     const DEFAULT_IMAGE = 'images/default-news.jpg';
     const RETRY_COOLDOWN = 60000;

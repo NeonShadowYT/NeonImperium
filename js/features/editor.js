@@ -98,6 +98,19 @@
         insertAtCursor(textarea, url);
     }
 
+    function insertPoll(textarea) {
+        const optionsInput = prompt('Введите варианты через запятую (макс. 10):', 'Вариант 1, Вариант 2, Вариант 3');
+        if (!optionsInput) return;
+        const options = optionsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        if (options.length === 0) return;
+        if (options.length > 10) {
+            alert('Слишком много вариантов. Будет использовано только первые 10.');
+            options.splice(10);
+        }
+        const pollComment = `\n<!-- poll: ${JSON.stringify({ options })} -->\n`;
+        insertAtCursor(textarea, pollComment);
+    }
+
     // Создаёт панель инструментов и привязывает обработчики
     function createEditorToolbar(textarea, options = {}) {
         const toolbar = document.createElement('div');
@@ -162,6 +175,7 @@
         specialGroup.innerHTML = `
             <button type="button" class="editor-btn" data-spoiler="true" title="Спойлер"><i class="fas fa-chevron-down"></i></button>
             <button type="button" class="editor-btn" data-table="true" title="Таблица"><i class="fas fa-table"></i></button>
+            <button type="button" class="editor-btn" data-poll="true" title="Опрос"><i class="fas fa-chart-pie"></i></button>
         `;
         toolbar.appendChild(specialGroup);
 
@@ -277,6 +291,13 @@
             });
         });
 
+        toolbar.querySelectorAll('[data-poll="true"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                insertPoll(textarea);
+            });
+        });
+
         // Обработчики для выпадающего меню
         const dropdownToggle = alertDropdown.querySelector('.dropdown-toggle');
         const dropdownMenu = alertDropdown.querySelector('.dropdown-menu');
@@ -311,6 +332,7 @@
         insertProgressBar,
         insertCard,
         insertYouTube,
+        insertPoll,
         createEditorToolbar
     };
 })();

@@ -40,7 +40,35 @@ function renderMarkdown(text) {
     } else {
         html = text.replace(/\n/g, '<br>');
     }
+    // Постобработка для GitHub-алертов
+    html = enhanceMarkdownAlerts(html);
     return html;
+}
+
+// Преобразует <blockquote> с [!NOTE] и т.п. в цветные блоки
+function enhanceMarkdownAlerts(html) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    doc.querySelectorAll('blockquote').forEach(blockquote => {
+        const firstChild = blockquote.firstElementChild || blockquote.firstChild;
+        if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
+            const text = firstChild.textContent.trim();
+            const match = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
+            if (match) {
+                const type = match[1].toLowerCase();
+                // Удаляем маркер из текста
+                firstChild.textContent = text.substring(match[0].length).trimStart();
+                // Создаём div-алерт
+                const alertDiv = document.createElement('div');
+                alertDiv.className = `markdown-alert markdown-alert-${type}`;
+                while (blockquote.firstChild) {
+                    alertDiv.appendChild(blockquote.firstChild);
+                }
+                blockquote.parentNode.replaceChild(alertDiv, blockquote);
+            }
+        }
+    });
+    return doc.body.innerHTML;
 }
 
 function deduplicateByNumber(items) {
