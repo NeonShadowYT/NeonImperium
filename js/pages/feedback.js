@@ -1,4 +1,4 @@
-// feedback.js — обратная связь для страниц игр с кешированием реакций в списке
+// feedback.js — обратная связь для страниц игр с кешированием реакций и карточками в стиле проектов
 
 (function() {
     const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
@@ -157,23 +157,26 @@
         }
         listEl.innerHTML = issues.map(issue => {
             const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
+            const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : '⭐';
             const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
-            return `<div class="feedback-item" data-issue-number="${issue.number}" data-issue-id="${issue.id}">
-                <div class="feedback-item-header">
-                    <h4 class="feedback-item-title">${escapeHtml(issue.title)}</h4>
-                    <div class="feedback-item-meta">
-                        <span class="feedback-label type-${typeLabel}">${typeLabel}</span>
-                        <span class="feedback-label">#${issue.number}</span>
+            const date = new Date(issue.created_at).toLocaleDateString();
+            return `
+                <div class="project-card-link" data-issue-number="${issue.number}" data-issue-id="${issue.id}" style="cursor: pointer;">
+                    <div class="project-card">
+                        <div class="image-wrapper" style="display: flex; align-items: center; justify-content: center; background: var(--bg-primary); font-size: 48px;">
+                            ${typeIcon}
+                        </div>
+                        <h3>${escapeHtml(issue.title)}</h3>
+                        <p class="text-secondary" style="font-size: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${escapeHtml(preview).replace(/\n/g,' ')}</p>
+                        <div class="reactions-container" data-target-type="issue" data-target-id="${issue.number}" style="margin: 8px 0;"></div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-secondary);">
+                            <span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span>
+                            <span><i class="fas fa-calendar-alt"></i> ${date}</span>
+                            <span><i class="fas fa-comment"></i> ${issue.comments}</span>
+                        </div>
                     </div>
                 </div>
-                <div class="feedback-item-preview">${escapeHtml(preview).replace(/\n/g,' ')}</div>
-                <div class="reactions-container" data-target-type="issue" data-target-id="${issue.number}"></div>
-                <div class="feedback-item-footer">
-                    <span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span>
-                    <span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span>
-                    <span><i class="fas fa-comment"></i> ${issue.comments}</span>
-                </div>
-            </div>`;
+            `;
         }).join('');
         issues.forEach(issue => {
             const reactionsContainer = document.querySelector(`.reactions-container[data-target-id="${issue.number}"]`);
@@ -187,14 +190,12 @@
         const cacheKey = `list_reactions_${issueNumber}`;
         const cached = reactionsListCache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < REACTIONS_CACHE_TTL) {
-            // Используем кешированные реакции
             renderReactionsFromCache(cached.data, container, issueNumber);
             return;
         }
 
         try {
             const reactions = await loadReactions(issueNumber);
-            // Сохраняем в кеш
             reactionsListCache.set(cacheKey, { data: reactions, timestamp: Date.now() });
             renderReactionsFromCache(reactions, container, issueNumber);
         } catch (err) {
@@ -206,7 +207,6 @@
         const handleAdd = async (num, content) => { 
             try { 
                 await addReaction(num, content); 
-                // Инвалидируем кеш
                 reactionsListCache.delete(`list_reactions_${num}`);
                 const updated = await loadReactions(num);
                 renderReactions(container, num, updated, currentUser, handleAdd, handleRemove); 
@@ -230,7 +230,7 @@
     }
 
     function attachEventHandlers() {
-        document.querySelectorAll('.feedback-item').forEach(item => {
+        document.querySelectorAll('.project-card-link[data-issue-number]').forEach(item => {
             item.addEventListener('click', (e) => {
                 if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
                 const issueNumber = item.dataset.issueNumber;
