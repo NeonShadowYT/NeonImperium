@@ -78,6 +78,11 @@
         return response.json();
     }
 
+    async function deleteComment(commentId) {
+        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${commentId}`;
+        await githubFetch(url, { method: 'DELETE' });
+    }
+
     async function loadReactions(issueNumber, signal) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
         const response = await githubFetch(url, { signal });
@@ -111,6 +116,7 @@
         closeIssue,
         loadComments,
         addComment,
+        deleteComment,  // добавлено
         loadReactions,
         addReaction,
         removeReaction

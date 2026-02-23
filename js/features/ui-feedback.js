@@ -281,7 +281,7 @@
         }
     }
 
-    // --- Функции для опросов ---
+    // --- Функции для опросов (новая реализация на комментариях) ---
 
     function extractPollFromBody(body) {
         const regex = /<!-- poll: (.*?) -->/g;
@@ -299,16 +299,29 @@
     async function renderPoll(container, issueNumber, pollData) {
         const currentUser = GithubAuth.getCurrentUser();
         
-        const allReactions = await GithubAPI.loadReactions(issueNumber);
-        const voteReactions = allReactions.filter(r => r.content.startsWith('vote:'));
+        // Загружаем комментарии (с возможным использованием кеша)
+        let comments = [];
+        try {
+            comments = await loadCommentsWithCache(issueNumber);
+        } catch (err) {
+            UIUtils.showToast('Ошибка загрузки комментариев для опроса', 'error');
+            container.innerHTML = '<p class="error-message">Не удалось загрузить опрос</p>';
+            return;
+        }
         
+        // Парсим голоса из комментариев, которые начинаются с !vote
+        const voteComments = comments.filter(c => c.body && c.body.startsWith('!vote '));
+        const votes = voteComments.map(c => {
+            const match = c.body.match(/^!vote (\d+)/);
+            if (match) return { optionIndex: parseInt(match[1], 10), user: c.user.login, id: c.id };
+            return null;
+        }).filter(v => v !== null && v.optionIndex >= 0 && v.optionIndex < pollData.options.length);
+        
+        // Подсчет голосов
         const voteCounts = pollData.options.map((_, index) => {
-            const content = `vote:${index}`;
-            const reactions = voteReactions.filter(r => r.content === content);
-            const count = reactions.length;
-            const userReacted = currentUser ? reactions.some(r => r.user.login === currentUser) : false;
-            const reactionId = userReacted ? reactions.find(r => r.user.login === currentUser).id : null;
-            return { count, userReacted, reactionId };
+            const count = votes.filter(v => v.optionIndex === index).length;
+            const userVote = currentUser ? votes.find(v => v.user === currentUser && v.optionIndex === index) : null;
+            return { count, userReacted: !!userVote, userVoteId: userVote ? userVote.id : null };
         });
         
         const totalVotes = voteCounts.reduce((sum, v) => sum + v.count, 0);
@@ -353,24 +366,42 @@
         container.appendChild(pollDiv);
         
         if (!hasVoted && currentUser) {
-            pollDiv.querySelectorAll('.poll-vote-btn').forEach(btn => {
+            const btns = pollDiv.querySelectorAll('.poll-vote-btn');
+            for (const btn of btns) {
                 btn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const optionIndex = btn.dataset.option;
-                    const content = `vote:${optionIndex}`;
                     
+                    // Отключаем кнопку, чтобы избежать двойного клика
                     btn.disabled = true;
                     
                     try {
-                        await GithubAPI.addReaction(issueNumber, content);
+                        // Проверяем, есть ли уже голос от этого пользователя (на случай двойного клика или если интерфейс не обновился)
+                        const existingVote = votes.find(v => v.user === currentUser);
+                        if (existingVote) {
+                            // Удаляем предыдущий комментарий с голосом
+                            await GithubAPI.deleteComment(existingVote.id);
+                            // Инвалидируем кеш комментариев
+                            invalidateCache(issueNumber);
+                        }
+                        
+                        // Отправляем новый комментарий с голосом
+                        const commentBody = `!vote ${optionIndex}`;
+                        await GithubAPI.addComment(issueNumber, commentBody);
+                        
                         UIUtils.showToast('Голос учтён', 'success');
+                        
+                        // Инвалидируем кеш и перерисовываем опрос
+                        invalidateCache(issueNumber);
                         await renderPoll(container, issueNumber, pollData);
+                        
                     } catch (err) {
+                        console.error('Vote error:', err);
                         UIUtils.showToast('Ошибка при голосовании', 'error');
                         btn.disabled = false;
                     }
                 });
-            });
+            }
         }
     }
 
@@ -571,7 +602,6 @@
                 <option value="review">⭐ Отзыв</option>
             </select>`;
         }
-        // ИСПРАВЛЕНИЕ: изменён id поля ввода на modal-input-title
         const contentHtml = `
             <div class="feedback-form">
                 <input type="text" id="modal-input-title" class="feedback-input" placeholder="Заголовок" value="${GithubCore.escapeHtml(data.title||'')}">
@@ -633,8 +663,6 @@
             e.preventDefault();
             console.log('Submit clicked'); // отладка
 
-            // Получаем элементы внутри модалки в момент клика
-            // ИСПРАВЛЕНИЕ: используем новый id
             const titleInput = modal.querySelector('#modal-input-title');
             const bodyTextarea = modal.querySelector('#modal-body');
             const categorySelect = modal.querySelector('#modal-category');

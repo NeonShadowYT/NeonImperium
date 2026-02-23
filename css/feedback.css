@@ -763,13 +763,14 @@
 }
 .poll-vote {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-direction: column; /* изменено: вертикальное расположение */
+    gap: 8px;
     margin: 15px 0;
 }
-.poll-vote-btn {
-    flex: 1 1 auto;
-    min-width: 120px;
+.poll-vote .poll-vote-btn {
+    width: 100%; /* кнопки на всю ширину */
+    text-align: left; /* выравнивание текста по левому краю */
+    justify-content: flex-start; /* для flex-контейнера внутри кнопки */
 }
 .poll-preview {
     background: var(--bg-inner-gradient);
