@@ -571,9 +571,10 @@
                 <option value="review">⭐ Отзыв</option>
             </select>`;
         }
+        // ИСПРАВЛЕНИЕ: изменён id поля ввода на modal-input-title
         const contentHtml = `
             <div class="feedback-form">
-                <input type="text" id="modal-title" class="feedback-input" placeholder="Заголовок" value="${GithubCore.escapeHtml(data.title||'')}">
+                <input type="text" id="modal-input-title" class="feedback-input" placeholder="Заголовок" value="${GithubCore.escapeHtml(data.title||'')}">
                 ${categoryHtml}
                 <div id="modal-editor-toolbar"></div>
                 <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(data.body||'')}</textarea>
@@ -633,7 +634,8 @@
             console.log('Submit clicked'); // отладка
 
             // Получаем элементы внутри модалки в момент клика
-            const titleInput = modal.querySelector('#modal-title');
+            // ИСПРАВЛЕНИЕ: используем новый id
+            const titleInput = modal.querySelector('#modal-input-title');
             const bodyTextarea = modal.querySelector('#modal-body');
             const categorySelect = modal.querySelector('#modal-category');
 

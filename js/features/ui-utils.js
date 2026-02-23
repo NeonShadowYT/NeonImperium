@@ -52,11 +52,12 @@
         modal.className = modalClass;
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
-        modal.setAttribute('aria-labelledby', 'modal-title');
+        modal.setAttribute('aria-labelledby', 'modal-header-title');
+        // ИСПРАВЛЕНИЕ: изменён id заголовка на modal-header-title
         modal.innerHTML = `
             <div class="${contentClass}">
                 <div class="modal-header">
-                    <h2 id="modal-title">${GithubCore.escapeHtml(title)}</h2>
+                    <h2 id="modal-header-title">${GithubCore.escapeHtml(title)}</h2>
                     ${closeButton ? '<button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>' : ''}
                 </div>
                 <div class="modal-body">${contentHtml}</div>
