@@ -253,31 +253,44 @@
 }
 
 /* Стили для alert-блоков (GitHub-стиль) */
-.preview-area .markdown-alert {
+.markdown-alert {
     padding: 0.5em 1em;
     margin: 1em 0;
     border-left: 0.25em solid;
     border-radius: 8px;
 }
-.preview-area .markdown-alert-note {
+.markdown-alert-note {
     border-left-color: #0969da;
     background: #ddf4ff;
 }
-.preview-area .markdown-alert-tip {
+.markdown-alert-tip {
     border-left-color: #1f883d;
     background: #dafbe1;
 }
-.preview-area .markdown-alert-important {
+.markdown-alert-important {
     border-left-color: #8250df;
     background: #fbefff;
 }
-.preview-area .markdown-alert-warning {
+.markdown-alert-warning {
     border-left-color: #f0883e;
     background: #fff8c5;
 }
-.preview-area .markdown-alert-caution {
+.markdown-alert-caution {
     border-left-color: #cf222e;
     background: #ffebe9;
+}
+.markdown-alert-title {
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 0.5em;
+}
+.markdown-alert-title i {
+    font-size: 1.2em;
+}
+.markdown-alert-content {
+    margin-left: 1.8em;
 }
 
 /* Стили для прогресс-бара */

@@ -45,29 +45,59 @@ function renderMarkdown(text) {
     return html;
 }
 
-// Преобразует <blockquote> с [!NOTE] и т.п. в цветные блоки
+// Преобразует <blockquote> с [!NOTE] и т.п. в цветные блоки с иконками и заголовками
 function enhanceMarkdownAlerts(html) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
+    
+    const alertTypes = {
+        note: { icon: 'fa-info-circle', title: 'Note' },
+        tip: { icon: 'fa-lightbulb', title: 'Tip' },
+        important: { icon: 'fa-exclamation', title: 'Important' },
+        warning: { icon: 'fa-exclamation-triangle', title: 'Warning' },
+        caution: { icon: 'fa-bolt', title: 'Caution' }
+    };
+
     doc.querySelectorAll('blockquote').forEach(blockquote => {
-        const firstChild = blockquote.firstElementChild || blockquote.firstChild;
-        if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
-            const text = firstChild.textContent.trim();
-            const match = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
-            if (match) {
-                const type = match[1].toLowerCase();
-                // Удаляем маркер из текста
-                firstChild.textContent = text.substring(match[0].length).trimStart();
-                // Создаём div-алерт
-                const alertDiv = document.createElement('div');
-                alertDiv.className = `markdown-alert markdown-alert-${type}`;
-                while (blockquote.firstChild) {
-                    alertDiv.appendChild(blockquote.firstChild);
-                }
-                blockquote.parentNode.replaceChild(alertDiv, blockquote);
-            }
+        const firstChild = blockquote.firstChild;
+        if (!firstChild) return;
+        
+        let textNode = firstChild.nodeType === Node.TEXT_NODE ? firstChild : null;
+        if (!textNode) return;
+        
+        const text = textNode.textContent.trim();
+        const match = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i);
+        if (!match) return;
+        
+        const type = match[1].toLowerCase();
+        const typeInfo = alertTypes[type];
+        if (!typeInfo) return;
+        
+        // Удаляем маркер из текста
+        textNode.textContent = text.substring(match[0].length);
+        
+        // Создаём новый div-алерт
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `markdown-alert markdown-alert-${type}`;
+        
+        // Заголовок с иконкой
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'markdown-alert-title';
+        titleDiv.innerHTML = `<i class="fas ${typeInfo.icon}"></i> ${typeInfo.title}`;
+        alertDiv.appendChild(titleDiv);
+        
+        // Контейнер для содержимого (все оставшиеся узлы blockquote)
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'markdown-alert-content';
+        while (blockquote.firstChild) {
+            contentDiv.appendChild(blockquote.firstChild);
         }
+        alertDiv.appendChild(contentDiv);
+        
+        // Заменяем blockquote на alertDiv
+        blockquote.parentNode.replaceChild(alertDiv, blockquote);
     });
+    
     return doc.body.innerHTML;
 }
 

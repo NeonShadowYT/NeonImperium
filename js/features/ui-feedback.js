@@ -593,30 +593,37 @@
             return;
         }
 
+        // Проверяем, что Editor загружен
         if (window.Editor) {
-            const toolbar = Editor.createEditorToolbar(textarea, { previewAreaId: 'modal-preview-area', onPreview: () => {
-                const preview = document.getElementById('modal-preview-area');
-                if (!preview) return;
-                let body = textarea.value;
-                const pollRegex = /<!-- poll: (.*?) -->/g;
-                body = body.replace(pollRegex, (match, p1) => {
-                    try {
-                        const pollData = JSON.parse(p1);
-                        const optionsHtml = pollData.options.map(opt => `<div>• ${GithubCore.escapeHtml(opt)}</div>`).join('');
-                        return `<div class="poll-preview"><strong>📊 Опрос: ${GithubCore.escapeHtml(pollData.question)}</strong>${optionsHtml}</div>`;
-                    } catch {
-                        return '<div class="poll-preview error">[Ошибка опроса]</div>';
-                    }
-                });
-                preview.innerHTML = window.GithubCore?.renderMarkdown(body) || body;
-                preview.style.display = body.trim() ? 'block' : 'none';
-            }});
+            const toolbar = Editor.createEditorToolbar(textarea, { 
+                previewAreaId: 'modal-preview-area', 
+                onPreview: () => {
+                    const preview = document.getElementById('modal-preview-area');
+                    if (!preview) return;
+                    let body = textarea.value;
+                    const pollRegex = /<!-- poll: (.*?) -->/g;
+                    body = body.replace(pollRegex, (match, p1) => {
+                        try {
+                            const pollData = JSON.parse(p1);
+                            const optionsHtml = pollData.options.map(opt => `<div>• ${GithubCore.escapeHtml(opt)}</div>`).join('');
+                            return `<div class="poll-preview"><strong>📊 Опрос: ${GithubCore.escapeHtml(pollData.question)}</strong>${optionsHtml}</div>`;
+                        } catch {
+                            return '<div class="poll-preview error">[Ошибка опроса]</div>';
+                        }
+                    });
+                    preview.innerHTML = window.GithubCore?.renderMarkdown(body) || body;
+                    preview.style.display = body.trim() ? 'block' : 'none';
+                }
+            });
             const toolbarContainer = document.getElementById('modal-editor-toolbar');
             if (toolbarContainer) {
                 toolbarContainer.appendChild(toolbar);
             } else {
                 console.error('toolbar container not found');
             }
+        } else {
+            console.error('Editor not loaded');
+            UIUtils.showToast('Редактор не загружен, попробуйте обновить страницу', 'error');
         }
 
         const submitBtn = document.getElementById('modal-submit');
@@ -626,7 +633,10 @@
             return;
         }
 
-        submitBtn.addEventListener('click', async () => {
+        // Добавим отладочный вывод
+        submitBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            console.log('Submit clicked'); // отладка
             const titleInput = document.getElementById('modal-title');
             const bodyTextarea = document.getElementById('modal-body');
             if (!titleInput || !bodyTextarea) {
@@ -696,6 +706,7 @@
                 if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
                 UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
             } catch (err) { 
+                console.error('Submit error:', err);
                 UIUtils.showToast('Ошибка: ' + err.message, 'error'); 
             } finally { 
                 btn.disabled = false; 
