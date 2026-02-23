@@ -195,7 +195,7 @@
 
         const grid = document.createElement('div'); grid.className = 'projects-grid';
         
-        posts.slice(0, 6).forEach(post => {
+        posts.slice(0, 9).forEach(post => {
             grid.appendChild(createPostCard(post));
         });
 
