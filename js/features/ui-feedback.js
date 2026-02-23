@@ -586,10 +586,9 @@
 
         const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
 
-        // Инициализация редактора (не зависит от клика)
-        const bodyTextarea = modal.querySelector('#modal-body');
-        const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
-        if (window.Editor && bodyTextarea) {
+        // Инициализация редактора
+        if (window.Editor) {
+            const bodyTextarea = modal.querySelector('#modal-body');
             const toolbar = Editor.createEditorToolbar(bodyTextarea, { 
                 previewAreaId: 'modal-preview-area', 
                 onPreview: () => {
@@ -610,6 +609,7 @@
                     preview.style.display = body.trim() ? 'block' : 'none';
                 }
             });
+            const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
             if (toolbarContainer) {
                 toolbarContainer.appendChild(toolbar);
             } else {
@@ -620,24 +620,25 @@
             UIUtils.showToast('Редактор не загружен, попробуйте обновить страницу', 'error');
         }
 
+        // Обработчик отправки
         const submitBtn = modal.querySelector('#modal-submit');
         if (!submitBtn) {
             console.error('submit button not found');
-            UIUtils.showToast('Ошибка создания формы', 'error');
-            closeModal();
+            UIUtils.showToast('Ошибка: кнопка отправки не найдена', 'error');
             return;
         }
 
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            console.log('Submit clicked');
+            console.log('Submit clicked'); // отладка
 
-            // Ищем элементы заново внутри модалки на момент клика
+            // Получаем элементы внутри модалки в момент клика
             const titleInput = modal.querySelector('#modal-title');
             const bodyTextarea = modal.querySelector('#modal-body');
             const categorySelect = modal.querySelector('#modal-category');
 
             if (!titleInput || !bodyTextarea) {
+                console.error('Modal elements missing');
                 UIUtils.showToast('Ошибка: элементы формы не найдены', 'error');
                 return;
             }
