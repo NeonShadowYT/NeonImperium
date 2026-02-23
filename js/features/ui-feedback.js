@@ -11,7 +11,7 @@
 
     const reactionsCache = new Map();
     const commentsCache = new Map();
-    const reactionLocks = new Map(); // ключ: `${issueNumber}_${content}`
+    const reactionLocks = new Map();
 
     function getCached(key, cacheMap) {
         const cached = cacheMap.get(key);
@@ -31,7 +31,6 @@
         }
     }
 
-    // Группировка только для обычных реакций (не голосований)
     function groupReactions(reactions, currentUser) {
         const grouped = {};
         REACTION_TYPES.forEach(type => { grouped[type.content] = { content: type.content, emoji: type.emoji, count: 0, userReacted: false, userReactionId: null }; });
@@ -249,9 +248,7 @@
         setTimeout(() => document.addEventListener('click', closeMenu), 100);
     }
 
-    // Функция рендеринга комментариев с фильтрацией голосов и кнопками действий
     function renderComments(container, comments, currentUser, issueNumber, onCommentAction) {
-        // Фильтруем комментарии голосования (начинаются с "!vote")
         const regularComments = comments.filter(c => !c.body.trim().startsWith('!vote'));
         
         container.innerHTML = regularComments.map(c => {
@@ -281,7 +278,6 @@
             `;
         }).join('');
 
-        // Добавляем обработчики для кнопок редактирования и удаления
         if (currentUser) {
             container.querySelectorAll('.comment-edit').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -299,7 +295,6 @@
                     try {
                         await GithubAPI.deleteComment(commentId);
                         invalidateCache(issueNumber);
-                        // Перезагружаем комментарии
                         const updated = await GithubAPI.loadComments(issueNumber);
                         setCached(`comments_${issueNumber}`, updated, commentsCache);
                         renderComments(container, updated, currentUser, issueNumber, onCommentAction);
@@ -312,7 +307,6 @@
         }
     }
 
-    // Модальное окно для редактирования комментария
     function openEditCommentModal(commentId, currentBody, issueNumber) {
         const modalHtml = `
             <div class="feedback-form">
@@ -340,7 +334,6 @@
                 invalidateCache(issueNumber);
                 const updatedComments = await GithubAPI.loadComments(issueNumber);
                 setCached(`comments_${issueNumber}`, updatedComments, commentsCache);
-                // Обновляем список комментариев в текущей модалке
                 const commentsContainer = document.querySelector('.feedback-comments');
                 if (commentsContainer) {
                     const currentUser = GithubAuth.getCurrentUser();
@@ -385,7 +378,7 @@
         }
     }
 
-    // --- Функции для опросов (новая реализация) ---
+    // --- Функции для опросов ---
 
     function extractPollFromBody(body) {
         const regex = /<!-- poll: (.*?) -->/g;
@@ -408,31 +401,44 @@
 
         // Обрабатываем опросы
         const pollData = extractPollFromBody(body);
-        if (pollData && issueNumber) {
+        if (pollData) {
             const pollContainer = document.createElement('div');
             pollContainer.className = 'poll-container';
             container.appendChild(pollContainer);
-            await renderPoll(pollContainer, issueNumber, pollData);
+            if (issueNumber) {
+                await renderPoll(pollContainer, issueNumber, pollData);
+            } else {
+                renderStaticPoll(pollContainer, pollData);
+            }
         }
+    }
+
+    // Статическое отображение опроса для предпросмотра (без интерактива)
+    function renderStaticPoll(container, pollData) {
+        const pollDiv = document.createElement('div');
+        pollDiv.className = 'poll card';
+        pollDiv.innerHTML = `
+            <h3>📊 ${GithubCore.escapeHtml(pollData.question)}</h3>
+            <div class="poll-options static">
+                ${pollData.options.map(opt => `<div class="poll-option"><span class="poll-option-text">${GithubCore.escapeHtml(opt)}</span></div>`).join('')}
+            </div>
+            <p class="text-secondary small">(опрос будет доступен после публикации)</p>
+        `;
+        container.appendChild(pollDiv);
     }
 
     async function renderPoll(container, issueNumber, pollData) {
         const currentUser = GithubAuth.getCurrentUser();
         
-        // Загружаем все комментарии к issue
         const comments = await GithubAPI.loadComments(issueNumber);
-        // Фильтруем комментарии, содержащие !vote индекс
         const voteComments = comments.filter(c => /^!vote \d+$/.test(c.body.trim()));
         
-        // Подсчёт голосов
         const voteCounts = pollData.options.map((_, index) => {
             const count = voteComments.filter(c => c.body.trim() === `!vote ${index}`).length;
             return count;
         });
         
         const totalVotes = voteCounts.reduce((sum, v) => sum + v, 0);
-        
-        // Проверяем, голосовал ли текущий пользователь
         const userVoted = currentUser ? voteComments.some(c => c.user.login === currentUser) : false;
 
         const pollDiv = document.createElement('div');
@@ -441,9 +447,8 @@
         pollDiv.dataset.options = JSON.stringify(pollData.options);
         
         let html = `<h3>📊 ${GithubCore.escapeHtml(pollData.question)}</h3>`;
-        
-        // Всегда показываем варианты
         html += '<div class="poll-options">';
+
         pollData.options.forEach((option, index) => {
             const count = voteCounts[index];
             const percent = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
@@ -451,52 +456,41 @@
             html += `<div class="poll-option" data-index="${index}">`;
             html += `<div class="poll-option-text">${GithubCore.escapeHtml(option)}</div>`;
 
-            // Если пользователь проголосовал (или не зарегистрирован, но мы показываем результаты? по условию: скрываем проценты до голоса)
-            // По новым правилам: если пользователь не зарегистрирован, показываем только приглашение, без кнопок и процентов.
-            // Если зарегистрирован, но не голосовал, показываем кнопки, проценты НЕ показываем.
-            // Если проголосовал, показываем проценты и скрываем кнопки.
-            
             if (!currentUser) {
-                // Не зарегистрирован: показываем только текст, без процентов и кнопок
-                // Ниже добавим приглашение
+                // Неавторизован: только текст
             } else if (!userVoted) {
-                // Зарегистрирован, но не голосовал: показываем кнопку, без процентов
+                // Авторизован, но не голосовал: показываем кнопку
                 html += `<button class="button poll-vote-btn" data-option="${index}">Голосовать</button>`;
             } else {
-                // Проголосовал: показываем прогресс-бар с процентами
-                html += `<div class="progress-bar"><div style="width: ${percent}%; text-align: center;">${percent}% (${count})</div></div>`;
+                // Уже проголосовал: показываем прогресс-бар
+                html += `<div class="progress-bar"><div style="width: ${percent}%;">${percent}% (${count})</div></div>`;
             }
 
             html += '</div>';
         });
         html += '</div>';
 
-        // Если пользователь не зарегистрирован, показываем сообщение
         if (!currentUser) {
             html += '<p class="text-secondary small" style="margin-top:15px;"><i class="fas fa-info-circle"></i> Чтобы участвовать в опросе, <a href="#" id="poll-login-link">войдите в аккаунт</a>.</p>';
         } else if (!userVoted) {
-            html += '<p class="text-secondary small" style="margin-top:10px;">Вы ещё не голосовали. Нажмите на кнопку варианта, чтобы отдать голос.</p>';
+            html += '<p class="text-secondary small" style="margin-top:10px;">Вы ещё не голосовали.</p>';
         }
 
         pollDiv.innerHTML = html;
         container.innerHTML = '';
         container.appendChild(pollDiv);
 
-        // Обработчики для кнопок голосования
+        // Обработчики
         if (currentUser && !userVoted) {
             pollDiv.querySelectorAll('.poll-vote-btn').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const optionIndex = btn.dataset.option;
-                    
                     btn.disabled = true;
-                    
                     try {
-                        // Добавляем комментарий с голосом
                         await GithubAPI.addComment(issueNumber, `!vote ${optionIndex}`);
                         UIUtils.showToast('Голос учтён', 'success');
-                        // Мгновенно обновляем опрос (без перезагрузки страницы)
-                        // Перерисовываем опрос с новыми данными
+                        // Мгновенно перерисовываем опрос (без перезагрузки страницы)
                         await renderPoll(container, issueNumber, pollData);
                     } catch (err) {
                         UIUtils.showToast('Ошибка при голосовании', 'error');
@@ -506,7 +500,6 @@
             });
         }
 
-        // Обработчик ссылки для входа
         const loginLink = pollDiv.querySelector('#poll-login-link');
         if (loginLink) {
             loginLink.addEventListener('click', (e) => {
@@ -585,7 +578,6 @@
                 invalidateCache(item.id);
                 const updated = await GithubAPI.loadComments(item.id); 
                 setCached(`comments_${item.id}`, updated, commentsCache);
-                // Перерисовываем комментарии с новыми данными
                 renderComments(commentsDiv, updated, currentUser, item.id);
                 UIUtils.showToast('Комментарий добавлен', 'success');
             } catch (err) { 
@@ -647,7 +639,6 @@
             const issue = await GithubAPI.loadIssue(item.id);
             container.innerHTML = '';
 
-            // Header
             const header = document.createElement('div');
             header.className = 'modal-post-header';
             header.style.cssText = `
@@ -679,7 +670,6 @@
             `;
             container.appendChild(header);
 
-            // Рендерим тело поста
             await renderPostBody(container, issue.body, item.id);
 
             await loadReactionsAndComments(container, item, currentUser, issue);
@@ -720,52 +710,77 @@
 
         const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
 
-        // Отслеживаем изменения в полях для предупреждения при закрытии
+        // --- Черновик ---
+        const draftKey = `draft_${postType}_${mode}_${data.game || 'global'}_${data.number || 'new'}`;
+        const savedDraft = UIUtils.loadDraft(draftKey);
+        if (savedDraft && savedDraft.title && savedDraft.body) {
+            if (confirm('Найден несохранённый черновик. Восстановить?')) {
+                document.getElementById('modal-input-title').value = savedDraft.title;
+                document.getElementById('modal-body').value = savedDraft.body;
+                if (savedDraft.category && document.getElementById('modal-category')) {
+                    document.getElementById('modal-category').value = savedDraft.category;
+                }
+            } else {
+                UIUtils.clearDraft(draftKey);
+            }
+        }
+
+        // Отслеживание изменений
         let hasChanges = false;
         const titleInput = modal.querySelector('#modal-input-title');
         const bodyTextarea = modal.querySelector('#modal-body');
         const categorySelect = modal.querySelector('#modal-category');
 
-        const checkChanges = () => {
+        const updateDraft = () => {
             const currentTitle = titleInput.value.trim();
             const currentBody = bodyTextarea.value.trim();
-            const originalTitle = (data.title || '').trim();
-            const originalBody = (data.body || '').trim();
-            hasChanges = (currentTitle !== originalTitle) || (currentBody !== originalBody);
+            const currentCategory = categorySelect ? categorySelect.value : null;
+            UIUtils.saveDraft(draftKey, { title: currentTitle, body: currentBody, category: currentCategory });
+            hasChanges = true;
         };
 
-        titleInput.addEventListener('input', checkChanges);
-        bodyTextarea.addEventListener('input', checkChanges);
-        if (categorySelect) {
-            categorySelect.addEventListener('change', checkChanges);
-        }
+        titleInput.addEventListener('input', updateDraft);
+        bodyTextarea.addEventListener('input', updateDraft);
+        if (categorySelect) categorySelect.addEventListener('change', updateDraft);
 
-        // Перехватываем попытку закрыть модалку
-        const originalClose = closeModal;
+        // Проверка изменений для закрытия
+        const originalCloseModal = closeModal;
         const closeWithCheck = () => {
             if (hasChanges) {
                 if (confirm('У вас есть несохранённые изменения. Вы действительно хотите закрыть?')) {
-                    originalClose();
+                    UIUtils.clearDraft(draftKey);
+                    originalCloseModal();
                 }
             } else {
-                originalClose();
+                UIUtils.clearDraft(draftKey);
+                originalCloseModal();
             }
         };
 
-        // Заменяем обработчик на кнопке закрытия
-        const closeBtn = modal.querySelector('.modal-close');
-        if (closeBtn) {
-            closeBtn.replaceWith(closeBtn.cloneNode(true));
-            modal.querySelector('.modal-close').addEventListener('click', closeWithCheck);
-        }
-
-        // Перехватываем клик по фону
+        // Замена обработчиков
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 e.preventDefault();
                 closeWithCheck();
             }
         });
+
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                closeWithCheck();
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+
+        const closeBtn = modal.querySelector('.modal-close');
+        if (closeBtn) {
+            closeBtn.replaceWith(closeBtn.cloneNode(true));
+            modal.querySelector('.modal-close').addEventListener('click', (e) => {
+                e.preventDefault();
+                closeWithCheck();
+            });
+        }
 
         // Инициализация редактора
         if (window.Editor) {
@@ -774,16 +789,13 @@
                 onPreview: () => {
                     const preview = modal.querySelector('#modal-preview-area');
                     if (!preview) return;
-                    // Используем renderPostBody для предпросмотра, но без issueNumber (опросы не будут интерактивными)
-                    preview.innerHTML = ''; // очистим
-                    renderPostBody(preview, bodyTextarea.value, null); // null issueNumber – опросы не активны
+                    preview.innerHTML = '';
+                    renderPostBody(preview, bodyTextarea.value, null); // null – статический режим
                     preview.style.display = bodyTextarea.value.trim() ? 'block' : 'none';
                 }
             });
             const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
-            if (toolbarContainer) {
-                toolbarContainer.appendChild(toolbar);
-            }
+            if (toolbarContainer) toolbarContainer.appendChild(toolbar);
         }
 
         // Обработчик отправки
@@ -831,7 +843,7 @@
                     labels = [`game:${data.game}`, `type:${category}`];
                 } else if (postType === 'news') {
                     labels = ['type:news'];
-                } else { // update
+                } else {
                     if (!data.game || data.game.trim() === '') {
                         UIUtils.showToast('Ошибка: не указана игра для обновления', 'error');
                         btn.disabled = false;
@@ -847,7 +859,8 @@
                     await GithubAPI.createIssue(title, body, labels);
                 }
 
-                closeWithCheck(); // используем проверку, но изменений уже нет
+                UIUtils.clearDraft(draftKey);
+                closeWithCheck(); // закроем без подтверждения, т.к. изменения сохранены
                 if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
                 if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
                 if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();

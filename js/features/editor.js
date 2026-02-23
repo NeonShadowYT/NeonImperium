@@ -1,7 +1,6 @@
-// editor.js — унифицированный Markdown-редактор с шаблонами и расширенными инструментами
+// editor.js — унифицированный Markdown-редактор с расширенными инструментами
 
 (function() {
-    // База шаблонов
     const TEMPLATES = {
         // Базовое форматирование
         bold: { 
@@ -110,7 +109,7 @@
             action: (textarea) => insertCard(textarea)
         },
         
-        // Иконки (Font Awesome)
+        // Иконки
         icon: {
             name: 'Иконка',
             icon: 'fas fa-icons',
@@ -131,11 +130,21 @@
             action: (textarea) => insertColor(textarea, 'background-color')
         },
 
-        // Кастомный CSS класс
-        class: {
-            name: 'CSS класс',
-            icon: 'fas fa-code',
-            action: (textarea) => insertClass(textarea)
+        // Дополнительные инструменты
+        hr: {
+            name: 'Горизонтальная линия',
+            icon: 'fas fa-minus',
+            action: (textarea) => insertAtCursor(textarea, '\n---\n')
+        },
+        emoji: {
+            name: 'Эмодзи',
+            icon: 'far fa-smile',
+            action: (textarea) => insertEmoji(textarea)
+        },
+        math: {
+            name: 'Формула',
+            icon: 'fas fa-square-root-alt',
+            action: (textarea) => insertMath(textarea)
         }
     };
 
@@ -302,23 +311,58 @@
         if (!color) return;
         const selected = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
         if (selected) {
-            // Оборачиваем выделенный текст в span с цветом
             insertAtCursor(textarea, `<span style="${styleProp}: ${color};">${selected}</span>`);
         } else {
-            // Вставляем span с цветом и плейсхолдером
             insertAtCursor(textarea, `<span style="${styleProp}: ${color};">текст</span>`);
         }
     }
 
-    function insertClass(textarea) {
-        const className = prompt('Введите имя CSS класса:', 'my-class');
-        if (!className) return;
-        const selected = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
-        if (selected) {
-            insertAtCursor(textarea, `<span class="${className}">${selected}</span>`);
-        } else {
-            insertAtCursor(textarea, `<span class="${className}">текст</span>`);
-        }
+    function insertEmoji(textarea) {
+        const emojiList = ['😀', '😂', '😍', '👍', '🔥', '✅', '❌', '⭐', '❤️', '🎉'];
+        const menu = document.createElement('div');
+        menu.className = 'emoji-menu';
+        menu.style.cssText = `
+            position: absolute;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 8px;
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            max-width: 200px;
+            z-index: 10020;
+        `;
+        emojiList.forEach(emoji => {
+            const btn = document.createElement('button');
+            btn.className = 'editor-btn';
+            btn.textContent = emoji;
+            btn.style.fontSize = '20px';
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                insertAtCursor(textarea, emoji);
+                document.body.removeChild(menu);
+            });
+            menu.appendChild(btn);
+        });
+        const rect = textarea.getBoundingClientRect();
+        menu.style.left = rect.left + 'px';
+        menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+        document.body.appendChild(menu);
+
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                document.body.removeChild(menu);
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeMenu), 100);
+    }
+
+    function insertMath(textarea) {
+        const formula = prompt('Введите формулу (LaTeX):', 'E = mc^2');
+        if (formula === null) return;
+        insertAtCursor(textarea, `\n$$${formula}$$\n`);
     }
 
     // Создание панели инструментов
@@ -336,7 +380,6 @@
             border: 1px solid var(--border);
         `;
 
-        // Группировка шаблонов
         const groups = {
             'Форматирование': ['bold', 'italic', 'strikethrough'],
             'Заголовки': ['h1', 'h2', 'h3'],
@@ -346,7 +389,7 @@
             'Блоки': ['spoiler', 'table', 'poll', 'progress', 'card'],
             'Иконки': ['icon'],
             'Цвет': ['color', 'bgcolor'],
-            'Классы': ['class']
+            'Дополнительно': ['hr', 'emoji', 'math']
         };
 
         for (const [groupName, templateKeys] of Object.entries(groups)) {
@@ -381,7 +424,6 @@
             toolbar.appendChild(group);
         }
 
-        // Кнопка предпросмотра
         if (options.preview !== false) {
             const previewBtn = document.createElement('button');
             previewBtn.type = 'button';
@@ -389,9 +431,7 @@
             previewBtn.innerHTML = '<i class="fas fa-eye"></i> Предпросмотр';
             previewBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                if (options.onPreview) {
-                    options.onPreview();
-                }
+                if (options.onPreview) options.onPreview();
             });
             toolbar.appendChild(previewBtn);
         }
@@ -399,7 +439,6 @@
         return toolbar;
     }
 
-    // Экспорт
     window.Editor = {
         TEMPLATES,
         createEditorToolbar,
@@ -417,6 +456,7 @@
         insertPoll,
         insertIcon,
         insertColor,
-        insertClass
+        insertEmoji,
+        insertMath
     };
 })();

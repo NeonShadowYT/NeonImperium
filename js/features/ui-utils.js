@@ -1,4 +1,4 @@
-// ui-utils.js – общие компоненты интерфейса: тосты, модалки, предупреждение при уходе
+// ui-utils.js – общие компоненты интерфейса: тосты, модалки, черновики
 
 (function() {
     // Показывает временное уведомление (тост)
@@ -38,11 +38,9 @@
     function createModal(title, contentHtml, options = {}) {
         const { onClose, size = 'full', closeButton = true } = options;
         
-        // Удаляем предыдущие модальные окна, чтобы избежать конфликтов ID
         document.querySelectorAll('.modal-fullscreen, .modal').forEach(m => m.remove());
         
         const modal = document.createElement('div');
-        // Определяем классы в зависимости от размера
         let modalClass = 'modal';
         let contentClass = 'modal-content';
         if (size === 'full') {
@@ -88,13 +86,26 @@
         return { modal, closeModal };
     }
 
-    // Функция для подтверждения перед уходом со страницы (используется в редакторе)
-    function confirmBeforeUnload(event) {
-        if (window.editorHasUnsavedChanges) {
-            event.preventDefault();
-            event.returnValue = ''; // Стандартное сообщение браузера
+    // Функции для работы с черновиками в sessionStorage
+    function saveDraft(key, data) {
+        try {
+            sessionStorage.setItem(key, JSON.stringify({ ...data, timestamp: Date.now() }));
+        } catch (e) {
+            console.warn('Failed to save draft', e);
         }
     }
 
-    window.UIUtils = { showToast, createModal, confirmBeforeUnload };
+    function loadDraft(key) {
+        try {
+            const draft = sessionStorage.getItem(key);
+            if (draft) return JSON.parse(draft);
+        } catch (e) {}
+        return null;
+    }
+
+    function clearDraft(key) {
+        sessionStorage.removeItem(key);
+    }
+
+    window.UIUtils = { showToast, createModal, saveDraft, loadDraft, clearDraft };
 })();
