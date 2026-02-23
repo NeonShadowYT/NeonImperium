@@ -1,7 +1,144 @@
-// editor.js — унифицированный Markdown-редактор для форм
+// editor.js — унифицированный Markdown-редактор с шаблонами
 
 (function() {
-    // Вставка текста в текстовое поле в позиции курсора
+    // База шаблонов
+    const TEMPLATES = {
+        // Базовое форматирование
+        bold: { 
+            name: 'Жирный', 
+            icon: 'fas fa-bold',
+            action: (textarea) => insertMarkdown(textarea, '**', 'текст', true)
+        },
+        italic: { 
+            name: 'Курсив', 
+            icon: 'fas fa-italic',
+            action: (textarea) => insertMarkdown(textarea, '*', 'текст', true)
+        },
+        strikethrough: { 
+            name: 'Зачёркнутый', 
+            icon: 'fas fa-strikethrough',
+            action: (textarea) => insertMarkdown(textarea, '~~', 'текст', true)
+        },
+        
+        // Заголовки
+        h1: { 
+            name: 'Заголовок 1', 
+            icon: 'H1',
+            action: (textarea) => insertMarkdown(textarea, '# ', 'Заголовок')
+        },
+        h2: { 
+            name: 'Заголовок 2', 
+            icon: 'H2',
+            action: (textarea) => insertMarkdown(textarea, '## ', 'Заголовок')
+        },
+        h3: { 
+            name: 'Заголовок 3', 
+            icon: 'H3',
+            action: (textarea) => insertMarkdown(textarea, '### ', 'Заголовок')
+        },
+        
+        // Списки
+        ul: { 
+            name: 'Маркированный список', 
+            icon: 'fas fa-list-ul',
+            action: (textarea) => insertList(textarea, '- ')
+        },
+        ol: { 
+            name: 'Нумерованный список', 
+            icon: 'fas fa-list-ol',
+            action: (textarea) => insertList(textarea, '1. ')
+        },
+        quote: { 
+            name: 'Цитата', 
+            icon: 'fas fa-quote-right',
+            action: (textarea) => insertMarkdown(textarea, '> ', 'цитата')
+        },
+        
+        // Ссылки и медиа
+        link: { 
+            name: 'Ссылка', 
+            icon: 'fas fa-link',
+            action: (textarea) => insertLink(textarea)
+        },
+        image: { 
+            name: 'Изображение', 
+            icon: 'fas fa-image',
+            action: (textarea) => insertImage(textarea)
+        },
+        youtube: { 
+            name: 'YouTube', 
+            icon: 'fab fa-youtube',
+            action: (textarea) => insertYouTube(textarea)
+        },
+        
+        // Код
+        code: { 
+            name: 'Код', 
+            icon: 'fas fa-code',
+            action: (textarea) => insertMarkdown(textarea, '`', 'код', true)
+        },
+        codeblock: { 
+            name: 'Блок кода', 
+            icon: 'fas fa-file-code',
+            action: (textarea) => insertCodeBlock(textarea)
+        },
+        
+        // Специальные блоки
+        spoiler: { 
+            name: 'Спойлер', 
+            icon: 'fas fa-chevron-down',
+            action: (textarea) => insertSpoiler(textarea)
+        },
+        table: { 
+            name: 'Таблица', 
+            icon: 'fas fa-table',
+            action: (textarea) => insertTable(textarea)
+        },
+        poll: { 
+            name: 'Опрос', 
+            icon: 'fas fa-chart-pie',
+            action: (textarea) => insertPoll(textarea)
+        },
+        progress: { 
+            name: 'Прогресс-бар', 
+            icon: 'fas fa-chart-bar',
+            action: (textarea) => insertProgressBar(textarea)
+        },
+        card: { 
+            name: 'Карточка', 
+            icon: 'fas fa-credit-card',
+            action: (textarea) => insertCard(textarea)
+        },
+        
+        // Alert блоки
+        alertNote: { 
+            name: 'Note', 
+            icon: 'fas fa-info-circle',
+            action: (textarea) => insertAlert(textarea, 'NOTE')
+        },
+        alertTip: { 
+            name: 'Tip', 
+            icon: 'fas fa-lightbulb',
+            action: (textarea) => insertAlert(textarea, 'TIP')
+        },
+        alertImportant: { 
+            name: 'Important', 
+            icon: 'fas fa-exclamation',
+            action: (textarea) => insertAlert(textarea, 'IMPORTANT')
+        },
+        alertWarning: { 
+            name: 'Warning', 
+            icon: 'fas fa-exclamation-triangle',
+            action: (textarea) => insertAlert(textarea, 'WARNING')
+        },
+        alertCaution: { 
+            name: 'Caution', 
+            icon: 'fas fa-bolt',
+            action: (textarea) => insertAlert(textarea, 'CAUTION')
+        }
+    };
+
+    // Вспомогательные функции
     function insertAtCursor(textarea, text) {
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
@@ -11,43 +148,78 @@
         textarea.setSelectionRange(start + text.length, start + text.length);
     }
 
-    // Основная функция вставки с тегами
-    function insertMarkdown(textarea, tag, placeholder, wrap = false, isLink = false) {
+    function insertMarkdown(textarea, tag, placeholder, wrap = false) {
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
         const selected = textarea.value.substring(start, end);
 
         let insertion;
-        if (isLink) {
-            const url = prompt('Введите URL:', 'https://');
-            if (!url) return;
-            const text = prompt('Введите текст ссылки:', selected || 'ссылка');
-            insertion = `[${text}](${url})`;
-        } else if (tag === '![](') {
-            const url = prompt('Введите URL изображения:', 'https://');
-            if (!url) return;
-            const alt = prompt('Введите описание изображения (alt):', 'image');
-            insertion = `![${alt}](${url})`;
-        } else if (wrap) {
-            if (selected) {
-                insertion = tag + selected + tag;
-            } else {
-                insertion = tag + placeholder + tag;
-            }
+        if (wrap) {
+            insertion = selected ? tag + selected + tag : tag + placeholder + tag;
         } else {
-            if (selected) {
-                insertion = tag + selected;
-            } else {
-                insertion = tag + placeholder;
-            }
+            insertion = selected ? tag + selected : tag + placeholder;
         }
         insertAtCursor(textarea, insertion);
+    }
+
+    function insertList(textarea, prefix) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selected = textarea.value.substring(start, end);
+        
+        if (selected.includes('\n')) {
+            const lines = selected.split('\n');
+            const newLines = lines.map(line => line.trim() ? prefix + line : line).join('\n');
+            insertAtCursor(textarea, newLines);
+        } else {
+            insertAtCursor(textarea, prefix + (selected || 'элемент списка'));
+        }
+    }
+
+    function insertLink(textarea) {
+        const url = prompt('Введите URL:', 'https://');
+        if (!url) return;
+        const text = prompt('Введите текст ссылки:', 'ссылка');
+        insertAtCursor(textarea, `[${text || 'ссылка'}](${url})`);
+    }
+
+    function insertImage(textarea) {
+        const url = prompt('Введите URL изображения:', 'https://');
+        if (!url) return;
+        const alt = prompt('Введите описание изображения:', 'image');
+        insertAtCursor(textarea, `![${alt || 'image'}](${url})`);
+    }
+
+    function insertYouTube(textarea) {
+        const url = prompt('Введите ссылку на YouTube видео:', 'https://youtu.be/...');
+        if (!url) return;
+        
+        // Пытаемся извлечь ID видео
+        let videoId = '';
+        const patterns = [
+            /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+            /youtube\.com\/embed\/([^&\n?#]+)/
+        ];
+        
+        for (const pattern of patterns) {
+            const match = url.match(pattern);
+            if (match) {
+                videoId = match[1];
+                break;
+            }
+        }
+        
+        if (videoId) {
+            insertAtCursor(textarea, `\n<div class="youtube-embed"><iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe></div>\n`);
+        } else {
+            insertAtCursor(textarea, url);
+        }
     }
 
     function insertSpoiler(textarea) {
         const summary = prompt('Заголовок спойлера:', 'Спойлер');
         if (summary === null) return;
-        const content = prompt('Содержимое спойлера (можно оставить пустым):', '');
+        const content = prompt('Содержимое спойлера:', '');
         const spoiler = `\n<details><summary>${summary}</summary>\n\n${content || '...'}\n\n</details>\n`;
         insertAtCursor(textarea, spoiler);
     }
@@ -60,17 +232,35 @@
     }
 
     function insertTable(textarea) {
-        const table = `
-| Заголовок 1 | Заголовок 2 |
-|-------------|-------------|
-| Ячейка 1    | Ячейка 2    |
-| Ячейка 3    | Ячейка 4    |
-`;
+        const rows = prompt('Количество строк:', '3');
+        const cols = prompt('Количество столбцов:', '2');
+        if (!rows || !cols) return;
+        
+        let table = '\n';
+        // Заголовок
+        for (let i = 0; i < parseInt(cols); i++) {
+            table += `| Заголовок ${i+1} `;
+        }
+        table += '|\n';
+        
+        // Разделитель
+        for (let i = 0; i < parseInt(cols); i++) {
+            table += '|-------------';
+        }
+        table += '|\n';
+        
+        // Ячейки
+        for (let r = 0; r < parseInt(rows); r++) {
+            for (let c = 0; c < parseInt(cols); c++) {
+                table += `| Ячейка ${r+1}-${c+1} `;
+            }
+            table += '|\n';
+        }
         insertAtCursor(textarea, table);
     }
 
     function insertCodeBlock(textarea) {
-        const lang = prompt('Язык (например, javascript, python, или оставьте пустым):', '');
+        const lang = prompt('Язык (например, javascript, python):', '');
         const code = prompt('Введите код:', '');
         if (code === null) return;
         const block = `\n\`\`\`${lang}\n${code}\n\`\`\`\n`;
@@ -80,7 +270,7 @@
     function insertProgressBar(textarea) {
         const percent = prompt('Введите процент заполнения (0-100):', '50');
         if (percent === null) return;
-        const bar = `\n<div class="progress-bar"><div style="width: ${percent}%;">${percent}%</div></div>\n`;
+        const bar = `\n<div class="progress-bar"><div style="width: ${percent}%; text-align: center; line-height: 24px;">${percent}%</div></div>\n`;
         insertAtCursor(textarea, bar);
     }
 
@@ -92,262 +282,116 @@
         insertAtCursor(textarea, card);
     }
 
-    function insertYouTube(textarea) {
-        const url = prompt('Введите ссылку на YouTube видео:', 'https://youtu.be/...');
-        if (url === null) return;
-        insertAtCursor(textarea, url);
-    }
-
     function insertPoll(textarea) {
-        const question = prompt('Вопрос опроса:', 'Добавлять ли лису?');
+        const question = prompt('Вопрос опроса:', 'Добавлять ли новую функцию?');
         if (question === null) return;
-        const optionsInput = prompt('Введите варианты через запятую (макс. 10):', 'Да, Нет');
+        const optionsInput = prompt('Введите варианты через запятую (макс. 10):', 'Да, Нет, Возможно');
         if (!optionsInput) return;
+        
         const options = optionsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
         if (options.length === 0) return;
         if (options.length > 10) {
             alert('Слишком много вариантов. Будет использовано только первые 10.');
             options.splice(10);
         }
+        
         const pollData = { question, options };
         const pollComment = `\n<!-- poll: ${JSON.stringify(pollData)} -->\n`;
         insertAtCursor(textarea, pollComment);
     }
 
-    // Создаёт панель инструментов и привязывает обработчики
+    // Создание панели инструментов
     function createEditorToolbar(textarea, options = {}) {
         const toolbar = document.createElement('div');
         toolbar.className = 'editor-toolbar';
-        toolbar.style.display = 'flex';
-        toolbar.style.gap = '5px';
-        toolbar.style.marginBottom = '10px';
-        toolbar.style.flexWrap = 'wrap';
-
-        // Группа базового форматирования
-        const baseGroup = document.createElement('div');
-        baseGroup.className = 'editor-btn-group';
-        baseGroup.innerHTML = `
-            <button type="button" class="editor-btn" data-tag="**" title="Жирный"><i class="fas fa-bold"></i></button>
-            <button type="button" class="editor-btn" data-tag="*" title="Курсив"><i class="fas fa-italic"></i></button>
-            <button type="button" class="editor-btn" data-tag="~~" title="Зачёркнутый" data-wrap="true"><i class="fas fa-strikethrough"></i></button>
+        toolbar.style.cssText = `
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            padding: 8px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
         `;
-        toolbar.appendChild(baseGroup);
 
-        // Группа заголовков
-        const headingGroup = document.createElement('div');
-        headingGroup.className = 'editor-btn-group';
-        headingGroup.innerHTML = `
-            <button type="button" class="editor-btn" data-tag="# " title="Заголовок 1">H1</button>
-            <button type="button" class="editor-btn" data-tag="## " title="Заголовок 2">H2</button>
-            <button type="button" class="editor-btn" data-tag="### " title="Заголовок 3">H3</button>
-        `;
-        toolbar.appendChild(headingGroup);
+        // Группировка шаблонов
+        const groups = {
+            'Форматирование': ['bold', 'italic', 'strikethrough'],
+            'Заголовки': ['h1', 'h2', 'h3'],
+            'Списки': ['ul', 'ol', 'quote'],
+            'Медиа': ['link', 'image', 'youtube'],
+            'Код': ['code', 'codeblock'],
+            'Блоки': ['spoiler', 'table', 'poll', 'progress', 'card'],
+            'Alert': ['alertNote', 'alertTip', 'alertImportant', 'alertWarning', 'alertCaution']
+        };
 
-        // Группа списков и цитат
-        const listGroup = document.createElement('div');
-        listGroup.className = 'editor-btn-group';
-        listGroup.innerHTML = `
-            <button type="button" class="editor-btn" data-tag="- " title="Маркированный список"><i class="fas fa-list-ul"></i></button>
-            <button type="button" class="editor-btn" data-tag="1. " title="Нумерованный список"><i class="fas fa-list-ol"></i></button>
-            <button type="button" class="editor-btn" data-tag="> " title="Цитата"><i class="fas fa-quote-right"></i></button>
-        `;
-        toolbar.appendChild(listGroup);
+        for (const [groupName, templateKeys] of Object.entries(groups)) {
+            const group = document.createElement('div');
+            group.className = 'editor-btn-group';
+            group.style.cssText = `
+                display: flex;
+                gap: 3px;
+                flex-wrap: wrap;
+                padding: 0 5px;
+                border-right: 1px solid var(--border);
+            `;
 
-        // Группа ссылок и медиа
-        const mediaGroup = document.createElement('div');
-        mediaGroup.className = 'editor-btn-group';
-        mediaGroup.innerHTML = `
-            <button type="button" class="editor-btn" data-link="true" title="Ссылка"><i class="fas fa-link"></i></button>
-            <button type="button" class="editor-btn" data-tag="![](" title="Изображение"><i class="fas fa-image"></i></button>
-            <button type="button" class="editor-btn" data-youtube="true" title="YouTube"><i class="fab fa-youtube"></i></button>
-        `;
-        toolbar.appendChild(mediaGroup);
+            templateKeys.forEach(key => {
+                const template = TEMPLATES[key];
+                if (!template) return;
 
-        // Группа кода
-        const codeGroup = document.createElement('div');
-        codeGroup.className = 'editor-btn-group';
-        codeGroup.innerHTML = `
-            <button type="button" class="editor-btn" data-tag="\`" data-wrap="true" title="Код"><i class="fas fa-code"></i></button>
-            <button type="button" class="editor-btn" data-codeblock="true" title="Блок кода"><i class="fas fa-file-code"></i></button>
-        `;
-        toolbar.appendChild(codeGroup);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'editor-btn';
+                btn.title = template.name;
+                btn.innerHTML = template.icon.startsWith('fas') || template.icon.startsWith('fab') 
+                    ? `<i class="${template.icon}"></i>` 
+                    : template.icon;
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    template.action(textarea);
+                });
+                group.appendChild(btn);
+            });
 
-        // Группа специальных блоков
-        const specialGroup = document.createElement('div');
-        specialGroup.className = 'editor-btn-group';
-        specialGroup.innerHTML = `
-            <button type="button" class="editor-btn" data-spoiler="true" title="Спойлер"><i class="fas fa-chevron-down"></i></button>
-            <button type="button" class="editor-btn" data-table="true" title="Таблица"><i class="fas fa-table"></i></button>
-            <button type="button" class="editor-btn" data-poll="true" title="Опрос"><i class="fas fa-chart-pie"></i></button>
-        `;
-        toolbar.appendChild(specialGroup);
-
-        // Выпадающее меню для alert-блоков
-        const alertDropdown = document.createElement('div');
-        alertDropdown.className = 'editor-dropdown';
-        alertDropdown.innerHTML = `
-            <button type="button" class="editor-btn dropdown-toggle"><i class="fas fa-exclamation-triangle"></i> Alert <i class="fas fa-caret-down"></i></button>
-            <div class="dropdown-menu">
-                <button type="button" data-alert="NOTE">📝 Note</button>
-                <button type="button" data-alert="TIP">💡 Tip</button>
-                <button type="button" data-alert="IMPORTANT">❗ Important</button>
-                <button type="button" data-alert="WARNING">⚠️ Warning</button>
-                <button type="button" data-alert="CAUTION">🔥 Caution</button>
-            </div>
-        `;
-        toolbar.appendChild(alertDropdown);
-
-        // Прогресс-бар и карточка
-        const extraGroup = document.createElement('div');
-        extraGroup.className = 'editor-btn-group';
-        extraGroup.innerHTML = `
-            <button type="button" class="editor-btn" data-progress="true" title="Прогресс-бар"><i class="fas fa-chart-bar"></i> Прогресс</button>
-            <button type="button" class="editor-btn" data-card="true" title="Карточка"><i class="fas fa-credit-card"></i> Карточка</button>
-        `;
-        toolbar.appendChild(extraGroup);
+            toolbar.appendChild(group);
+        }
 
         // Кнопка предпросмотра
         if (options.preview !== false) {
             const previewBtn = document.createElement('button');
             previewBtn.type = 'button';
             previewBtn.className = 'editor-btn preview-btn';
-            previewBtn.id = options.previewId || 'preview-btn';
             previewBtn.innerHTML = '<i class="fas fa-eye"></i> Предпросмотр';
             previewBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 if (options.onPreview) {
                     options.onPreview();
-                } else {
-                    const previewArea = document.getElementById(options.previewAreaId || 'preview-area');
-                    if (previewArea) {
-                        const body = textarea.value;
-                        if (!body.trim()) {
-                            previewArea.style.display = 'none';
-                            return;
-                        }
-                        // Для предпросмотра заменяем комментарий опроса на заглушку
-                        let previewBody = body;
-                        const pollRegex = /<!-- poll: (.*?) -->/g;
-                        previewBody = previewBody.replace(pollRegex, (match, p1) => {
-                            try {
-                                const pollData = JSON.parse(p1);
-                                const optionsHtml = pollData.options.map(opt => `<div>• ${GithubCore.escapeHtml(opt)}</div>`).join('');
-                                return `<div class="poll-preview"><strong>📊 Опрос: ${GithubCore.escapeHtml(pollData.question)}</strong>${optionsHtml}</div>`;
-                            } catch {
-                                return '<div class="poll-preview error">[Ошибка опроса]</div>';
-                            }
-                        });
-                        previewArea.innerHTML = window.GithubCore?.renderMarkdown(previewBody) || previewBody;
-                        previewArea.style.display = 'block';
-                    }
                 }
             });
             toolbar.appendChild(previewBtn);
         }
 
-        // Привязываем обработчики
-        toolbar.querySelectorAll('[data-tag]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const tag = btn.dataset.tag;
-                const placeholder = btn.dataset.placeholder || '';
-                const wrap = btn.dataset.wrap === 'true';
-                const isLink = btn.dataset.link === 'true';
-                insertMarkdown(textarea, tag, placeholder, wrap, isLink);
-            });
-        });
-
-        toolbar.querySelectorAll('[data-link="true"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                insertMarkdown(textarea, '[', '', false, true);
-            });
-        });
-
-        toolbar.querySelectorAll('[data-youtube="true"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                insertYouTube(textarea);
-            });
-        });
-
-        toolbar.querySelectorAll('[data-codeblock="true"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                insertCodeBlock(textarea);
-            });
-        });
-
-        toolbar.querySelectorAll('[data-spoiler="true"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                insertSpoiler(textarea);
-            });
-        });
-
-        toolbar.querySelectorAll('[data-table="true"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                insertTable(textarea);
-            });
-        });
-
-        toolbar.querySelectorAll('[data-progress="true"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                insertProgressBar(textarea);
-            });
-        });
-
-        toolbar.querySelectorAll('[data-card="true"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                insertCard(textarea);
-            });
-        });
-
-        toolbar.querySelectorAll('[data-poll="true"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                insertPoll(textarea);
-            });
-        });
-
-        // Обработчики для выпадающего меню
-        const dropdownToggle = alertDropdown.querySelector('.dropdown-toggle');
-        const dropdownMenu = alertDropdown.querySelector('.dropdown-menu');
-        dropdownToggle.addEventListener('click', (e) => {
-            e.preventDefault();
-            dropdownMenu.classList.toggle('show');
-        });
-        dropdownMenu.querySelectorAll('[data-alert]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const type = btn.dataset.alert;
-                insertAlert(textarea, type);
-                dropdownMenu.classList.remove('show');
-            });
-        });
-        document.addEventListener('click', (e) => {
-            if (!dropdownToggle.contains(e.target) && !dropdownMenu.contains(e.target)) {
-                dropdownMenu.classList.remove('show');
-            }
-        });
-
         return toolbar;
     }
 
+    // Экспорт
     window.Editor = {
+        TEMPLATES,
+        createEditorToolbar,
         insertAtCursor,
         insertMarkdown,
+        insertList,
+        insertLink,
+        insertImage,
+        insertYouTube,
         insertSpoiler,
         insertAlert,
         insertTable,
         insertCodeBlock,
         insertProgressBar,
         insertCard,
-        insertYouTube,
-        insertPoll,
-        createEditorToolbar
+        insertPoll
     };
 })();
