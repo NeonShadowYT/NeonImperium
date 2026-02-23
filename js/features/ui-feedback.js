@@ -586,10 +586,13 @@
 
         const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
 
-        // Проверяем, что все необходимые элементы существуют
-        const titleInput = document.getElementById('modal-title');
-        const bodyTextarea = document.getElementById('modal-body');
-        const submitBtn = document.getElementById('modal-submit');
+        // Ищем элементы внутри модального окна
+        const titleInput = modal.querySelector('#modal-title');
+        const bodyTextarea = modal.querySelector('#modal-body');
+        const submitBtn = modal.querySelector('#modal-submit');
+        const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
+        const categorySelect = modal.querySelector('#modal-category');
+
         if (!titleInput || !bodyTextarea || !submitBtn) {
             console.error('One of modal elements not found');
             UIUtils.showToast('Ошибка создания формы', 'error');
@@ -602,7 +605,7 @@
             const toolbar = Editor.createEditorToolbar(bodyTextarea, { 
                 previewAreaId: 'modal-preview-area', 
                 onPreview: () => {
-                    const preview = document.getElementById('modal-preview-area');
+                    const preview = modal.querySelector('#modal-preview-area');
                     if (!preview) return;
                     let body = bodyTextarea.value;
                     const pollRegex = /<!-- poll: (.*?) -->/g;
@@ -619,7 +622,6 @@
                     preview.style.display = body.trim() ? 'block' : 'none';
                 }
             });
-            const toolbarContainer = document.getElementById('modal-editor-toolbar');
             if (toolbarContainer) {
                 toolbarContainer.appendChild(toolbar);
             } else {
@@ -656,9 +658,8 @@
             }
             
             let category = 'idea';
-            if (postType === 'feedback') {
-                const categorySelect = document.getElementById('modal-category');
-                if (categorySelect) category = categorySelect.value;
+            if (postType === 'feedback' && categorySelect) {
+                category = categorySelect.value;
             }
             const btn = submitBtn;
             btn.disabled = true;
