@@ -11,6 +11,7 @@
 
     const reactionsCache = new Map();
     const commentsCache = new Map();
+    const reactionLocks = new Map(); // ключ: `${issueNumber}_${content}`, значение: true (заблокировано)
 
     function getCached(key, cacheMap) {
         const cached = cacheMap.get(key);
@@ -63,26 +64,40 @@
                 const isActive = btn.classList.contains('active');
                 const countSpan = btn.querySelector('.reaction-count');
                 const oldCount = parseInt(countSpan.textContent, 10);
+                const lockKey = `${issueNumber}_${content}`;
+
+                // Проверяем, не выполняется ли уже запрос для этого типа
+                if (reactionLocks.has(lockKey)) return;
 
                 if (isActive && reactionId) {
-                    // Оптимистичное удаление
+                    // Удаление реакции
+                    reactionLocks.set(lockKey, true);
                     btn.classList.remove('active');
                     countSpan.textContent = oldCount - 1;
                     const wasZero = oldCount - 1 === 0;
                     if (wasZero) btn.style.display = 'none';
                     try {
                         await onRemove(issueNumber, parseInt(reactionId, 10));
-                        // Успех: ничего не делаем, кнопка уже обновлена
+                        // Успех
                     } catch (err) {
                         // Ошибка: откатываем
                         UIUtils.showToast('Ошибка при удалении реакции', 'error');
                         btn.classList.add('active');
                         countSpan.textContent = oldCount;
                         if (wasZero) btn.style.display = '';
+                    } finally {
+                        reactionLocks.delete(lockKey);
                     }
                 } else {
+                    // Добавление новой реакции (клик по существующей неактивной кнопке)
+                    reactionLocks.set(lockKey, true);
                     showReactionMenu(btn, issueNumber, async (selected) => {
-                        // Оптимистичное добавление: создаём временную кнопку
+                        if (selected !== content) {
+                            // Если выбрана другая реакция, снимаем блокировку для исходной
+                            reactionLocks.delete(lockKey);
+                            return;
+                        }
+                        // Оптимистичное добавление
                         const tempBtn = document.createElement('button');
                         tempBtn.className = 'reaction-button active';
                         tempBtn.dataset.content = selected;
@@ -90,7 +105,6 @@
                         const emoji = REACTION_TYPES.find(t => t.content === selected).emoji;
                         tempBtn.innerHTML = `<span class="reaction-emoji">${emoji}</span><span class="reaction-count">1</span>`;
                         tempBtn.setAttribute('aria-label', `${emoji} (1)`);
-                        // Вставляем перед кнопкой "ещё" или добавляем в конец
                         const addBtn = container.querySelector('[data-add],[data-more]');
                         if (addBtn && addBtn.parentNode === container) {
                             container.insertBefore(tempBtn, addBtn);
@@ -99,13 +113,12 @@
                         }
                         try {
                             await onAdd(issueNumber, selected);
-                            // Успех: заменяем временный ID на настоящий (если нужно)
-                            // Но мы не знаем настоящий ID, поэтому просто оставляем кнопку
-                            // При следующем рендере (если он случится) данные обновятся
+                            // Успех: оставляем кнопку
                         } catch (err) {
-                            // Ошибка: удаляем временную кнопку
                             UIUtils.showToast('Ошибка при добавлении реакции', 'error');
                             if (tempBtn.parentNode) tempBtn.remove();
+                        } finally {
+                            reactionLocks.delete(lockKey);
                         }
                     });
                 }
@@ -117,6 +130,10 @@
             addBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 showReactionMenu(addBtn, issueNumber, async (selected) => {
+                    const lockKey = `${issueNumber}_${selected}`;
+                    if (reactionLocks.has(lockKey)) return;
+                    reactionLocks.set(lockKey, true);
+
                     // Оптимистичное добавление
                     const tempBtn = document.createElement('button');
                     tempBtn.className = 'reaction-button active';
@@ -131,6 +148,8 @@
                     } catch (err) {
                         UIUtils.showToast('Ошибка при добавлении реакции', 'error');
                         if (tempBtn.parentNode) tempBtn.remove();
+                    } finally {
+                        reactionLocks.delete(lockKey);
                     }
                 });
             });
@@ -269,7 +288,6 @@
             try { 
                 await GithubAPI.addReaction(num, content); 
                 invalidateCache(num);
-                // Не перезагружаем, только инвалидируем кеш
             } catch (err) {
                 UIUtils.showToast('Ошибка при добавлении реакции', 'error');
                 throw err;

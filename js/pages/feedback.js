@@ -209,10 +209,9 @@
                 await addReaction(num, content); 
                 window.reactionsListCache.delete(`list_reactions_${num}`);
                 if (window.UIFeedback) window.UIFeedback.invalidateCache(num);
-                // Не перезагружаем, только инвалидируем кеш
             } catch (err) { 
                 UIUtils.showToast('Ошибка при добавлении реакции', 'error');
-                throw err; // для оптимистичного отката
+                throw err;
             }
         };
         const handleRemove = async (num, reactionId) => { 
