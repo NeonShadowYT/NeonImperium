@@ -45,6 +45,30 @@
         }
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; refreshNewsFeed(); });
         window.addEventListener('github-logout', () => { currentUser = null; refreshNewsFeed(); });
+
+        // Слушаем событие создания нового issue
+        window.addEventListener('github-issue-created', (e) => {
+            const issue = e.detail;
+            // Проверяем, что issue имеет тип news или update и автор разрешён
+            const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
+            if (!typeLabel) return;
+            if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+
+            const newPost = {
+                type: 'post',
+                number: issue.number,
+                title: issue.title,
+                body: issue.body,
+                author: issue.user.login,
+                date: new Date(issue.created_at),
+                labels: issue.labels.map(l => l.name),
+                game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
+            };
+            // Добавляем в начало массива posts
+            posts = [newPost, ...posts];
+            // Перемешиваем с видео и отображаем
+            renderMixed();
+        });
     });
 
     window.refreshNewsFeed = () => {

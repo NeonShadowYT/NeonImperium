@@ -135,16 +135,6 @@
             name: 'Горизонтальная линия',
             icon: 'fas fa-minus',
             action: (textarea) => insertAtCursor(textarea, '\n---\n')
-        },
-        emoji: {
-            name: 'Эмодзи',
-            icon: 'far fa-smile',
-            action: (textarea) => insertEmoji(textarea)
-        },
-        math: {
-            name: 'Формула',
-            icon: 'fas fa-square-root-alt',
-            action: (textarea) => insertMath(textarea)
         }
     };
 
@@ -299,7 +289,6 @@
         insertAtCursor(textarea, pollComment);
     }
 
-    // Новые инструменты
     function insertIcon(textarea) {
         const icon = prompt('Введите название иконки Font Awesome (например, "fa-heart"):', 'fa-heart');
         if (!icon) return;
@@ -315,54 +304,6 @@
         } else {
             insertAtCursor(textarea, `<span style="${styleProp}: ${color};">текст</span>`);
         }
-    }
-
-    function insertEmoji(textarea) {
-        const emojiList = ['😀', '😂', '😍', '👍', '🔥', '✅', '❌', '⭐', '❤️', '🎉'];
-        const menu = document.createElement('div');
-        menu.className = 'emoji-menu';
-        menu.style.cssText = `
-            position: absolute;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 8px;
-            display: flex;
-            gap: 5px;
-            flex-wrap: wrap;
-            max-width: 200px;
-            z-index: 10020;
-        `;
-        emojiList.forEach(emoji => {
-            const btn = document.createElement('button');
-            btn.className = 'editor-btn';
-            btn.textContent = emoji;
-            btn.style.fontSize = '20px';
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                insertAtCursor(textarea, emoji);
-                document.body.removeChild(menu);
-            });
-            menu.appendChild(btn);
-        });
-        const rect = textarea.getBoundingClientRect();
-        menu.style.left = rect.left + 'px';
-        menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
-        document.body.appendChild(menu);
-
-        const closeMenu = (e) => {
-            if (!menu.contains(e.target)) {
-                document.body.removeChild(menu);
-                document.removeEventListener('click', closeMenu);
-            }
-        };
-        setTimeout(() => document.addEventListener('click', closeMenu), 100);
-    }
-
-    function insertMath(textarea) {
-        const formula = prompt('Введите формулу (LaTeX):', 'E = mc^2');
-        if (formula === null) return;
-        insertAtCursor(textarea, `\n$$${formula}$$\n`);
     }
 
     // Создание панели инструментов
@@ -389,7 +330,7 @@
             'Блоки': ['spoiler', 'table', 'poll', 'progress', 'card'],
             'Иконки': ['icon'],
             'Цвет': ['color', 'bgcolor'],
-            'Дополнительно': ['hr', 'emoji', 'math']
+            'Дополнительно': ['hr']
         };
 
         for (const [groupName, templateKeys] of Object.entries(groups)) {
@@ -455,8 +396,6 @@
         insertCard,
         insertPoll,
         insertIcon,
-        insertColor,
-        insertEmoji,
-        insertMath
+        insertColor
     };
 })();

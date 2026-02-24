@@ -6,10 +6,48 @@
 
     const DEFAULT_IMAGE = 'images/default-news.jpg';
     let currentAbort = null;
+    let currentGame = null;
 
     document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('game-updates');
-        if (container && container.dataset.game) loadGameUpdates(container, container.dataset.game);
+        if (container && container.dataset.game) {
+            currentGame = container.dataset.game;
+            loadGameUpdates(container, currentGame);
+        }
+
+        // Слушаем событие создания нового issue
+        window.addEventListener('github-issue-created', (e) => {
+            const issue = e.detail;
+            if (!currentGame) return;
+            // Проверяем, что это обновление для текущей игры
+            const hasUpdateLabel = issue.labels.some(l => l.name === 'type:update');
+            const hasGameLabel = issue.labels.some(l => l.name === `game:${currentGame}`);
+            if (!hasUpdateLabel || !hasGameLabel) return;
+            if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+
+            const container = document.getElementById('game-updates');
+            if (!container) return;
+
+            const newPost = {
+                number: issue.number,
+                title: issue.title,
+                body: issue.body,
+                date: new Date(issue.created_at),
+                author: issue.user.login,
+                game: currentGame
+            };
+            // Получаем текущий grid или создаём новый
+            let grid = container.querySelector('.projects-grid');
+            if (!grid) {
+                grid = document.createElement('div');
+                grid.className = 'projects-grid';
+                container.innerHTML = '';
+                container.appendChild(grid);
+            }
+            // Вставляем карточку в начало
+            const card = createUpdateCard(newPost);
+            grid.insertBefore(card, grid.firstChild);
+        });
     });
 
     window.refreshGameUpdates = (game) => {

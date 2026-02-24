@@ -287,20 +287,31 @@
                     openEditCommentModal(commentId, currentBody, issueNumber);
                 });
             });
+
             container.querySelectorAll('.comment-delete').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     e.stopPropagation();
-                    if (!confirm('Удалить комментарий?')) return;
+                    const commentDiv = btn.closest('.comment');
                     const commentId = btn.dataset.commentId;
+
+                    // Оптимистичное удаление
+                    commentDiv.remove();
+
                     try {
                         await GithubAPI.deleteComment(commentId);
                         invalidateCache(issueNumber);
-                        const updated = await GithubAPI.loadComments(issueNumber);
-                        setCached(`comments_${issueNumber}`, updated, commentsCache);
-                        renderComments(container, updated, currentUser, issueNumber, onCommentAction);
                         UIUtils.showToast('Комментарий удалён', 'success');
                     } catch (err) {
                         UIUtils.showToast('Ошибка при удалении', 'error');
+                        // Возвращаем комментарий обратно
+                        if (!commentDiv.parentNode) {
+                            // Восстанавливаем, вставив на место
+                            const commentsContainer = container;
+                            const commentsArray = Array.from(commentsContainer.children);
+                            // Находим индекс, куда вставить (ориентируемся по времени)
+                            // Для простоты вставим в конец, но можно попытаться восстановить порядок
+                            commentsContainer.appendChild(commentDiv);
+                        }
                     }
                 });
             });
@@ -486,15 +497,46 @@
                 btn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const optionIndex = btn.dataset.option;
+
+                    // Оптимистичное обновление UI
+                    const oldVoteCounts = [...voteCounts];
+                    const newVoteCounts = [...voteCounts];
+                    newVoteCounts[optionIndex] += 1;
+                    const newTotal = totalVotes + 1;
+                    const newUserVoted = true;
+
+                    // Перерисовываем с новыми данными (без кнопок, с прогрессбарами)
+                    const optimisticPollDiv = document.createElement('div');
+                    optimisticPollDiv.className = 'poll card';
+                    optimisticPollDiv.dataset.issue = issueNumber;
+                    optimisticPollDiv.dataset.options = JSON.stringify(pollData.options);
+
+                    let optimisticHtml = `<h3>📊 ${GithubCore.escapeHtml(pollData.question)}</h3>`;
+                    optimisticHtml += '<div class="poll-options">';
+
+                    pollData.options.forEach((opt, idx) => {
+                        const count = newVoteCounts[idx];
+                        const percent = newTotal > 0 ? Math.round((count / newTotal) * 100) : 0;
+                        optimisticHtml += `<div class="poll-option" data-index="${idx}">`;
+                        optimisticHtml += `<div class="poll-option-text">${GithubCore.escapeHtml(opt)}</div>`;
+                        optimisticHtml += `<div class="progress-bar"><div style="width: ${percent}%;">${percent}% (${count})</div></div>`;
+                        optimisticHtml += '</div>';
+                    });
+                    optimisticHtml += '</div>';
+                    optimisticPollDiv.innerHTML = optimisticHtml;
+                    container.innerHTML = '';
+                    container.appendChild(optimisticPollDiv);
+
                     btn.disabled = true;
                     try {
                         await GithubAPI.addComment(issueNumber, `!vote ${optionIndex}`);
                         UIUtils.showToast('Голос учтён', 'success');
-                        // Мгновенно перерисовываем опрос (без перезагрузки страницы)
+                        // Перерисовываем с реальными данными
                         await renderPoll(container, issueNumber, pollData);
                     } catch (err) {
                         UIUtils.showToast('Ошибка при голосовании', 'error');
-                        btn.disabled = false;
+                        // Откат: возвращаем старый UI
+                        await renderPoll(container, issueNumber, pollData);
                     }
                 });
             });
@@ -860,7 +902,8 @@
                 }
 
                 UIUtils.clearDraft(draftKey);
-                closeWithCheck(); // закроем без подтверждения, т.к. изменения сохранены
+                // Закрываем без проверки, т.к. изменения сохранены
+                originalCloseModal(); // используем оригинальную closeModal
                 if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
                 if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
                 if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();

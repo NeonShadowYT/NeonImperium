@@ -45,7 +45,10 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, body, labels })
         });
-        return response.json();
+        const issue = await response.json();
+        // Диспатчим событие о создании issue
+        window.dispatchEvent(new CustomEvent('github-issue-created', { detail: issue }));
+        return issue;
     }
 
     async function updateIssue(issueNumber, data) {

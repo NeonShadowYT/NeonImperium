@@ -27,6 +27,17 @@
 
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; checkAuthAndRender(); });
         window.addEventListener('github-logout', () => { currentUser = null; checkAuthAndRender(); });
+        // Слушаем событие создания нового issue
+        window.addEventListener('github-issue-created', (e) => {
+            const issue = e.detail;
+            // Проверяем, относится ли issue к текущей игре и имеет нужный тип
+            const hasGameLabel = issue.labels.some(l => l.name === `game:${currentGame}`);
+            if (!hasGameLabel) return;
+            // Добавляем в начало allIssues
+            allIssues = [issue, ...allIssues];
+            filterAndDisplayIssues(true); // перерисовываем сброс
+        });
+
         currentUser = getCurrentUser();
         checkAuthAndRender();
     }
