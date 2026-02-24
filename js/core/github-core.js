@@ -24,6 +24,22 @@ function cacheRemove(key) {
     sessionStorage.removeItem(`${key}_time`);
 }
 
+// Удаляет все записи кеша, ключи которых начинаются с prefix
+function cacheRemoveByPrefix(prefix) {
+    const keysToRemove = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+            keysToRemove.push(key);
+        }
+    }
+    keysToRemove.forEach(key => {
+        sessionStorage.removeItem(key);
+        // также удаляем соответствующий _time ключ, если он есть
+        sessionStorage.removeItem(key + '_time');
+    });
+}
+
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -69,6 +85,7 @@ window.GithubCore = {
     cacheGet,
     cacheSet,
     cacheRemove,
+    cacheRemoveByPrefix,  // новая функция
     escapeHtml,
     renderMarkdown,
     deduplicateByNumber,

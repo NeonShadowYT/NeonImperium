@@ -1,8 +1,8 @@
 (function() {
-    const { cacheGet, cacheSet, renderMarkdown, escapeHtml, CONFIG, deduplicateByNumber, createAbortable } = GithubCore;
-    const { loadIssues, loadIssue, loadComments, addComment, loadReactions, addReaction, removeReaction, closeIssue } = GithubAPI;
-    const { renderReactions, renderComments, openFullModal } = UIFeedback;
-    const { isAdmin, getCurrentUser } = GithubAuth;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable } = GithubCore;
+    const { loadIssues } = GithubAPI;
+    const { openFullModal } = UIFeedback;
+    const { getCurrentUser } = GithubAuth;
 
     const DEFAULT_IMAGE = 'images/default-news.webp';
     let currentAbort = null;
@@ -15,15 +15,16 @@
             loadGameUpdates(container, currentGame);
         }
 
-        // Слушаем событие создания нового issue
         window.addEventListener('github-issue-created', (e) => {
             const issue = e.detail;
             if (!currentGame) return;
-            // Проверяем, что это обновление для текущей игры
             const hasUpdateLabel = issue.labels.some(l => l.name === 'type:update');
             const hasGameLabel = issue.labels.some(l => l.name === `game:${currentGame}`);
             if (!hasUpdateLabel || !hasGameLabel) return;
             if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+
+            // Инвалидируем кеш обновлений для этой игры
+            cacheRemoveByPrefix(`game_updates_${currentGame}`);
 
             const container = document.getElementById('game-updates');
             if (!container) return;
@@ -36,7 +37,6 @@
                 author: issue.user.login,
                 game: currentGame
             };
-            // Получаем текущий grid или создаём новый
             let grid = container.querySelector('.projects-grid');
             if (!grid) {
                 grid = document.createElement('div');
@@ -44,7 +44,6 @@
                 container.innerHTML = '';
                 container.appendChild(grid);
             }
-            // Вставляем карточку в начало
             const card = createUpdateCard(newPost);
             grid.insertBefore(card, grid.firstChild);
         });

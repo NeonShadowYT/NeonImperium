@@ -12,10 +12,13 @@
     <meta property="og:url" content="https://example.com/">
     <meta property="og:type" content="website">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
-    <!-- Preconnect -->
+    <!-- Preconnect для внешних ресурсов -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="preconnect" href="https://www.youtube.com">
+    <link rel="preconnect" href="https://i.ytimg.com">
+    <link rel="preconnect" href="https://img.youtube.com">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
@@ -26,7 +29,6 @@
     <script src="js/core/github-auth.js" defer></script>
     <script src="js/features/ui-feedback.js" defer></script>
     <script src="js/features/editor.js" defer></script>
-    <script src="js/features/admin-news.js" defer></script>
     <script src="js/pages/news-feed.js" defer></script>
     <script src="js/lang.js" defer></script>
     <script src="js/effects.js" defer></script>
@@ -157,7 +159,7 @@
                         <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.webp" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy">
+                                    <img src="images/avatar-neon-shadow.webp" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
@@ -165,7 +167,7 @@
                         <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy">
+                                    <img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
@@ -180,7 +182,7 @@
                         <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.webp" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy">
+                                    <img src="images/avatar-neon-shadow.webp" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
@@ -188,7 +190,7 @@
                         <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy">
+                                    <img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
@@ -196,7 +198,7 @@
                         <a href="https://www.youtube.com/@werewolf-play" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-werewolf.webp" alt="Оборотень" class="avatar" width="80" height="80" loading="lazy">
+                                    <img src="images/avatar-werewolf.webp" alt="Оборотень" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Оборотень</span>
                             </div>
@@ -204,7 +206,7 @@
                         <a href="https://www.youtube.com/@mitmiplayyt" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-mitmi.webp" alt="Mitmi" class="avatar" width="80" height="80" loading="lazy">
+                                    <img src="images/avatar-mitmi.webp" alt="Mitmi" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Mitmi</span>
                             </div>
@@ -212,7 +214,7 @@
                         <a href="https://www.youtube.com/@stasyimpro6287" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-stasy.webp" alt="Stasy" class="avatar" width="80" height="80" loading="lazy">
+                                    <img src="images/avatar-stasy.webp" alt="Stasy" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Stasy</span>
                             </div>
@@ -220,7 +222,7 @@
                         <a href="https://www.youtube.com/@ggelita5951" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-ggelita.webp" alt="GGelita" class="avatar" width="80" height="80" loading="lazy">
+                                    <img src="images/avatar-ggelita.webp" alt="GGelita" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">GGelita</span>
                             </div>

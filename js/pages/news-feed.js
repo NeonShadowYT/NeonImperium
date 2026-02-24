@@ -1,11 +1,10 @@
-// news-feed.js — лента новостей на главной (новости + обновления) с видео
-// Теперь отображает только 6 самых новых элементов (посты и видео, смешанные)
+// news-feed.js — лента новостей на главной
 
 (function() {
-    const { cacheGet, cacheSet, escapeHtml, renderMarkdown, CONFIG, deduplicateByNumber, createAbortable, stripHtml } = GithubCore;
-    const { loadIssues, loadIssue, loadComments, addComment, loadReactions, addReaction, removeReaction, closeIssue } = GithubAPI;
-    const { renderReactions, renderComments, openFullModal } = UIFeedback;
-    const { isAdmin, getCurrentUser } = GithubAuth;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml } = GithubCore;
+    const { loadIssues } = GithubAPI;
+    const { openFullModal } = UIFeedback;
+    const { getCurrentUser } = GithubAuth;
 
     const YT_CHANNELS = [
         { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
@@ -49,10 +48,12 @@
         // Слушаем событие создания нового issue
         window.addEventListener('github-issue-created', (e) => {
             const issue = e.detail;
-            // Проверяем, что issue имеет тип news или update и автор разрешён
             const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
             if (!typeLabel) return;
             if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+
+            // Инвалидируем кеш постов
+            cacheRemoveByPrefix('posts_news+update_v3');
 
             const newPost = {
                 type: 'post',
@@ -64,9 +65,7 @@
                 labels: issue.labels.map(l => l.name),
                 game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
             };
-            // Добавляем в начало массива posts
             posts = [newPost, ...posts];
-            // Перемешиваем с видео и отображаем
             renderMixed();
         });
     });

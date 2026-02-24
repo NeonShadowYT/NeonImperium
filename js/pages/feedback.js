@@ -1,20 +1,20 @@
 // feedback.js — обратная связь для страниц игр с бесконечной прокруткой и лимитом DOM-элементов
 
 (function() {
-    const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
     const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
     const { renderReactions, renderComments, openFullModal, openEditorModal } = UIFeedback;
     const { isAdmin, getCurrentUser } = GithubAuth;
 
     const ITEMS_PER_PAGE = 10;
-    const MAX_DISPLAY_ITEMS = 30; // максимальное количество карточек в DOM (для экономии памяти)
+    const MAX_DISPLAY_ITEMS = 30;
     const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
 
     let currentGame = '', currentTab = 'all', currentPage = 1, hasMorePages = true, isLoading = false;
     let allIssues = [], displayedIssues = [], container, feedbackSection, gridContainer;
     let currentUser = null, currentAbort = null;
-    let observer = null; // Intersection Observer для бесконечной прокрутки
-    let sentinel = null; // элемент-триггер в конце списка
+    let observer = null;
+    let sentinel = null;
 
     document.addEventListener('DOMContentLoaded', init);
     function init() {
@@ -27,15 +27,14 @@
 
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; checkAuthAndRender(); });
         window.addEventListener('github-logout', () => { currentUser = null; checkAuthAndRender(); });
-        // Слушаем событие создания нового issue
+
         window.addEventListener('github-issue-created', (e) => {
             const issue = e.detail;
-            // Проверяем, относится ли issue к текущей игре и имеет нужный тип
             const hasGameLabel = issue.labels.some(l => l.name === `game:${currentGame}`);
             if (!hasGameLabel) return;
-            // Добавляем в начало allIssues
+            cacheRemoveByPrefix(`issues_${currentGame}_page_`);
             allIssues = [issue, ...allIssues];
-            filterAndDisplayIssues(true); // перерисовываем сброс
+            filterAndDisplayIssues(true);
         });
 
         currentUser = getCurrentUser();

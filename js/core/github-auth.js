@@ -35,6 +35,9 @@
             try {
                 const user = JSON.parse(cachedUser);
                 renderProfile(user, savedToken);
+                if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) {
+                    loadAdminScript();
+                }
             } catch {
                 validateAndShowProfile(savedToken);
             }
@@ -65,6 +68,14 @@
             if (errorMsg) errorMsg.remove();
             if (modal) modal.classList.add('active');
         });
+    }
+
+    function loadAdminScript() {
+        if (document.querySelector('script[src="js/features/admin-news.js"]')) return;
+        const script = document.createElement('script');
+        script.src = 'js/features/admin-news.js';
+        script.defer = true;
+        document.body.appendChild(script);
     }
 
     function createModal() {
@@ -154,7 +165,6 @@
 
             const userData = await userResponse.json();
 
-            // Проверка доступа к репозиторию (необязательно)
             try {
                 await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -171,6 +181,10 @@
             window.dispatchEvent(new CustomEvent('github-login-success', { detail: { login: userData.login } }));
 
             renderProfile(userData, token);
+            if (CONFIG.ALLOWED_AUTHORS.includes(userData.login)) {
+                loadAdminScript();
+            }
+
             modal.classList.remove('active');
             tokenInput.value = '';
             tokenInput.type = 'password';
@@ -320,12 +334,13 @@
                 break;
             case 'logout':
                 localStorage.removeItem(TOKEN_KEY);
-                sessionStorage.clear(); // очищаем весь кеш
+                sessionStorage.clear();
                 window.dispatchEvent(new CustomEvent('github-logout'));
                 delete profileContainer.dataset.githubToken;
                 delete profileContainer.dataset.githubLogin;
                 showNotLoggedIn();
                 UIUtils.showToast('Вы вышли из аккаунта.', 'info');
+                location.reload();
                 break;
         }
     }
