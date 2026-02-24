@@ -58,6 +58,7 @@
     background: var(--accent);
     color: white;
     border-color: var(--accent);
+    transform: translateY(-2px);
 }
 .feedback-tab.active {
     background: var(--accent);
@@ -88,6 +89,14 @@
     color: var(--text-primary);
     font-family: 'Russo One', sans-serif;
     font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.feedback-input:focus,
+.feedback-select:focus,
+.feedback-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(61,158,179,0.2);
+    outline: none;
 }
 .feedback-select {
     appearance: none;
@@ -126,6 +135,7 @@
     background: var(--accent);
     color: white;
     border-color: var(--accent);
+    transform: translateY(-2px);
 }
 #preview-btn-feedback, .preview-btn {
     background: var(--accent);
@@ -156,6 +166,7 @@
 }
 .editor-dropdown .dropdown-menu.show {
     display: block;
+    animation: fadeInScale 0.15s ease;
 }
 .editor-dropdown .dropdown-menu button {
     display: block;
@@ -168,6 +179,7 @@
     cursor: pointer;
     font-family: 'Russo One', sans-serif;
     font-size: 13px;
+    transition: background 0.2s;
 }
 .editor-dropdown .dropdown-menu button:hover {
     background: var(--bg-inner-gradient);
@@ -286,6 +298,7 @@ blockquote.color-green {
     text-align: center;
     white-space: nowrap;
     border-radius: 20px;
+    transition: width 0.3s ease;
 }
 
 /* Стили для карточек */
@@ -417,11 +430,12 @@ blockquote.color-green {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.2s, color 0.2s;
+    transition: background 0.2s, color 0.2s, transform 0.2s;
 }
 .feedback-item-actions button:hover {
     background: var(--bg-primary);
     color: var(--accent);
+    transform: scale(1.1);
 }
 .feedback-item-actions button.delete:hover {
     color: #f44336;
@@ -442,6 +456,10 @@ blockquote.color-green {
     font-size: 13px;
     border: 1px solid var(--border);
     position: relative;
+    transition: background 0.2s;
+}
+.comment:hover {
+    background: var(--bg-inner-gradient);
 }
 .comment-meta {
     display: flex;
@@ -469,6 +487,11 @@ blockquote.color-green {
     color: var(--text-primary);
     font-size: 13px;
     font-family: 'Russo One', sans-serif;
+    transition: border-color 0.2s;
+}
+.comment-form input:focus {
+    border-color: var(--accent);
+    outline: none;
 }
 .comment-form button {
     padding: 8px 18px;
@@ -479,10 +502,11 @@ blockquote.color-green {
     color: white;
     border: none;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.2s, transform 0.2s;
 }
 .comment-form button:hover {
     background: var(--accent-light);
+    transform: translateY(-2px);
 }
 .comment-form button:disabled {
     opacity: 0.5;
@@ -492,6 +516,9 @@ blockquote.color-green {
     text-align: center;
     padding: 30px;
     color: var(--text-secondary);
+}
+.loading-spinner i {
+    animation: gentleRotate 1s infinite linear;
 }
 .error-message {
     background: rgba(244, 67, 54, 0.1);
@@ -511,6 +538,7 @@ blockquote.color-green {
     font-size: 48px;
     color: var(--accent);
     margin-bottom: 15px;
+    animation: pulse 2s infinite;
 }
 .login-prompt h3 {
     margin: 0 0 10px;
@@ -601,6 +629,7 @@ blockquote.color-green {
     gap: 5px;
     box-shadow: var(--shadow);
     z-index: 10010;
+    animation: fadeInScale 0.15s ease;
 }
 .reaction-menu-btn {
     background: transparent;
@@ -609,10 +638,11 @@ blockquote.color-green {
     cursor: pointer;
     padding: 5px 10px;
     border-radius: 20px;
-    transition: background 0.2s;
+    transition: background 0.2s, transform 0.2s;
 }
 .reaction-menu-btn:hover {
     background: var(--bg-inner-gradient);
+    transform: scale(1.1);
 }
 
 /* Модальное окно на весь экран */
@@ -643,6 +673,7 @@ blockquote.color-green {
     border: 1px solid var(--accent);
     display: flex;
     flex-direction: column;
+    animation: fadeInScale 0.3s ease;
 }
 
 .modal-header {
@@ -788,6 +819,7 @@ blockquote.color-green {
     background: var(--accent);
     color: white;
     border-color: var(--accent);
+    transform: scale(1.1);
 }
 
 /* Адаптивность */

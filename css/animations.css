@@ -1,0 +1,198 @@
+/* animations.css — лёгкие, плавные анимации для всего сайта */
+
+/* -------------------- Keyframes -------------------- */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+@keyframes gentleRotate {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+/* -------------------- Базовые анимации для всех карточек -------------------- */
+.project-card,
+.feature-item,
+.update-card,
+.req-item,
+.profile-card,
+.video-card,
+.feedback-item,
+.developer-card,
+.download-card {
+    animation: fadeInUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    /* небольшая задержка для каскада, если нужно — можно регулировать через JS или дополнительные классы */
+}
+
+/* Задержки для каскадного появления (можно добавить через JS или разметку) */
+.project-card:nth-child(1) { animation-delay: 0.05s; }
+.project-card:nth-child(2) { animation-delay: 0.1s; }
+.project-card:nth-child(3) { animation-delay: 0.15s; }
+.project-card:nth-child(4) { animation-delay: 0.2s; }
+.project-card:nth-child(5) { animation-delay: 0.25s; }
+.project-card:nth-child(6) { animation-delay: 0.3s; }
+
+/* -------------------- Анимация для модальных окон -------------------- */
+.modal.active .modal-content {
+    animation: fadeInScale 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* -------------------- Интерактивные микро-анимации -------------------- */
+/* Кнопки */
+.button,
+.download-button,
+.lang-btn,
+.nav-link,
+.social-icon,
+.reaction-button,
+.reaction-add-btn,
+.editor-btn,
+.feedback-tab,
+.project-card-link,
+.profile-card-link {
+    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform, background-color, border-color, box-shadow;
+}
+
+.button:hover,
+.download-button:hover,
+.lang-btn:hover,
+.nav-link:hover,
+.social-icon:hover,
+.reaction-button:hover,
+.reaction-add-btn:hover,
+.editor-btn:hover,
+.feedback-tab:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+
+/* Иконки соцсетей при наведении */
+.social-icon:hover i {
+    animation: gentleRotate 0.4s ease;
+}
+
+/* Карточки проектов при наведении */
+.project-card-link:hover .project-card {
+    transform: scale(1.02) translateY(-5px);
+    transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.project-card-link:hover .project-image {
+    transform: scale(1.08);
+    transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Анимация для версии/бейджа */
+.version-badge {
+    transition: background-color 0.2s, transform 0.2s;
+}
+.version-badge:hover {
+    transform: scale(1.05);
+    background-color: var(--accent-light);
+}
+
+/* Прогресс-бар плавное изменение ширины */
+.progress-fill,
+.progress-bar > div {
+    transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Анимация появления спойлера */
+.spoiler[open] .spoiler-content {
+    animation: fadeInUp 0.3s ease;
+}
+
+/* Анимация для тостов */
+.toast {
+    animation: slideInRight 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+}
+
+/* Анимация для новых элементов (добавляемых через JS) */
+@keyframes highlight {
+    0% { background-color: rgba(61, 158, 179, 0.3); }
+    100% { background-color: transparent; }
+}
+
+.project-card-link.new-item .project-card {
+    animation: highlight 1.5s ease;
+}
+
+/* -------------------- Анимации для реакций (пульсация при добавлении) -------------------- */
+.reaction-button.active {
+    animation: pulse 0.3s ease;
+}
+
+/* -------------------- Анимация для шапки (параллакс уже есть, добавим плавность) -------------------- */
+.game-header {
+    transition: background-position 0.1s ease-out;
+}
+
+/* -------------------- Анимация для переключателя языка (легкое вращение стрелки) -------------------- */
+.nav-profile:hover .nav-profile-chevron {
+    transform: rotate(90deg);
+    transition: transform 0.2s ease;
+}
+
+/* -------------------- Анимация для выпадающего меню профиля -------------------- */
+.profile-dropdown {
+    animation: fadeInScale 0.2s ease;
+    transform-origin: top right;
+}
+
+/* -------------------- Уважение к предпочтениям пользователя (reduced motion) -------------------- */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
