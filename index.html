@@ -12,10 +12,12 @@
     <meta property="og:url" content="https://example.com/">
     <meta property="og:type" content="website">
     <link rel="icon" href="images/logo-neon-imperium.png" type="image/png">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
+    <!-- Preconnect для внешних ресурсов -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
@@ -48,7 +50,7 @@
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
-                        <img src="images/logo-neon-imperium.png" alt="Neon Imperium Logo" class="game-icon">
+                        <img src="images/logo-neon-imperium.png" alt="Neon Imperium Logo" class="game-icon" width="80" height="80">
                     </div>
                     <h1 class="game-title" data-lang="siteTitle">Neon Imperium</h1>
                     <div class="social-icons">
@@ -71,7 +73,7 @@
                     <a href="starve-neon.html" class="project-card-link">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
-                                <img src="images/starve-neon-header.jpg" alt="Starve Neon" class="project-image">
+                                <img src="images/starve-neon-header.jpg" alt="Starve Neon" class="project-image" width="300" height="180" loading="lazy">
                             </div>
                             <h3>Starve Neon</h3>
                             <p data-lang="starveDesc">Выживание в брутальном мире с прокачкой и генетикой.</p>
@@ -81,7 +83,7 @@
                     <a href="alpha-01.html" class="project-card-link">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
-                                <img src="images/alpha-01-header.jpg" alt="Alpha 01" class="project-image">
+                                <img src="images/alpha-01-header.jpg" alt="Alpha 01" class="project-image" width="300" height="180" loading="lazy">
                             </div>
                             <h3>Alpha 01</h3>
                             <p data-lang="alphaDesc">Top-down шутер, где вы робот, помогающий солдатам.</p>
@@ -91,7 +93,7 @@
                     <a href="gc-adven.html" class="project-card-link">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
-                                <img src="images/gc-adven-header.jpg" alt="ГК Адвенчур" class="project-image">
+                                <img src="images/gc-adven-header.jpg" alt="ГК Адвенчур" class="project-image" width="300" height="180" loading="lazy">
                             </div>
                             <h3>ГК Адвенчур</h3>
                             <p data-lang="gcDesc">Просто приключение ГКТМО.</p>
@@ -106,12 +108,12 @@
                 <p class="text-secondary" data-lang="smallProjectsDesc">Игры созданные по рофлу</p>
                 <div class="small-projects-container">
                     <div class="trailer-small">
-                        <iframe src="https://www.youtube.com/embed/Ckjgf8Jza5w" frameborder="0" allowfullscreen></iframe>
+                        <iframe src="https://www.youtube.com/embed/Ckjgf8Jza5w" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
                     </div>
                     <a href="https://disk.yandex.ru/d/kV-dcNQvZg1Y_g" target="_blank" class="project-card-link">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
-                                <img src="images/project-pnsd1.jpg" alt="ПНСД 1" class="project-image">
+                                <img src="images/project-pnsd1.jpg" alt="ПНСД 1" class="project-image" width="300" height="180" loading="lazy">
                             </div>
                             <h3>ПНСД 1</h3>
                             <span class="button" data-lang="downloadBtn">Скачать</span>
@@ -120,7 +122,7 @@
                     <a href="https://disk.yandex.ru/d/J3f2JxRbzAIwxQ" target="_blank" class="project-card-link">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
-                                <img src="images/project-pnsd2.jpg" alt="ПНСД 2" class="project-image">
+                                <img src="images/project-pnsd2.jpg" alt="ПНСД 2" class="project-image" width="300" height="180" loading="lazy">
                             </div>
                             <h3>ПНСД 2</h3>
                             <span class="button" data-lang="downloadBtn">Скачать</span>
@@ -129,7 +131,7 @@
                     <a href="javascript:void(0)" class="project-card-link disabled">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
-                                <img src="images/project-pnsd3.jpg" alt="ПНСД 3" class="project-image">
+                                <img src="images/project-pnsd3.jpg" alt="ПНСД 3" class="project-image" width="300" height="180" loading="lazy">
                             </div>
                             <h3>ПНСД 3</h3>
                             <span class="button disabled" data-lang="comingSoon">Скоро</span>
@@ -138,7 +140,6 @@
                 </div>
             </section>
 
-            <!-- Секция новостей (заголовок и описание будут добавлены скриптом news-feed.js) -->
             <section class="card" id="news-section">
                 <div id="news-feed" class="video-grid">
                     <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
@@ -146,7 +147,6 @@
                         <p style="margin-top: 10px;" data-lang="newsLoading">Загрузка новостей...</p>
                     </div>
                 </div>
-                <!-- Сюда admin-news.js добавит панель для NeonShadowYT -->
             </section>
 
             <div class="row">
@@ -157,7 +157,7 @@
                         <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar">
+                                    <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
@@ -165,7 +165,7 @@
                         <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar">
+                                    <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
@@ -180,7 +180,7 @@
                         <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar">
+                                    <img src="images/avatar-neon-shadow.jpg" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
@@ -188,7 +188,7 @@
                         <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar">
+                                    <img src="images/avatar-golden-creeper.jpg" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
@@ -196,7 +196,7 @@
                         <a href="https://www.youtube.com/@werewolf-play" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-werewolf.jpg" alt="Оборотень" class="avatar">
+                                    <img src="images/avatar-werewolf.jpg" alt="Оборотень" class="avatar" width="80" height="80" loading="lazy">
                                 </div>
                                 <span class="profile-name">Оборотень</span>
                             </div>
@@ -204,7 +204,7 @@
                         <a href="https://www.youtube.com/@mitmiplayyt" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-mitmi.jpg" alt="Mitmi" class="avatar">
+                                    <img src="images/avatar-mitmi.jpg" alt="Mitmi" class="avatar" width="80" height="80" loading="lazy">
                                 </div>
                                 <span class="profile-name">Mitmi</span>
                             </div>
@@ -212,7 +212,7 @@
                         <a href="https://www.youtube.com/@stasyimpro6287" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-stasy.jpg" alt="Stasy" class="avatar">
+                                    <img src="images/avatar-stasy.jpg" alt="Stasy" class="avatar" width="80" height="80" loading="lazy">
                                 </div>
                                 <span class="profile-name">Stasy</span>
                             </div>
@@ -220,7 +220,7 @@
                         <a href="https://www.youtube.com/@ggelita5951" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-ggelita.jpg" alt="GGelita" class="avatar">
+                                    <img src="images/avatar-ggelita.jpg" alt="GGelita" class="avatar" width="80" height="80" loading="lazy">
                                 </div>
                                 <span class="profile-name">GGelita</span>
                             </div>
