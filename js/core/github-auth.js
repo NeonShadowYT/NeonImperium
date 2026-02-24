@@ -206,11 +206,11 @@
     }
 
     function renderProfile(user, token) {
-        const avatarUrl = user.avatar_url || 'images/default-avatar.png';
+        const avatarUrl = user.avatar_url || 'images/default-avatar.webp';
         const login = user.login || 'User';
 
         profileContainer.innerHTML = `
-            <img src="${avatarUrl}" alt="${login}" class="nav-profile-avatar" onerror="this.src='images/default-avatar.png'">
+            <img src="${avatarUrl}" alt="${login}" class="nav-profile-avatar" onerror="this.src='images/default-avatar.webp'" width="32" height="32">
             <span class="nav-profile-login">${login}</span>
             <i class="fas fa-chevron-right nav-profile-chevron"></i>
             <div class="profile-dropdown">

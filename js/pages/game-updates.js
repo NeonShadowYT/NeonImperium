@@ -4,7 +4,7 @@
     const { renderReactions, renderComments, openFullModal } = UIFeedback;
     const { isAdmin, getCurrentUser } = GithubAuth;
 
-    const DEFAULT_IMAGE = 'images/default-news.jpg';
+    const DEFAULT_IMAGE = 'images/default-news.webp';
     let currentAbort = null;
     let currentGame = null;
 

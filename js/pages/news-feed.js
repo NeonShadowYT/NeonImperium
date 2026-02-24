@@ -13,7 +13,7 @@
         { id: 'UCQKVSv62dLsK3QnfIke24uQ', name: 'Golden Creeper' },
         { id: 'UCcuqf3fNtZ2UP5MO89kVKLw', name: 'Mitmi' }
     ];
-    const DEFAULT_IMAGE = 'images/default-news.jpg';
+    const DEFAULT_IMAGE = 'images/default-news.webp';
 
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
     let currentUser = null, currentAbort = null;
