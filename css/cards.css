@@ -1,4 +1,4 @@
-/* cards.css — удалены все will-change для экономии памяти, добавлены плавные переходы */
+/* cards.css — удалены все will-change для экономии памяти */
 
 :root {
     --border-radius-card: 20px;
@@ -16,19 +16,16 @@
     margin-bottom: 24px;
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
-    transition: box-shadow var(--transition-default), transform 0.2s ease;
+    transition: box-shadow var(--transition-default);
 }
-.card:hover { 
-    box-shadow: var(--shadow-hover);
-    transform: translateY(-2px);
-}
+.card:hover { box-shadow: var(--shadow-hover); }
 
-/* Шапка с фоном */
+/* Шапка с фоном (специфичная карточка) */
 .game-header {
     background-size: 110%;
     background-position: center;
     padding: 0;
-    transition: background-position 0.1s ease-out, transform 0.2s ease;
+    transition: background-position 0.1s ease-out;
 }
 .header-overlay {
     padding: 60px 28px;
@@ -60,9 +57,6 @@
     object-fit: contain;
     transition: transform var(--transition-default);
 }
-.game-icon:hover {
-    transform: scale(1.05);
-}
 .header-content .game-title {
     margin-bottom: 0;
     color: #fff;
@@ -88,11 +82,10 @@
 .social-icon {
     color: white;
     font-size: 24px;
-    transition: opacity var(--transition-default), transform 0.2s;
+    transition: opacity var(--transition-default);
 }
 .social-icon:hover {
     opacity: 0.8;
-    transform: scale(1.1);
 }
 
 /* Проекты */
@@ -183,9 +176,6 @@
     object-position: center;
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-.profile-card-link:hover .avatar {
-    transform: scale(1.05);
-}
 .profile-name {
     color: var(--text-primary);
 }
@@ -237,20 +227,13 @@
     border-radius: var(--border-radius-inner);
     padding: 20px;
     border: 1px solid var(--border);
-    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color 0.2s;
-}
-.feature-item:hover {
-    transform: translateY(-4px);
-    border-color: var(--accent);
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 .feature-icon {
     font-size: 32px;
     display: block;
     margin-bottom: 10px;
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-.feature-item:hover .feature-icon {
-    transform: scale(1.1);
 }
 .feature-item h3 {
     margin: 0 0 8px;
@@ -263,10 +246,6 @@
     border-radius: var(--border-radius-inner);
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-.features-extra:hover {
-    transform: translateY(-2px);
-    border-color: var(--accent);
 }
 .features-extra h3 {
     margin: 0 0 15px;
@@ -299,10 +278,7 @@
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color var(--transition-default);
 }
-.video-card:hover { 
-    border-color: var(--accent);
-    transform: translateY(-4px);
-}
+.video-card:hover { border-color: var(--accent); }
 .video-thumbnail {
     width: 100%;
     height: 140px;
@@ -311,9 +287,6 @@
     margin-bottom: 10px;
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-.video-card:hover .video-thumbnail {
-    transform: scale(1.03);
 }
 .video-card h4 {
     font-size: 16px;
@@ -341,10 +314,6 @@
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-.req-item:hover {
-    transform: translateY(-4px);
-    border-color: var(--accent);
-}
 .req-label {
     display: block;
     color: var(--accent);
@@ -358,10 +327,6 @@
     margin-top: 24px;
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-.consumption-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--accent);
 }
 .consumption-table {
     width: 100%;
@@ -387,10 +352,6 @@
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-.update-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--accent);
-}
 .update-card h3 {
     margin: 0 0 15px;
     color: var(--accent);
@@ -404,10 +365,6 @@
     border-radius: var(--border-radius-small);
     border: 1px solid var(--border);
     overflow: hidden;
-    transition: border-color 0.2s;
-}
-.spoiler:hover {
-    border-color: var(--accent);
 }
 .spoiler summary {
     background: var(--bg-inner-gradient);
@@ -419,10 +376,9 @@
     align-items: center;
     border-bottom: 1px solid transparent;
     font-size: 16px;
-    transition: background 0.2s;
 }
-.spoiler summary:hover { background: #3a3a48; }
 .spoiler[open] summary { border-bottom-color: var(--border); }
+.spoiler summary:hover { background: #3a3a48; }
 .spoiler summary:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -2px;

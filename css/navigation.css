@@ -14,11 +14,6 @@
     position: sticky;
     top: 0;
     z-index: 100;
-    transition: box-shadow 0.2s, border-color 0.2s;
-}
-.nav-bar:hover {
-    border-color: var(--accent);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
 }
 .nav-links {
     display: flex;
@@ -30,13 +25,12 @@
     padding: 10px 20px;
     border-radius: 40px;
     font-size: 16px;
-    transition: background 0.2s, color 0.2s, transform 0.2s;
+    transition: background 0.2s, color 0.2s;
     white-space: nowrap;
 }
 .nav-link:hover {
     background: #4a4a55;
     color: var(--text-primary);
-    transform: translateY(-2px);
 }
 .nav-link.active {
     background: var(--accent);
@@ -47,7 +41,7 @@
 .lang-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    border-radius: 40px;
+    border-radius: 40px; /* для nav-link */
 }
 .lang-btn:focus-visible {
     border-radius: 20px;
@@ -57,7 +51,7 @@
 .lang-switcher {
     display: flex;
     gap: 5px;
-    flex-wrap: nowrap;
+    flex-wrap: nowrap; /* гарантируем одну строку */
 }
 .lang-btn {
     background: transparent;
@@ -69,7 +63,7 @@
     font-size: 14px;
     transition: all 0.2s;
     white-space: nowrap;
-    font-family: 'Russo One', sans-serif;
+    font-family: 'Russo One', sans-serif; /* добавлено */
 }
 .lang-btn:hover {
     background: var(--accent);
@@ -94,12 +88,11 @@
     background: var(--bg-inner-gradient);
     border: 1px solid var(--border);
     cursor: pointer;
-    transition: border-color 0.2s, transform 0.2s;
+    transition: border-color 0.2s;
     position: relative;
 }
 .nav-profile:hover {
     border-color: var(--accent);
-    transform: translateY(-2px);
 }
 .nav-profile-avatar {
     width: 32px;
@@ -107,10 +100,6 @@
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid var(--accent);
-    transition: transform 0.2s;
-}
-.nav-profile:hover .nav-profile-avatar {
-    transform: scale(1.05);
 }
 .nav-profile-login {
     font-size: 14px;
@@ -146,18 +135,16 @@
     box-shadow: var(--shadow);
     display: none;
     z-index: 1000;
-    transform-origin: top right;
 }
 .nav-profile.active .profile-dropdown {
     display: block;
-    animation: fadeInScale 0.2s ease;
 }
 .profile-dropdown-item {
     padding: 10px 16px;
     color: var(--text-secondary);
     font-size: 14px;
     cursor: pointer;
-    transition: background 0.2s, color 0.2s;
+    transition: background 0.2s;
     white-space: nowrap;
     display: flex;
     align-items: center;
@@ -170,10 +157,6 @@
 .profile-dropdown-item i {
     width: 16px;
     color: var(--accent);
-    transition: transform 0.2s;
-}
-.profile-dropdown-item:hover i {
-    transform: scale(1.1);
 }
 .profile-dropdown-divider {
     height: 1px;
@@ -181,7 +164,7 @@
     margin: 8px 0;
 }
 
-/* Token modal */
+/* Token modal (если пользователь не вошёл) */
 .modal {
     display: none;
     position: fixed;
@@ -204,7 +187,6 @@
     max-width: 400px;
     width: 90%;
     border: 1px solid var(--accent);
-    animation: fadeInScale 0.3s ease;
 }
 .modal-content h3 {
     margin-top: 0;
@@ -223,12 +205,10 @@
     color: var(--text-primary);
     margin-bottom: 16px;
     font-family: monospace;
-    transition: border-color 0.2s, box-shadow 0.2s;
 }
 .modal-content input:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(61,158,179,0.2);
 }
 .modal-buttons {
     display: flex;

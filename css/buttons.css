@@ -10,8 +10,7 @@
     border: none;
     cursor: pointer;
     text-align: center;
-    font-family: 'Russo One', sans-serif;
-    will-change: transform, background-color, box-shadow;
+    font-family: 'Russo One', sans-serif; /* добавлено */
 }
 .button:hover {
     background: var(--accent-light);
@@ -44,7 +43,6 @@
     transition: all 0.2s;
     min-width: 200px;
     flex: 0 1 auto;
-    will-change: transform, background-color, border-color;
 }
 .download-button:hover {
     background: var(--accent);
@@ -56,12 +54,12 @@
 .download-button.android::before { content: "📱"; }
 .download-button.linux::before { content: "🐧"; }
 .download-button.gamejolt::before {
-    content: "\f0e7";
+    content: "\f0e7"; /* fa-bolt */
     font-family: "Font Awesome 6 Free";
     font-weight: 900;
 }
 .download-button.itch::before {
-    content: "\f83a";
+    content: "\f83a"; /* fa-itch-io */
     font-family: "Font Awesome 6 Brands";
 }
 
@@ -71,7 +69,7 @@
 .social-icon:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    border-radius: 30px;
+    border-radius: 30px; /* для обычных кнопок */
 }
 .download-button:focus-visible {
     border-radius: 50px;
