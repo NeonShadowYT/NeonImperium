@@ -1,5 +1,4 @@
 // news-feed.js — лента новостей на главной (новости + обновления) с видео
-// Теперь отображает только 6 самых новых элементов (посты и видео, смешанные)
 
 (function() {
     const { cacheGet, cacheSet, escapeHtml, renderMarkdown, CONFIG, deduplicateByNumber, createAbortable, stripHtml } = GithubCore;
@@ -22,7 +21,6 @@
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('news-section');
         if (!section) return;
-        // Создаём заголовок и описание, если их нет
         let header = section.querySelector('.news-header');
         if (!header) {
             header = document.createElement('div');
@@ -46,10 +44,8 @@
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; refreshNewsFeed(); });
         window.addEventListener('github-logout', () => { currentUser = null; refreshNewsFeed(); });
 
-        // Слушаем событие создания нового issue
         window.addEventListener('github-issue-created', (e) => {
             const issue = e.detail;
-            // Проверяем, что issue имеет тип news или update и автор разрешён
             const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
             if (!typeLabel) return;
             if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
@@ -64,10 +60,9 @@
                 labels: issue.labels.map(l => l.name),
                 game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
             };
-            // Добавляем в начало массива posts
             posts = [newPost, ...posts];
-            // Перемешиваем с видео и отображаем
             renderMixed();
+            if (window.initTiltEffect) window.initTiltEffect();
         });
     });
 
@@ -89,7 +84,6 @@
             if (err.name === 'AbortError') return;
             posts = []; postsLoaded = true;
         }
-        // Пытаемся загрузить видео параллельно, но не ждём
         loadVideosAsync();
     }
 
@@ -106,7 +100,7 @@
             videoError = true;
         } finally {
             videoLoading = false;
-            renderMixed(); // при загрузке видео перерисовываем
+            renderMixed();
         }
     }
 
@@ -154,7 +148,6 @@
                 allVideos.push(...videosFromChannel);
             }
 
-            // Сортируем все видео по дате и берём 20, чтобы потом смешать с постами
             const sorted = allVideos.sort((a, b) => b.date - a.date).slice(0, 20);
             const serialized = sorted.map(v => ({ ...v, date: v.date.toISOString() }));
             cacheSet(cacheKey, serialized);
@@ -178,7 +171,6 @@
         const { controller, timeoutId } = createAbortable(10000);
         currentAbort = { controller };
         try {
-            // Загружаем по 15 штук каждого типа, чтобы потом отобрать свежие
             const [newsIssues, updateIssues] = await Promise.all([
                 loadIssues({ labels: 'type:news', per_page: 15, signal: controller.signal }),
                 loadIssues({ labels: 'type:update', per_page: 15, signal: controller.signal })
@@ -216,14 +208,11 @@
             return;
         }
 
-        // Объединяем посты и видео, сортируем по дате (новые сверху)
         let allItems = [...posts];
         if (videosLoaded) {
             allItems = allItems.concat(videos);
         }
-        // Сортируем по убыванию даты
         allItems.sort((a, b) => b.date - a.date);
-        // Берём только первые 6
         const itemsToShow = allItems.slice(0, 6);
 
         const grid = document.createElement('div'); grid.className = 'projects-grid';
@@ -242,12 +231,13 @@
 
         container.innerHTML = '';
         container.appendChild(grid);
+        if (window.initTiltEffect) window.initTiltEffect();
     }
 
     function createVideoCard(video) {
         const card = document.createElement('div'); card.className = 'project-card-link'; card.style.cursor = 'pointer';
         card.setAttribute('aria-label', `Смотреть видео: ${video.title}`);
-        const inner = document.createElement('div'); inner.className = 'project-card';
+        const inner = document.createElement('div'); inner.className = 'project-card tilt-card'; // добавлен tilt-card
         const imgWrapper = document.createElement('div'); imgWrapper.className = 'image-wrapper';
         const img = document.createElement('img'); img.src = video.thumbnail; img.alt = video.title; img.loading = 'lazy'; img.className = 'project-image';
         imgWrapper.appendChild(img);
@@ -262,7 +252,7 @@
     function createPostCard(post) {
         const card = document.createElement('div'); card.className = 'project-card-link no-tilt'; card.style.cursor = 'pointer';
         card.setAttribute('aria-label', `Читать пост: ${post.title}`);
-        const inner = document.createElement('div'); inner.className = 'project-card';
+        const inner = document.createElement('div'); inner.className = 'project-card tilt-card'; // добавлен tilt-card
         const imgMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
         const thumbnail = imgMatch ? imgMatch[1] : DEFAULT_IMAGE;
         const imgWrapper = document.createElement('div'); imgWrapper.className = 'image-wrapper';

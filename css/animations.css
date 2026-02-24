@@ -55,21 +55,25 @@
     100% { background-position: 200% 0; }
 }
 
+@keyframes glow {
+    0% { box-shadow: 0 0 5px var(--accent); }
+    50% { box-shadow: 0 0 20px var(--accent); }
+    100% { box-shadow: 0 0 5px var(--accent); }
+}
+
 /* -------------------- Базовые анимации для всех карточек -------------------- */
 .project-card,
 .feature-item,
 .update-card,
 .req-item,
 .profile-card,
-.video-card,
 .feedback-item,
 .developer-card,
 .download-card {
     animation: fadeInUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-    /* небольшая задержка для каскада, если нужно — можно регулировать через JS или дополнительные классы */
 }
 
-/* Задержки для каскадного появления (можно добавить через JS или разметку) */
+/* Задержки для каскадного появления */
 .project-card:nth-child(1) { animation-delay: 0.05s; }
 .project-card:nth-child(2) { animation-delay: 0.1s; }
 .project-card:nth-child(3) { animation-delay: 0.15s; }
@@ -83,7 +87,6 @@
 }
 
 /* -------------------- Интерактивные микро-анимации -------------------- */
-/* Кнопки */
 .button,
 .download-button,
 .lang-btn,
@@ -96,7 +99,6 @@
 .project-card-link,
 .profile-card-link {
     transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform, background-color, border-color, box-shadow;
 }
 
 .button:hover,
@@ -117,9 +119,8 @@
     animation: gentleRotate 0.4s ease;
 }
 
-/* Карточки проектов при наведении */
+/* Карточки проектов при наведении (дополнительно к 3D-эффекту) */
 .project-card-link:hover .project-card {
-    transform: scale(1.02) translateY(-5px);
     transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
@@ -135,6 +136,7 @@
 .version-badge:hover {
     transform: scale(1.05);
     background-color: var(--accent-light);
+    animation: glow 1.5s infinite;
 }
 
 /* Прогресс-бар плавное изменение ширины */
@@ -183,6 +185,22 @@
 .profile-dropdown {
     animation: fadeInScale 0.2s ease;
     transform-origin: top right;
+}
+
+/* -------------------- Эффект пульсации для индикатора загрузки -------------------- */
+.loading-spinner i {
+    animation: gentleRotate 1s infinite linear;
+}
+
+/* -------------------- Анимация появления при скролле (Intersection Observer) -------------------- */
+.fade-in-on-scroll {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.fade-in-on-scroll.visible {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* -------------------- Уважение к предпочтениям пользователя (reduced motion) -------------------- */

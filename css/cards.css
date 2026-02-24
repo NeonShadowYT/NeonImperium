@@ -1,4 +1,4 @@
-/* cards.css — удалены все will-change для экономии памяти, добавлены плавные переходы */
+/* cards.css — добавлен will-change для оптимизации 3D-наклона */
 
 :root {
     --border-radius-card: 20px;
@@ -142,6 +142,13 @@
 }
 .project-card .button {
     margin-top: 8px;
+}
+
+/* Класс для 3D-эффекта наклона */
+.tilt-card {
+    will-change: transform; /* подсказка браузеру для оптимизации */
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
 }
 
 /* Профили */
@@ -289,40 +296,6 @@
     position: absolute;
     left: 0;
     top: -1px;
-}
-
-/* Видео карточки */
-.video-card {
-    background: var(--bg-inner-gradient);
-    border-radius: var(--border-radius-inner);
-    padding: 12px;
-    border: 1px solid var(--border);
-    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color var(--transition-default);
-}
-.video-card:hover { 
-    border-color: var(--accent);
-    transform: translateY(-4px);
-}
-.video-thumbnail {
-    width: 100%;
-    height: 140px;
-    object-fit: cover;
-    border-radius: var(--border-radius-small);
-    margin-bottom: 10px;
-    border: 1px solid var(--border);
-    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-.video-card:hover .video-thumbnail {
-    transform: scale(1.03);
-}
-.video-card h4 {
-    font-size: 16px;
-    margin: 0 0 4px;
-    color: var(--text-primary);
-}
-.video-card p {
-    font-size: 12px;
-    margin: 0;
 }
 
 /* Видео в трейлере */
@@ -518,41 +491,4 @@
     box-shadow: 0 0 15px var(--accent), 0 4px 8px rgba(0,0,0,0.3);
     transform: scale(1.02);
     transition: box-shadow var(--transition-default), transform var(--transition-default);
-}
-
-/* Прогресс-бар разработки */
-.progress-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 12px;
-    flex-wrap: wrap;
-    justify-content: center;
-}
-.progress-label {
-    font-size: 14px;
-    color: var(--text-secondary);
-    white-space: nowrap;
-}
-.progress-bar {
-    flex: 1;
-    min-width: 150px;
-    height: 8px;
-    background: var(--bg-inner-gradient);
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    overflow: hidden;
-}
-.progress-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 20px;
-    transition: width 0.3s ease;
-}
-.progress-percent {
-    font-size: 14px;
-    color: var(--accent);
-    font-weight: bold;
-    min-width: 45px;
-    text-align: right;
 }

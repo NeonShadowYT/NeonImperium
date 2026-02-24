@@ -1,7 +1,7 @@
 // admin-news.js — кнопки для админов с aria-label, поддержка существующих кнопок
 
 (function() {
-    const { cacheRemove, CONFIG } = GithubCore;
+    const { CONFIG } = GithubCore;
     const { isAdmin } = GithubAuth;
     const { openEditorModal } = UIFeedback;
 
@@ -38,7 +38,6 @@
 
         const updatesContainer = document.getElementById('game-updates');
         if (updatesContainer && updatesContainer.dataset.game) {
-            // Обрезаем пробелы, чтобы избежать пустых меток
             const game = String(updatesContainer.dataset.game).trim();
             if (!game) {
                 console.warn('admin-news.js: data-game пустой или содержит только пробелы');

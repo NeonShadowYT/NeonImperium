@@ -15,11 +15,9 @@
             loadGameUpdates(container, currentGame);
         }
 
-        // Слушаем событие создания нового issue
         window.addEventListener('github-issue-created', (e) => {
             const issue = e.detail;
             if (!currentGame) return;
-            // Проверяем, что это обновление для текущей игры
             const hasUpdateLabel = issue.labels.some(l => l.name === 'type:update');
             const hasGameLabel = issue.labels.some(l => l.name === `game:${currentGame}`);
             if (!hasUpdateLabel || !hasGameLabel) return;
@@ -36,7 +34,6 @@
                 author: issue.user.login,
                 game: currentGame
             };
-            // Получаем текущий grid или создаём новый
             let grid = container.querySelector('.projects-grid');
             if (!grid) {
                 grid = document.createElement('div');
@@ -44,9 +41,9 @@
                 container.innerHTML = '';
                 container.appendChild(grid);
             }
-            // Вставляем карточку в начало
             const card = createUpdateCard(newPost);
             grid.insertBefore(card, grid.firstChild);
+            if (window.initTiltEffect) window.initTiltEffect();
         });
     });
 
@@ -74,6 +71,7 @@
             container.innerHTML = '';
             const grid = document.createElement('div'); grid.className = 'projects-grid'; container.appendChild(grid);
             posts.forEach(post => grid.appendChild(createUpdateCard(post)));
+            if (window.initTiltEffect) window.initTiltEffect();
         } catch (err) {
             if (err.name === 'AbortError') return;
             container.innerHTML = '<p class="error-message">Ошибка загрузки</p>';
@@ -85,7 +83,7 @@
 
     function createUpdateCard(post) {
         const card = document.createElement('div'); card.className = 'project-card-link no-tilt'; card.style.cursor = 'pointer';
-        const inner = document.createElement('div'); inner.className = 'project-card';
+        const inner = document.createElement('div'); inner.className = 'project-card tilt-card'; // добавлен tilt-card
         const imgMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
         const thumbnail = imgMatch ? imgMatch[1] : DEFAULT_IMAGE;
         const imgWrapper = document.createElement('div'); imgWrapper.className = 'image-wrapper';

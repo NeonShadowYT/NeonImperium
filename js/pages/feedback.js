@@ -1,20 +1,20 @@
 // feedback.js — обратная связь для страниц игр с бесконечной прокруткой и лимитом DOM-элементов
 
 (function() {
-    const { cacheGet, cacheSet, cacheRemove, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
+    const { cacheGet, cacheSet, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
     const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
     const { renderReactions, renderComments, openFullModal, openEditorModal } = UIFeedback;
     const { isAdmin, getCurrentUser } = GithubAuth;
 
     const ITEMS_PER_PAGE = 10;
-    const MAX_DISPLAY_ITEMS = 30; // максимальное количество карточек в DOM (для экономии памяти)
+    const MAX_DISPLAY_ITEMS = 30;
     const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
 
     let currentGame = '', currentTab = 'all', currentPage = 1, hasMorePages = true, isLoading = false;
     let allIssues = [], displayedIssues = [], container, feedbackSection, gridContainer;
     let currentUser = null, currentAbort = null;
-    let observer = null; // Intersection Observer для бесконечной прокрутки
-    let sentinel = null; // элемент-триггер в конце списка
+    let observer = null;
+    let sentinel = null;
 
     document.addEventListener('DOMContentLoaded', init);
     function init() {
@@ -27,15 +27,14 @@
 
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; checkAuthAndRender(); });
         window.addEventListener('github-logout', () => { currentUser = null; checkAuthAndRender(); });
-        // Слушаем событие создания нового issue
         window.addEventListener('github-issue-created', (e) => {
             const issue = e.detail;
-            // Проверяем, относится ли issue к текущей игре и имеет нужный тип
             const hasGameLabel = issue.labels.some(l => l.name === `game:${currentGame}`);
             if (!hasGameLabel) return;
-            // Добавляем в начало allIssues
             allIssues = [issue, ...allIssues];
-            filterAndDisplayIssues(true); // перерисовываем сброс
+            filterAndDisplayIssues(true);
+            // Запускаем tilt для новых карточек
+            if (window.initTiltEffect) window.initTiltEffect();
         });
 
         currentUser = getCurrentUser();
@@ -117,7 +116,6 @@
         gridContainer = document.getElementById('feedback-panel');
         sentinel = document.getElementById('sentinel');
 
-        // Настраиваем Intersection Observer для подгрузки
         observer = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting && !isLoading && hasMorePages) {
                 loadIssuesPage(currentPage + 1, false);
@@ -165,10 +163,8 @@
         if (currentTab !== 'all') filtered = filtered.filter(issue => issue.labels.some(l => l.name === `type:${currentTab}`));
         displayedIssues = filtered;
 
-        // Ограничиваем количество отображаемых в DOM элементов (для производительности)
         let issuesToRender = displayedIssues;
         if (displayedIssues.length > MAX_DISPLAY_ITEMS) {
-            // Показываем последние MAX_DISPLAY_ITEMS (самые новые)
             issuesToRender = displayedIssues.slice(-MAX_DISPLAY_ITEMS);
         }
 
@@ -177,6 +173,8 @@
         }
 
         renderIssuesList(issuesToRender, reset);
+        // После рендера новых карточек запускаем tilt
+        if (window.initTiltEffect) window.initTiltEffect();
     }
 
     function renderIssuesList(issues, reset) {
@@ -184,17 +182,13 @@
             gridContainer.innerHTML = '';
         }
 
-        // Создаём карточки для новых элементов (тех, которых ещё нет в DOM)
-        // Для простоты будем добавлять все issues в конец. Если общее количество превысит лимит, удалим старые.
         issues.forEach(issue => {
-            // Проверяем, есть ли уже такая карточка (по номеру)
             if (document.querySelector(`.project-card-link[data-issue-number="${issue.number}"]`)) return;
 
             const card = createIssueCard(issue);
             gridContainer.appendChild(card);
         });
 
-        // Если общее количество карточек превысило MAX_DISPLAY_ITEMS, удаляем лишние сверху
         const cards = gridContainer.querySelectorAll('.project-card-link');
         if (cards.length > MAX_DISPLAY_ITEMS) {
             const toRemove = cards.length - MAX_DISPLAY_ITEMS;
@@ -217,7 +211,7 @@
         cardLink.style.cursor = 'pointer';
 
         const card = document.createElement('div');
-        card.className = 'project-card';
+        card.className = 'project-card tilt-card'; // добавлен класс tilt-card
 
         const imageWrapper = document.createElement('div');
         imageWrapper.className = 'image-wrapper';
@@ -260,10 +254,8 @@
         card.append(imageWrapper, title, previewP, reactionsDiv, footer);
         cardLink.appendChild(card);
 
-        // Загружаем реакции
         loadAndRenderReactionsWithCache(issue.number, reactionsDiv);
 
-        // Обработчик клика на карточку
         cardLink.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
             openFullModal({
