@@ -377,9 +377,6 @@ blockquote.color-green {
     color: var(--text-secondary);
     border: none;
 }
-.feedback-label.type-idea { background: #2e7d32; color: white; }
-.feedback-label.type-bug { background: #c62828; color: white; }
-.feedback-label.type-review { background: #f57c00; color: white; }
 .feedback-item-preview {
     color: var(--text-secondary);
     font-size: 13px;

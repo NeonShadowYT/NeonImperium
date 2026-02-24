@@ -270,34 +270,6 @@
     top: -1px;
 }
 
-/* Видео карточки */
-.video-card {
-    background: var(--bg-inner-gradient);
-    border-radius: var(--border-radius-inner);
-    padding: 12px;
-    border: 1px solid var(--border);
-    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color var(--transition-default);
-}
-.video-card:hover { border-color: var(--accent); }
-.video-thumbnail {
-    width: 100%;
-    height: 140px;
-    object-fit: cover;
-    border-radius: var(--border-radius-small);
-    margin-bottom: 10px;
-    border: 1px solid var(--border);
-    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-.video-card h4 {
-    font-size: 16px;
-    margin: 0 0 4px;
-    color: var(--text-primary);
-}
-.video-card p {
-    font-size: 12px;
-    margin: 0;
-}
-
 /* Видео в трейлере */
 .video-embed iframe {
     width: 100%;
@@ -356,46 +328,6 @@
     margin: 0 0 15px;
     color: var(--accent);
     font-size: 22px;
-}
-
-/* Спойлеры */
-.spoiler {
-    margin-top: 16px;
-    background: var(--bg-inner-gradient);
-    border-radius: var(--border-radius-small);
-    border: 1px solid var(--border);
-    overflow: hidden;
-}
-.spoiler summary {
-    background: var(--bg-inner-gradient);
-    color: var(--text-primary);
-    padding: 14px 20px;
-    cursor: pointer;
-    list-style: none;
-    display: flex;
-    align-items: center;
-    border-bottom: 1px solid transparent;
-    font-size: 16px;
-}
-.spoiler[open] summary { border-bottom-color: var(--border); }
-.spoiler summary:hover { background: #3a3a48; }
-.spoiler summary:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
-    border-radius: var(--border-radius-small);
-}
-.spoiler summary::before {
-    content: "▶";
-    margin-right: 12px;
-    font-size: 12px;
-    color: var(--accent);
-    transition: transform var(--transition-default);
-}
-.spoiler[open] summary::before { transform: rotate(90deg); }
-.spoiler-content {
-    padding: 20px;
-    background: var(--bg-inner-gradient);
-    font-size: 14px;
 }
 
 /* Скачивание (карточка) */

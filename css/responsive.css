@@ -25,7 +25,6 @@
     body { padding: 10px; }
     .game-title { font-size: 32px; }
     .card { padding: 20px; }
-    .dev-notice { flex-direction: column; gap: 8px; }
     .download-buttons { flex-direction: column; align-items: stretch; }
     .download-button { width: 100%; }
     .progress-row { flex-direction: column; align-items: stretch; gap: 8px; }
@@ -38,7 +37,6 @@
     .version-row { flex-direction: column; gap: 5px; }
     .developer-actions { flex-direction: column; width: 100%; }
     .developer-actions .button { width: 100%; }
-    .dev-notice { flex-direction: column; text-align: center; gap: 10px; }
     .lang-btn { padding: 6px 8px; font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -10,7 +10,7 @@
     border: none;
     cursor: pointer;
     text-align: center;
-    font-family: 'Russo One', sans-serif; /* добавлено */
+    font-family: 'Russo One', sans-serif;
 }
 .button:hover {
     background: var(--accent-light);
@@ -50,9 +50,6 @@
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(64,116,140,0.4);
 }
-.download-button.windows::before { content: "🖥️"; }
-.download-button.android::before { content: "📱"; }
-.download-button.linux::before { content: "🐧"; }
 .download-button.gamejolt::before {
     content: "\f0e7"; /* fa-bolt */
     font-family: "Font Awesome 6 Free";
