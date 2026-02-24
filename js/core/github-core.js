@@ -19,6 +19,11 @@ function cacheSet(key, data) {
     sessionStorage.setItem(`${key}_time`, Date.now().toString());
 }
 
+function cacheRemove(key) {
+    sessionStorage.removeItem(key);
+    sessionStorage.removeItem(`${key}_time`);
+}
+
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -63,6 +68,7 @@ window.GithubCore = {
     CONFIG: GITHUB_CONFIG,
     cacheGet,
     cacheSet,
+    cacheRemove,
     escapeHtml,
     renderMarkdown,
     deduplicateByNumber,
