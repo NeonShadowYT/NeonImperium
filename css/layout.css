@@ -1,22 +1,19 @@
 /* layout.css — основные сетки */
 
-/* Сетка проектов (используется для новостей, обновлений, обратной связи) */
+/* Сетка проектов */
 .projects-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 24px;
     margin-top: 20px;
-    width: 100%; /* занимает всю ширину родителя */
 }
 
 .project-card-link {
-    min-width: 0; /* позволяет сжиматься */
-    display: flex;
+    min-width: 0; /* позволяет сжиматься ниже min-content */
 }
 
 .project-card {
-    width: 100%;
-    min-width: 200px;
+    min-width: 200px; /* минимальная ширина карточки */
 }
 
 /* Сетка особенностей */
@@ -152,14 +149,4 @@
 
 .small-projects-container .project-card .button {
     margin-top: 8px;
-}
-
-/* Секция новостей на главной */
-#news-section {
-    width: 100%;
-}
-
-#news-section .projects-grid {
-    width: 100%;
-    grid-template-columns: repeat(3, 1fr); /* сохраняем 3 колонки */
 }

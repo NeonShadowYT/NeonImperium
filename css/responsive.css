@@ -1,6 +1,5 @@
-/* responsive.css — адаптивность для всех устройств */
+/* responsive.css — адаптивность */
 
-/* Планшеты и малые десктопы */
 @media (max-width: 900px) {
     .nav-bar {
         flex-wrap: nowrap;
@@ -27,11 +26,9 @@
     }
 }
 
-/* Переход на 2 колонки */
 @media (max-width: 800px) {
-    .projects-grid,
-    #news-section .projects-grid {
-        grid-template-columns: repeat(2, 1fr);
+    .projects-grid {
+        grid-template-columns: repeat(2, 1fr); /* на планшетах 2 колонки */
     }
     .features-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -40,14 +37,13 @@
         grid-template-columns: repeat(2, 1fr);
     }
     .small-projects-container {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr 1fr; /* 2 колонки */
     }
     .trailer-small {
         grid-column: span 2; /* видео занимает всю ширину */
     }
 }
 
-/* Промежуточный диапазон */
 @media (max-width: 700px) {
     .row {
         gap: 12px;
@@ -136,11 +132,9 @@
     }
 }
 
-/* Узкие экраны (телефоны в портретной ориентации) */
 @media (max-width: 500px) {
-    .projects-grid,
-    #news-section .projects-grid {
-        grid-template-columns: 1fr;
+    .projects-grid {
+        grid-template-columns: 1fr; /* одна колонка на очень узких */
     }
     .features-grid {
         grid-template-columns: 1fr;
@@ -196,21 +190,6 @@
     }
 }
 
-/* Горизонтальная ориентация на телефонах (высокие экраны) */
-@media (min-width: 501px) and (max-width: 900px) and (orientation: landscape) {
-    .projects-grid,
-    #news-section .projects-grid {
-        grid-template-columns: repeat(3, 1fr); /* возвращаем 3 колонки */
-    }
-    .features-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-    .video-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
-/* Для устройств с предпочтением уменьшенной анимации */
 @media (prefers-reduced-motion: reduce) {
     * {
         transition-duration: 0.01ms !important;
@@ -218,7 +197,6 @@
     }
 }
 
-/* Фокус для доступности */
 :focus-visible {
     outline: 3px solid var(--accent);
     outline-offset: 3px;
