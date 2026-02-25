@@ -1,6 +1,5 @@
-/* responsive.css — адаптивность без потери структуры */
+/* responsive.css — адаптивность */
 
-/* Планшеты и малые десктопы */
 @media (max-width: 900px) {
     .nav-bar {
         flex-wrap: nowrap;
@@ -27,40 +26,33 @@
     }
 }
 
-/* Мобильные устройства (ширина до 700px) */
-@media (max-width: 700px) {
-    /* Сохраняем многоколоночность */
+@media (max-width: 800px) {
     .projects-grid {
-        grid-template-columns: repeat(3, 1fr); /* 3 колонки как на ПК */
-        gap: 12px;
+        grid-template-columns: repeat(2, 1fr); /* на планшетах 2 колонки */
+    }
+    .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .video-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
     .small-projects-container {
-        grid-template-columns: 2fr 1fr 1fr 1fr; /* сохраняем пропорции ПК */
-        gap: 12px;
+        grid-template-columns: 1fr 1fr; /* 2 колонки */
     }
+    .trailer-small {
+        grid-column: span 2; /* видео занимает всю ширину */
+    }
+}
+
+@media (max-width: 700px) {
     .row {
-        flex-direction: row; /* отменяем column */
         gap: 12px;
     }
     .trailer-card,
     .developer-card,
     .half {
-        flex: 1 1 auto;
-        min-width: 200px; /* предотвращает чрезмерное сжатие */
+        min-width: 200px;
     }
-    .features-grid {
-        grid-template-columns: repeat(2, 1fr); /* если 4 элемента, то 2x2 */
-        gap: 12px;
-    }
-    .requirements-grid {
-        gap: 12px;
-    }
-    .video-grid {
-        grid-template-columns: repeat(2, 1fr); /* два видео в ряд */
-        gap: 12px;
-    }
-
-    /* Уменьшаем отступы и размеры */
     .card {
         padding: 16px;
         margin-bottom: 16px;
@@ -122,8 +114,6 @@
     .req-label {
         font-size: 14px;
     }
-
-    /* Шапка игры: сохраняем горизонтальное расположение */
     .header-content {
         flex-direction: row;
         padding: 16px 24px;
@@ -140,23 +130,23 @@
     .header-overlay {
         padding: 30px 16px;
     }
-
-    /* Исправляем навигацию для мобильных (уже есть выше) */
 }
 
-/* Очень маленькие экраны (до 500px) */
 @media (max-width: 500px) {
     .projects-grid {
-        grid-template-columns: repeat(2, 1fr); /* на узких экранах 2 колонки */
-    }
-    .small-projects-container {
-        grid-template-columns: 1fr 1fr; /* тоже 2 колонки */
+        grid-template-columns: 1fr; /* одна колонка на очень узких */
     }
     .features-grid {
-        grid-template-columns: 1fr; /* фичи в один столбец (читаемость) */
+        grid-template-columns: 1fr;
     }
     .video-grid {
         grid-template-columns: 1fr;
+    }
+    .small-projects-container {
+        grid-template-columns: 1fr;
+    }
+    .trailer-small {
+        grid-column: auto;
     }
     .requirements-grid {
         flex-direction: column;
@@ -165,7 +155,7 @@
         font-size: 24px;
     }
     .version-row {
-        flex-direction: row; /* сохраняем строку */
+        flex-direction: row;
         gap: 8px;
     }
     .button {
@@ -200,7 +190,6 @@
     }
 }
 
-/* Для устройств с предпочтением уменьшенной анимации */
 @media (prefers-reduced-motion: reduce) {
     * {
         transition-duration: 0.01ms !important;
@@ -208,7 +197,6 @@
     }
 }
 
-/* Фокус для доступности */
 :focus-visible {
     outline: 3px solid var(--accent);
     outline-offset: 3px;
