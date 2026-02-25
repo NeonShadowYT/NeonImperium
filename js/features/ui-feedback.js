@@ -305,11 +305,7 @@
                         UIUtils.showToast('Ошибка при удалении', 'error');
                         // Возвращаем комментарий обратно
                         if (!commentDiv.parentNode) {
-                            // Восстанавливаем, вставив на место
                             const commentsContainer = container;
-                            const commentsArray = Array.from(commentsContainer.children);
-                            // Находим индекс, куда вставить (ориентируемся по времени)
-                            // Для простоты вставим в конец, но можно попытаться восстановить порядок
                             commentsContainer.appendChild(commentDiv);
                         }
                     }
@@ -404,13 +400,10 @@
         return null;
     }
 
-    // Рендеринг тела поста (используется и в модалке, и в предпросмотре)
     async function renderPostBody(container, body, issueNumber) {
-        // Рендерим Markdown
         let html = GithubCore.renderMarkdown(body);
         container.innerHTML = html;
 
-        // Обрабатываем опросы
         const pollData = extractPollFromBody(body);
         if (pollData) {
             const pollContainer = document.createElement('div');
@@ -424,7 +417,6 @@
         }
     }
 
-    // Статическое отображение опроса для предпросмотра (без интерактива)
     function renderStaticPoll(container, pollData) {
         const pollDiv = document.createElement('div');
         pollDiv.className = 'poll card';
@@ -491,7 +483,6 @@
         container.innerHTML = '';
         container.appendChild(pollDiv);
 
-        // Обработчики
         if (currentUser && !userVoted) {
             pollDiv.querySelectorAll('.poll-vote-btn').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
@@ -505,7 +496,6 @@
                     const newTotal = totalVotes + 1;
                     const newUserVoted = true;
 
-                    // Перерисовываем с новыми данными (без кнопок, с прогрессбарами)
                     const optimisticPollDiv = document.createElement('div');
                     optimisticPollDiv.className = 'poll card';
                     optimisticPollDiv.dataset.issue = issueNumber;
@@ -531,11 +521,9 @@
                     try {
                         await GithubAPI.addComment(issueNumber, `!vote ${optionIndex}`);
                         UIUtils.showToast('Голос учтён', 'success');
-                        // Перерисовываем с реальными данными
                         await renderPoll(container, issueNumber, pollData);
                     } catch (err) {
                         UIUtils.showToast('Ошибка при голосовании', 'error');
-                        // Откат: возвращаем старый UI
                         await renderPoll(container, issueNumber, pollData);
                     }
                 });
@@ -550,8 +538,6 @@
             });
         }
     }
-
-    // --- Подфункции для openFullModal ---
 
     async function loadReactionsAndComments(container, item, currentUser, issue) {
         const reactionsDiv = document.createElement('div'); reactionsDiv.className = 'reactions-container';
@@ -667,7 +653,6 @@
         });
     }
 
-    // --- Основная функция открытия модалки с header ---
     async function openFullModal(item) {
         const currentUser = GithubAuth.getCurrentUser();
         const contentHtml = `<div class="loading-spinner" id="modal-loader"><i class="fas fa-circle-notch fa-spin"></i></div>`;
@@ -752,7 +737,6 @@
 
         const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
 
-        // --- Черновик ---
         const draftKey = `draft_${postType}_${mode}_${data.game || 'global'}_${data.number || 'new'}`;
         const savedDraft = UIUtils.loadDraft(draftKey);
         if (savedDraft && savedDraft.title && savedDraft.body) {
@@ -767,7 +751,6 @@
             }
         }
 
-        // Отслеживание изменений
         let hasChanges = false;
         const titleInput = modal.querySelector('#modal-input-title');
         const bodyTextarea = modal.querySelector('#modal-body');
@@ -785,7 +768,6 @@
         bodyTextarea.addEventListener('input', updateDraft);
         if (categorySelect) categorySelect.addEventListener('change', updateDraft);
 
-        // Проверка изменений для закрытия
         const originalCloseModal = closeModal;
         const closeWithCheck = () => {
             if (hasChanges) {
@@ -799,7 +781,6 @@
             }
         };
 
-        // Замена обработчиков
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 e.preventDefault();
@@ -824,7 +805,6 @@
             });
         }
 
-        // Инициализация редактора
         if (window.Editor) {
             const toolbar = Editor.createEditorToolbar(bodyTextarea, { 
                 previewAreaId: 'modal-preview-area',
@@ -832,7 +812,7 @@
                     const preview = modal.querySelector('#modal-preview-area');
                     if (!preview) return;
                     preview.innerHTML = '';
-                    renderPostBody(preview, bodyTextarea.value, null); // null – статический режим
+                    renderPostBody(preview, bodyTextarea.value, null);
                     preview.style.display = bodyTextarea.value.trim() ? 'block' : 'none';
                 }
             });
@@ -840,7 +820,6 @@
             if (toolbarContainer) toolbarContainer.appendChild(toolbar);
         }
 
-        // Обработчик отправки
         const submitBtn = modal.querySelector('#modal-submit');
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
@@ -902,8 +881,7 @@
                 }
 
                 UIUtils.clearDraft(draftKey);
-                // Закрываем без проверки, т.к. изменения сохранены
-                originalCloseModal(); // используем оригинальную closeModal
+                originalCloseModal();
                 if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
                 if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
                 if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
