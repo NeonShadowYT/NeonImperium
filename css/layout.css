@@ -6,11 +6,11 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 24px;
     margin-top: 20px;
-    width: 100%; /* занимает всю ширину родителя */
+    width: 100%;
 }
 
 .project-card-link {
-    min-width: 0; /* позволяет сжиматься */
+    min-width: 0;
     display: flex;
 }
 
@@ -154,12 +154,16 @@
     margin-top: 8px;
 }
 
-/* Секция новостей на главной */
+/* Секция новостей на главной — гарантируем полную ширину */
 #news-section {
     width: 100%;
 }
 
-#news-section .projects-grid {
+#news-feed {
     width: 100%;
-    grid-template-columns: repeat(3, 1fr); /* сохраняем 3 колонки */
+}
+
+#news-feed .projects-grid {
+    width: 100%;
+    grid-template-columns: repeat(3, 1fr);
 }

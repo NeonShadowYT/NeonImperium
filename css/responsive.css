@@ -30,12 +30,8 @@
 /* Переход на 2 колонки */
 @media (max-width: 800px) {
     .projects-grid,
-    #news-section .projects-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    .features-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
+    #news-feed .projects-grid,
+    .features-grid,
     .video-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -43,7 +39,7 @@
         grid-template-columns: 1fr 1fr;
     }
     .trailer-small {
-        grid-column: span 2; /* видео занимает всю ширину */
+        grid-column: span 2;
     }
 }
 
@@ -139,12 +135,8 @@
 /* Узкие экраны (телефоны в портретной ориентации) */
 @media (max-width: 500px) {
     .projects-grid,
-    #news-section .projects-grid {
-        grid-template-columns: 1fr;
-    }
-    .features-grid {
-        grid-template-columns: 1fr;
-    }
+    #news-feed .projects-grid,
+    .features-grid,
     .video-grid {
         grid-template-columns: 1fr;
     }
@@ -199,8 +191,8 @@
 /* Горизонтальная ориентация на телефонах (высокие экраны) */
 @media (min-width: 501px) and (max-width: 900px) and (orientation: landscape) {
     .projects-grid,
-    #news-section .projects-grid {
-        grid-template-columns: repeat(3, 1fr); /* возвращаем 3 колонки */
+    #news-feed .projects-grid {
+        grid-template-columns: repeat(3, 1fr);
     }
     .features-grid {
         grid-template-columns: repeat(3, 1fr);
