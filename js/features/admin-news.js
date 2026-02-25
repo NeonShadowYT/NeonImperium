@@ -1,9 +1,13 @@
 // admin-news.js — кнопки для админов с aria-label, поддержка существующих кнопок
+// Теперь использует MutationObserver для отслеживания появления контейнеров
 
 (function() {
     const { cacheRemove, CONFIG } = GithubCore;
     const { isAdmin } = GithubAuth;
     const { openEditorModal } = UIFeedback;
+
+    // Состояние: были ли уже добавлены кнопки
+    let panelsAdded = false;
 
     function renderAdminPanels() {
         if (!isAdmin()) {
@@ -11,6 +15,7 @@
             return;
         }
 
+        // Кнопка для новостей
         const newsSection = document.getElementById('news-section');
         if (newsSection) {
             let header = newsSection.querySelector('.news-header');
@@ -36,9 +41,8 @@
             }
         }
 
-        const updatesContainer = document.getElementById('game-updates');
-        if (updatesContainer && updatesContainer.dataset.game) {
-            // Обрезаем пробелы, чтобы избежать пустых меток
+        // Кнопка для обновлений (ищет все контейнеры game-updates)
+        document.querySelectorAll('#game-updates').forEach(updatesContainer => {
             const game = String(updatesContainer.dataset.game).trim();
             if (!game) {
                 console.warn('admin-news.js: data-game пустой или содержит только пробелы');
@@ -72,18 +76,47 @@
                 btn.addEventListener('click', () => openEditorModal('new', { game: game }, 'update'));
                 header.appendChild(btn);
             }
-        }
+        });
     }
 
+    // Используем MutationObserver для отслеживания появления нужных элементов
+    function initObserver() {
+        const observer = new MutationObserver((mutations) => {
+            // Проверяем, появились ли #news-section или #game-updates
+            const newsSection = document.getElementById('news-section');
+            const updatesContainers = document.querySelectorAll('#game-updates');
+            if ((newsSection || updatesContainers.length > 0) && !panelsAdded) {
+                renderAdminPanels();
+                panelsAdded = true;
+                // Можно отключить observer после первого успеха, но оставим на случай динамических изменений
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // Функция для явного вызова извне (например, после логина)
+    function init() {
+        panelsAdded = false; // сбрасываем флаг, чтобы кнопки добавились заново
+        renderAdminPanels();
+        // также запускаем observer для будущих изменений
+        initObserver();
+    }
+
+    // Запускаем при загрузке скрипта
     document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(renderAdminPanels, 200);
+        setTimeout(init, 200);
     });
 
+    // Также слушаем события логина/логаута
     window.addEventListener('github-login-success', () => {
-        setTimeout(renderAdminPanels, 100);
+        setTimeout(init, 100);
     });
 
     window.addEventListener('github-logout', () => {
         document.querySelectorAll('.admin-panel, .admin-news-btn, .admin-update-btn').forEach(el => el.remove());
+        panelsAdded = false;
     });
+
+    // Экспортируем для возможности вызова из github-auth.js
+    window.AdminNews = { init };
 })();

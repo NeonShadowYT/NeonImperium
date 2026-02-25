@@ -179,7 +179,6 @@
     }
     .editor-btn-group {
         padding: 0 3px;
-        border-right: none; /* убираем разделители на мобильных */
     }
     .editor-btn {
         padding: 6px 10px;
@@ -193,9 +192,9 @@
 
 @media (max-width: 500px) {
     .editor-btn-group {
+        border-right: none;
         width: 100%;
         justify-content: center;
-        border-right: none;
     }
     .preview-btn {
         margin-left: 0;

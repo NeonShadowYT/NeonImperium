@@ -75,6 +75,11 @@
         const script = document.createElement('script');
         script.src = 'js/features/admin-news.js';
         script.defer = true;
+        script.onload = () => {
+            if (window.AdminNews && typeof window.AdminNews.init === 'function') {
+                window.AdminNews.init();
+            }
+        };
         document.body.appendChild(script);
     }
 
@@ -339,7 +344,6 @@
                 delete profileContainer.dataset.githubToken;
                 delete profileContainer.dataset.githubLogin;
                 showNotLoggedIn();
-                UIUtils.showToast('Вы вышли из аккаунта.', 'info');
                 location.reload();
                 break;
         }
