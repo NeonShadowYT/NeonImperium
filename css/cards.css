@@ -1,4 +1,4 @@
-/* cards.css — стили для всех карточек и компонентов */
+/* cards.css — удалены все will-change для экономии памяти */
 
 :root {
     --border-radius-card: 20px;
@@ -18,24 +18,19 @@
     box-shadow: var(--shadow);
     transition: box-shadow var(--transition-default);
 }
+.card:hover { box-shadow: var(--shadow-hover); }
 
-.card:hover {
-    box-shadow: var(--shadow-hover);
-}
-
-/* Шапка с фоном (game-header) */
+/* Шапка с фоном (специфичная карточка) */
 .game-header {
     background-size: 110%;
     background-position: center;
     padding: 0;
     transition: background-position 0.1s ease-out;
 }
-
 .header-overlay {
     padding: 60px 28px;
     text-align: center;
 }
-
 .header-content {
     display: inline-flex;
     align-items: center;
@@ -47,7 +42,6 @@
     border-radius: 100px;
     backdrop-filter: blur(2px);
 }
-
 .game-icon-circle {
     width: 100px;
     height: 100px;
@@ -57,67 +51,53 @@
     justify-content: center;
     padding: 10px;
 }
-
 .game-icon {
     max-width: 80px;
     max-height: 80px;
     object-fit: contain;
     transition: transform var(--transition-default);
 }
-
 .header-content .game-title {
     margin-bottom: 0;
     color: #fff;
 }
-
 .header-text {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 4px;
 }
-
 .version-row {
     display: flex;
     align-items: center;
     gap: 15px;
 }
-
 .social-icons {
     display: flex;
     gap: 15px;
 }
-
 .social-icons.small .social-icon {
     font-size: 20px;
 }
-
 .social-icon {
     color: white;
     font-size: 24px;
     transition: opacity var(--transition-default);
 }
-
 .social-icon:hover {
     opacity: 0.8;
 }
 
-/* Проекты (главная и страницы игр) */
+/* Проекты */
 .project-card-link {
     display: block;
     color: inherit;
     transition: transform var(--transition-default);
 }
-
 .project-card-link:hover {
     transform: translateY(-5px);
 }
-
-.project-card-link.disabled {
-    pointer-events: none;
-    opacity: 0.7;
-}
-
+.project-card-link.disabled { pointer-events: none; opacity: 0.7; }
 .project-card {
     background: var(--bg-inner-gradient);
     border-radius: var(--border-radius-inner);
@@ -128,11 +108,7 @@
     flex-direction: column;
     height: 100%;
 }
-
-.project-card-link:hover .project-card {
-    border-color: var(--accent);
-}
-
+.project-card-link:hover .project-card { border-color: var(--accent); }
 .image-wrapper {
     width: 100%;
     height: 180px;
@@ -141,44 +117,33 @@
     margin-bottom: 12px;
     border: 1px solid var(--border);
 }
-
 .project-image {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-
-.project-card-link:hover .project-image {
-    transform: scale(1.05);
-}
-
+.project-card-link:hover .project-image { transform: scale(1.05); }
 .project-card h3 {
     margin: 8px 0 4px;
     font-size: 20px;
     color: var(--text-primary);
 }
-
 .project-card p {
     flex-grow: 1;
     margin-bottom: 16px;
 }
-
 .project-card .button {
     margin-top: 8px;
 }
 
-/* Профили (разработчики, ютуберы) */
+/* Профили */
 .profile-card-link {
     flex: 1 1 150px;
     color: inherit;
     transition: transform var(--transition-default);
 }
-
-.profile-card-link:hover {
-    transform: translateY(-3px);
-}
-
+.profile-card-link:hover { transform: translateY(-3px); }
 .profile-card {
     background: var(--bg-inner-gradient);
     border-radius: var(--border-radius-inner);
@@ -190,11 +155,7 @@
     text-align: center;
     transition: border-color var(--transition-default), transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-
-.profile-card-link:hover .profile-card {
-    border-color: var(--accent);
-}
-
+.profile-card-link:hover .profile-card { border-color: var(--accent); }
 .avatar-wrapper {
     width: 80px;
     height: 80px;
@@ -207,12 +168,7 @@
     justify-content: center;
     flex-shrink: 0;
 }
-
-.avatar-wrapper.large {
-    width: 100px;
-    height: 100px;
-}
-
+.avatar-wrapper.large { width: 100px; height: 100px; }
 .avatar {
     width: 100%;
     height: 100%;
@@ -220,24 +176,21 @@
     object-position: center;
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-
 .profile-name {
     color: var(--text-primary);
 }
 
-/* Трейлер и разработчик на страницах игр */
+/* Трейлер и разработчик */
 .trailer-card .video-embed {
     border-radius: var(--border-radius-small);
     overflow: hidden;
     border: 1px solid var(--border);
 }
-
 .developer-card {
     display: flex;
     flex-direction: column;
     min-height: 320px;
 }
-
 .developer-info {
     flex: 1;
     display: flex;
@@ -247,14 +200,12 @@
     text-align: center;
     gap: 8px;
 }
-
 .developer-details {
     display: flex;
     flex-direction: column;
     align-items: center;
     width: 100%;
 }
-
 .developer-actions {
     margin-top: 16px;
     display: flex;
@@ -262,17 +213,15 @@
     justify-content: center;
     flex-wrap: wrap;
 }
-
 .developer-actions .button:hover {
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(58,168,201,0.4);
 }
-
 .developer-details h3 {
     margin: 0 0 4px;
 }
 
-/* Особенности (features) */
+/* Особенности */
 .feature-item {
     background: var(--bg-inner-gradient);
     border-radius: var(--border-radius-inner);
@@ -280,19 +229,16 @@
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-
 .feature-icon {
     font-size: 32px;
     display: block;
     margin-bottom: 10px;
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-
 .feature-item h3 {
     margin: 0 0 8px;
     color: var(--accent);
 }
-
 .features-extra {
     margin-top: 30px;
     padding: 20px;
@@ -301,22 +247,20 @@
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-
 .features-extra h3 {
     margin: 0 0 15px;
     color: var(--accent);
 }
 
+/* Списки */
 .features-list {
     list-style: none;
     padding-left: 0;
 }
-
 .features-list li {
     padding: 4px 0 4px 20px;
     position: relative;
 }
-
 .features-list li::before {
     content: "•";
     color: var(--accent);
@@ -333,7 +277,7 @@
     border: none;
 }
 
-/* Требования (системные) */
+/* Требования */
 .req-item {
     flex: 1 1 200px;
     background: var(--bg-inner-gradient);
@@ -342,14 +286,12 @@
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-
 .req-label {
     display: block;
     color: var(--accent);
     margin-bottom: 8px;
     font-size: 16px;
 }
-
 .consumption-card {
     background: var(--bg-inner-gradient);
     border-radius: var(--border-radius-inner);
@@ -358,22 +300,34 @@
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-
 .consumption-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 16px;
 }
-
 .consumption-table td {
     padding: 12px 10px;
     border-bottom: 1px solid var(--border);
     font-size: 14px;
 }
-
 .consumption-table td:first-child {
     color: var(--text-primary);
     width: 40%;
+}
+
+/* Обновления */
+.update-card {
+    background: var(--bg-inner-gradient);
+    border-radius: var(--border-radius-inner);
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.update-card h3 {
+    margin: 0 0 15px;
+    color: var(--accent);
+    font-size: 22px;
 }
 
 /* Скачивание (карточка) */
@@ -381,7 +335,6 @@
     text-align: center;
     background: linear-gradient(145deg, var(--bg-card-solid), #2a2a35);
 }
-
 .download-buttons {
     display: flex;
     flex-wrap: wrap;
@@ -390,7 +343,7 @@
     margin: 24px 0;
 }
 
-/* Небольшие проекты на главной (дублируется с layout.css, но оставим для целостности) */
+/* Небольшие проекты на главной */
 .small-projects-container {
     display: grid;
     grid-template-columns: 2fr 1fr 1fr 1fr;
@@ -398,25 +351,21 @@
     margin-top: 20px;
     align-items: stretch;
 }
-
 .trailer-small,
 .small-projects-container .project-card-link {
     height: 100%;
     display: flex;
 }
-
 .trailer-small iframe {
     border-radius: var(--border-radius-inner);
     border: 1px solid var(--border);
     width: 100%;
     aspect-ratio: 16 / 9;
 }
-
 .small-projects-container .project-card {
     height: 100%;
     padding: 12px;
 }
-
 .small-projects-container .project-card .image-wrapper {
     flex: 1;
     width: 100%;
@@ -424,22 +373,18 @@
     border-radius: var(--border-radius-small);
     overflow: hidden;
 }
-
 .small-projects-container .project-card .image-wrapper img {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
-
 .small-projects-container .project-card p {
     display: none;
 }
-
 .small-projects-container .project-card h3 {
     margin: 4px 0;
     font-size: 16px;
 }
-
 .small-projects-container .project-card .button {
     margin-top: 8px;
 }
@@ -451,7 +396,6 @@
     outline-offset: 2px;
     border-radius: var(--border-radius-inner);
 }
-
 .project-card-link:focus-visible .project-card,
 .profile-card-link:focus-visible .profile-card {
     border-color: var(--accent);
@@ -462,4 +406,41 @@
     box-shadow: 0 0 15px var(--accent), 0 4px 8px rgba(0,0,0,0.3);
     transform: scale(1.02);
     transition: box-shadow var(--transition-default), transform var(--transition-default);
+}
+
+/* Прогресс-бар разработки */
+.progress-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.progress-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.progress-bar {
+    flex: 1;
+    min-width: 150px;
+    height: 8px;
+    background: var(--bg-inner-gradient);
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 20px;
+    transition: width 0.3s ease;
+}
+.progress-percent {
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: bold;
+    min-width: 45px;
+    text-align: right;
 }
