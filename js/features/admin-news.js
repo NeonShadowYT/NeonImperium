@@ -38,7 +38,6 @@
 
         const updatesContainer = document.getElementById('game-updates');
         if (updatesContainer && updatesContainer.dataset.game) {
-            // Обрезаем пробелы, чтобы избежать пустых меток
             const game = String(updatesContainer.dataset.game).trim();
             if (!game) {
                 console.warn('admin-news.js: data-game пустой или содержит только пробелы');
