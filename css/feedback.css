@@ -181,10 +181,10 @@
         gap: 4px;
     }
     .editor-btn-group {
-        border-right: none;
+        border-right: none; /* убираем разделители */
         padding: 0;
         margin-right: 0;
-        width: 100%;
+        width: 100%; /* группы занимают всю ширину */
         justify-content: flex-start;
     }
     .editor-btn {
