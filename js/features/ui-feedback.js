@@ -404,6 +404,10 @@
         // Рендерим Markdown
         let html = GithubCore.renderMarkdown(body);
         container.innerHTML = html;
+        // Добавляем класс для стилизации, если его нет
+        if (!container.classList.contains('markdown-body')) {
+            container.classList.add('markdown-body');
+        }
 
         // Обрабатываем опросы
         const pollData = extractPollFromBody(body);
@@ -826,7 +830,11 @@
             const text = bodyTextarea.value;
             if (text.trim()) {
                 previewArea.innerHTML = '';
-                renderPostBody(previewArea, text, null); // статический режим
+                // Добавляем класс markdown-body, если его нет
+                if (!previewArea.classList.contains('markdown-body')) {
+                    previewArea.classList.add('markdown-body');
+                }
+                renderPostBody(previewArea, text, null);
                 previewArea.style.display = 'block';
             } else {
                 previewArea.style.display = 'none';
@@ -847,6 +855,12 @@
         const submitBtn = modal.querySelector('#modal-submit');
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
+
+            // Проверка наличия токена
+            if (!GithubAuth.getToken()) {
+                UIUtils.showToast('Вы не авторизованы. Войдите через GitHub.', 'error');
+                return;
+            }
 
             const title = titleInput.value.trim();
             let body = bodyTextarea.value;
@@ -912,7 +926,17 @@
                 UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
             } catch (err) {
                 console.error('Submit error:', err);
-                UIUtils.showToast('Ошибка: ' + err.message, 'error');
+                let errorMessage = 'Ошибка при сохранении.';
+                if (err.message.includes('NetworkError') || err.name === 'TypeError' && err.message.includes('NetworkError')) {
+                    errorMessage = 'Ошибка сети. Проверьте подключение к интернету.';
+                } else if (err.message.includes('401')) {
+                    errorMessage = 'Ошибка авторизации. Возможно, токен устарел. Войдите заново.';
+                } else if (err.message.includes('403')) {
+                    errorMessage = 'Доступ запрещён. Проверьте права токена.';
+                } else if (err.message) {
+                    errorMessage = 'Ошибка: ' + err.message;
+                }
+                UIUtils.showToast(errorMessage, 'error');
             } finally {
                 btn.disabled = false;
                 btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
