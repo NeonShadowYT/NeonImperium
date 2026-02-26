@@ -101,6 +101,71 @@
     resize: vertical;
 }
 
+/* Поле для ссылки на превью */
+.preview-url-wrapper {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.preview-url-input {
+    flex: 1;
+}
+.image-services-btn {
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 10px 16px;
+    border-radius: 40px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    font-family: 'Russo One', sans-serif;
+}
+.image-services-btn:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+/* Мини-превью изображения */
+.preview-thumbnail {
+    margin-top: 5px;
+    max-width: 200px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid var(--accent);
+    position: relative;
+}
+.preview-thumbnail img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+.preview-thumbnail .remove-preview {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+.preview-thumbnail .remove-preview:hover {
+    background: #f44336;
+}
+
 /* Кнопки редактора */
 .editor-toolbar {
     display: flex;

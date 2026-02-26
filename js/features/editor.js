@@ -315,6 +315,91 @@
         };
     }
 
+    /**
+     * Создаёт кнопку-меню со списком безопасных сервисов для загрузки изображений
+     * @returns {HTMLElement} кнопка с выпадающим меню
+     */
+    function createImageServicesMenu() {
+        const services = [
+            { 
+                name: 'ImageBam', 
+                url: 'https://www.imagebam.com/upload?multi=1',
+                description: 'До 100 МБ, массовая загрузка, без регистрации [citation:2]'
+            },
+            { 
+                name: 'Postimages', 
+                url: 'https://postimages.org/',
+                description: 'До 32 МБ, без регистрации, прямые ссылки [citation:6][citation:7]'
+            },
+            { 
+                name: 'ImgBB', 
+                url: 'https://imgbb.com/',
+                description: 'До 32 МБ, удобный интерфейс, без регистрации [citation:6][citation:9]'
+            },
+            { 
+                name: 'Catbox', 
+                url: 'https://catbox.moe/',
+                description: 'До 200 МБ, анонимно, минимализм [citation:7]'
+            }
+        ];
+
+        const container = document.createElement('div');
+        container.className = 'preview-split';
+        container.style.marginLeft = '0';
+
+        const mainBtn = document.createElement('button');
+        mainBtn.type = 'button';
+        mainBtn.className = 'image-services-btn';
+        mainBtn.innerHTML = '<i class="fas fa-images"></i> Хостинги';
+
+        const dropdownBtn = document.createElement('button');
+        dropdownBtn.type = 'button';
+        dropdownBtn.className = 'editor-btn dropdown-toggle';
+        dropdownBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+
+        const dropdownMenu = document.createElement('div');
+        dropdownMenu.className = 'preview-dropdown';
+        dropdownMenu.style.minWidth = '280px';
+
+        services.forEach(service => {
+            const item = document.createElement('button');
+            item.innerHTML = `<strong>${service.name}</strong><br><small>${service.description}</small>`;
+            item.style.whiteSpace = 'normal';
+            item.style.lineHeight = '1.4';
+            item.style.padding = '10px 16px';
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.open(service.url, '_blank');
+                dropdownMenu.classList.remove('show');
+            });
+            dropdownMenu.appendChild(item);
+        });
+
+        container.appendChild(mainBtn);
+        container.appendChild(dropdownBtn);
+        container.appendChild(dropdownMenu);
+
+        // Логика открытия/закрытия меню
+        dropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownMenu.classList.toggle('show');
+        });
+
+        mainBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownMenu.classList.toggle('show');
+        });
+
+        // Закрытие при клике вне
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) {
+                dropdownMenu.classList.remove('show');
+            }
+        });
+
+        return container;
+    }
+
     function createEditorToolbar(textarea, options = {}) {
         const toolbar = document.createElement('div');
         toolbar.className = 'editor-toolbar';
@@ -373,11 +458,14 @@
             toolbar.appendChild(group);
         }
 
+        // Добавляем кнопку с хостингами (в начало правой части)
+        toolbar.appendChild(createImageServicesMenu());
+
         // Split button для предпросмотра
         if (options.preview !== false) {
             const previewWrapper = document.createElement('div');
             previewWrapper.className = 'preview-split';
-            previewWrapper.style.cssText = 'display: flex; margin-left: auto; align-items: center; position: relative;';
+            previewWrapper.style.marginLeft = 'auto';
 
             const previewBtn = document.createElement('button');
             previewBtn.type = 'button';
@@ -419,7 +507,6 @@
                     e.stopPropagation();
                     const mode = btn.dataset.mode;
                     
-                    // Сброс активного класса в меню
                     dropdownMenu.querySelectorAll('button').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
 
@@ -427,11 +514,9 @@
                         previewBtn.textContent = 'Живой предпросмотр';
                         if (!liveMode) {
                             liveMode = true;
-                            // Включаем живое обновление
                             if (inputHandler) textarea.removeEventListener('input', inputHandler);
                             inputHandler = debounce(showPreview, 300);
                             textarea.addEventListener('input', inputHandler);
-                            // Показываем предпросмотр сразу, если есть текст
                             if (textarea.value.trim()) showPreview();
                         }
                     } else {
@@ -465,6 +550,7 @@
     window.Editor = {
         TEMPLATES,
         createEditorToolbar,
+        createImageServicesMenu,
         insertAtCursor,
         insertMarkdown,
         insertList,
