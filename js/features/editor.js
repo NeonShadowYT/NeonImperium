@@ -324,22 +324,22 @@
             { 
                 name: 'ImageBam', 
                 url: 'https://www.imagebam.com/upload?multi=1',
-                description: 'До 100 МБ, массовая загрузка, без регистрации [citation:2]'
+                description: 'До 100 МБ, массовая загрузка, без регистрации'
             },
             { 
                 name: 'Postimages', 
                 url: 'https://postimages.org/',
-                description: 'До 32 МБ, без регистрации, прямые ссылки [citation:6][citation:7]'
+                description: 'До 32 МБ, без регистрации, прямые ссылки'
             },
             { 
                 name: 'ImgBB', 
                 url: 'https://imgbb.com/',
-                description: 'До 32 МБ, удобный интерфейс, без регистрации [citation:6][citation:9]'
+                description: 'До 32 МБ, удобный интерфейс, без регистрации'
             },
             { 
                 name: 'Catbox', 
                 url: 'https://catbox.moe/',
-                description: 'До 200 МБ, анонимно, минимализм [citation:7]'
+                description: 'До 200 МБ, анонимно, минимализм'
             }
         ];
 
