@@ -149,61 +149,61 @@
     background: var(--accent-light);
 }
 
-/* Кастомный переключатель "Живой предпросмотр" */
-.toggle-switch {
+/* Split button для предпросмотра */
+.preview-split {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    user-select: none;
-    font-size: 13px;
-    color: var(--text-secondary);
-    white-space: nowrap;
-}
-
-.toggle-switch input {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.toggle-slider {
+    margin-left: auto;
     position: relative;
-    display: inline-block;
-    width: 36px;
-    height: 20px;
-    background-color: var(--bg-primary);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    transition: all 0.2s;
 }
-
-.toggle-slider::before {
-    content: "";
+.preview-split .preview-btn {
+    border-radius: 30px 0 0 30px;
+    margin-right: 1px;
+}
+.preview-split .dropdown-toggle {
+    border-radius: 0 30px 30px 0;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+.preview-split .dropdown-toggle i {
+    font-size: 12px;
+}
+.preview-dropdown {
     position: absolute;
-    width: 16px;
-    height: 16px;
-    left: 2px;
-    top: 1px;
-    background-color: var(--text-secondary);
-    border-radius: 50%;
-    transition: transform 0.2s, background-color 0.2s;
+    top: calc(100% + 5px);
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 5px 0;
+    min-width: 160px;
+    z-index: 100;
+    box-shadow: var(--shadow);
+    display: none;
 }
-
-.toggle-switch input:checked + .toggle-slider {
-    background-color: var(--accent);
-    border-color: var(--accent);
+.preview-dropdown.show {
+    display: block;
 }
-
-.toggle-switch input:checked + .toggle-slider::before {
-    transform: translateX(16px);
-    background-color: white;
+.preview-dropdown button {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    text-align: left;
+    cursor: pointer;
+    font-family: 'Russo One', sans-serif;
+    font-size: 13px;
+    transition: background 0.2s;
 }
-
-.toggle-switch input:focus-visible + .toggle-slider {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
+.preview-dropdown button:hover {
+    background: var(--bg-inner-gradient);
+    color: var(--text-primary);
+}
+.preview-dropdown button.active {
+    background: var(--accent);
+    color: white;
 }
 
 /* Область предпросмотра */
@@ -938,6 +938,17 @@ blockquote.color-green {
     }
     .editor-dropdown .dropdown-menu {
         min-width: 120px;
+    }
+
+    /* Split button на мобильных */
+    .preview-split {
+        margin-left: 0;
+        width: 100%;
+        justify-content: flex-end;
+    }
+    .preview-dropdown {
+        right: auto;
+        left: 0;
     }
 
     /* Модальное окно на мобильных */

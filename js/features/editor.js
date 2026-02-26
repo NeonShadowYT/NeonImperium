@@ -306,6 +306,15 @@
         }
     }
 
+    // Debounce для живого предпросмотра
+    function debounce(fn, delay) {
+        let timer;
+        return function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
     function createEditorToolbar(textarea, options = {}) {
         const toolbar = document.createElement('div');
         toolbar.className = 'editor-toolbar';
@@ -364,30 +373,89 @@
             toolbar.appendChild(group);
         }
 
+        // Split button для предпросмотра
         if (options.preview !== false) {
             const previewWrapper = document.createElement('div');
-            previewWrapper.style.cssText = 'display: flex; gap: 10px; margin-left: auto; align-items: center;';
+            previewWrapper.className = 'preview-split';
+            previewWrapper.style.cssText = 'display: flex; margin-left: auto; align-items: center; position: relative;';
 
-            const togglePreviewBtn = document.createElement('button');
-            togglePreviewBtn.type = 'button';
-            togglePreviewBtn.className = 'editor-btn preview-btn';
-            togglePreviewBtn.innerHTML = '<i class="fas fa-eye"></i> Предпросмотр';
-            togglePreviewBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (options.onPreview) options.onPreview();
-            });
+            const previewBtn = document.createElement('button');
+            previewBtn.type = 'button';
+            previewBtn.className = 'editor-btn preview-btn';
+            previewBtn.textContent = 'Предпросмотр';
 
-            // Кастомный переключатель "Живой предпросмотр"
-            const livePreviewLabel = document.createElement('label');
-            livePreviewLabel.className = 'toggle-switch';
-            livePreviewLabel.innerHTML = `
-                <input type="checkbox" id="live-preview-toggle">
-                <span class="toggle-slider"></span>
-                <span class="toggle-label">Живой предпросмотр</span>
+            const dropdownBtn = document.createElement('button');
+            dropdownBtn.type = 'button';
+            dropdownBtn.className = 'editor-btn dropdown-toggle';
+            dropdownBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+
+            const dropdownMenu = document.createElement('div');
+            dropdownMenu.className = 'preview-dropdown';
+            dropdownMenu.innerHTML = `
+                <button data-mode="preview" class="active">Предпросмотр</button>
+                <button data-mode="live">Живой предпросмотр</button>
             `;
 
-            previewWrapper.appendChild(togglePreviewBtn);
-            previewWrapper.appendChild(livePreviewLabel);
+            previewWrapper.appendChild(previewBtn);
+            previewWrapper.appendChild(dropdownBtn);
+            previewWrapper.appendChild(dropdownMenu);
+
+            let liveMode = false;
+            let inputHandler = null;
+
+            const showPreview = () => {
+                if (options.onPreview) options.onPreview();
+            };
+
+            previewBtn.addEventListener('click', showPreview);
+
+            dropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdownMenu.classList.toggle('show');
+            });
+
+            dropdownMenu.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const mode = btn.dataset.mode;
+                    
+                    // Сброс активного класса в меню
+                    dropdownMenu.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    if (mode === 'live') {
+                        previewBtn.textContent = 'Живой предпросмотр';
+                        if (!liveMode) {
+                            liveMode = true;
+                            // Включаем живое обновление
+                            if (inputHandler) textarea.removeEventListener('input', inputHandler);
+                            inputHandler = debounce(showPreview, 300);
+                            textarea.addEventListener('input', inputHandler);
+                            // Показываем предпросмотр сразу, если есть текст
+                            if (textarea.value.trim()) showPreview();
+                        }
+                    } else {
+                        previewBtn.textContent = 'Предпросмотр';
+                        if (liveMode) {
+                            liveMode = false;
+                            if (inputHandler) {
+                                textarea.removeEventListener('input', inputHandler);
+                                inputHandler = null;
+                            }
+                        }
+                    }
+
+                    dropdownMenu.classList.remove('show');
+                });
+            });
+
+            // Закрытие меню при клике вне
+            document.addEventListener('click', (e) => {
+                if (!previewWrapper.contains(e.target)) {
+                    dropdownMenu.classList.remove('show');
+                }
+            });
+
             toolbar.appendChild(previewWrapper);
         }
 

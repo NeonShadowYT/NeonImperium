@@ -721,7 +721,7 @@
         }
     }
 
-    // --- Обновлённая openEditorModal с живым предпросмотром и улучшенным UI ---
+    // --- Обновлённая openEditorModal с живым предпросмотром через split button ---
     function openEditorModal(mode, data, postType = 'feedback') {
         const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
         let categoryHtml = '';
@@ -820,8 +820,7 @@
 
         // --- Логика предпросмотра ---
         const previewArea = modal.querySelector('#modal-preview-area');
-        let previewTimeout = null;
-
+        
         function updatePreview() {
             if (!previewArea) return;
             const text = bodyTextarea.value;
@@ -837,42 +836,11 @@
         // Инициализация редактора и тулбара
         if (window.Editor) {
             const toolbar = Editor.createEditorToolbar(bodyTextarea, {
-                previewAreaId: 'modal-preview-area',
                 onPreview: updatePreview,
-                onTogglePreview: () => {
-                    if (previewArea.style.display === 'none') {
-                        updatePreview();
-                        previewArea.style.display = 'block';
-                    } else {
-                        previewArea.style.display = 'none';
-                    }
-                }
+                textarea: bodyTextarea // передаём для живого режима
             });
             const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
             if (toolbarContainer) toolbarContainer.appendChild(toolbar);
-
-            // Настраиваем live preview
-            const liveCheckbox = modal.querySelector('#live-preview-toggle');
-            if (liveCheckbox) {
-                liveCheckbox.addEventListener('change', (e) => {
-                    if (e.target.checked) {
-                        // Включаем live preview
-                        bodyTextarea.addEventListener('input', () => {
-                            clearTimeout(previewTimeout);
-                            previewTimeout = setTimeout(updatePreview, 300);
-                        });
-                        // Если предпросмотр скрыт, показываем его
-                        if (previewArea.style.display === 'none' && bodyTextarea.value.trim()) {
-                            updatePreview();
-                            previewArea.style.display = 'block';
-                        }
-                    } else {
-                        // Выключаем live preview
-                        bodyTextarea.removeEventListener('input', updatePreview);
-                        clearTimeout(previewTimeout);
-                    }
-                });
-            }
         }
 
         // Обработчик отправки
