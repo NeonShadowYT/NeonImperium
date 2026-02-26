@@ -107,7 +107,20 @@
     gap: 5px;
     margin-bottom: 10px;
     flex-wrap: wrap;
+    padding: 8px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
 }
+
+.editor-btn-group {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+    padding: 0 5px;
+    border-right: 1px solid var(--border);
+}
+
 .editor-btn {
     background: var(--bg-inner-gradient);
     border: 1px solid var(--border);
@@ -127,13 +140,29 @@
     color: white;
     border-color: var(--accent);
 }
-#preview-btn-feedback, .preview-btn {
+.editor-btn.preview-btn {
     background: var(--accent);
     color: white;
     border: none;
 }
-#preview-btn-feedback:hover, .preview-btn:hover {
+.editor-btn.preview-btn:hover {
     background: var(--accent-light);
+}
+
+/* Чекбокс живого предпросмотра */
+#live-preview-toggle {
+    margin-right: 4px;
+    accent-color: var(--accent);
+    transform: scale(1.1);
+    vertical-align: middle;
+}
+label:has(#live-preview-toggle) {
+    display: inline-flex;
+    align-items: center;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
 }
 
 /* Выпадающее меню для редактора */
@@ -178,21 +207,32 @@
 .preview-area {
     background: var(--bg-primary);
     border-radius: 16px;
-    padding: 16px;
+    padding: 20px;
     margin-top: 10px;
     border: 1px solid var(--border);
     overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
 }
 
-/* Стили для Markdown-контента в предпросмотре */
-.preview-area h1, .preview-area h2, .preview-area h3, .preview-area h4 {
+/* Стили для Markdown-контента в предпросмотре (идентично финальному посту) */
+.preview-area h1,
+.preview-area h2,
+.preview-area h3,
+.preview-area h4 {
     color: var(--text-primary);
-    margin-top: 0.5em;
+    margin-top: 1em;
     margin-bottom: 0.5em;
 }
+.preview-area h1 { font-size: 2em; }
+.preview-area h2 { font-size: 1.5em; }
+.preview-area h3 { font-size: 1.3em; }
+.preview-area h4 { font-size: 1.1em; }
+
 .preview-area p {
     margin: 0.5em 0;
     line-height: 1.6;
+    color: var(--text-secondary);
 }
 .preview-area blockquote {
     border-left: 4px solid var(--accent);
@@ -223,7 +263,8 @@
     width: 100%;
     margin: 1em 0;
 }
-.preview-area th, .preview-area td {
+.preview-area th,
+.preview-area td {
     border: 1px solid var(--border);
     padding: 8px 12px;
     text-align: left;
@@ -236,30 +277,72 @@
     height: auto;
     border-radius: 8px;
 }
-.preview-area details {
+
+/* Спойлеры (details/summary) */
+.preview-area details,
+.modal-body details,
+.feedback-item-details details {
     margin: 1em 0;
     background: var(--bg-card);
-    border-radius: 8px;
+    border-radius: 12px;
     border: 1px solid var(--border);
+    overflow: hidden;
 }
-.preview-area summary {
-    padding: 10px 16px;
+
+.preview-area summary,
+.modal-body summary,
+.feedback-item-details summary {
+    padding: 12px 16px;
     cursor: pointer;
     font-weight: bold;
     color: var(--accent);
-}
-.preview-area details[open] summary {
-    border-bottom: 1px solid var(--border);
+    background: var(--bg-inner-gradient);
+    list-style: none;
+    position: relative;
+    transition: background 0.2s;
+    border-bottom: 1px solid transparent;
 }
 
-/* Стили для кастомных цветных цитат (можно раскрашивать через классы) */
+.preview-area summary:hover,
+.modal-body summary:hover,
+.feedback-item-details summary:hover {
+    background: var(--bg-card-solid);
+}
+
+/* Кастомный маркер (стрелка) */
+.preview-area summary::before,
+.modal-body summary::before,
+.feedback-item-details summary::before {
+    content: '▶';
+    display: inline-block;
+    margin-right: 8px;
+    transition: transform 0.2s;
+    font-size: 14px;
+    color: var(--accent);
+}
+
+.preview-area details[open] summary::before,
+.modal-body details[open] summary::before,
+.feedback-item-details details[open] summary::before {
+    transform: rotate(90deg);
+}
+
+/* Контент спойлера */
+.preview-area details > :not(summary),
+.modal-body details > :not(summary),
+.feedback-item-details details > :not(summary) {
+    padding: 16px;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+}
+
+/* Стили для кастомных цветных цитат */
 blockquote.color-red {
     border-left-color: #f44336;
 }
 blockquote.color-green {
     border-left-color: #4caf50;
 }
-/* и так далее */
 
 /* Стили для иконок в тексте */
 .inline-icon {
@@ -785,63 +868,6 @@ blockquote.color-green {
     background: var(--accent);
     color: white;
     border-color: var(--accent);
-}
-
-/* Стили для спойлеров (details/summary) в предпросмотре и постах */
-.preview-area details,
-.modal-body details,
-.feedback-item-details details {
-    margin: 1em 0;
-    background: var(--bg-card);
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    overflow: hidden;
-}
-
-.preview-area summary,
-.modal-body summary,
-.feedback-item-details summary {
-    padding: 12px 16px;
-    cursor: pointer;
-    font-weight: bold;
-    color: var(--accent);
-    background: var(--bg-inner-gradient);
-    list-style: none; /* убираем стандартный маркер */
-    position: relative;
-    transition: background 0.2s;
-}
-
-.preview-area summary:hover,
-.modal-body summary:hover,
-.feedback-item-details summary:hover {
-    background: var(--bg-card-solid);
-}
-
-/* Кастомный маркер (стрелка) */
-.preview-area summary::before,
-.modal-body summary::before,
-.feedback-item-details summary::before {
-    content: '▶';
-    display: inline-block;
-    margin-right: 8px;
-    transition: transform 0.2s;
-    font-size: 14px;
-    color: var(--accent);
-}
-
-.preview-area details[open] summary::before,
-.modal-body details[open] summary::before,
-.feedback-item-details details[open] summary::before {
-    transform: rotate(90deg);
-}
-
-/* Контент спойлера */
-.preview-area details > :not(summary),
-.modal-body details > :not(summary),
-.feedback-item-details details > :not(summary) {
-    padding: 16px;
-    background: var(--bg-primary);
-    border-top: 1px solid var(--border);
 }
 
 /* Адаптивность */

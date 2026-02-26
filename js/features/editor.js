@@ -306,8 +306,6 @@
         }
     }
 
-    // Создание панели инструментов
-    // editor.js — обновлённая функция createEditorToolbar
     function createEditorToolbar(textarea, options = {}) {
         const toolbar = document.createElement('div');
         toolbar.className = 'editor-toolbar';
@@ -366,10 +364,9 @@
             toolbar.appendChild(group);
         }
 
-        // Добавляем элементы управления предпросмотром
         if (options.preview !== false) {
             const previewWrapper = document.createElement('div');
-            previewWrapper.style.cssText = 'display: flex; gap: 5px; margin-left: auto; align-items: center;';
+            previewWrapper.style.cssText = 'display: flex; gap: 10px; margin-left: auto; align-items: center;';
 
             const togglePreviewBtn = document.createElement('button');
             togglePreviewBtn.type = 'button';

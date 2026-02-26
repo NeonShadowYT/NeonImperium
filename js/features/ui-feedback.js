@@ -305,11 +305,7 @@
                         UIUtils.showToast('Ошибка при удалении', 'error');
                         // Возвращаем комментарий обратно
                         if (!commentDiv.parentNode) {
-                            // Восстанавливаем, вставив на место
                             const commentsContainer = container;
-                            const commentsArray = Array.from(commentsContainer.children);
-                            // Находим индекс, куда вставить (ориентируемся по времени)
-                            // Для простоты вставим в конец, но можно попытаться восстановить порядок
                             commentsContainer.appendChild(commentDiv);
                         }
                     }
@@ -390,7 +386,6 @@
     }
 
     // --- Функции для опросов ---
-
     function extractPollFromBody(body) {
         const regex = /<!-- poll: (.*?) -->/g;
         const match = regex.exec(body);
@@ -552,7 +547,6 @@
     }
 
     // --- Подфункции для openFullModal ---
-
     async function loadReactionsAndComments(container, item, currentUser, issue) {
         const reactionsDiv = document.createElement('div'); reactionsDiv.className = 'reactions-container';
         const commentsDiv = document.createElement('div'); commentsDiv.className = 'feedback-comments';
@@ -727,7 +721,7 @@
         }
     }
 
-    // ui-feedback.js — обновлённая openEditorModal
+    // --- Обновлённая openEditorModal с живым предпросмотром и улучшенным UI ---
     function openEditorModal(mode, data, postType = 'feedback') {
         const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
         let categoryHtml = '';
@@ -745,7 +739,7 @@
                 <div id="modal-editor-toolbar"></div>
                 <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(data.body||'')}</textarea>
                 <div class="preview-area" id="modal-preview-area" style="display:none;"></div>
-                <div class="button-group">
+                <div class="button-group" style="margin-top: 10px;">
                     <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                 </div>
             </div>
@@ -833,8 +827,7 @@
             const text = bodyTextarea.value;
             if (text.trim()) {
                 previewArea.innerHTML = '';
-                // Используем существующую функцию renderPostBody из UIFeedback
-                renderPostBody(previewArea, text, null); // null – статический режим (без опросов)
+                renderPostBody(previewArea, text, null); // статический режим
                 previewArea.style.display = 'block';
             } else {
                 previewArea.style.display = 'none';
