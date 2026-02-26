@@ -87,6 +87,12 @@ const translations = {
         githubError: "Ошибка",
         githubRetry: "Попробовать снова",
         githubRevoke: "Управление токенами",
+        githubTokenMissing: "Введите токен доступа",
+        githubTimeout: "Превышено время ожидания. Проверьте соединение.",
+        githubForbidden: "Доступ запрещён (403). Проверьте права токена.",
+        githubNotFound: "Репозиторий не найден (404).",
+        githubServerError: "Ошибка сервера GitHub",
+        githubNetworkError: "Ошибка сети. Проверьте подключение.",
 
         // Фраза про лицензию
         licenseAccept: "Скачивая игру, вы принимаете ",
@@ -323,6 +329,12 @@ const translations = {
         githubError: "Error",
         githubRetry: "Try again",
         githubRevoke: "Manage tokens",
+        githubTokenMissing: "Enter access token",
+        githubTimeout: "Request timeout. Check your connection.",
+        githubForbidden: "Access denied (403). Check token permissions.",
+        githubNotFound: "Repository not found (404).",
+        githubServerError: "GitHub server error",
+        githubNetworkError: "Network error. Check your connection.",
 
         licenseAccept: "By downloading the game, you accept the ",
         licenseLink: "license agreement",

@@ -727,6 +727,7 @@
         }
     }
 
+    // ui-feedback.js — обновлённая openEditorModal
     function openEditorModal(mode, data, postType = 'feedback') {
         const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
         let categoryHtml = '';
@@ -799,7 +800,6 @@
             }
         };
 
-        // Замена обработчиков
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 e.preventDefault();
@@ -824,20 +824,62 @@
             });
         }
 
-        // Инициализация редактора
+        // --- Логика предпросмотра ---
+        const previewArea = modal.querySelector('#modal-preview-area');
+        let previewTimeout = null;
+
+        function updatePreview() {
+            if (!previewArea) return;
+            const text = bodyTextarea.value;
+            if (text.trim()) {
+                previewArea.innerHTML = '';
+                // Используем существующую функцию renderPostBody из UIFeedback
+                renderPostBody(previewArea, text, null); // null – статический режим (без опросов)
+                previewArea.style.display = 'block';
+            } else {
+                previewArea.style.display = 'none';
+            }
+        }
+
+        // Инициализация редактора и тулбара
         if (window.Editor) {
-            const toolbar = Editor.createEditorToolbar(bodyTextarea, { 
+            const toolbar = Editor.createEditorToolbar(bodyTextarea, {
                 previewAreaId: 'modal-preview-area',
-                onPreview: () => {
-                    const preview = modal.querySelector('#modal-preview-area');
-                    if (!preview) return;
-                    preview.innerHTML = '';
-                    renderPostBody(preview, bodyTextarea.value, null); // null – статический режим
-                    preview.style.display = bodyTextarea.value.trim() ? 'block' : 'none';
+                onPreview: updatePreview,
+                onTogglePreview: () => {
+                    if (previewArea.style.display === 'none') {
+                        updatePreview();
+                        previewArea.style.display = 'block';
+                    } else {
+                        previewArea.style.display = 'none';
+                    }
                 }
             });
             const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
             if (toolbarContainer) toolbarContainer.appendChild(toolbar);
+
+            // Настраиваем live preview
+            const liveCheckbox = modal.querySelector('#live-preview-toggle');
+            if (liveCheckbox) {
+                liveCheckbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        // Включаем live preview
+                        bodyTextarea.addEventListener('input', () => {
+                            clearTimeout(previewTimeout);
+                            previewTimeout = setTimeout(updatePreview, 300);
+                        });
+                        // Если предпросмотр скрыт, показываем его
+                        if (previewArea.style.display === 'none' && bodyTextarea.value.trim()) {
+                            updatePreview();
+                            previewArea.style.display = 'block';
+                        }
+                    } else {
+                        // Выключаем live preview
+                        bodyTextarea.removeEventListener('input', updatePreview);
+                        clearTimeout(previewTimeout);
+                    }
+                });
+            }
         }
 
         // Обработчик отправки
@@ -857,7 +899,7 @@
                 bodyTextarea.focus();
                 return;
             }
-            
+
             const pollMatches = body.match(/<!-- poll: .*? -->/g);
             if (pollMatches && pollMatches.length > 1) {
                 if (!confirm('Обнаружено несколько блоков опроса. Будут сохранены только первые. Продолжить?')) return;
@@ -865,7 +907,7 @@
                 body = body.replace(/<!-- poll: .*? -->/g, '');
                 body = first + '\n' + body;
             }
-            
+
             let category = 'idea';
             if (postType === 'feedback' && categorySelect) {
                 category = categorySelect.value;
@@ -902,18 +944,17 @@
                 }
 
                 UIUtils.clearDraft(draftKey);
-                // Закрываем без проверки, т.к. изменения сохранены
                 originalCloseModal(); // используем оригинальную closeModal
                 if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
                 if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
                 if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
                 UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
-            } catch (err) { 
+            } catch (err) {
                 console.error('Submit error:', err);
-                UIUtils.showToast('Ошибка: ' + err.message, 'error'); 
-            } finally { 
-                btn.disabled = false; 
-                btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать'; 
+                UIUtils.showToast('Ошибка: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
             }
         });
     }

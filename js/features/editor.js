@@ -307,6 +307,7 @@
     }
 
     // Создание панели инструментов
+    // editor.js — обновлённая функция createEditorToolbar
     function createEditorToolbar(textarea, options = {}) {
         const toolbar = document.createElement('div');
         toolbar.className = 'editor-toolbar';
@@ -365,16 +366,27 @@
             toolbar.appendChild(group);
         }
 
+        // Добавляем элементы управления предпросмотром
         if (options.preview !== false) {
-            const previewBtn = document.createElement('button');
-            previewBtn.type = 'button';
-            previewBtn.className = 'editor-btn preview-btn';
-            previewBtn.innerHTML = '<i class="fas fa-eye"></i> Предпросмотр';
-            previewBtn.addEventListener('click', (e) => {
+            const previewWrapper = document.createElement('div');
+            previewWrapper.style.cssText = 'display: flex; gap: 5px; margin-left: auto; align-items: center;';
+
+            const togglePreviewBtn = document.createElement('button');
+            togglePreviewBtn.type = 'button';
+            togglePreviewBtn.className = 'editor-btn preview-btn';
+            togglePreviewBtn.innerHTML = '<i class="fas fa-eye"></i> Предпросмотр';
+            togglePreviewBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 if (options.onPreview) options.onPreview();
             });
-            toolbar.appendChild(previewBtn);
+
+            const livePreviewCheckbox = document.createElement('label');
+            livePreviewCheckbox.style.cssText = 'display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-secondary); cursor: pointer;';
+            livePreviewCheckbox.innerHTML = '<input type="checkbox" id="live-preview-toggle"> Живой предпросмотр';
+
+            previewWrapper.appendChild(togglePreviewBtn);
+            previewWrapper.appendChild(livePreviewCheckbox);
+            toolbar.appendChild(previewWrapper);
         }
 
         return toolbar;

@@ -787,6 +787,63 @@ blockquote.color-green {
     border-color: var(--accent);
 }
 
+/* Стили для спойлеров (details/summary) в предпросмотре и постах */
+.preview-area details,
+.modal-body details,
+.feedback-item-details details {
+    margin: 1em 0;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.preview-area summary,
+.modal-body summary,
+.feedback-item-details summary {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-weight: bold;
+    color: var(--accent);
+    background: var(--bg-inner-gradient);
+    list-style: none; /* убираем стандартный маркер */
+    position: relative;
+    transition: background 0.2s;
+}
+
+.preview-area summary:hover,
+.modal-body summary:hover,
+.feedback-item-details summary:hover {
+    background: var(--bg-card-solid);
+}
+
+/* Кастомный маркер (стрелка) */
+.preview-area summary::before,
+.modal-body summary::before,
+.feedback-item-details summary::before {
+    content: '▶';
+    display: inline-block;
+    margin-right: 8px;
+    transition: transform 0.2s;
+    font-size: 14px;
+    color: var(--accent);
+}
+
+.preview-area details[open] summary::before,
+.modal-body details[open] summary::before,
+.feedback-item-details details[open] summary::before {
+    transform: rotate(90deg);
+}
+
+/* Контент спойлера */
+.preview-area details > :not(summary),
+.modal-body details > :not(summary),
+.feedback-item-details details > :not(summary) {
+    padding: 16px;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+}
+
 /* Адаптивность */
 @media (max-width: 600px) {
     .feedback-header {
