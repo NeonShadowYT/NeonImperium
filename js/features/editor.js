@@ -377,12 +377,17 @@
                 if (options.onPreview) options.onPreview();
             });
 
-            const livePreviewCheckbox = document.createElement('label');
-            livePreviewCheckbox.style.cssText = 'display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-secondary); cursor: pointer;';
-            livePreviewCheckbox.innerHTML = '<input type="checkbox" id="live-preview-toggle"> Живой предпросмотр';
+            // Кастомный переключатель "Живой предпросмотр"
+            const livePreviewLabel = document.createElement('label');
+            livePreviewLabel.className = 'toggle-switch';
+            livePreviewLabel.innerHTML = `
+                <input type="checkbox" id="live-preview-toggle">
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Живой предпросмотр</span>
+            `;
 
             previewWrapper.appendChild(togglePreviewBtn);
-            previewWrapper.appendChild(livePreviewCheckbox);
+            previewWrapper.appendChild(livePreviewLabel);
             toolbar.appendChild(previewWrapper);
         }
 
