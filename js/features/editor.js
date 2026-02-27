@@ -160,8 +160,7 @@
             { name: 'Catbox', url: 'https://catbox.moe/', description: 'До 200 МБ, анонимно' }
         ];
         const container = document.createElement('div');
-        container.className = 'preview-split';
-        container.style.marginLeft = '0';
+        container.className = 'image-services-menu';
         const mainBtn = document.createElement('button');
         mainBtn.type = 'button';
         mainBtn.className = 'image-services-btn';

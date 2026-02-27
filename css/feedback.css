@@ -98,6 +98,7 @@
 }
 .preview-url-input {
     flex: 1;
+    min-width: 0;
 }
 .image-services-btn {
     background: var(--bg-inner-gradient);
@@ -113,6 +114,7 @@
     gap: 6px;
     white-space: nowrap;
     font-family: 'Russo One', sans-serif;
+    flex-shrink: 0;
 }
 .image-services-btn:hover {
     background: var(--accent);
@@ -1036,5 +1038,12 @@ blockquote.color-green { border-left-color: #4caf50; }
     }
     .modal-body {
         padding: 20px;
+    }
+    .preview-url-wrapper {
+        flex-wrap: wrap;
+    }
+    .image-services-btn {
+        width: 100%;
+        justify-content: center;
     }
 }

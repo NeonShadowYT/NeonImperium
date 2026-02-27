@@ -1,5 +1,3 @@
-// feedback.js — обратная связь для страниц игр с бесконечной прокруткой и лимитом DOM-элементов
-
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
     const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
@@ -39,6 +37,34 @@
 
         currentUser = getCurrentUser();
         checkAuthAndRender();
+
+        // Обработка параметра post в URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const postId = urlParams.get('post');
+        if (postId) {
+            setTimeout(() => openPostFromUrl(postId), 1000);
+        }
+    }
+
+    async function openPostFromUrl(postId) {
+        try {
+            const issue = await loadIssue(postId);
+            const gameLabel = issue.labels.find(l => l.name.startsWith('game:'));
+            if (!gameLabel || gameLabel.name.split(':')[1] !== currentGame) return;
+            const item = {
+                type: 'issue',
+                id: issue.number,
+                title: issue.title,
+                body: issue.body,
+                author: issue.user.login,
+                date: new Date(issue.created_at),
+                game: currentGame,
+                labels: issue.labels.map(l => l.name)
+            };
+            openFullModal(item);
+        } catch (err) {
+            UIUtils.showToast('Не удалось загрузить пост', 'error');
+        }
     }
 
     function checkAuthAndRender() {
@@ -116,7 +142,6 @@
         gridContainer = document.getElementById('feedback-panel');
         sentinel = document.getElementById('sentinel');
 
-        // Настраиваем Intersection Observer для подгрузки
         observer = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting && !isLoading && hasMorePages) {
                 loadIssuesPage(currentPage + 1, false);
@@ -163,43 +188,23 @@
         let filtered = allIssues.filter(issue => issue.state === 'open');
         if (currentTab !== 'all') filtered = filtered.filter(issue => issue.labels.some(l => l.name === `type:${currentTab}`));
         displayedIssues = filtered;
-
-        // Ограничиваем количество отображаемых в DOM элементов (для производительности)
         let issuesToRender = displayedIssues;
-        if (displayedIssues.length > MAX_DISPLAY_ITEMS) {
-            // Показываем последние MAX_DISPLAY_ITEMS (самые новые)
-            issuesToRender = displayedIssues.slice(-MAX_DISPLAY_ITEMS);
-        }
-
-        if (reset) {
-            gridContainer.innerHTML = '';
-        }
-
+        if (displayedIssues.length > MAX_DISPLAY_ITEMS) issuesToRender = displayedIssues.slice(-MAX_DISPLAY_ITEMS);
+        if (reset) gridContainer.innerHTML = '';
         renderIssuesList(issuesToRender, reset);
     }
 
     function renderIssuesList(issues, reset) {
-        if (reset) {
-            gridContainer.innerHTML = '';
-        }
-
-        // Создаём карточки для новых элементов (тех, которых ещё нет в DOM)
-        // Для простоты будем добавлять все issues в конец. Если общее количество превысит лимит, удалим старые.
+        if (reset) gridContainer.innerHTML = '';
         issues.forEach(issue => {
-            // Проверяем, есть ли уже такая карточка (по номеру)
             if (document.querySelector(`.project-card-link[data-issue-number="${issue.number}"]`)) return;
-
             const card = createIssueCard(issue);
             gridContainer.appendChild(card);
         });
-
-        // Если общее количество карточек превысило MAX_DISPLAY_ITEMS, удаляем лишние сверху
         const cards = gridContainer.querySelectorAll('.project-card-link');
         if (cards.length > MAX_DISPLAY_ITEMS) {
             const toRemove = cards.length - MAX_DISPLAY_ITEMS;
-            for (let i = 0; i < toRemove; i++) {
-                cards[i].remove();
-            }
+            for (let i = 0; i < toRemove; i++) cards[i].remove();
         }
     }
 
@@ -208,16 +213,13 @@
         const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : '⭐';
         const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
         const date = new Date(issue.created_at).toLocaleDateString();
-
         const cardLink = document.createElement('div');
         cardLink.className = 'project-card-link';
         cardLink.dataset.issueNumber = issue.number;
         cardLink.dataset.issueId = issue.id;
         cardLink.style.cursor = 'pointer';
-
         const card = document.createElement('div');
         card.className = 'project-card';
-
         const imageWrapper = document.createElement('div');
         imageWrapper.className = 'image-wrapper';
         imageWrapper.style.display = 'flex';
@@ -226,10 +228,8 @@
         imageWrapper.style.background = 'var(--bg-primary)';
         imageWrapper.style.fontSize = '48px';
         imageWrapper.textContent = typeIcon;
-
         const title = document.createElement('h3');
         title.textContent = issue.title.length > 70 ? issue.title.substring(0,70)+'…' : issue.title;
-
         const previewP = document.createElement('p');
         previewP.className = 'text-secondary';
         previewP.style.fontSize = '13px';
@@ -238,31 +238,20 @@
         previewP.style.webkitLineClamp = '2';
         previewP.style.webkitBoxOrient = 'vertical';
         previewP.textContent = preview.replace(/\n/g,' ');
-
         const reactionsDiv = document.createElement('div');
         reactionsDiv.className = 'reactions-container';
         reactionsDiv.dataset.targetType = 'issue';
         reactionsDiv.dataset.targetId = issue.number;
-
         const footer = document.createElement('div');
         footer.style.display = 'flex';
         footer.style.justifyContent = 'space-between';
         footer.style.alignItems = 'center';
         footer.style.fontSize = '12px';
         footer.style.color = 'var(--text-secondary)';
-        footer.innerHTML = `
-            <span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span>
-            <span><i class="fas fa-calendar-alt"></i> ${date}</span>
-            <span><i class="fas fa-comment"></i> ${issue.comments}</span>
-        `;
-
+        footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${date}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span>`;
         card.append(imageWrapper, title, previewP, reactionsDiv, footer);
         cardLink.appendChild(card);
-
-        // Загружаем реакции
         loadAndRenderReactionsWithCache(issue.number, reactionsDiv);
-
-        // Обработчик клика на карточку
         cardLink.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
             openFullModal({
@@ -276,7 +265,6 @@
                 labels: issue.labels.map(l => l.name)
             });
         });
-
         return cardLink;
     }
 
@@ -287,7 +275,6 @@
             renderReactionsFromCache(cached.data, container, issueNumber);
             return;
         }
-
         try {
             const reactions = await loadReactions(issueNumber);
             if (!window.reactionsListCache) window.reactionsListCache = new Map();

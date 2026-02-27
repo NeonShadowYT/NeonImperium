@@ -458,7 +458,19 @@
             else if (item.labels?.includes('type:review')) typeIcon = '⭐';
             else typeIcon = '📌';
             const postUrl = `${window.location.origin}${window.location.pathname}?post=${item.id}`;
-            header.innerHTML = `<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:24px;">${typeIcon}</span><div><div style="font-size:14px;color:var(--accent);">${GithubCore.escapeHtml(item.author || 'Unknown')}</div><div style="font-size:12px;color:var(--text-secondary);">${new Date(item.date).toLocaleString()}</div></div></div>${item.game ? `<span class="feedback-label" style="margin-left:auto;">${GithubCore.escapeHtml(item.game)}</span>` : ''}<button class="button small" id="share-post-btn" style="margin-left:10px;" title="Поделиться"><i class="fas fa-share-alt"></i></button>`;
+            header.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span style="font-size:24px;">${typeIcon}</span>
+                    <div>
+                        <div style="font-size:14px;color:var(--accent);">${GithubCore.escapeHtml(item.author || 'Unknown')}</div>
+                        <div style="font-size:12px;color:var(--text-secondary);">${new Date(item.date).toLocaleString()}</div>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+                    ${item.game ? `<span class="feedback-label">${GithubCore.escapeHtml(item.game)}</span>` : ''}
+                    <button class="button small" id="share-post-btn" title="Поделиться"><i class="fas fa-share-alt"></i></button>
+                </div>
+            `;
             container.appendChild(header);
             const shareBtn = container.querySelector('#share-post-btn');
             if (shareBtn) {
