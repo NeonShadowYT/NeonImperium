@@ -154,50 +154,67 @@
 
     function createImageServicesMenu() {
         const services = [
+            { name: 'Catbox', url: 'https://catbox.moe/', description: 'До 200 МБ, анонимно, лучший выбор' },
             { name: 'ImageBam', url: 'https://www.imagebam.com/upload?multi=1', description: 'До 100 МБ, массовая загрузка' },
             { name: 'Postimages', url: 'https://postimages.org/', description: 'До 32 МБ, прямые ссылки' },
-            { name: 'ImgBB', url: 'https://imgbb.com/', description: 'До 32 МБ, удобный интерфейс' },
-            { name: 'Catbox', url: 'https://catbox.moe/', description: 'До 200 МБ, анонимно' }
+            { name: 'ImgBB', url: 'https://imgbb.com/', description: 'До 32 МБ, удобный интерфейс' }
         ];
         const container = document.createElement('div');
         container.className = 'image-services-menu';
+        container.style.position = 'relative';
+        container.style.display = 'inline-block';
         const mainBtn = document.createElement('button');
         mainBtn.type = 'button';
         mainBtn.className = 'image-services-btn';
         mainBtn.innerHTML = '<i class="fas fa-images"></i> Хостинги';
-        const dropdownBtn = document.createElement('button');
-        dropdownBtn.type = 'button';
-        dropdownBtn.className = 'editor-btn dropdown-toggle';
-        dropdownBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
         const dropdownMenu = document.createElement('div');
         dropdownMenu.className = 'preview-dropdown';
+        dropdownMenu.style.position = 'absolute';
+        dropdownMenu.style.top = '100%';
+        dropdownMenu.style.right = '0';
+        dropdownMenu.style.zIndex = '1000';
         dropdownMenu.style.minWidth = '280px';
+        dropdownMenu.style.background = 'var(--bg-card)';
+        dropdownMenu.style.border = '1px solid var(--border)';
+        dropdownMenu.style.borderRadius = '12px';
+        dropdownMenu.style.padding = '5px 0';
+        dropdownMenu.style.boxShadow = 'var(--shadow)';
+        dropdownMenu.style.display = 'none';
         services.forEach(service => {
             const item = document.createElement('button');
+            item.type = 'button';
             item.innerHTML = `<strong>${service.name}</strong><br><small>${service.description}</small>`;
             item.style.whiteSpace = 'normal';
             item.style.lineHeight = '1.4';
             item.style.padding = '10px 16px';
+            item.style.width = '100%';
+            item.style.textAlign = 'left';
+            item.style.background = 'transparent';
+            item.style.border = 'none';
+            item.style.color = 'var(--text-secondary)';
+            item.style.cursor = 'pointer';
+            item.style.fontFamily = "'Russo One', sans-serif";
+            item.style.fontSize = '13px';
+            item.addEventListener('mouseenter', () => { item.style.background = 'var(--bg-inner-gradient)'; item.style.color = 'var(--text-primary)'; });
+            item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; item.style.color = 'var(--text-secondary)'; });
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
                 window.open(service.url, '_blank');
-                dropdownMenu.classList.remove('show');
+                dropdownMenu.style.display = 'none';
             });
             dropdownMenu.appendChild(item);
         });
         container.appendChild(mainBtn);
-        container.appendChild(dropdownBtn);
         container.appendChild(dropdownMenu);
-        dropdownBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            dropdownMenu.classList.toggle('show');
-        });
         mainBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            dropdownMenu.classList.toggle('show');
+            const isVisible = dropdownMenu.style.display === 'block';
+            dropdownMenu.style.display = isVisible ? 'none' : 'block';
         });
         document.addEventListener('click', (e) => {
-            if (!container.contains(e.target)) dropdownMenu.classList.remove('show');
+            if (!container.contains(e.target)) {
+                dropdownMenu.style.display = 'none';
+            }
         });
         return container;
     }

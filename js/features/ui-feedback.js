@@ -229,7 +229,6 @@
         }
     }
 
-    // ========== ПОЛНОЦЕННЫЙ РЕДАКТОР ДЛЯ КОММЕНТАРИЯ ==========
     function openEditCommentModal(commentId, currentBody, issueNumber) {
         const modalHtml = `
             <div class="feedback-form">
@@ -247,7 +246,6 @@
         const previewArea = modal.querySelector('#modal-preview-area');
         const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
 
-        // Добавляем панель инструментов
         if (window.Editor) {
             const updatePreview = () => {
                 const text = textarea.value;
@@ -443,13 +441,13 @@
         });
     }
 
-    // ========== ИСПРАВЛЕННАЯ ФУНКЦИЯ setupAdminActions (теперь с кнопкой "Поделиться") ==========
-    function setupAdminActions(container, item, issue, currentUser, closeModal, escHandler) {
+    // ========== ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ КНОПОК В ШАПКУ МОДАЛКИ ==========
+    function addHeaderActions(modalHeader, item, issue, currentUser, closeModal, escHandler) {
         const isAdmin = GithubAuth.isAdmin();
-        const actionButtons = document.createElement('div'); actionButtons.className = 'feedback-item-actions';
-
-        // Формируем URL для шаринга
         const postUrl = `${window.location.origin}${window.location.pathname}?post=${item.id}`;
+        const actionsContainer = document.createElement('div');
+        actionsContainer.className = 'modal-header-actions';
+        actionsContainer.style.cssText = 'display:flex;align-items:center;gap:8px;margin-left:auto;';
 
         let buttonsHtml = '';
         if (isAdmin || (currentUser && issue.user.login === currentUser)) {
@@ -458,14 +456,12 @@
                 <button class="action-btn close-issue" title="Закрыть" aria-label="Закрыть"><i class="fas fa-trash-alt"></i></button>
             `;
         }
-        // Кнопка "Поделиться" добавляется всегда
         buttonsHtml += `<button class="action-btn share-post" title="Поделиться" aria-label="Поделиться"><i class="fas fa-share-alt"></i></button>`;
 
-        actionButtons.innerHTML = buttonsHtml;
-        container.appendChild(actionButtons);
+        actionsContainer.innerHTML = buttonsHtml;
+        modalHeader.appendChild(actionsContainer);
 
-        // Обработчики
-        actionButtons.querySelector('.edit-issue')?.addEventListener('click', (e) => {
+        actionsContainer.querySelector('.edit-issue')?.addEventListener('click', (e) => {
             e.stopPropagation(); closeModal(); document.removeEventListener('keydown', escHandler);
             let postType = 'feedback';
             if (item.labels?.includes('type:news')) postType = 'news';
@@ -473,7 +469,7 @@
             openEditorModal('edit', { number: item.id, title: issue.title, body: issue.body, game: item.game }, postType);
         });
 
-        actionButtons.querySelector('.close-issue')?.addEventListener('click', async (e) => {
+        actionsContainer.querySelector('.close-issue')?.addEventListener('click', async (e) => {
             e.stopPropagation(); if (!confirm('Закрыть?')) return;
             try {
                 await GithubAPI.closeIssue(item.id);
@@ -484,13 +480,13 @@
             } catch (err) { UIUtils.showToast('Ошибка при закрытии', 'error'); }
         });
 
-        actionButtons.querySelector('.share-post')?.addEventListener('click', (e) => {
+        actionsContainer.querySelector('.share-post')?.addEventListener('click', (e) => {
             e.stopPropagation();
             navigator.clipboard.writeText(postUrl).then(() => UIUtils.showToast('Ссылка скопирована', 'success')).catch(() => UIUtils.showToast('Ошибка копирования', 'error'));
         });
     }
 
-    // ========== ИСПРАВЛЕННАЯ ФУНКЦИЯ openFullModal (убрана кнопка из шапки) ==========
+    // ========== ИСПРАВЛЕННАЯ ФУНКЦИЯ openFullModal ==========
     async function openFullModal(item) {
         const currentUser = GithubAuth.getCurrentUser();
         const contentHtml = '<div class="loading-spinner" id="modal-loader"><i class="fas fa-circle-notch fa-spin"></i></div>';
@@ -501,6 +497,8 @@
         try {
             const issue = await GithubAPI.loadIssue(item.id);
             container.innerHTML = '';
+
+            // Создаём шапку (без кнопок действий)
             const header = document.createElement('div');
             header.className = 'modal-post-header';
             header.style.cssText = 'display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap;';
@@ -524,10 +522,16 @@
                 </div>
             `;
             container.appendChild(header);
+
+            // Добавляем кнопки действий в шапку модального окна (рядом с крестиком)
+            const modalHeader = modal.querySelector('.modal-header');
+            if (modalHeader) {
+                addHeaderActions(modalHeader, item, issue, currentUser, closeModal, escHandler);
+            }
+
             await renderPostBody(container, issue.body, item.id);
             await loadReactionsAndComments(container, item, currentUser, issue);
             if (currentUser) setupCommentForm(container, item, currentUser);
-            setupAdminActions(container, item, issue, currentUser, closeModal, escHandler);
         } catch (err) {
             container.innerHTML = '<p class="error-message">Не удалось загрузить содержимое. Закрытие...</p>';
             setTimeout(() => { closeModal(); document.removeEventListener('keydown', escHandler); }, 2000);

@@ -2,7 +2,7 @@
 
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml } = GithubCore;
-    const { loadIssues } = GithubAPI;
+    const { loadIssues, loadIssue } = GithubAPI;
     const { openFullModal } = UIFeedback;
     const { getCurrentUser } = GithubAuth;
 
@@ -68,6 +68,37 @@
             posts = [newPost, ...posts];
             renderMixed();
         });
+
+        // ===== ОБРАБОТКА ПАРАМЕТРА POST В URL =====
+        const urlParams = new URLSearchParams(window.location.search);
+        const postId = urlParams.get('post');
+        if (postId) {
+            // Даём время на загрузку основных данных и скриптов
+            setTimeout(async () => {
+                try {
+                    // Убедимся, что необходимые объекты загружены
+                    if (!GithubAPI || !UIFeedback) {
+                        console.warn('GithubAPI или UIFeedback не доступны');
+                        return;
+                    }
+                    const issue = await loadIssue(postId);
+                    const item = {
+                        type: 'post',
+                        id: issue.number,
+                        title: issue.title,
+                        body: issue.body,
+                        author: issue.user.login,
+                        date: new Date(issue.created_at),
+                        game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
+                        labels: issue.labels.map(l => l.name)
+                    };
+                    openFullModal(item);
+                } catch (err) {
+                    console.error('Ошибка загрузки поста по ссылке:', err);
+                    if (UIUtils) UIUtils.showToast('Не удалось загрузить пост', 'error');
+                }
+            }, 1500); // небольшая задержка для гарантии загрузки всех скриптов
+        }
     });
 
     window.refreshNewsFeed = () => {
