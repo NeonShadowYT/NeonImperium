@@ -466,7 +466,7 @@
                         <div style="font-size:12px;color:var(--text-secondary);">${new Date(item.date).toLocaleString()}</div>
                     </div>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+                <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0;">
                     ${item.game ? `<span class="feedback-label">${GithubCore.escapeHtml(item.game)}</span>` : ''}
                     <button class="button small" id="share-post-btn" title="Поделиться"><i class="fas fa-share-alt"></i></button>
                 </div>
