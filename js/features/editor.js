@@ -1,348 +1,152 @@
-// editor.js — унифицированный Markdown-редактор с расширенными инструментами
+// editor.js — унифицированный Markdown-редактор
 
 (function() {
     const TEMPLATES = {
-        // Базовое форматирование
-        bold: { 
-            name: 'Жирный', 
-            icon: 'fas fa-bold',
-            action: (textarea) => insertMarkdown(textarea, '**', 'текст', true)
-        },
-        italic: { 
-            name: 'Курсив', 
-            icon: 'fas fa-italic',
-            action: (textarea) => insertMarkdown(textarea, '*', 'текст', true)
-        },
-        strikethrough: { 
-            name: 'Зачёркнутый', 
-            icon: 'fas fa-strikethrough',
-            action: (textarea) => insertMarkdown(textarea, '~~', 'текст', true)
-        },
-        
-        // Заголовки
-        h1: { 
-            name: 'Заголовок 1', 
-            icon: 'H1',
-            action: (textarea) => insertMarkdown(textarea, '# ', 'Заголовок')
-        },
-        h2: { 
-            name: 'Заголовок 2', 
-            icon: 'H2',
-            action: (textarea) => insertMarkdown(textarea, '## ', 'Заголовок')
-        },
-        h3: { 
-            name: 'Заголовок 3', 
-            icon: 'H3',
-            action: (textarea) => insertMarkdown(textarea, '### ', 'Заголовок')
-        },
-        
-        // Списки
-        ul: { 
-            name: 'Маркированный список', 
-            icon: 'fas fa-list-ul',
-            action: (textarea) => insertList(textarea, '- ')
-        },
-        ol: { 
-            name: 'Нумерованный список', 
-            icon: 'fas fa-list-ol',
-            action: (textarea) => insertList(textarea, '1. ')
-        },
-        quote: { 
-            name: 'Цитата', 
-            icon: 'fas fa-quote-right',
-            action: (textarea) => insertMarkdown(textarea, '> ', 'цитата')
-        },
-        
-        // Ссылки и медиа
-        link: { 
-            name: 'Ссылка', 
-            icon: 'fas fa-link',
-            action: (textarea) => insertLink(textarea)
-        },
-        image: { 
-            name: 'Изображение', 
-            icon: 'fas fa-image',
-            action: (textarea) => insertImage(textarea)
-        },
-        youtube: { 
-            name: 'YouTube', 
-            icon: 'fab fa-youtube',
-            action: (textarea) => insertYouTube(textarea)
-        },
-        
-        // Код
-        code: { 
-            name: 'Код', 
-            icon: 'fas fa-code',
-            action: (textarea) => insertMarkdown(textarea, '`', 'код', true)
-        },
-        codeblock: { 
-            name: 'Блок кода', 
-            icon: 'fas fa-file-code',
-            action: (textarea) => insertCodeBlock(textarea)
-        },
-        
-        // Специальные блоки
-        spoiler: { 
-            name: 'Спойлер', 
-            icon: 'fas fa-chevron-down',
-            action: (textarea) => insertSpoiler(textarea)
-        },
-        table: { 
-            name: 'Таблица', 
-            icon: 'fas fa-table',
-            action: (textarea) => insertTable(textarea)
-        },
-        poll: { 
-            name: 'Опрос', 
-            icon: 'fas fa-chart-pie',
-            action: (textarea) => insertPoll(textarea)
-        },
-        progress: { 
-            name: 'Прогресс-бар', 
-            icon: 'fas fa-chart-bar',
-            action: (textarea) => insertProgressBar(textarea)
-        },
-        card: { 
-            name: 'Карточка', 
-            icon: 'fas fa-credit-card',
-            action: (textarea) => insertCard(textarea)
-        },
-        
-        // Иконки
-        icon: {
-            name: 'Иконка',
-            icon: 'fas fa-icons',
-            action: (textarea) => insertIcon(textarea)
-        },
-
-        // Цвет текста
-        color: {
-            name: 'Цвет текста',
-            icon: 'fas fa-palette',
-            action: (textarea) => insertColor(textarea, 'color')
-        },
-
-        // Цвет фона
-        bgcolor: {
-            name: 'Цвет фона',
-            icon: 'fas fa-fill-drip',
-            action: (textarea) => insertColor(textarea, 'background-color')
-        },
-
-        // Дополнительные инструменты
-        hr: {
-            name: 'Горизонтальная линия',
-            icon: 'fas fa-minus',
-            action: (textarea) => insertAtCursor(textarea, '\n---\n')
-        }
+        bold: { name: 'Жирный', icon: 'fas fa-bold', action: (ta) => insertMarkdown(ta, '**', 'текст', true) },
+        italic: { name: 'Курсив', icon: 'fas fa-italic', action: (ta) => insertMarkdown(ta, '*', 'текст', true) },
+        strikethrough: { name: 'Зачёркнутый', icon: 'fas fa-strikethrough', action: (ta) => insertMarkdown(ta, '~~', 'текст', true) },
+        h1: { name: 'Заголовок 1', icon: 'H1', action: (ta) => insertMarkdown(ta, '# ', 'Заголовок') },
+        h2: { name: 'Заголовок 2', icon: 'H2', action: (ta) => insertMarkdown(ta, '## ', 'Заголовок') },
+        h3: { name: 'Заголовок 3', icon: 'H3', action: (ta) => insertMarkdown(ta, '### ', 'Заголовок') },
+        ul: { name: 'Список', icon: 'fas fa-list-ul', action: (ta) => insertList(ta, '- ') },
+        ol: { name: 'Нумерованный', icon: 'fas fa-list-ol', action: (ta) => insertList(ta, '1. ') },
+        quote: { name: 'Цитата', icon: 'fas fa-quote-right', action: (ta) => insertMarkdown(ta, '> ', 'цитата') },
+        link: { name: 'Ссылка', icon: 'fas fa-link', action: insertLink },
+        image: { name: 'Изображение', icon: 'fas fa-image', action: insertImage },
+        youtube: { name: 'YouTube', icon: 'fab fa-youtube', action: insertYouTube },
+        code: { name: 'Код', icon: 'fas fa-code', action: (ta) => insertMarkdown(ta, '`', 'код', true) },
+        codeblock: { name: 'Блок кода', icon: 'fas fa-file-code', action: insertCodeBlock },
+        spoiler: { name: 'Спойлер', icon: 'fas fa-chevron-down', action: insertSpoiler },
+        table: { name: 'Таблица', icon: 'fas fa-table', action: insertTable },
+        poll: { name: 'Опрос', icon: 'fas fa-chart-pie', action: insertPoll },
+        progress: { name: 'Прогресс', icon: 'fas fa-chart-bar', action: insertProgressBar },
+        card: { name: 'Карточка', icon: 'fas fa-credit-card', action: insertCard },
+        icon: { name: 'Иконка', icon: 'fas fa-icons', action: insertIcon },
+        color: { name: 'Цвет текста', icon: 'fas fa-palette', action: (ta) => insertColor(ta, 'color') },
+        bgcolor: { name: 'Цвет фона', icon: 'fas fa-fill-drip', action: (ta) => insertColor(ta, 'background-color') },
+        hr: { name: 'Линия', icon: 'fas fa-minus', action: (ta) => insertAtCursor(ta, '\n---\n') }
     };
 
-    // Вспомогательные функции
-    function insertAtCursor(textarea, text) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const value = textarea.value;
-        textarea.value = value.substring(0, start) + text + value.substring(end);
-        textarea.focus();
-        textarea.setSelectionRange(start + text.length, start + text.length);
+    // Вставка текста в позицию курсора
+    function insertAtCursor(ta, text) {
+        const start = ta.selectionStart, end = ta.selectionEnd;
+        ta.value = ta.value.substring(0, start) + text + ta.value.substring(end);
+        ta.focus();
+        ta.setSelectionRange(start + text.length, start + text.length);
     }
 
-    function insertMarkdown(textarea, tag, placeholder, wrap = false) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const selected = textarea.value.substring(start, end);
-
-        let insertion;
-        if (wrap) {
-            insertion = selected ? tag + selected + tag : tag + placeholder + tag;
-        } else {
-            insertion = selected ? tag + selected : tag + placeholder;
-        }
-        insertAtCursor(textarea, insertion);
+    function insertMarkdown(ta, tag, placeholder, wrap = false) {
+        const selected = ta.value.substring(ta.selectionStart, ta.selectionEnd);
+        const ins = selected ? (wrap ? tag + selected + tag : tag + selected) : (wrap ? tag + placeholder + tag : tag + placeholder);
+        insertAtCursor(ta, ins);
     }
 
-    function insertList(textarea, prefix) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const selected = textarea.value.substring(start, end);
-        
+    function insertList(ta, prefix) {
+        const selected = ta.value.substring(ta.selectionStart, ta.selectionEnd);
         if (selected.includes('\n')) {
-            const lines = selected.split('\n');
-            const newLines = lines.map(line => line.trim() ? prefix + line : line).join('\n');
-            insertAtCursor(textarea, newLines);
-        } else {
-            insertAtCursor(textarea, prefix + (selected || 'элемент списка'));
-        }
+            const lines = selected.split('\n').map(l => l.trim() ? prefix + l : l).join('\n');
+            insertAtCursor(ta, lines);
+        } else insertAtCursor(ta, prefix + (selected || 'элемент'));
     }
 
-    function insertLink(textarea) {
-        const url = prompt('Введите URL:', 'https://');
+    function insertLink(ta) {
+        const url = prompt('URL:', 'https://');
         if (!url) return;
-        const text = prompt('Введите текст ссылки:', 'ссылка');
-        insertAtCursor(textarea, `[${text || 'ссылка'}](${url})`);
+        const text = prompt('Текст ссылки:', 'ссылка');
+        insertAtCursor(ta, `[${text || 'ссылка'}](${url})`);
     }
 
-    function insertImage(textarea) {
-        const url = prompt('Введите URL изображения:', 'https://');
+    function insertImage(ta) {
+        const url = prompt('URL изображения:', 'https://');
         if (!url) return;
-        const alt = prompt('Введите описание изображения:', 'image');
-        insertAtCursor(textarea, `![${alt || 'image'}](${url})`);
+        const alt = prompt('Описание:', 'image');
+        insertAtCursor(ta, `![${alt || 'image'}](${url})`);
     }
 
-    function insertYouTube(textarea) {
-        const url = prompt('Введите ссылку на YouTube видео:', 'https://youtu.be/...');
+    function insertYouTube(ta) {
+        const url = prompt('YouTube ссылка:', 'https://youtu.be/...');
         if (!url) return;
-        
-        let videoId = '';
-        const patterns = [
-            /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
-            /youtube\.com\/embed\/([^&\n?#]+)/
-        ];
-        
-        for (const pattern of patterns) {
-            const match = url.match(pattern);
-            if (match) {
-                videoId = match[1];
-                break;
-            }
-        }
-        
-        if (videoId) {
-            insertAtCursor(textarea, `\n<div class="youtube-embed"><iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe></div>\n`);
-        } else {
-            insertAtCursor(textarea, url);
-        }
+        const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+        if (match) insertAtCursor(ta, `\n<div class="youtube-embed"><iframe src="https://www.youtube.com/embed/${match[1]}" frameborder="0" allowfullscreen></iframe></div>\n`);
+        else insertAtCursor(ta, url);
     }
 
-    function insertSpoiler(textarea) {
+    function insertCodeBlock(ta) {
+        const lang = prompt('Язык (js, python...):', '');
+        const code = prompt('Код:', '');
+        if (code === null) return;
+        insertAtCursor(ta, `\n\`\`\`${lang}\n${code}\n\`\`\`\n`);
+    }
+
+    function insertSpoiler(ta) {
         const summary = prompt('Заголовок спойлера:', 'Спойлер');
         if (summary === null) return;
-        const content = prompt('Содержимое спойлера:', '');
-        const spoiler = `\n<details><summary>${summary}</summary>\n\n${content || '...'}\n\n</details>\n`;
-        insertAtCursor(textarea, spoiler);
+        const content = prompt('Содержимое:', '');
+        insertAtCursor(ta, `\n<details><summary>${summary}</summary>\n\n${content || '...'}\n\n</details>\n`);
     }
 
-    function insertTable(textarea) {
-        const rows = prompt('Количество строк:', '3');
-        const cols = prompt('Количество столбцов:', '2');
+    function insertTable(ta) {
+        const rows = parseInt(prompt('Строк:', '3')), cols = parseInt(prompt('Столбцов:', '2'));
         if (!rows || !cols) return;
-        
         let table = '\n';
-        for (let i = 0; i < parseInt(cols); i++) {
-            table += `| Заголовок ${i+1} `;
-        }
-        table += '|\n';
-        
-        for (let i = 0; i < parseInt(cols); i++) {
-            table += '|-------------';
-        }
-        table += '|\n';
-        
-        for (let r = 0; r < parseInt(rows); r++) {
-            for (let c = 0; c < parseInt(cols); c++) {
-                table += `| Ячейка ${r+1}-${c+1} `;
-            }
+        for (let c = 0; c < cols; c++) table += `| Заголовок ${c+1} `;
+        table += '|\n' + '|' + '-------------|'.repeat(cols) + '\n';
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) table += `| Ячейка ${r+1}-${c+1} `;
             table += '|\n';
         }
-        insertAtCursor(textarea, table);
+        insertAtCursor(ta, table);
     }
 
-    function insertCodeBlock(textarea) {
-        const lang = prompt('Язык (например, javascript, python):', '');
-        const code = prompt('Введите код:', '');
-        if (code === null) return;
-        const block = `\n\`\`\`${lang}\n${code}\n\`\`\`\n`;
-        insertAtCursor(textarea, block);
+    function insertProgressBar(ta) {
+        const p = prompt('Процент (0-100):', '50');
+        if (p === null) return;
+        insertAtCursor(ta, `\n<div class="progress-bar"><div style="width: ${p}%;">${p}%</div></div>\n`);
     }
 
-    function insertProgressBar(textarea) {
-        const percent = prompt('Введите процент заполнения (0-100):', '50');
-        if (percent === null) return;
-        const bar = `\n<div class="progress-bar"><div style="width: ${percent}%; text-align: center; line-height: 24px;">${percent}%</div></div>\n`;
-        insertAtCursor(textarea, bar);
-    }
-
-    function insertCard(textarea) {
+    function insertCard(ta) {
         const title = prompt('Заголовок карточки:', 'Карточка');
         if (title === null) return;
-        const content = prompt('Содержимое карточки:', '');
-        const card = `\n<div class="custom-card"><h4>${title}</h4><p>${content || ''}</p></div>\n`;
-        insertAtCursor(textarea, card);
+        const content = prompt('Содержимое:', '');
+        insertAtCursor(ta, `\n<div class="custom-card"><h4>${title}</h4><p>${content || ''}</p></div>\n`);
     }
 
-    function insertPoll(textarea) {
-        const question = prompt('Вопрос опроса:', 'Добавлять ли новую функцию?');
-        if (question === null) return;
-        const optionsInput = prompt('Введите варианты через запятую (макс. 10):', 'Да, Нет, Возможно');
-        if (!optionsInput) return;
-        
-        const options = optionsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
-        if (options.length === 0) return;
-        if (options.length > 10) {
-            alert('Слишком много вариантов. Будет использовано только первые 10.');
-            options.splice(10);
-        }
-        
-        const pollData = { question, options };
-        const pollComment = `\n<!-- poll: ${JSON.stringify(pollData)} -->\n`;
-        insertAtCursor(textarea, pollComment);
+    function insertPoll(ta) {
+        const q = prompt('Вопрос:', 'Добавлять функцию?');
+        if (q === null) return;
+        const opts = prompt('Варианты через запятую (до 10):', 'Да, Нет, Возможно');
+        if (!opts) return;
+        const options = opts.split(',').map(s => s.trim()).filter(Boolean).slice(0,10);
+        if (!options.length) return;
+        insertAtCursor(ta, `\n<!-- poll: ${JSON.stringify({ question: q, options })} -->\n`);
     }
 
-    function insertIcon(textarea) {
-        const icon = prompt('Введите название иконки Font Awesome (например, "fa-heart"):', 'fa-heart');
-        if (!icon) return;
-        insertAtCursor(textarea, `<i class="fas ${icon}"></i>`);
+    function insertIcon(ta) {
+        const icon = prompt('Название иконки (fa-heart):', 'fa-heart');
+        if (icon) insertAtCursor(ta, `<i class="fas ${icon}"></i>`);
     }
 
-    function insertColor(textarea, styleProp) {
-        const color = prompt(`Введите цвет (например, red, #ff0000):`, 'red');
+    function insertColor(ta, prop) {
+        const color = prompt('Цвет (red, #ff0000):', 'red');
         if (!color) return;
-        const selected = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
-        if (selected) {
-            insertAtCursor(textarea, `<span style="${styleProp}: ${color};">${selected}</span>`);
-        } else {
-            insertAtCursor(textarea, `<span style="${styleProp}: ${color};">текст</span>`);
-        }
+        const selected = ta.value.substring(ta.selectionStart, ta.selectionEnd);
+        if (selected) insertAtCursor(ta, `<span style="${prop}: ${color};">${selected}</span>`);
+        else insertAtCursor(ta, `<span style="${prop}: ${color};">текст</span>`);
     }
 
-    // Debounce для живого предпросмотра
     function debounce(fn, delay) {
         let timer;
-        return function(...args) {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn.apply(this, args), delay);
-        };
+        return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
     }
 
-    /**
-     * Создаёт кнопку-меню со списком безопасных сервисов для загрузки изображений
-     * @returns {HTMLElement} кнопка с выпадающим меню
-     */
+    // Меню с хостингами изображений
     function createImageServicesMenu() {
         const services = [
-            { 
-                name: 'ImageBam', 
-                url: 'https://www.imagebam.com/upload?multi=1',
-                description: 'До 100 МБ, массовая загрузка, без регистрации'
-            },
-            { 
-                name: 'Postimages', 
-                url: 'https://postimages.org/',
-                description: 'До 32 МБ, без регистрации, прямые ссылки'
-            },
-            { 
-                name: 'ImgBB', 
-                url: 'https://imgbb.com/',
-                description: 'До 32 МБ, удобный интерфейс, без регистрации'
-            },
-            { 
-                name: 'Catbox', 
-                url: 'https://catbox.moe/',
-                description: 'До 200 МБ, анонимно, минимализм'
-            }
+            { name: 'ImageBam', url: 'https://www.imagebam.com/upload?multi=1', desc: 'До 100 МБ, массовая загрузка' },
+            { name: 'Postimages', url: 'https://postimages.org/', desc: 'До 32 МБ, прямые ссылки' },
+            { name: 'ImgBB', url: 'https://imgbb.com/', desc: 'До 32 МБ, удобно' },
+            { name: 'Catbox', url: 'https://catbox.moe/', desc: 'До 200 МБ, анонимно' }
         ];
-
         const container = document.createElement('div');
         container.className = 'preview-split';
         container.style.marginLeft = '0';
@@ -357,111 +161,63 @@
         dropdownBtn.className = 'editor-btn dropdown-toggle';
         dropdownBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
 
-        const dropdownMenu = document.createElement('div');
-        dropdownMenu.className = 'preview-dropdown';
-        dropdownMenu.style.minWidth = '280px';
-
-        services.forEach(service => {
-            const item = document.createElement('button');
-            item.innerHTML = `<strong>${service.name}</strong><br><small>${service.description}</small>`;
-            item.style.whiteSpace = 'normal';
-            item.style.lineHeight = '1.4';
-            item.style.padding = '10px 16px';
-            item.addEventListener('click', (e) => {
-                e.stopPropagation();
-                window.open(service.url, '_blank');
-                dropdownMenu.classList.remove('show');
-            });
-            dropdownMenu.appendChild(item);
+        const dropdown = document.createElement('div');
+        dropdown.className = 'preview-dropdown';
+        dropdown.style.minWidth = '280px';
+        services.forEach(s => {
+            const btn = document.createElement('button');
+            btn.innerHTML = `<strong>${s.name}</strong><br><small>${s.desc}</small>`;
+            btn.style.whiteSpace = 'normal';
+            btn.onclick = (e) => { e.stopPropagation(); window.open(s.url, '_blank'); dropdown.classList.remove('show'); };
+            dropdown.appendChild(btn);
         });
 
-        container.appendChild(mainBtn);
-        container.appendChild(dropdownBtn);
-        container.appendChild(dropdownMenu);
+        container.append(mainBtn, dropdownBtn, dropdown);
 
-        // Логика открытия/закрытия меню
-        dropdownBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            dropdownMenu.classList.toggle('show');
-        });
-
-        mainBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            dropdownMenu.classList.toggle('show');
-        });
-
-        // Закрытие при клике вне
-        document.addEventListener('click', (e) => {
-            if (!container.contains(e.target)) {
-                dropdownMenu.classList.remove('show');
-            }
-        });
+        const toggle = (e) => { e.stopPropagation(); dropdown.classList.toggle('show'); };
+        mainBtn.addEventListener('click', toggle);
+        dropdownBtn.addEventListener('click', toggle);
+        document.addEventListener('click', (e) => { if (!container.contains(e.target)) dropdown.classList.remove('show'); });
 
         return container;
     }
 
+    // Создание тулбара редактора
     function createEditorToolbar(textarea, options = {}) {
         const toolbar = document.createElement('div');
         toolbar.className = 'editor-toolbar';
-        toolbar.style.cssText = `
-            display: flex;
-            gap: 5px;
-            margin-bottom: 10px;
-            flex-wrap: wrap;
-            padding: 8px;
-            background: var(--bg-card);
-            border-radius: 12px;
-            border: 1px solid var(--border);
-        `;
 
         const groups = {
-            'Форматирование': ['bold', 'italic', 'strikethrough'],
-            'Заголовки': ['h1', 'h2', 'h3'],
-            'Списки': ['ul', 'ol', 'quote'],
-            'Медиа': ['link', 'image', 'youtube'],
-            'Код': ['code', 'codeblock'],
-            'Блоки': ['spoiler', 'table', 'poll', 'progress', 'card'],
+            'Форматирование': ['bold','italic','strikethrough'],
+            'Заголовки': ['h1','h2','h3'],
+            'Списки': ['ul','ol','quote'],
+            'Медиа': ['link','image','youtube'],
+            'Код': ['code','codeblock'],
+            'Блоки': ['spoiler','table','poll','progress','card'],
             'Иконки': ['icon'],
-            'Цвет': ['color', 'bgcolor'],
-            'Дополнительно': ['hr']
+            'Цвет': ['color','bgcolor'],
+            'Доп': ['hr']
         };
 
-        for (const [groupName, templateKeys] of Object.entries(groups)) {
+        for (let [name, keys] of Object.entries(groups)) {
             const group = document.createElement('div');
             group.className = 'editor-btn-group';
-            group.style.cssText = `
-                display: flex;
-                gap: 3px;
-                flex-wrap: wrap;
-                padding: 0 5px;
-                border-right: 1px solid var(--border);
-            `;
-
-            templateKeys.forEach(key => {
-                const template = TEMPLATES[key];
-                if (!template) return;
-
+            keys.forEach(key => {
+                const t = TEMPLATES[key];
+                if (!t) return;
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'editor-btn';
-                btn.title = template.name;
-                btn.innerHTML = template.icon.startsWith('fas') || template.icon.startsWith('fab') 
-                    ? `<i class="${template.icon}"></i>` 
-                    : template.icon;
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    template.action(textarea);
-                });
+                btn.title = t.name;
+                btn.innerHTML = t.icon.startsWith('fa') ? `<i class="${t.icon}"></i>` : t.icon;
+                btn.addEventListener('click', (e) => { e.preventDefault(); t.action(textarea); });
                 group.appendChild(btn);
             });
-
             toolbar.appendChild(group);
         }
 
-        // Добавляем кнопку с хостингами (в начало правой части)
         toolbar.appendChild(createImageServicesMenu());
 
-        // Split button для предпросмотра
         if (options.preview !== false) {
             const previewWrapper = document.createElement('div');
             previewWrapper.className = 'preview-split';
@@ -477,41 +233,25 @@
             dropdownBtn.className = 'editor-btn dropdown-toggle';
             dropdownBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
 
-            const dropdownMenu = document.createElement('div');
-            dropdownMenu.className = 'preview-dropdown';
-            dropdownMenu.innerHTML = `
-                <button data-mode="preview" class="active">Предпросмотр</button>
-                <button data-mode="live">Живой предпросмотр</button>
-            `;
+            const dropdown = document.createElement('div');
+            dropdown.className = 'preview-dropdown';
+            dropdown.innerHTML = '<button data-mode="preview" class="active">Предпросмотр</button><button data-mode="live">Живой</button>';
 
-            previewWrapper.appendChild(previewBtn);
-            previewWrapper.appendChild(dropdownBtn);
-            previewWrapper.appendChild(dropdownMenu);
+            previewWrapper.append(previewBtn, dropdownBtn, dropdown);
 
-            let liveMode = false;
-            let inputHandler = null;
-
-            const showPreview = () => {
-                if (options.onPreview) options.onPreview();
-            };
+            let liveMode = false, inputHandler = null;
+            const showPreview = () => options.onPreview?.();
 
             previewBtn.addEventListener('click', showPreview);
+            dropdownBtn.addEventListener('click', (e) => { e.stopPropagation(); dropdown.classList.toggle('show'); });
 
-            dropdownBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                dropdownMenu.classList.toggle('show');
-            });
-
-            dropdownMenu.querySelectorAll('button').forEach(btn => {
+            dropdown.querySelectorAll('button').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const mode = btn.dataset.mode;
-                    
-                    dropdownMenu.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    dropdown.querySelectorAll('button').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-
-                    if (mode === 'live') {
-                        previewBtn.textContent = 'Живой предпросмотр';
+                    if (btn.dataset.mode === 'live') {
+                        previewBtn.textContent = 'Живой';
                         if (!liveMode) {
                             liveMode = true;
                             if (inputHandler) textarea.removeEventListener('input', inputHandler);
@@ -523,47 +263,20 @@
                         previewBtn.textContent = 'Предпросмотр';
                         if (liveMode) {
                             liveMode = false;
-                            if (inputHandler) {
-                                textarea.removeEventListener('input', inputHandler);
-                                inputHandler = null;
-                            }
+                            textarea.removeEventListener('input', inputHandler);
+                            inputHandler = null;
                         }
                     }
-
-                    dropdownMenu.classList.remove('show');
+                    dropdown.classList.remove('show');
                 });
             });
 
-            // Закрытие меню при клике вне
-            document.addEventListener('click', (e) => {
-                if (!previewWrapper.contains(e.target)) {
-                    dropdownMenu.classList.remove('show');
-                }
-            });
-
+            document.addEventListener('click', (e) => { if (!previewWrapper.contains(e.target)) dropdown.classList.remove('show'); });
             toolbar.appendChild(previewWrapper);
         }
 
         return toolbar;
     }
 
-    window.Editor = {
-        TEMPLATES,
-        createEditorToolbar,
-        createImageServicesMenu,
-        insertAtCursor,
-        insertMarkdown,
-        insertList,
-        insertLink,
-        insertImage,
-        insertYouTube,
-        insertSpoiler,
-        insertTable,
-        insertCodeBlock,
-        insertProgressBar,
-        insertCard,
-        insertPoll,
-        insertIcon,
-        insertColor
-    };
+    window.Editor = { TEMPLATES, createEditorToolbar, createImageServicesMenu, insertAtCursor, insertMarkdown, insertList, insertLink, insertImage, insertYouTube, insertSpoiler, insertTable, insertCodeBlock, insertProgressBar, insertCard, insertPoll, insertIcon, insertColor };
 })();
