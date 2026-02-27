@@ -82,6 +82,13 @@
                         return;
                     }
                     const issue = await loadIssue(postId);
+                    
+                    // Проверяем состояние issue
+                    if (issue.state === 'closed') {
+                        UIUtils.showToast('Этот пост был закрыт и больше не доступен', 'error');
+                        return;
+                    }
+
                     const item = {
                         type: 'post',
                         id: issue.number,
@@ -95,7 +102,7 @@
                     openFullModal(item);
                 } catch (err) {
                     console.error('Ошибка загрузки поста по ссылке:', err);
-                    if (UIUtils) UIUtils.showToast('Не удалось загрузить пост', 'error');
+                    if (UIUtils) UIUtils.showToast('Пост не найден или произошла ошибка', 'error');
                 }
             }, 1500); // небольшая задержка для гарантии загрузки всех скриптов
         }
@@ -215,7 +222,7 @@
             ]);
             const allIssues = deduplicateByNumber([...newsIssues, ...updateIssues]);
             const posts = allIssues
-                .filter(issue => CONFIG.ALLOWED_AUTHORS.includes(issue.user.login))
+                .filter(issue => issue.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(issue.user.login))
                 .map(issue => ({
                     type: 'post',
                     number: issue.number,

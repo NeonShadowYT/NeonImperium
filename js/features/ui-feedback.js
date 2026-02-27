@@ -441,7 +441,7 @@
         });
     }
 
-    // ========== ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ КНОПОК В ШАПКУ МОДАЛКИ ==========
+    // Функция для добавления кнопок в шапку модалки
     function addHeaderActions(modalHeader, item, issue, currentUser, closeModal, escHandler) {
         const isAdmin = GithubAuth.isAdmin();
         const postUrl = `${window.location.origin}${window.location.pathname}?post=${item.id}`;
@@ -458,21 +458,7 @@
         buttonsHtml += `<button class="action-btn share-post" title="Поделиться" aria-label="Поделиться"><i class="fas fa-share-alt"></i></button>`;
 
         actionsContainer.innerHTML = buttonsHtml;
-
-        // Вставляем после заголовка, но перед spacer'ом
-        const title = modalHeader.querySelector('h2');
-        const spacer = modalHeader.querySelector('.modal-header-spacer');
-        if (spacer) {
-            modalHeader.insertBefore(actionsContainer, spacer);
-        } else {
-            // fallback: вставляем перед закрытием
-            const closeBtn = modalHeader.querySelector('.modal-close');
-            if (closeBtn) {
-                modalHeader.insertBefore(actionsContainer, closeBtn);
-            } else {
-                modalHeader.appendChild(actionsContainer);
-            }
-        }
+        modalHeader.appendChild(actionsContainer);
 
         actionsContainer.querySelector('.edit-issue')?.addEventListener('click', (e) => {
             e.stopPropagation(); closeModal(); document.removeEventListener('keydown', escHandler);
@@ -499,7 +485,7 @@
         });
     }
 
-    // ========== ИСПРАВЛЕННАЯ ФУНКЦИЯ openFullModal ==========
+    // Основная функция открытия модального окна поста
     async function openFullModal(item) {
         const currentUser = GithubAuth.getCurrentUser();
         const contentHtml = '<div class="loading-spinner" id="modal-loader"><i class="fas fa-circle-notch fa-spin"></i></div>';
@@ -509,6 +495,13 @@
         document.addEventListener('keydown', escHandler);
         try {
             const issue = await GithubAPI.loadIssue(item.id);
+            
+            // Проверяем, не закрыт ли issue
+            if (issue.state === 'closed') {
+                container.innerHTML = '<p class="error-message">Этот пост был закрыт и больше не доступен.</p>';
+                return;
+            }
+
             container.innerHTML = '';
 
             // Создаём шапку (без кнопок действий)
@@ -546,8 +539,9 @@
             await loadReactionsAndComments(container, item, currentUser, issue);
             if (currentUser) setupCommentForm(container, item, currentUser);
         } catch (err) {
-            container.innerHTML = '<p class="error-message">Не удалось загрузить содержимое. Закрытие...</p>';
-            setTimeout(() => { closeModal(); document.removeEventListener('keydown', escHandler); }, 2000);
+            console.error('Error loading post:', err);
+            container.innerHTML = '<p class="error-message">Пост не найден или произошла ошибка загрузки.</p>';
+            setTimeout(() => { closeModal(); document.removeEventListener('keydown', escHandler); }, 3000);
         }
     }
 
