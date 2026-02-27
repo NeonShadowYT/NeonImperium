@@ -51,12 +51,17 @@
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
         modal.setAttribute('aria-labelledby', 'modal-header-title');
+        
+        const headerHtml = `
+            <div class="modal-header">
+                <h2 id="modal-header-title">${GithubCore.escapeHtml(title)}</h2>
+                <div class="modal-header-spacer"></div>
+                ${closeButton ? '<button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>' : ''}
+            </div>
+        `;
         modal.innerHTML = `
             <div class="${contentClass}">
-                <div class="modal-header">
-                    <h2 id="modal-header-title">${GithubCore.escapeHtml(title)}</h2>
-                    ${closeButton ? '<button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>' : ''}
-                </div>
+                ${headerHtml}
                 <div class="modal-body">${contentHtml}</div>
             </div>
         `;

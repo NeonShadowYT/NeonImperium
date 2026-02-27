@@ -447,7 +447,6 @@
         const postUrl = `${window.location.origin}${window.location.pathname}?post=${item.id}`;
         const actionsContainer = document.createElement('div');
         actionsContainer.className = 'modal-header-actions';
-        actionsContainer.style.cssText = 'display:flex;align-items:center;gap:8px;margin-left:auto;';
 
         let buttonsHtml = '';
         if (isAdmin || (currentUser && issue.user.login === currentUser)) {
@@ -459,7 +458,21 @@
         buttonsHtml += `<button class="action-btn share-post" title="Поделиться" aria-label="Поделиться"><i class="fas fa-share-alt"></i></button>`;
 
         actionsContainer.innerHTML = buttonsHtml;
-        modalHeader.appendChild(actionsContainer);
+
+        // Вставляем после заголовка, но перед spacer'ом
+        const title = modalHeader.querySelector('h2');
+        const spacer = modalHeader.querySelector('.modal-header-spacer');
+        if (spacer) {
+            modalHeader.insertBefore(actionsContainer, spacer);
+        } else {
+            // fallback: вставляем перед закрытием
+            const closeBtn = modalHeader.querySelector('.modal-close');
+            if (closeBtn) {
+                modalHeader.insertBefore(actionsContainer, closeBtn);
+            } else {
+                modalHeader.appendChild(actionsContainer);
+            }
+        }
 
         actionsContainer.querySelector('.edit-issue')?.addEventListener('click', (e) => {
             e.stopPropagation(); closeModal(); document.removeEventListener('keydown', escHandler);
