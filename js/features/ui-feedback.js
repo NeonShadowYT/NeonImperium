@@ -229,12 +229,44 @@
         }
     }
 
+    // ========== ПОЛНОЦЕННЫЙ РЕДАКТОР ДЛЯ КОММЕНТАРИЯ ==========
     function openEditCommentModal(commentId, currentBody, issueNumber) {
-        const modalHtml = `<div class="feedback-form"><textarea id="edit-comment-body" class="feedback-textarea" rows="5">${GithubCore.escapeHtml(currentBody)}</textarea><div class="button-group" style="margin-top:15px;"><button class="button" id="edit-comment-save">Сохранить</button><button class="button" id="edit-comment-cancel">Отмена</button></div></div>`;
-        const { modal, closeModal } = UIUtils.createModal('Редактировать комментарий', modalHtml, { size: 'small' });
+        const modalHtml = `
+            <div class="feedback-form">
+                <div id="modal-editor-toolbar"></div>
+                <textarea id="edit-comment-body" class="feedback-textarea" rows="10">${GithubCore.escapeHtml(currentBody)}</textarea>
+                <div class="preview-area" id="modal-preview-area" style="display:none;"></div>
+                <div class="button-group" style="margin-top:15px;">
+                    <button class="button" id="edit-comment-save">Сохранить</button>
+                    <button class="button" id="edit-comment-cancel">Отмена</button>
+                </div>
+            </div>
+        `;
+        const { modal, closeModal } = UIUtils.createModal('Редактировать комментарий', modalHtml, { size: 'full' });
+        const textarea = modal.querySelector('#edit-comment-body');
+        const previewArea = modal.querySelector('#modal-preview-area');
+        const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
+
+        // Добавляем панель инструментов
+        if (window.Editor) {
+            const updatePreview = () => {
+                const text = textarea.value;
+                if (text.trim()) {
+                    previewArea.innerHTML = '';
+                    if (!previewArea.classList.contains('markdown-body')) previewArea.classList.add('markdown-body');
+                    renderPostBody(previewArea, text, null);
+                    previewArea.style.display = 'block';
+                } else {
+                    previewArea.style.display = 'none';
+                }
+            };
+            const toolbar = Editor.createEditorToolbar(textarea, { onPreview: updatePreview, textarea: textarea });
+            toolbarContainer.appendChild(toolbar);
+        }
+
         const saveBtn = modal.querySelector('#edit-comment-save');
         const cancelBtn = modal.querySelector('#edit-comment-cancel');
-        const textarea = modal.querySelector('#edit-comment-body');
+
         saveBtn.addEventListener('click', async () => {
             const newBody = textarea.value.trim();
             if (!newBody) { UIUtils.showToast('Комментарий не может быть пустым', 'error'); return; }
@@ -411,13 +443,28 @@
         });
     }
 
+    // ========== ИСПРАВЛЕННАЯ ФУНКЦИЯ setupAdminActions (теперь с кнопкой "Поделиться") ==========
     function setupAdminActions(container, item, issue, currentUser, closeModal, escHandler) {
         const isAdmin = GithubAuth.isAdmin();
         const actionButtons = document.createElement('div'); actionButtons.className = 'feedback-item-actions';
+
+        // Формируем URL для шаринга
+        const postUrl = `${window.location.origin}${window.location.pathname}?post=${item.id}`;
+
+        let buttonsHtml = '';
         if (isAdmin || (currentUser && issue.user.login === currentUser)) {
-            actionButtons.innerHTML = '<button class="edit-issue" title="Редактировать" aria-label="Редактировать"><i class="fas fa-edit"></i></button><button class="close-issue" title="Закрыть" aria-label="Закрыть"><i class="fas fa-trash-alt"></i></button>';
+            buttonsHtml += `
+                <button class="action-btn edit-issue" title="Редактировать" aria-label="Редактировать"><i class="fas fa-edit"></i></button>
+                <button class="action-btn close-issue" title="Закрыть" aria-label="Закрыть"><i class="fas fa-trash-alt"></i></button>
+            `;
         }
+        // Кнопка "Поделиться" добавляется всегда
+        buttonsHtml += `<button class="action-btn share-post" title="Поделиться" aria-label="Поделиться"><i class="fas fa-share-alt"></i></button>`;
+
+        actionButtons.innerHTML = buttonsHtml;
         container.appendChild(actionButtons);
+
+        // Обработчики
         actionButtons.querySelector('.edit-issue')?.addEventListener('click', (e) => {
             e.stopPropagation(); closeModal(); document.removeEventListener('keydown', escHandler);
             let postType = 'feedback';
@@ -425,6 +472,7 @@
             else if (item.labels?.includes('type:update')) postType = 'update';
             openEditorModal('edit', { number: item.id, title: issue.title, body: issue.body, game: item.game }, postType);
         });
+
         actionButtons.querySelector('.close-issue')?.addEventListener('click', async (e) => {
             e.stopPropagation(); if (!confirm('Закрыть?')) return;
             try {
@@ -435,8 +483,14 @@
                 UIUtils.showToast('Закрыто', 'success');
             } catch (err) { UIUtils.showToast('Ошибка при закрытии', 'error'); }
         });
+
+        actionButtons.querySelector('.share-post')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(postUrl).then(() => UIUtils.showToast('Ссылка скопирована', 'success')).catch(() => UIUtils.showToast('Ошибка копирования', 'error'));
+        });
     }
 
+    // ========== ИСПРАВЛЕННАЯ ФУНКЦИЯ openFullModal (убрана кнопка из шапки) ==========
     async function openFullModal(item) {
         const currentUser = GithubAuth.getCurrentUser();
         const contentHtml = '<div class="loading-spinner" id="modal-loader"><i class="fas fa-circle-notch fa-spin"></i></div>';
@@ -457,7 +511,6 @@
             else if (item.labels?.includes('type:bug')) typeIcon = '🐛';
             else if (item.labels?.includes('type:review')) typeIcon = '⭐';
             else typeIcon = '📌';
-            const postUrl = `${window.location.origin}${window.location.pathname}?post=${item.id}`;
             header.innerHTML = `
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <span style="font-size:24px;">${typeIcon}</span>
@@ -468,16 +521,9 @@
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0;">
                     ${item.game ? `<span class="feedback-label">${GithubCore.escapeHtml(item.game)}</span>` : ''}
-                    <button class="button small" id="share-post-btn" title="Поделиться"><i class="fas fa-share-alt"></i></button>
                 </div>
             `;
             container.appendChild(header);
-            const shareBtn = container.querySelector('#share-post-btn');
-            if (shareBtn) {
-                shareBtn.addEventListener('click', () => {
-                    navigator.clipboard.writeText(postUrl).then(() => UIUtils.showToast('Ссылка скопирована', 'success')).catch(() => UIUtils.showToast('Ошибка копирования', 'error'));
-                });
-            }
             await renderPostBody(container, issue.body, item.id);
             await loadReactionsAndComments(container, item, currentUser, issue);
             if (currentUser) setupCommentForm(container, item, currentUser);
