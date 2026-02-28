@@ -1,10 +1,8 @@
-// news-feed.js — лента новостей на главной
-
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
-    const { openFullModal } = UIFeedback;
-    const { getCurrentUser } = GithubAuth;
+    const { openFullModal, canViewPost } = UIFeedback;
+    const { getCurrentUser, isAdmin } = GithubAuth;
 
     const YT_CHANNELS = [
         { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
@@ -21,7 +19,6 @@
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('news-section');
         if (!section) return;
-        // Создаём заголовок и описание, если их нет
         let header = section.querySelector('.news-header');
         if (!header) {
             header = document.createElement('div');
@@ -45,16 +42,12 @@
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; refreshNewsFeed(); });
         window.addEventListener('github-logout', () => { currentUser = null; refreshNewsFeed(); });
 
-        // Слушаем событие создания нового issue
         window.addEventListener('github-issue-created', (e) => {
             const issue = e.detail;
             const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
             if (!typeLabel) return;
             if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
-
-            // Инвалидируем кеш постов
             cacheRemoveByPrefix('posts_news+update_v3');
-
             const newPost = {
                 type: 'post',
                 number: issue.number,
@@ -69,26 +62,20 @@
             renderMixed();
         });
 
-        // ===== ОБРАБОТКА ПАРАМЕТРА POST В URL =====
         const urlParams = new URLSearchParams(window.location.search);
         const postId = urlParams.get('post');
         if (postId) {
-            // Даём время на загрузку основных данных и скриптов
             setTimeout(async () => {
                 try {
-                    // Убедимся, что необходимые объекты загружены
                     if (!GithubAPI || !UIFeedback) {
                         console.warn('GithubAPI или UIFeedback не доступны');
                         return;
                     }
                     const issue = await loadIssue(postId);
-                    
-                    // Проверяем состояние issue
                     if (issue.state === 'closed') {
                         UIUtils.showToast('Этот пост был закрыт и больше не доступен', 'error');
                         return;
                     }
-
                     const item = {
                         type: 'post',
                         id: issue.number,
@@ -99,12 +86,16 @@
                         game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
                         labels: issue.labels.map(l => l.name)
                     };
+                    if (!canViewPost(issue.body, issue.labels.map(l => l.name), currentUser)) {
+                        UIUtils.showToast('У вас нет доступа к этому посту', 'error');
+                        return;
+                    }
                     openFullModal(item);
                 } catch (err) {
                     console.error('Ошибка загрузки поста по ссылке:', err);
                     if (UIUtils) UIUtils.showToast('Пост не найден или произошла ошибка', 'error');
                 }
-            }, 1500); // небольшая задержка для гарантии загрузки всех скриптов
+            }, 1500);
         }
     });
 
@@ -126,7 +117,6 @@
             if (err.name === 'AbortError') return;
             posts = []; postsLoaded = true;
         }
-        // Пытаемся загрузить видео параллельно, но не ждём
         loadVideosAsync();
     }
 
@@ -143,7 +133,7 @@
             videoError = true;
         } finally {
             videoLoading = false;
-            renderMixed(); // при загрузке видео перерисовываем
+            renderMixed();
         }
     }
 
@@ -191,7 +181,6 @@
                 allVideos.push(...videosFromChannel);
             }
 
-            // Сортируем все видео по дате и берём 20, чтобы потом смешать с постами
             const sorted = allVideos.sort((a, b) => b.date - a.date).slice(0, 20);
             const serialized = sorted.map(v => ({ ...v, date: v.date.toISOString() }));
             cacheSet(cacheKey, serialized);
@@ -215,7 +204,6 @@
         const { controller, timeoutId } = createAbortable(10000);
         currentAbort = { controller };
         try {
-            // Загружаем по 15 штук каждого типа, чтобы потом отобрать свежие
             const [newsIssues, updateIssues] = await Promise.all([
                 loadIssues({ labels: 'type:news', per_page: 15, signal: controller.signal }),
                 loadIssues({ labels: 'type:update', per_page: 15, signal: controller.signal })
@@ -253,14 +241,20 @@
             return;
         }
 
-        // Объединяем посты и видео, сортируем по дате (новые сверху)
-        let allItems = [...posts];
+        let filteredPosts = posts.filter(post => {
+            if (!post.labels.includes('private')) return true;
+            if (isAdmin()) return true;
+            const allowed = extractAllowed(post.body);
+            if (!allowed) return false;
+            const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
+            return allowedList.includes(currentUser);
+        });
+
+        let allItems = [...filteredPosts];
         if (videosLoaded) {
             allItems = allItems.concat(videos);
         }
-        // Сортируем по убыванию даты
         allItems.sort((a, b) => b.date - a.date);
-        // Берём только первые 6
         const itemsToShow = allItems.slice(0, 6);
 
         const grid = document.createElement('div'); grid.className = 'projects-grid';
@@ -307,7 +301,8 @@
         imgWrapper.appendChild(img);
         const title = document.createElement('h3'); title.textContent = post.title.length > 70 ? post.title.substring(0,70)+'…' : post.title;
         const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
-        const preview = document.createElement('p'); preview.className = 'text-secondary'; preview.style.fontSize='13px'; preview.style.overflow='hidden'; preview.style.display='-webkit-box'; preview.style.webkitLineClamp='2'; preview.style.webkitBoxOrient='vertical'; preview.textContent = stripHtml(post.body).substring(0,120)+'…';
+        const summary = extractSummary(post.body) || stripHtml(post.body).substring(0,120)+'…';
+        const preview = document.createElement('p'); preview.className = 'text-secondary'; preview.style.fontSize='13px'; preview.style.overflow='hidden'; preview.style.display='-webkit-box'; preview.style.webkitLineClamp='2'; preview.style.webkitBoxOrient='vertical'; preview.textContent = summary;
         inner.append(imgWrapper, title, meta, preview); card.appendChild(inner);
         card.addEventListener('click', (e) => { e.preventDefault(); openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); });
         return card;

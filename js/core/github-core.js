@@ -24,7 +24,6 @@ function cacheRemove(key) {
     sessionStorage.removeItem(`${key}_time`);
 }
 
-// Удаляет все записи кеша, ключи которых начинаются с prefix
 function cacheRemoveByPrefix(prefix) {
     const keysToRemove = [];
     for (let i = 0; i < sessionStorage.length; i++) {
@@ -35,7 +34,6 @@ function cacheRemoveByPrefix(prefix) {
     }
     keysToRemove.forEach(key => {
         sessionStorage.removeItem(key);
-        // также удаляем соответствующий _time ключ, если он есть
         sessionStorage.removeItem(key + '_time');
     });
 }
@@ -80,15 +78,32 @@ function stripHtml(html) {
     return tmp.textContent || tmp.innerText || '';
 }
 
+function extractMeta(body, tag) {
+    const regex = new RegExp(`<!--\\s*${tag}:\\s*(.*?)\\s*-->`, 'i');
+    const match = body ? body.match(regex) : null;
+    return match ? match[1].trim() : null;
+}
+
+function extractAllowed(body) {
+    return extractMeta(body, 'allowed');
+}
+
+function extractSummary(body) {
+    return extractMeta(body, 'summary');
+}
+
 window.GithubCore = {
     CONFIG: GITHUB_CONFIG,
     cacheGet,
     cacheSet,
     cacheRemove,
-    cacheRemoveByPrefix,  // новая функция
+    cacheRemoveByPrefix,
     escapeHtml,
     renderMarkdown,
     deduplicateByNumber,
     createAbortable,
-    stripHtml
+    stripHtml,
+    extractMeta,
+    extractAllowed,
+    extractSummary
 };

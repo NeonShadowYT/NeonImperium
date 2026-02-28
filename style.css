@@ -8,3 +8,77 @@
 @import url('css/layout.css');
 @import url('css/responsive.css');
 @import url('css/feedback.css');
+
+/* Исправление положения кнопок в шапке модалки */
+.modal-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.modal-header-spacer {
+    flex: 1;
+}
+.modal-header-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-right: auto; /* чтобы быть слева от спейсера */
+}
+.modal-header-actions .action-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+.modal-header-actions .action-btn:hover {
+    background: var(--bg-primary);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.modal-close {
+    flex-shrink: 0;
+}
+
+/* Поле превью и кнопка хостинги в одной строке */
+.preview-url-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.preview-url-wrapper .preview-url-input {
+    flex: 1;
+}
+.image-services-menu {
+    flex-shrink: 0;
+}
+
+/* Форма комментария */
+.comment-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+}
+.comment-form .comment-input {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    color: var(--text-primary);
+}
+.comment-form .button {
+    flex-shrink: 0;
+}
+
+/* Дополнительные стили для приватности */
+.privacy-row {
+    margin: 8px 0;
+}
+.allowed-users-row {
+    margin-bottom: 12px;
+}

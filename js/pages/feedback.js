@@ -1,7 +1,7 @@
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable, extractSummary } = GithubCore;
     const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
-    const { renderReactions, renderComments, openFullModal, openEditorModal } = UIFeedback;
+    const { renderReactions, renderComments, openFullModal, openEditorModal, canViewPost } = UIFeedback;
     const { isAdmin, getCurrentUser } = GithubAuth;
 
     const ITEMS_PER_PAGE = 10;
@@ -38,7 +38,6 @@
         currentUser = getCurrentUser();
         checkAuthAndRender();
 
-        // Обработка параметра post в URL
         const urlParams = new URLSearchParams(window.location.search);
         const postId = urlParams.get('post');
         if (postId) {
@@ -61,6 +60,10 @@
                 game: currentGame,
                 labels: issue.labels.map(l => l.name)
             };
+            if (!canViewPost(issue.body, issue.labels.map(l => l.name), currentUser)) {
+                UIUtils.showToast('У вас нет доступа к этому посту', 'error');
+                return;
+            }
             openFullModal(item);
         } catch (err) {
             UIUtils.showToast('Не удалось загрузить пост', 'error');
@@ -186,6 +189,15 @@
 
     function filterAndDisplayIssues(reset = false) {
         let filtered = allIssues.filter(issue => issue.state === 'open');
+        filtered = filtered.filter(issue => {
+            const labels = issue.labels.map(l => l.name);
+            if (!labels.includes('private')) return true;
+            if (isAdmin()) return true;
+            const allowed = GithubCore.extractAllowed(issue.body);
+            if (!allowed) return false;
+            const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
+            return allowedList.includes(currentUser);
+        });
         if (currentTab !== 'all') filtered = filtered.filter(issue => issue.labels.some(l => l.name === `type:${currentTab}`));
         displayedIssues = filtered;
         let issuesToRender = displayedIssues;
@@ -211,7 +223,8 @@
     function createIssueCard(issue) {
         const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
         const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : '⭐';
-        const preview = (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
+        const summary = GithubCore.extractSummary(issue.body) || (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
+        const preview = summary;
         const date = new Date(issue.created_at).toLocaleDateString();
         const cardLink = document.createElement('div');
         cardLink.className = 'project-card-link';

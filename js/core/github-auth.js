@@ -1,5 +1,3 @@
-// github-auth.js — авторизация через GitHub с правильной обработкой ошибок
-
 (function() {
     const CONFIG = GithubCore.CONFIG;
     const TOKEN_KEY = 'github_token';
@@ -168,7 +166,6 @@
     }
 
     async function validateAndShowProfile(token, shouldSave = false) {
-        // Проверка наличия токена
         if (!token) {
             showModalError('githubTokenMissing');
             return;
@@ -177,9 +174,8 @@
         profileContainer.innerHTML = `<i class="fas fa-circle-notch fa-spin" style="color: var(--accent); margin: 8px;"></i>`;
         clearModalError();
 
-        // Создаём контроллер с таймаутом
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
         try {
             const userResponse = await fetch('https://api.github.com/user', {
@@ -202,7 +198,6 @@
 
             const userData = await userResponse.json();
 
-            // Проверяем доступ к репозиторию (опционально, не критично)
             try {
                 await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}`, {
                     headers: { 'Authorization': `Bearer ${token}` },
@@ -235,11 +230,9 @@
             clearTimeout(timeoutId);
             console.error('Auth error:', error);
 
-            // Очищаем недействительные данные
             localStorage.removeItem(TOKEN_KEY);
             sessionStorage.removeItem(USER_CACHE_KEY);
 
-            // Определяем тип ошибки
             if (error.name === 'AbortError') {
                 showModalError('githubTimeout');
             } else if (error.message === 'unauthorized') {

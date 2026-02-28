@@ -1,19 +1,14 @@
-// admin-news.js — кнопки для админов с поддержкой динамической загрузки и событий входа/выхода
-
 (function() {
     const { cacheRemove, CONFIG } = GithubCore;
     const { isAdmin, getCurrentUser } = GithubAuth;
     const { openEditorModal } = UIFeedback;
 
-    // Функция рендера кнопок для админов
     function renderAdminPanels() {
-        // Если пользователь не админ — удаляем все существующие админ-кнопки и выходим
         if (!isAdmin()) {
             document.querySelectorAll('.admin-panel, .admin-news-btn, .admin-update-btn').forEach(el => el.remove());
             return;
         }
 
-        // Кнопка на главной (новости)
         const newsSection = document.getElementById('news-section');
         if (newsSection) {
             let header = newsSection.querySelector('.news-header');
@@ -27,7 +22,6 @@
                 header.appendChild(title);
                 newsSection.prepend(header);
             }
-            // Проверяем, нет ли уже такой кнопки
             if (!header.querySelector('.admin-news-btn')) {
                 const btn = document.createElement('button');
                 btn.className = 'button admin-news-btn';
@@ -74,14 +68,11 @@
         }
     }
 
-    // Удаление всех админ-кнопок
     function removeAdminPanels() {
         document.querySelectorAll('.admin-panel, .admin-news-btn, .admin-update-btn').forEach(el => el.remove());
     }
 
-    // Инициализация: проверяем статус и подписываемся на события
     function init() {
-        // Немедленная проверка (если уже залогинены)
         setTimeout(() => {
             if (isAdmin()) {
                 renderAdminPanels();
@@ -90,7 +81,6 @@
             }
         }, 0);
 
-        // Слушаем события входа/выхода
         window.addEventListener('github-login-success', () => {
             setTimeout(() => {
                 if (isAdmin()) {
@@ -98,7 +88,7 @@
                 } else {
                     removeAdminPanels();
                 }
-            }, 100); // небольшая задержка для гарантии обновления состояния
+            }, 100);
         });
 
         window.addEventListener('github-logout', () => {
@@ -106,8 +96,6 @@
         });
     }
 
-    // Запускаем инициализацию, когда скрипт загружен
-    // Если документ ещё не готов — ждём DOMContentLoaded, иначе сразу
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

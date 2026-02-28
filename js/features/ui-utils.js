@@ -1,7 +1,4 @@
-// ui-utils.js – общие компоненты интерфейса: тосты, модалки, черновики
-
 (function() {
-    // Показывает временное уведомление (тост)
     function showToast(message, type = 'info', duration = 3000) {
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
@@ -34,7 +31,6 @@
         }, duration);
     }
 
-    // Создаёт модальное окно с заголовком и содержимым
     function createModal(title, contentHtml, options = {}) {
         const { onClose, size = 'full', closeButton = true } = options;
         
@@ -91,7 +87,6 @@
         return { modal, closeModal };
     }
 
-    // Функции для работы с черновиками в sessionStorage
     function saveDraft(key, data) {
         try {
             sessionStorage.setItem(key, JSON.stringify({ ...data, timestamp: Date.now() }));

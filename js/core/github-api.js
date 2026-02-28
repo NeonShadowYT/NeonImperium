@@ -46,7 +46,6 @@
             body: JSON.stringify({ title, body, labels })
         });
         const issue = await response.json();
-        // Диспатчим событие о создании issue
         window.dispatchEvent(new CustomEvent('github-issue-created', { detail: issue }));
         return issue;
     }
