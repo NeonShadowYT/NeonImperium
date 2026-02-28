@@ -201,7 +201,7 @@
             if (canEditDelete) {
                 actionsHtml = `<div class="comment-actions"><button class="comment-edit" data-comment-id="${c.id}" data-comment-body="${GithubCore.escapeHtml(c.body)}" title="Редактировать"><i class="fas fa-edit"></i></button><button class="comment-delete" data-comment-id="${c.id}" title="Удалить"><i class="fas fa-trash-alt"></i></button></div>`;
             }
-            return `<div class="comment" data-comment-id="${c.id}"><div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(c.user.login)}</span><span>${new Date(c.created_at).toLocaleString()}</span></div><div class="comment-body">${GithubCore.escapeHtml(c.body).replace(/\n/g,'<br>')}</div>${actionsHtml}</div>`;
+            return `<div class="comment" data-comment-id="${c.id}"><div class="comment-header"><span class="comment-author">${GithubCore.escapeHtml(c.user.login)}</span><span class="comment-date">${new Date(c.created_at).toLocaleString()}</span>${actionsHtml}</div><div class="comment-body">${GithubCore.escapeHtml(c.body).replace(/\n/g,'<br>')}</div></div>`;
         }).join('');
         if (currentUser) {
             container.querySelectorAll('.comment-edit').forEach(btn => {
@@ -283,6 +283,65 @@
             } catch (err) {
                 UIUtils.showToast('Ошибка при сохранении', 'error');
                 saveBtn.disabled = false;
+            }
+        });
+        cancelBtn.addEventListener('click', closeModal);
+    }
+
+    function openCommentEditorModal(issueNumber) {
+        const modalHtml = `
+            <div class="feedback-form">
+                <div id="modal-editor-toolbar"></div>
+                <textarea id="comment-body" class="feedback-textarea" placeholder="Текст комментария..." rows="10"></textarea>
+                <div class="preview-area" id="modal-preview-area" style="display:none;"></div>
+                <div class="button-group" style="margin-top:15px;">
+                    <button class="button" id="comment-submit">Отправить</button>
+                    <button class="button" id="comment-cancel">Отмена</button>
+                </div>
+            </div>
+        `;
+        const { modal, closeModal } = UIUtils.createModal('Новый комментарий', modalHtml, { size: 'full' });
+        const textarea = modal.querySelector('#comment-body');
+        const previewArea = modal.querySelector('#modal-preview-area');
+        const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
+
+        if (window.Editor) {
+            const updatePreview = () => {
+                const text = textarea.value;
+                if (text.trim()) {
+                    previewArea.innerHTML = '';
+                    if (!previewArea.classList.contains('markdown-body')) previewArea.classList.add('markdown-body');
+                    renderPostBody(previewArea, text, null);
+                    previewArea.style.display = 'block';
+                } else {
+                    previewArea.style.display = 'none';
+                }
+            };
+            const toolbar = Editor.createEditorToolbar(textarea, { onPreview: updatePreview, textarea: textarea });
+            toolbarContainer.appendChild(toolbar);
+        }
+
+        const submitBtn = modal.querySelector('#comment-submit');
+        const cancelBtn = modal.querySelector('#comment-cancel');
+
+        submitBtn.addEventListener('click', async () => {
+            const body = textarea.value.trim();
+            if (!body) { UIUtils.showToast('Комментарий не может быть пустым', 'error'); return; }
+            submitBtn.disabled = true;
+            try {
+                await GithubAPI.addComment(issueNumber, body);
+                invalidateCache(issueNumber);
+                const updatedComments = await GithubAPI.loadComments(issueNumber);
+                setCached(`comments_${issueNumber}`, updatedComments, commentsCache);
+                const commentsContainer = document.querySelector('.feedback-comments');
+                if (commentsContainer) {
+                    renderComments(commentsContainer, updatedComments, GithubAuth.getCurrentUser(), issueNumber);
+                }
+                closeModal();
+                UIUtils.showToast('Комментарий добавлен', 'success');
+            } catch (err) {
+                UIUtils.showToast('Ошибка при отправке', 'error');
+                submitBtn.disabled = false;
             }
         });
         cancelBtn.addEventListener('click', closeModal);
@@ -408,7 +467,7 @@
 
     function setupCommentForm(container, item, currentUser) {
         const commentForm = document.createElement('div'); commentForm.className = 'comment-form'; commentForm.dataset.issue = item.id;
-        commentForm.innerHTML = '<input type="text" class="comment-input" placeholder="Написать комментарий..."><button class="button comment-submit">Отправить</button>';
+        commentForm.innerHTML = '<input type="text" class="comment-input" placeholder="Написать комментарий..."><button class="button comment-submit">Отправить</button><button class="button comment-editor-btn" title="Открыть редактор"><i class="fas fa-pencil-alt"></i></button>';
         container.appendChild(commentForm);
         commentForm.querySelector('.comment-submit')?.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -419,14 +478,15 @@
             const tempCommentDiv = document.createElement('div');
             tempCommentDiv.className = 'comment';
             tempCommentDiv.dataset.commentId = tempId;
-            tempCommentDiv.innerHTML = `<div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(currentUser)}</span><span>только что</span></div><div>${GithubCore.escapeHtml(comment).replace(/\n/g,'<br>')}</div>`;
+            tempCommentDiv.innerHTML = `<div class="comment-header"><span class="comment-author">${GithubCore.escapeHtml(currentUser)}</span><span class="comment-date">только что</span></div><div>${GithubCore.escapeHtml(comment).replace(/\n/g,'<br>')}</div>`;
             const commentsDiv = container.querySelector('.feedback-comments');
             commentsDiv.appendChild(tempCommentDiv);
             input.disabled = true; e.target.disabled = true;
             try {
                 const newComment = await GithubAPI.addComment(item.id, comment);
                 tempCommentDiv.dataset.commentId = newComment.id;
-                tempCommentDiv.querySelector('.comment-meta span:last-child').textContent = new Date(newComment.created_at).toLocaleString();
+                const dateSpan = tempCommentDiv.querySelector('.comment-date');
+                if (dateSpan) dateSpan.textContent = new Date(newComment.created_at).toLocaleString();
                 invalidateCache(item.id);
                 const updated = await GithubAPI.loadComments(item.id);
                 setCached(`comments_${item.id}`, updated, commentsCache);
@@ -438,6 +498,9 @@
             } finally {
                 input.disabled = false; e.target.disabled = false; input.value = '';
             }
+        });
+        commentForm.querySelector('.comment-editor-btn')?.addEventListener('click', () => {
+            openCommentEditorModal(item.id);
         });
     }
 
@@ -457,7 +520,6 @@
         buttonsHtml += `<button class="action-btn share-post" title="Поделиться" aria-label="Поделиться"><i class="fas fa-share-alt"></i></button>`;
 
         actionsContainer.innerHTML = buttonsHtml;
-        // Вставляем перед спейсером, чтобы кнопки были слева от крестика
         modalHeader.insertBefore(actionsContainer, modalHeader.querySelector('.modal-header-spacer'));
 
         actionsContainer.querySelector('.edit-issue')?.addEventListener('click', (e) => {
@@ -572,19 +634,21 @@
         }
         const contentHtml = `
             <div class="feedback-form">
-                <input type="text" id="modal-input-title" class="feedback-input" placeholder="Заголовок" value="${GithubCore.escapeHtml(data.title||'')}">
-                <div class="form-row">
+                <div class="form-row compact-row">
+                    <input type="text" id="modal-input-title" class="feedback-input" placeholder="Заголовок" value="${GithubCore.escapeHtml(data.title||'')}">
+                </div>
+                <div class="form-row compact-row">
                     <input type="text" id="modal-summary" class="feedback-input" placeholder="Краткое описание (для карточки)" value="${GithubCore.escapeHtml(summary)}">
                 </div>
-                <div class="form-row privacy-row">
-                    <label><input type="checkbox" id="modal-private" ${isPrivate ? 'checked' : ''}> Приватный пост</label>
-                </div>
-                <div class="form-row allowed-users-row" style="${isPrivate ? '' : 'display:none;'}">
-                    <input type="text" id="modal-allowed" class="feedback-input" placeholder="Ники через запятую (кто может видеть)" value="${GithubCore.escapeHtml(allowed)}">
-                </div>
-                <div class="preview-url-wrapper">
-                    <input type="url" id="modal-preview-url" class="feedback-input preview-url-input" placeholder="Ссылка на превью (необязательно)" value="${GithubCore.escapeHtml(previewUrl)}">
+                <div class="preview-url-wrapper compact-row">
+                    <input type="url" id="modal-preview-url" class="feedback-input preview-url-input" placeholder="Ссылка на превью" value="${GithubCore.escapeHtml(previewUrl)}">
                     <div id="preview-services-placeholder"></div>
+                </div>
+                <div class="privacy-allowed-row">
+                    <label class="privacy-checkbox"><input type="checkbox" id="modal-private" ${isPrivate ? 'checked' : ''}> Приватный пост</label>
+                    <div class="allowed-users-wrapper" style="${isPrivate ? '' : 'display:none;'}">
+                        <input type="text" id="modal-allowed" class="feedback-input" placeholder="Ники через запятую" value="${GithubCore.escapeHtml(allowed)}">
+                    </div>
                 </div>
                 <div id="preview-thumbnail-container" class="preview-thumbnail" style="${previewUrl ? '' : 'display:none;'}">
                     <img id="preview-thumbnail-img" src="${previewUrl ? GithubCore.escapeHtml(previewUrl) : ''}" alt="Preview">
@@ -607,7 +671,7 @@
         const thumbnailImg = modal.querySelector('#preview-thumbnail-img');
         const removePreviewBtn = modal.querySelector('#remove-preview-btn');
         const privateCheckbox = modal.querySelector('#modal-private');
-        const allowedRow = modal.querySelector('.allowed-users-row');
+        const allowedWrapper = modal.querySelector('.allowed-users-wrapper');
         const allowedInput = modal.querySelector('#modal-allowed');
         function updateThumbnail(url) {
             if (url && url.trim()) { thumbnailImg.src = url; thumbnailContainer.style.display = 'block'; }
@@ -617,7 +681,7 @@
         removePreviewBtn.addEventListener('click', () => { previewUrlInput.value = ''; updateThumbnail(''); });
 
         privateCheckbox.addEventListener('change', () => {
-            allowedRow.style.display = privateCheckbox.checked ? '' : 'none';
+            allowedWrapper.style.display = privateCheckbox.checked ? '' : 'none';
             if (!privateCheckbox.checked) allowedInput.value = '';
         });
 
@@ -628,7 +692,7 @@
                 document.getElementById('modal-input-title').value = savedDraft.title || '';
                 document.getElementById('modal-summary').value = savedDraft.summary || '';
                 privateCheckbox.checked = savedDraft.isPrivate || false;
-                allowedRow.style.display = privateCheckbox.checked ? '' : 'none';
+                allowedWrapper.style.display = privateCheckbox.checked ? '' : 'none';
                 if (savedDraft.allowed) document.getElementById('modal-allowed').value = savedDraft.allowed;
                 if (savedDraft.previewUrl) {
                     document.getElementById('modal-preview-url').value = savedDraft.previewUrl;
