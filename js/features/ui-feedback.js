@@ -570,13 +570,15 @@
                 <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(bodyContent)}</textarea>
                 <div class="preview-area" id="modal-preview-area" style="display:none; margin-top:4px;"></div>
                 <div class="button-group" style="display: flex; justify-content: space-between; align-items: center; margin-top:10px;">
-                    <div class="access-settings" style="display: flex; align-items: center; gap: 12px;">
-                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                            <input type="checkbox" id="private-post" style="width: auto;"> <span style="font-size:14px;">Приватный</span>
-                        </label>
-                        <span style="font-size:14px; color:var(--accent);"><i class="fas fa-user"></i> ${currentUser || 'Неизвестный'}</span>
+                    <div class="access-settings" style="display: flex; align-items: center; gap: 8px;">
+                        <div class="access-toggle" style="display: flex; background: var(--bg-inner-gradient); border-radius: 30px; border: 1px solid var(--border); overflow: hidden;">
+                            <button type="button" class="access-btn active" data-access="public" style="background: transparent; border: none; padding: 8px 16px; cursor: pointer; color: var(--text-secondary); transition: 0.2s;">Публичный</button>
+                            <button type="button" class="access-btn" data-access="private" style="background: transparent; border: none; padding: 8px 16px; cursor: pointer; color: var(--text-secondary); transition: 0.2s;">Приватный</button>
+                        </div>
+                        <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" style="width: 200px; display: none; margin-bottom:0;">
+                        <span style="font-size:14px; color:var(--accent); margin-left:4px;"><i class="fas fa-user"></i> ${currentUser || 'Неизвестный'}</span>
                     </div>
-                    <button class="button" id="modal-submit" style="margin-left: auto;">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
+                    <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                 </div>
             </div>
         `;
@@ -596,9 +598,34 @@
         previewUrlInput.addEventListener('input', (e) => updateThumbnail(e.target.value.trim()));
         removePreviewBtn.addEventListener('click', () => { previewUrlInput.value = ''; updateThumbnail(''); });
 
+        const accessPublicBtn = modal.querySelector('[data-access="public"]');
+        const accessPrivateBtn = modal.querySelector('[data-access="private"]');
+        const privateUsersInput = modal.querySelector('#private-users');
+
+        function updateAccessUI() {
+            const isPublic = accessPublicBtn.classList.contains('active');
+            privateUsersInput.style.display = isPublic ? 'none' : 'block';
+            accessPublicBtn.style.background = isPublic ? 'var(--accent)' : 'transparent';
+            accessPublicBtn.style.color = isPublic ? 'white' : 'var(--text-secondary)';
+            accessPrivateBtn.style.background = !isPublic ? 'var(--accent)' : 'transparent';
+            accessPrivateBtn.style.color = !isPublic ? 'white' : 'var(--text-secondary)';
+        }
+
+        accessPublicBtn.addEventListener('click', () => {
+            accessPublicBtn.classList.add('active');
+            accessPrivateBtn.classList.remove('active');
+            updateAccessUI();
+        });
+        accessPrivateBtn.addEventListener('click', () => {
+            accessPrivateBtn.classList.add('active');
+            accessPublicBtn.classList.remove('active');
+            updateAccessUI();
+        });
+        updateAccessUI();
+
         const draftKey = `draft_${postType}_${mode}_${data.game || 'global'}_${data.number || 'new'}`;
         const savedDraft = UIUtils.loadDraft(draftKey);
-        if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl)) {
+        if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl || savedDraft.access || savedDraft.privateUsers)) {
             if (confirm('Найден несохранённый черновик. Восстановить?')) {
                 document.getElementById('modal-input-title').value = savedDraft.title || '';
                 if (savedDraft.previewUrl) {
@@ -608,6 +635,16 @@
                 document.getElementById('modal-body').value = savedDraft.body || '';
                 if (savedDraft.category && document.getElementById('modal-category')) {
                     document.getElementById('modal-category').value = savedDraft.category;
+                }
+                if (savedDraft.access) {
+                    if (savedDraft.access === 'private') {
+                        accessPrivateBtn.click();
+                    } else {
+                        accessPublicBtn.click();
+                    }
+                }
+                if (savedDraft.privateUsers) {
+                    privateUsersInput.value = savedDraft.privateUsers;
                 }
             } else { UIUtils.clearDraft(draftKey); }
         }
@@ -621,13 +658,25 @@
             const currentPreview = previewUrlInput.value.trim();
             const currentBody = bodyTextarea.value.trim();
             const currentCategory = categorySelect ? categorySelect.value : null;
-            UIUtils.saveDraft(draftKey, { title: currentTitle, previewUrl: currentPreview, body: currentBody, category: currentCategory });
+            const currentAccess = accessPublicBtn.classList.contains('active') ? 'public' : 'private';
+            const currentPrivateUsers = privateUsersInput.value.trim();
+            UIUtils.saveDraft(draftKey, { 
+                title: currentTitle, 
+                previewUrl: currentPreview, 
+                body: currentBody, 
+                category: currentCategory,
+                access: currentAccess,
+                privateUsers: currentPrivateUsers
+            });
             hasChanges = true;
         };
         titleInput.addEventListener('input', updateDraft);
         previewUrlInput.addEventListener('input', updateDraft);
         bodyTextarea.addEventListener('input', updateDraft);
         if (categorySelect) categorySelect.addEventListener('change', updateDraft);
+        accessPublicBtn.addEventListener('click', updateDraft);
+        accessPrivateBtn.addEventListener('click', updateDraft);
+        privateUsersInput.addEventListener('input', updateDraft);
 
         const originalCloseModal = closeModal;
         const closeWithCheck = () => {
@@ -676,7 +725,6 @@
         }
 
         const submitBtn = modal.querySelector('#modal-submit');
-        const privateCheckbox = modal.querySelector('#private-post');
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             if (!GithubAuth.getToken()) { UIUtils.showToast('Вы не авторизованы. Войдите через GitHub.', 'error'); return; }
@@ -709,7 +757,7 @@
                     if (!data.game || data.game.trim() === '') { UIUtils.showToast('Ошибка: не указана игра для обновления', 'error'); btn.disabled = false; btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать'; return; }
                     labels = ['type:update', `game:${data.game}`];
                 }
-                if (privateCheckbox && privateCheckbox.checked) {
+                if (!accessPublicBtn.classList.contains('active')) {
                     if (!labels.includes('private')) labels.push('private');
                 }
                 if (mode === 'edit') await GithubAPI.updateIssue(data.number, { title, body, labels });
