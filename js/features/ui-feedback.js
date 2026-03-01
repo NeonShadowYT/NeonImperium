@@ -571,12 +571,11 @@
                 <div class="preview-area" id="modal-preview-area" style="display:none; margin-top:4px;"></div>
                 <div class="button-group" style="display: flex; justify-content: space-between; align-items: center; margin-top:10px;">
                     <div class="access-settings" style="display: flex; align-items: center; gap: 8px;">
-                        <div class="access-toggle" style="display: flex; background: var(--bg-inner-gradient); border-radius: 30px; border: 1px solid var(--border); overflow: hidden;">
-                            <button type="button" class="access-btn active" data-access="public" style="background: transparent; border: none; padding: 8px 16px; cursor: pointer; color: var(--text-secondary); transition: 0.2s;">Публичный</button>
-                            <button type="button" class="access-btn" data-access="private" style="background: transparent; border: none; padding: 8px 16px; cursor: pointer; color: var(--text-secondary); transition: 0.2s;">Приватный</button>
+                        <div class="preview-split" style="display: flex; border-radius: 30px; overflow: hidden;">
+                            <button type="button" class="editor-btn access-btn active" data-access="public" style="border-radius: 30px 0 0 30px;">Публичный</button>
+                            <button type="button" class="editor-btn access-btn" data-access="private" style="border-radius: 0 30px 30px 0;">Приватный</button>
                         </div>
                         <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" style="width: 200px; display: none; margin-bottom:0;">
-                        <span style="font-size:14px; color:var(--accent); margin-left:4px;"><i class="fas fa-user"></i> ${currentUser || 'Неизвестный'}</span>
                     </div>
                     <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                 </div>
@@ -605,10 +604,8 @@
         function updateAccessUI() {
             const isPublic = accessPublicBtn.classList.contains('active');
             privateUsersInput.style.display = isPublic ? 'none' : 'block';
-            accessPublicBtn.style.background = isPublic ? 'var(--accent)' : 'transparent';
-            accessPublicBtn.style.color = isPublic ? 'white' : 'var(--text-secondary)';
-            accessPrivateBtn.style.background = !isPublic ? 'var(--accent)' : 'transparent';
-            accessPrivateBtn.style.color = !isPublic ? 'white' : 'var(--text-secondary)';
+            accessPublicBtn.classList.toggle('active', isPublic);
+            accessPrivateBtn.classList.toggle('active', !isPublic);
         }
 
         accessPublicBtn.addEventListener('click', () => {
