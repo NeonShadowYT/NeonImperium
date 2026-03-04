@@ -560,6 +560,15 @@
         }
     }
 
+    function canViewPost(body, labels, currentUser) {
+        if (!labels.includes('private')) return true;
+        if (GithubAuth.isAdmin()) return true;
+        const allowed = GithubCore.extractAllowed(body);
+        if (!allowed) return false;
+        const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
+        return allowedList.includes(currentUser);
+    }
+
     function openEditorModal(mode, data, postType = 'feedback') {
         const currentUser = GithubAuth.getCurrentUser();
         const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
@@ -843,6 +852,7 @@
         openFullModal,
         openEditorModal,
         renderPostBody,
+        canViewPost,
         REACTION_TYPES,
         invalidateCache
     };
