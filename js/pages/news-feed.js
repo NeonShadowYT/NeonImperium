@@ -86,7 +86,7 @@
                         game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
                         labels: issue.labels.map(l => l.name)
                     };
-                    if (!canViewPost(issue.body, issue.labels.map(l => l.name), currentUser)) {
+                    if (!UIFeedback.canViewPost(issue.body, issue.labels.map(l => l.name), currentUser)) {
                         UIUtils.showToast('У вас нет доступа к этому посту', 'error');
                         return;
                     }

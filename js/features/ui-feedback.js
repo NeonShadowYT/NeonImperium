@@ -450,9 +450,7 @@
 
         editorBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (window.Editor) {
-                window.dispatchEvent(new CustomEvent('open-comment-editor', { detail: { issueNumber: item.id } }));
-            }
+            window.dispatchEvent(new CustomEvent('open-comment-editor', { detail: { issueNumber: item.id } }));
         });
     }
 
@@ -844,6 +842,12 @@
             }
         });
     }
+
+    window.addEventListener('open-comment-editor', (e) => {
+        const { issueNumber } = e.detail;
+        if (!issueNumber) return;
+        openEditorModal('new', { issueNumber }, 'comment');
+    });
 
     window.UIFeedback = {
         renderReactions,
