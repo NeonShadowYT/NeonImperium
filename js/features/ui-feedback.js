@@ -201,7 +201,7 @@
             if (canEditDelete) {
                 actionsHtml = `<div class="comment-actions"><button class="comment-edit" data-comment-id="${c.id}" data-comment-body="${GithubCore.escapeHtml(c.body)}" title="Редактировать"><i class="fas fa-edit"></i></button><button class="comment-delete" data-comment-id="${c.id}" title="Удалить"><i class="fas fa-trash-alt"></i></button></div>`;
             }
-            return `<div class="comment" data-comment-id="${c.id}"><div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(c.user.login)}</span><span>${new Date(c.created_at).toLocaleString()}</span></div><div class="comment-body">${GithubCore.escapeHtml(c.body).replace(/\n/g,'<br>')}</div>${actionsHtml}</div>`;
+            return `<div class="comment" data-comment-id="${c.id}"><div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(c.user.login)}</span></div><div class="comment-body">${GithubCore.escapeHtml(c.body).replace(/\n/g,'<br>')}</div>${actionsHtml}</div>`;
         }).join('');
         if (currentUser) {
             container.querySelectorAll('.comment-edit').forEach(btn => {
@@ -407,26 +407,34 @@
     }
 
     function setupCommentForm(container, item, currentUser) {
-        const commentForm = document.createElement('div'); commentForm.className = 'comment-form'; commentForm.dataset.issue = item.id;
-        commentForm.innerHTML = '<input type="text" class="comment-input" placeholder="Написать комментарий..."><button class="button comment-submit">Отправить</button>';
+        const commentForm = document.createElement('div'); commentForm.className = 'comment-form';
+        commentForm.innerHTML = `
+            <input type="text" class="comment-input" placeholder="Написать комментарий...">
+            <div class="button-group">
+                <button class="button comment-submit">Отправить</button>
+                <button class="button comment-editor-btn"><i class="fas fa-pencil-alt"></i> Редактор</button>
+            </div>
+        `;
         container.appendChild(commentForm);
-        commentForm.querySelector('.comment-submit')?.addEventListener('click', async (e) => {
+        const input = commentForm.querySelector('.comment-input');
+        const submitBtn = commentForm.querySelector('.comment-submit');
+        const editorBtn = commentForm.querySelector('.comment-editor-btn');
+
+        submitBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const input = commentForm.querySelector('.comment-input');
             const comment = input.value.trim();
             if (!comment) return;
             const tempId = 'temp-' + Date.now();
             const tempCommentDiv = document.createElement('div');
             tempCommentDiv.className = 'comment';
             tempCommentDiv.dataset.commentId = tempId;
-            tempCommentDiv.innerHTML = `<div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(currentUser)}</span><span>только что</span></div><div>${GithubCore.escapeHtml(comment).replace(/\n/g,'<br>')}</div>`;
+            tempCommentDiv.innerHTML = `<div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(currentUser)}</span></div><div>${GithubCore.escapeHtml(comment).replace(/\n/g,'<br>')}</div>`;
             const commentsDiv = container.querySelector('.feedback-comments');
             commentsDiv.appendChild(tempCommentDiv);
-            input.disabled = true; e.target.disabled = true;
+            input.disabled = true; submitBtn.disabled = true; editorBtn.disabled = true;
             try {
                 const newComment = await GithubAPI.addComment(item.id, comment);
                 tempCommentDiv.dataset.commentId = newComment.id;
-                tempCommentDiv.querySelector('.comment-meta span:last-child').textContent = new Date(newComment.created_at).toLocaleString();
                 invalidateCache(item.id);
                 const updated = await GithubAPI.loadComments(item.id);
                 setCached(`comments_${item.id}`, updated, commentsCache);
@@ -436,7 +444,14 @@
                 UIUtils.showToast('Ошибка при отправке комментария', 'error');
                 tempCommentDiv.remove();
             } finally {
-                input.disabled = false; e.target.disabled = false; input.value = '';
+                input.disabled = false; submitBtn.disabled = false; editorBtn.disabled = false; input.value = '';
+            }
+        });
+
+        editorBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (window.Editor) {
+                window.dispatchEvent(new CustomEvent('open-comment-editor', { detail: { issueNumber: item.id } }));
             }
         });
     }
@@ -457,7 +472,13 @@
         buttonsHtml += `<button class="action-btn share-post" title="Поделиться" aria-label="Поделиться"><i class="fas fa-share-alt"></i></button>`;
 
         actionsContainer.innerHTML = buttonsHtml;
-        modalHeader.appendChild(actionsContainer);
+
+        const closeBtn = modalHeader.querySelector('.modal-close');
+        if (closeBtn) {
+            modalHeader.insertBefore(actionsContainer, closeBtn);
+        } else {
+            modalHeader.appendChild(actionsContainer);
+        }
 
         actionsContainer.querySelector('.edit-issue')?.addEventListener('click', (e) => {
             e.stopPropagation(); closeModal(); document.removeEventListener('keydown', escHandler);
@@ -516,7 +537,6 @@
                     <span style="font-size:24px;">${typeIcon}</span>
                     <div>
                         <div style="font-size:14px;color:var(--accent);">${GithubCore.escapeHtml(item.author || 'Unknown')}</div>
-                        <div style="font-size:12px;color:var(--text-secondary);">${new Date(item.date).toLocaleString()}</div>
                     </div>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0;">
@@ -554,169 +574,179 @@
         if (postType === 'feedback') {
             categoryHtml = `<select id="modal-category" class="feedback-select"><option value="idea">💡 Идея</option><option value="bug">🐛 Баг</option><option value="review">⭐ Отзыв</option></select>`;
         }
-        const contentHtml = `
-            <div class="feedback-form feedback-form-compact" style="gap:4px;">
-                <input type="text" id="modal-input-title" class="feedback-input" placeholder="Заголовок" value="${GithubCore.escapeHtml(data.title||'')}" style="margin-bottom:4px;">
-                <div class="preview-url-wrapper" style="gap:4px;">
-                    <input type="url" id="modal-preview-url" class="feedback-input preview-url-input" placeholder="Ссылка на превью (необязательно)" value="${GithubCore.escapeHtml(previewUrl)}" style="margin-bottom:0;">
-                    <div id="preview-services-placeholder"></div>
-                </div>
-                <div id="preview-thumbnail-container" class="preview-thumbnail" style="${previewUrl ? '' : 'display:none;'} margin-top:4px;">
-                    <img id="preview-thumbnail-img" src="${previewUrl ? GithubCore.escapeHtml(previewUrl) : ''}" alt="Preview">
-                    <button type="button" class="remove-preview" id="remove-preview-btn" title="Удалить превью"><i class="fas fa-times"></i></button>
-                </div>
-                ${categoryHtml}
-                <div id="modal-editor-toolbar"></div>
-                <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(bodyContent)}</textarea>
-                <div class="preview-area" id="modal-preview-area" style="display:none; margin-top:4px;"></div>
-                <div class="button-group" style="display: flex; justify-content: space-between; align-items: center; margin-top:10px;">
-                    <div class="access-settings" style="display: flex; align-items: center; gap: 8px;">
-                        <div class="preview-split" style="display: flex; border-radius: 30px; overflow: hidden;">
-                            <button type="button" class="editor-btn access-btn active" data-access="public" style="border-radius: 30px 0 0 30px;">Публичный</button>
-                            <button type="button" class="editor-btn access-btn" data-access="private" style="border-radius: 0 30px 30px 0;">Приватный</button>
-                        </div>
-                        <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" style="width: 200px; display: none; margin-bottom:0;">
+        let contentHtml = '';
+        if (postType === 'comment') {
+            contentHtml = `
+                <div class="feedback-form feedback-form-compact" style="gap:4px;">
+                    <div id="modal-editor-toolbar"></div>
+                    <textarea id="modal-body" class="feedback-textarea" placeholder="Текст комментария..." rows="10">${GithubCore.escapeHtml(bodyContent)}</textarea>
+                    <div class="preview-area" id="modal-preview-area" style="display:none;"></div>
+                    <div class="button-group" style="display: flex; justify-content: flex-end; margin-top:10px;">
+                        <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Отправить'}</button>
                     </div>
-                    <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                 </div>
-            </div>
-        `;
+            `;
+        } else {
+            contentHtml = `
+                <div class="feedback-form feedback-form-compact" style="gap:4px;">
+                    <input type="text" id="modal-input-title" class="feedback-input" placeholder="Заголовок" value="${GithubCore.escapeHtml(data.title||'')}" style="margin-bottom:4px;">
+                    <div class="preview-url-wrapper" style="gap:4px;">
+                        <input type="url" id="modal-preview-url" class="feedback-input preview-url-input" placeholder="Ссылка на превью (необязательно)" value="${GithubCore.escapeHtml(previewUrl)}" style="margin-bottom:0;">
+                        <div id="preview-services-placeholder"></div>
+                    </div>
+                    <div id="preview-thumbnail-container" class="preview-thumbnail" style="${previewUrl ? '' : 'display:none;'} margin-top:4px;">
+                        <img id="preview-thumbnail-img" src="${previewUrl ? GithubCore.escapeHtml(previewUrl) : ''}" alt="Preview">
+                        <button type="button" class="remove-preview" id="remove-preview-btn" title="Удалить превью"><i class="fas fa-times"></i></button>
+                    </div>
+                    ${categoryHtml}
+                    <div id="modal-editor-toolbar"></div>
+                    <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(bodyContent)}</textarea>
+                    <div class="preview-area" id="modal-preview-area" style="display:none; margin-top:4px;"></div>
+                    <div class="button-group" style="display: flex; justify-content: space-between; align-items: center; margin-top:10px;">
+                        <div class="access-settings" style="display: flex; align-items: center; gap: 8px;">
+                            <div class="preview-split" style="display: flex; border-radius: 30px; overflow: hidden;">
+                                <button type="button" class="editor-btn access-btn active" data-access="public" style="border-radius: 30px 0 0 30px;">Публичный</button>
+                                <button type="button" class="editor-btn access-btn" data-access="private" style="border-radius: 0 30px 30px 0;">Приватный</button>
+                            </div>
+                            <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" style="width: 200px; display: none; margin-bottom:0;">
+                        </div>
+                        <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
+                    </div>
+                </div>
+            `;
+        }
         const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
-        const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
-        if (servicesPlaceholder && window.Editor) {
-            servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
-        }
-        const previewUrlInput = modal.querySelector('#modal-preview-url');
-        const thumbnailContainer = modal.querySelector('#preview-thumbnail-container');
-        const thumbnailImg = modal.querySelector('#preview-thumbnail-img');
-        const removePreviewBtn = modal.querySelector('#remove-preview-btn');
-        function updateThumbnail(url) {
-            if (url && url.trim()) { thumbnailImg.src = url; thumbnailContainer.style.display = 'block'; }
-            else { thumbnailContainer.style.display = 'none'; thumbnailImg.src = ''; }
-        }
-        previewUrlInput.addEventListener('input', (e) => updateThumbnail(e.target.value.trim()));
-        removePreviewBtn.addEventListener('click', () => { previewUrlInput.value = ''; updateThumbnail(''); });
+        if (postType !== 'comment') {
+            const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
+            if (servicesPlaceholder && window.Editor) {
+                servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
+            }
+            const previewUrlInput = modal.querySelector('#modal-preview-url');
+            const thumbnailContainer = modal.querySelector('#preview-thumbnail-container');
+            const thumbnailImg = modal.querySelector('#preview-thumbnail-img');
+            const removePreviewBtn = modal.querySelector('#remove-preview-btn');
+            function updateThumbnail(url) {
+                if (url && url.trim()) { thumbnailImg.src = url; thumbnailContainer.style.display = 'block'; }
+                else { thumbnailContainer.style.display = 'none'; thumbnailImg.src = ''; }
+            }
+            previewUrlInput.addEventListener('input', (e) => updateThumbnail(e.target.value.trim()));
+            removePreviewBtn.addEventListener('click', () => { previewUrlInput.value = ''; updateThumbnail(''); });
 
-        const accessPublicBtn = modal.querySelector('[data-access="public"]');
-        const accessPrivateBtn = modal.querySelector('[data-access="private"]');
-        const privateUsersInput = modal.querySelector('#private-users');
+            const accessPublicBtn = modal.querySelector('[data-access="public"]');
+            const accessPrivateBtn = modal.querySelector('[data-access="private"]');
+            const privateUsersInput = modal.querySelector('#private-users');
 
-        function updateAccessUI() {
-            const isPublic = accessPublicBtn.classList.contains('active');
-            privateUsersInput.style.display = isPublic ? 'none' : 'block';
-            accessPublicBtn.classList.toggle('active', isPublic);
-            accessPrivateBtn.classList.toggle('active', !isPublic);
-        }
+            function updateAccessUI() {
+                const isPublic = accessPublicBtn.classList.contains('active');
+                privateUsersInput.style.display = isPublic ? 'none' : 'block';
+                accessPublicBtn.classList.toggle('active', isPublic);
+                accessPrivateBtn.classList.toggle('active', !isPublic);
+            }
 
-        accessPublicBtn.addEventListener('click', () => {
-            accessPublicBtn.classList.add('active');
-            accessPrivateBtn.classList.remove('active');
-            updateAccessUI();
-        });
-        accessPrivateBtn.addEventListener('click', () => {
-            accessPrivateBtn.classList.add('active');
-            accessPublicBtn.classList.remove('active');
-            updateAccessUI();
-        });
-        updateAccessUI();
-
-        const draftKey = `draft_${postType}_${mode}_${data.game || 'global'}_${data.number || 'new'}`;
-        const savedDraft = UIUtils.loadDraft(draftKey);
-        if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl || savedDraft.access || savedDraft.privateUsers)) {
-            if (confirm('Найден несохранённый черновик. Восстановить?')) {
-                document.getElementById('modal-input-title').value = savedDraft.title || '';
-                if (savedDraft.previewUrl) {
-                    document.getElementById('modal-preview-url').value = savedDraft.previewUrl;
-                    updateThumbnail(savedDraft.previewUrl);
-                }
-                document.getElementById('modal-body').value = savedDraft.body || '';
-                if (savedDraft.category && document.getElementById('modal-category')) {
-                    document.getElementById('modal-category').value = savedDraft.category;
-                }
-                if (savedDraft.access) {
-                    if (savedDraft.access === 'private') {
-                        accessPrivateBtn.click();
-                    } else {
-                        accessPublicBtn.click();
-                    }
-                }
-                if (savedDraft.privateUsers) {
-                    privateUsersInput.value = savedDraft.privateUsers;
-                }
-            } else { UIUtils.clearDraft(draftKey); }
-        }
-
-        let hasChanges = false;
-        const titleInput = modal.querySelector('#modal-input-title');
-        const bodyTextarea = modal.querySelector('#modal-body');
-        const categorySelect = modal.querySelector('#modal-category');
-        const updateDraft = () => {
-            const currentTitle = titleInput.value.trim();
-            const currentPreview = previewUrlInput.value.trim();
-            const currentBody = bodyTextarea.value.trim();
-            const currentCategory = categorySelect ? categorySelect.value : null;
-            const currentAccess = accessPublicBtn.classList.contains('active') ? 'public' : 'private';
-            const currentPrivateUsers = privateUsersInput.value.trim();
-            UIUtils.saveDraft(draftKey, { 
-                title: currentTitle, 
-                previewUrl: currentPreview, 
-                body: currentBody, 
-                category: currentCategory,
-                access: currentAccess,
-                privateUsers: currentPrivateUsers
+            accessPublicBtn.addEventListener('click', () => {
+                accessPublicBtn.classList.add('active');
+                accessPrivateBtn.classList.remove('active');
+                updateAccessUI();
             });
-            hasChanges = true;
-        };
-        titleInput.addEventListener('input', updateDraft);
-        previewUrlInput.addEventListener('input', updateDraft);
-        bodyTextarea.addEventListener('input', updateDraft);
-        if (categorySelect) categorySelect.addEventListener('change', updateDraft);
-        accessPublicBtn.addEventListener('click', updateDraft);
-        accessPrivateBtn.addEventListener('click', updateDraft);
-        privateUsersInput.addEventListener('input', updateDraft);
+            accessPrivateBtn.addEventListener('click', () => {
+                accessPrivateBtn.classList.add('active');
+                accessPublicBtn.classList.remove('active');
+                updateAccessUI();
+            });
+            updateAccessUI();
 
-        const originalCloseModal = closeModal;
-        const closeWithCheck = () => {
-            if (hasChanges) {
-                if (confirm('У вас есть несохранённые изменения. Вы действительно хотите закрыть?')) {
+            const draftKey = `draft_${postType}_${mode}_${data.game || 'global'}_${data.number || 'new'}`;
+            const savedDraft = UIUtils.loadDraft(draftKey);
+            if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl || savedDraft.access || savedDraft.privateUsers)) {
+                if (confirm('Найден несохранённый черновик. Восстановить?')) {
+                    document.getElementById('modal-input-title').value = savedDraft.title || '';
+                    if (savedDraft.previewUrl) {
+                        document.getElementById('modal-preview-url').value = savedDraft.previewUrl;
+                        updateThumbnail(savedDraft.previewUrl);
+                    }
+                    document.getElementById('modal-body').value = savedDraft.body || '';
+                    if (savedDraft.category && document.getElementById('modal-category')) {
+                        document.getElementById('modal-category').value = savedDraft.category;
+                    }
+                    if (savedDraft.access) {
+                        if (savedDraft.access === 'private') {
+                            accessPrivateBtn.click();
+                        } else {
+                            accessPublicBtn.click();
+                        }
+                    }
+                    if (savedDraft.privateUsers) {
+                        privateUsersInput.value = savedDraft.privateUsers;
+                    }
+                } else { UIUtils.clearDraft(draftKey); }
+            }
+
+            let hasChanges = false;
+            const titleInput = modal.querySelector('#modal-input-title');
+            const bodyTextarea = modal.querySelector('#modal-body');
+            const categorySelect = modal.querySelector('#modal-category');
+            const updateDraft = () => {
+                const currentTitle = titleInput.value.trim();
+                const currentPreview = previewUrlInput.value.trim();
+                const currentBody = bodyTextarea.value.trim();
+                const currentCategory = categorySelect ? categorySelect.value : null;
+                const currentAccess = accessPublicBtn.classList.contains('active') ? 'public' : 'private';
+                const currentPrivateUsers = privateUsersInput.value.trim();
+                UIUtils.saveDraft(draftKey, { 
+                    title: currentTitle, 
+                    previewUrl: currentPreview, 
+                    body: currentBody, 
+                    category: currentCategory,
+                    access: currentAccess,
+                    privateUsers: currentPrivateUsers
+                });
+                hasChanges = true;
+            };
+            titleInput.addEventListener('input', updateDraft);
+            previewUrlInput.addEventListener('input', updateDraft);
+            bodyTextarea.addEventListener('input', updateDraft);
+            if (categorySelect) categorySelect.addEventListener('change', updateDraft);
+            accessPublicBtn.addEventListener('click', updateDraft);
+            accessPrivateBtn.addEventListener('click', updateDraft);
+            privateUsersInput.addEventListener('input', updateDraft);
+
+            const originalCloseModal = closeModal;
+            const closeWithCheck = () => {
+                if (hasChanges) {
+                    if (confirm('У вас есть несохранённые изменения. Вы действительно хотите закрыть?')) {
+                        UIUtils.clearDraft(draftKey);
+                        originalCloseModal();
+                    }
+                } else {
                     UIUtils.clearDraft(draftKey);
                     originalCloseModal();
                 }
-            } else {
-                UIUtils.clearDraft(draftKey);
-                originalCloseModal();
+            };
+            modal.addEventListener('click', (e) => { if (e.target === modal) { e.preventDefault(); closeWithCheck(); } });
+            const escHandler = (e) => { if (e.key === 'Escape') { e.preventDefault(); closeWithCheck(); } };
+            document.addEventListener('keydown', escHandler);
+            const closeBtn = modal.querySelector('.modal-close');
+            if (closeBtn) {
+                closeBtn.replaceWith(closeBtn.cloneNode(true));
+                modal.querySelector('.modal-close').addEventListener('click', (e) => { e.preventDefault(); closeWithCheck(); });
             }
-        };
-        modal.addEventListener('click', (e) => { if (e.target === modal) { e.preventDefault(); closeWithCheck(); } });
-        const escHandler = (e) => { if (e.key === 'Escape') { e.preventDefault(); closeWithCheck(); } };
-        document.addEventListener('keydown', escHandler);
-        const closeBtn = modal.querySelector('.modal-close');
-        if (closeBtn) {
-            closeBtn.replaceWith(closeBtn.cloneNode(true));
-            modal.querySelector('.modal-close').addEventListener('click', (e) => { e.preventDefault(); closeWithCheck(); });
         }
 
         const previewArea = modal.querySelector('#modal-preview-area');
         function updatePreview() {
             if (!previewArea) return;
-            const title = titleInput.value.trim();
-            const previewUrl = previewUrlInput.value.trim();
-            const text = bodyTextarea.value;
-            let fullContent = '';
-            if (previewUrl) fullContent += `<!-- preview: ${previewUrl} -->\n\n![Preview](${previewUrl})\n\n`;
-            if (title && postType !== 'feedback') fullContent += `# ${title}\n\n`;
-            fullContent += text;
-            if (fullContent.trim()) {
+            const text = modal.querySelector('#modal-body').value;
+            if (text.trim()) {
                 previewArea.innerHTML = '';
                 if (!previewArea.classList.contains('markdown-body')) previewArea.classList.add('markdown-body');
-                renderPostBody(previewArea, fullContent, null);
+                renderPostBody(previewArea, text, null);
                 previewArea.style.display = 'block';
             } else {
                 previewArea.style.display = 'none';
             }
         }
         if (window.Editor) {
-            const toolbar = Editor.createEditorToolbar(bodyTextarea, { onPreview: updatePreview, textarea: bodyTextarea });
+            const toolbar = Editor.createEditorToolbar(modal.querySelector('#modal-body'), { onPreview: updatePreview, textarea: modal.querySelector('#modal-body') });
             const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
             if (toolbarContainer) toolbarContainer.appendChild(toolbar);
         }
@@ -725,21 +755,47 @@
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             if (!GithubAuth.getToken()) { UIUtils.showToast('Вы не авторизованы. Войдите через GitHub.', 'error'); return; }
-            const title = titleInput.value.trim();
-            const previewUrl = previewUrlInput.value.trim();
-            let body = bodyTextarea.value;
-            if (!title) { UIUtils.showToast('Заполните заголовок', 'error'); titleInput.focus(); return; }
-            if (!body.trim()) { UIUtils.showToast('Заполните описание', 'error'); bodyTextarea.focus(); return; }
-            if (previewUrl) body = `<!-- preview: ${previewUrl} -->\n\n![Preview](${previewUrl})\n\n` + body;
-            const pollMatches = body.match(/<!-- poll: .*? -->/g);
+            const body = modal.querySelector('#modal-body').value.trim();
+            if (!body) { UIUtils.showToast('Заполните описание', 'error'); modal.querySelector('#modal-body').focus(); return; }
+            if (postType === 'comment') {
+                const btn = submitBtn;
+                btn.disabled = true;
+                btn.textContent = 'Отправка...';
+                try {
+                    await GithubAPI.addComment(data.issueNumber, body);
+                    UIUtils.clearDraft(draftKey);
+                    closeModal();
+                    window.dispatchEvent(new CustomEvent('github-comment-created', { detail: { issueNumber: data.issueNumber } }));
+                    UIUtils.showToast('Комментарий добавлен', 'success');
+                } catch (err) {
+                    console.error('Submit error:', err);
+                    let errorMessage = 'Ошибка при отправке.';
+                    if (err.message.includes('NetworkError') || (err.name === 'TypeError' && err.message.includes('NetworkError'))) errorMessage = 'Ошибка сети. Проверьте подключение к интернету.';
+                    else if (err.message.includes('401')) errorMessage = 'Ошибка авторизации. Возможно, токен устарел. Войдите заново.';
+                    else if (err.message.includes('403')) errorMessage = 'Доступ запрещён. Проверьте права токена.';
+                    else if (err.message) errorMessage = 'Ошибка: ' + err.message;
+                    UIUtils.showToast(errorMessage, 'error');
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Отправить';
+                }
+                return;
+            }
+
+            const title = modal.querySelector('#modal-input-title').value.trim();
+            const previewUrl = modal.querySelector('#modal-preview-url').value.trim();
+            let bodyText = body;
+            if (!title) { UIUtils.showToast('Заполните заголовок', 'error'); modal.querySelector('#modal-input-title').focus(); return; }
+            if (previewUrl) bodyText = `<!-- preview: ${previewUrl} -->\n\n![Preview](${previewUrl})\n\n` + bodyText;
+            const pollMatches = bodyText.match(/<!-- poll: .*? -->/g);
             if (pollMatches && pollMatches.length > 1) {
                 if (!confirm('Обнаружено несколько блоков опроса. Будут сохранены только первые. Продолжить?')) return;
                 const first = pollMatches[0];
-                body = body.replace(/<!-- poll: .*? -->/g, '');
-                body = first + '\n' + body;
+                bodyText = bodyText.replace(/<!-- poll: .*? -->/g, '');
+                bodyText = first + '\n' + bodyText;
             }
             let category = 'idea';
-            if (postType === 'feedback' && categorySelect) category = categorySelect.value;
+            if (postType === 'feedback' && modal.querySelector('#modal-category')) category = modal.querySelector('#modal-category').value;
             const btn = submitBtn;
             btn.disabled = true;
             btn.textContent = 'Сохранение...';
@@ -754,13 +810,13 @@
                     if (!data.game || data.game.trim() === '') { UIUtils.showToast('Ошибка: не указана игра для обновления', 'error'); btn.disabled = false; btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать'; return; }
                     labels = ['type:update', `game:${data.game}`];
                 }
-                if (!accessPublicBtn.classList.contains('active')) {
+                if (modal.querySelector('[data-access="private"]')?.classList.contains('active')) {
                     if (!labels.includes('private')) labels.push('private');
                 }
-                if (mode === 'edit') await GithubAPI.updateIssue(data.number, { title, body, labels });
-                else await GithubAPI.createIssue(title, body, labels);
+                if (mode === 'edit') await GithubAPI.updateIssue(data.number, { title, body: bodyText, labels });
+                else await GithubAPI.createIssue(title, bodyText, labels);
                 UIUtils.clearDraft(draftKey);
-                originalCloseModal();
+                closeModal();
                 if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
                 if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
                 if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
