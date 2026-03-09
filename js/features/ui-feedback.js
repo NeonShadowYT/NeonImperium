@@ -567,20 +567,54 @@
         return allowedList.includes(currentUser);
     }
 
+    /**
+     * Открывает модальное окно редактора поста/комментария.
+     * @param {string} mode - 'new' или 'edit'
+     * @param {object} data - данные: { number?, title?, body?, game?, issueNumber? } для комментария
+     * @param {string} postType - 'feedback', 'news', 'update', 'comment'
+     */
     function openEditorModal(mode, data, postType = 'feedback') {
         const currentUser = GithubAuth.getCurrentUser();
         const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
+        
+        // Извлекаем preview и allowed из тела (если есть)
         let previewUrl = '';
+        let allowedUsers = '';
         let bodyContent = data.body || '';
         const previewMatch = bodyContent.match(/<!--\s*preview:\s*(https?:\/\/[^\s]+)\s*-->/);
         if (previewMatch) {
             previewUrl = previewMatch[1];
             bodyContent = bodyContent.replace(/<!--\s*preview:\s*https?:\/\/[^\s]+\s*-->\s*\n?/, '');
         }
+        const allowedMatch = bodyContent.match(/<!--\s*allowed:\s*(.*?)\s*-->/);
+        if (allowedMatch) {
+            allowedUsers = allowedMatch[1];
+            bodyContent = bodyContent.replace(/<!--\s*allowed:\s*.*?\s*-->\s*\n?/, '');
+        }
+
         let categoryHtml = '';
         if (postType === 'feedback') {
-            categoryHtml = `<select id="modal-category" class="feedback-select"><option value="idea">💡 Идея</option><option value="bug">🐛 Баг</option><option value="review">⭐ Отзыв</option></select>`;
+            // Определяем текущую категорию из меток
+            let currentCategory = 'idea';
+            if (data.labels) {
+                const typeLabel = data.labels.find(l => l.startsWith('type:'));
+                if (typeLabel) currentCategory = typeLabel.split(':')[1];
+            }
+            categoryHtml = `<select id="modal-category" class="feedback-select">
+                <option value="idea" ${currentCategory==='idea'?'selected':''}>💡 Идея</option>
+                <option value="bug" ${currentCategory==='bug'?'selected':''}>🐛 Баг</option>
+                <option value="review" ${currentCategory==='review'?'selected':''}>⭐ Отзыв</option>
+            </select>`;
         }
+
+        // Определяем draftKey
+        let draftKey;
+        if (postType === 'comment') {
+            draftKey = `draft_comment_${data.issueNumber || 'new'}`;
+        } else {
+            draftKey = `draft_${postType}_${mode}_${data.game || 'global'}_${data.number || 'new'}`;
+        }
+
         let contentHtml = '';
         if (postType === 'comment') {
             contentHtml = `
@@ -612,18 +646,41 @@
                     <div class="button-group" style="display: flex; justify-content: space-between; align-items: center; margin-top:10px;">
                         <div class="access-settings" style="display: flex; align-items: center; gap: 8px;">
                             <div class="preview-split" style="display: flex; border-radius: 30px; overflow: hidden;">
-                                <button type="button" class="editor-btn access-btn active" data-access="public" style="border-radius: 30px 0 0 30px;">Публичный</button>
-                                <button type="button" class="editor-btn access-btn" data-access="private" style="border-radius: 0 30px 30px 0;">Приватный</button>
+                                <button type="button" class="editor-btn access-btn ${!data.labels?.includes('private') ? 'active' : ''}" data-access="public" style="border-radius: 30px 0 0 30px;">Публичный</button>
+                                <button type="button" class="editor-btn access-btn ${data.labels?.includes('private') ? 'active' : ''}" data-access="private" style="border-radius: 0 30px 30px 0;">Приватный</button>
                             </div>
-                            <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" style="width: 200px; display: none; margin-bottom:0;">
+                            <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" value="${GithubCore.escapeHtml(allowedUsers)}" style="width: 200px; ${data.labels?.includes('private') ? '' : 'display: none;'} margin-bottom:0;">
                         </div>
                         <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                     </div>
                 </div>
             `;
         }
+
         const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
-        if (postType !== 'comment') {
+
+        // Для комментариев редактор и предпросмотр
+        if (postType === 'comment') {
+            const previewArea = modal.querySelector('#modal-preview-area');
+            function updatePreview() {
+                if (!previewArea) return;
+                const text = modal.querySelector('#modal-body').value;
+                if (text.trim()) {
+                    previewArea.innerHTML = '';
+                    if (!previewArea.classList.contains('markdown-body')) previewArea.classList.add('markdown-body');
+                    renderPostBody(previewArea, text, null);
+                    previewArea.style.display = 'block';
+                } else {
+                    previewArea.style.display = 'none';
+                }
+            }
+            if (window.Editor) {
+                const toolbar = Editor.createEditorToolbar(modal.querySelector('#modal-body'), { onPreview: updatePreview, textarea: modal.querySelector('#modal-body') });
+                const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
+                if (toolbarContainer) toolbarContainer.appendChild(toolbar);
+            }
+        } else {
+            // Для постов: превью изображения, доступ, черновик
             const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
             if (servicesPlaceholder && window.Editor) {
                 servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
@@ -662,7 +719,7 @@
             });
             updateAccessUI();
 
-            const draftKey = `draft_${postType}_${mode}_${data.game || 'global'}_${data.number || 'new'}`;
+            // Восстановление черновика
             const savedDraft = UIUtils.loadDraft(draftKey);
             if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl || savedDraft.access || savedDraft.privateUsers)) {
                 if (confirm('Найден несохранённый черновик. Восстановить?')) {
@@ -737,33 +794,36 @@
                 closeBtn.replaceWith(closeBtn.cloneNode(true));
                 modal.querySelector('.modal-close').addEventListener('click', (e) => { e.preventDefault(); closeWithCheck(); });
             }
-        }
 
-        const previewArea = modal.querySelector('#modal-preview-area');
-        function updatePreview() {
-            if (!previewArea) return;
-            const text = modal.querySelector('#modal-body').value;
-            if (text.trim()) {
-                previewArea.innerHTML = '';
-                if (!previewArea.classList.contains('markdown-body')) previewArea.classList.add('markdown-body');
-                renderPostBody(previewArea, text, null);
-                previewArea.style.display = 'block';
-            } else {
-                previewArea.style.display = 'none';
+            // Предпросмотр Markdown
+            const previewArea = modal.querySelector('#modal-preview-area');
+            function updatePreview() {
+                if (!previewArea) return;
+                const text = modal.querySelector('#modal-body').value;
+                if (text.trim()) {
+                    previewArea.innerHTML = '';
+                    if (!previewArea.classList.contains('markdown-body')) previewArea.classList.add('markdown-body');
+                    renderPostBody(previewArea, text, null);
+                    previewArea.style.display = 'block';
+                } else {
+                    previewArea.style.display = 'none';
+                }
             }
-        }
-        if (window.Editor) {
-            const toolbar = Editor.createEditorToolbar(modal.querySelector('#modal-body'), { onPreview: updatePreview, textarea: modal.querySelector('#modal-body') });
-            const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
-            if (toolbarContainer) toolbarContainer.appendChild(toolbar);
+            if (window.Editor) {
+                const toolbar = Editor.createEditorToolbar(modal.querySelector('#modal-body'), { onPreview: updatePreview, textarea: modal.querySelector('#modal-body') });
+                const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
+                if (toolbarContainer) toolbarContainer.appendChild(toolbar);
+            }
         }
 
         const submitBtn = modal.querySelector('#modal-submit');
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             if (!GithubAuth.getToken()) { UIUtils.showToast('Вы не авторизованы. Войдите через GitHub.', 'error'); return; }
+
             const body = modal.querySelector('#modal-body').value.trim();
             if (!body) { UIUtils.showToast('Заполните описание', 'error'); modal.querySelector('#modal-body').focus(); return; }
+
             if (postType === 'comment') {
                 const btn = submitBtn;
                 btn.disabled = true;
@@ -790,22 +850,44 @@
             }
 
             const title = modal.querySelector('#modal-input-title').value.trim();
-            const previewUrl = modal.querySelector('#modal-preview-url').value.trim();
-            let bodyText = body;
             if (!title) { UIUtils.showToast('Заполните заголовок', 'error'); modal.querySelector('#modal-input-title').focus(); return; }
-            if (previewUrl) bodyText = `<!-- preview: ${previewUrl} -->\n\n![Preview](${previewUrl})\n\n` + bodyText;
-            const pollMatches = bodyText.match(/<!-- poll: .*? -->/g);
+
+            // Подготавливаем финальное тело: удаляем старые мета-строки
+            let finalBody = body;
+            finalBody = finalBody.replace(/<!--\s*preview:\s*https?:\/\/[^\s]+\s*-->\s*\n?/g, '');
+            finalBody = finalBody.replace(/<!--\s*allowed:\s*.*?\s*-->\s*\n?/g, '');
+
+            // Добавляем preview если есть
+            const previewUrl = modal.querySelector('#modal-preview-url').value.trim();
+            if (previewUrl) {
+                finalBody = `<!-- preview: ${previewUrl} -->\n\n![Preview](${previewUrl})\n\n` + finalBody;
+            }
+
+            // Добавляем allowed если приватный
+            const isPrivate = modal.querySelector('[data-access="private"]')?.classList.contains('active');
+            if (isPrivate) {
+                const allowedUsers = modal.querySelector('#private-users').value.trim();
+                if (allowedUsers) {
+                    finalBody = `<!-- allowed: ${allowedUsers} -->\n\n` + finalBody;
+                }
+            }
+
+            // Проверка на несколько опросов
+            const pollMatches = finalBody.match(/<!-- poll: .*? -->/g);
             if (pollMatches && pollMatches.length > 1) {
                 if (!confirm('Обнаружено несколько блоков опроса. Будут сохранены только первые. Продолжить?')) return;
                 const first = pollMatches[0];
-                bodyText = bodyText.replace(/<!-- poll: .*? -->/g, '');
-                bodyText = first + '\n' + bodyText;
+                finalBody = finalBody.replace(/<!-- poll: .*? -->/g, '');
+                finalBody = first + '\n' + finalBody;
             }
+
             let category = 'idea';
             if (postType === 'feedback' && modal.querySelector('#modal-category')) category = modal.querySelector('#modal-category').value;
+
             const btn = submitBtn;
             btn.disabled = true;
             btn.textContent = 'Сохранение...';
+
             try {
                 let labels;
                 if (postType === 'feedback') {
@@ -817,16 +899,23 @@
                     if (!data.game || data.game.trim() === '') { UIUtils.showToast('Ошибка: не указана игра для обновления', 'error'); btn.disabled = false; btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать'; return; }
                     labels = ['type:update', `game:${data.game}`];
                 }
-                if (modal.querySelector('[data-access="private"]')?.classList.contains('active')) {
+                if (isPrivate) {
                     if (!labels.includes('private')) labels.push('private');
                 }
-                if (mode === 'edit') await GithubAPI.updateIssue(data.number, { title, body: bodyText, labels });
-                else await GithubAPI.createIssue(title, bodyText, labels);
+
+                if (mode === 'edit') {
+                    await GithubAPI.updateIssue(data.number, { title, body: finalBody, labels });
+                } else {
+                    await GithubAPI.createIssue(title, finalBody, labels);
+                }
+
                 UIUtils.clearDraft(draftKey);
                 closeModal();
+
                 if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
                 if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
                 if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
+
                 UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
             } catch (err) {
                 console.error('Submit error:', err);
