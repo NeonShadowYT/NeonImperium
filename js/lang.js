@@ -99,8 +99,8 @@ const translations = {
         licenseLink: "лицензионное соглашение",
         
         // Starve Neon
-        starveDownloadNote: "Версия 0.13.7 · Обновление от 31.12.2025",
-        starveVersion: "Объединение 0.13.7",
+        starveDownloadNote: "Версия 0.14.0 · Обновление от 08.03.2026",
+        starveVersion: "Объединение 0.14.0",
         worldTitle: "Игровой мир",
         worldDesc: "БРУТАЛЬНЫЙ ХАРДКОРНЫЙ МИР. Я не буду держать тебя за руку, приятель. Я оставлю небольшой туториал по базовой механике, а дальше ты сам по себе ;}",
         statusTitle: "Статус",
@@ -141,7 +141,7 @@ const translations = {
         video3Title: "Прохождение мультиплеера",
         video4Title: "Лучшие моменты",
         video5Title: "Секреты и пасхалки",
-        starveUpdateTitle: "Патч 0.13.7",
+        starveUpdateTitle: "Бета 0.14.0",
         spoilerTutorial: "Туториал",
         tutorialContent: "Цели по всей игре",
         spoilerRewards: "Награды",
@@ -340,8 +340,8 @@ const translations = {
         licenseLink: "license agreement",
         
         // Starve Neon
-        starveDownloadNote: "Version 0.13.7 · Update 2025-12-31",
-        starveVersion: "Union 0.13.7",
+        starveDownloadNote: "Version 0.14.0 · Update 2026-03-08",
+        starveVersion: "Union 0.14.0",
         worldTitle: "Game World",
         worldDesc: "BRUTAL HARDCORE WORLD. I won't hold your hand, buddy. I'll leave a short tutorial on the basic mechanics, and then you're on your own ;}",
         statusTitle: "Status",
@@ -382,7 +382,7 @@ const translations = {
         video3Title: "Multiplayer Walkthrough",
         video4Title: "Highlights",
         video5Title: "Secrets & Easter Eggs",
-        starveUpdateTitle: "Patch 0.13.7",
+        starveUpdateTitle: "Beta 0.14.0",
         spoilerTutorial: "Tutorial",
         tutorialContent: "Goals throughout the game",
         spoilerRewards: "Rewards",
