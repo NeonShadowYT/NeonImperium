@@ -109,7 +109,7 @@
                         <i class="fas fa-eye"></i>
                     </button>
                 </div>
-                <div id="modal-error-container" style="min-height: 50px;"></div>
+                <div id="modal-error-container"></div>
                 <div class="modal-buttons">
                     <button class="button" id="modal-cancel" data-lang="feedbackCancel">Отмена</button>
                     <button class="button" id="modal-submit" data-lang="githubLoginBtn">Войти</button>
