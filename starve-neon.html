@@ -226,6 +226,64 @@
                 </div>
                 <div id="game-updates" data-game="starve-neon"></div>
             </section>
+
+            <button id="donate-button" class="donate-button-fixed">
+                <i class="fas fa-heart"></i>
+                <span data-lang="donateButton">Поддержать</span>
+            </button>
+            <script>
+                (function() {
+                    function updateDonateButtonText() {
+                        const donateBtn = document.getElementById('donate-button');
+                        if (!donateBtn) return;
+                        const span = donateBtn.querySelector('span[data-lang="donateButton"]');
+                        if (!span) return;
+                        
+                        const lang = localStorage.getItem('preferredLanguage') || 'ru';
+                        if (window.translations && translations[lang] && translations[lang].donateButton) {
+                            span.textContent = translations[lang].donateButton;
+                        } else {
+                            span.textContent = (lang === 'en') ? 'Support' : 'Поддержать';
+                        }
+                    }
+
+                    // Инициализация кнопки Itch.io
+                    function initDonateButton() {
+                        const donateBtn = document.getElementById('donate-button');
+                        if (!donateBtn) return;
+
+                        Itch.attachBuyButton(donateBtn, {
+                            user: 'neon-imperium',
+                            game: 'starve-neon',
+                            width: 700,
+                            height: 500
+                        });
+
+                        updateDonateButtonText();
+                    }
+
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', function() {
+                            setTimeout(initDonateButton, 100);
+                        });
+                    } else {
+                        setTimeout(initDonateButton, 100);
+                    }
+
+                    window.addEventListener('languageChanged', function(e) {
+                        updateDonateButtonText();
+                    });
+                    
+                    const originalSetLanguage = window.setLanguage;
+                    if (originalSetLanguage) {
+                        window.setLanguage = function(lang) {
+                            originalSetLanguage(lang);
+                            updateDonateButtonText();
+                            window.dispatchEvent(new Event('languageChanged'));
+                        };
+                    }
+                })();
+            </script>
         </main>
     </div>
 </body>

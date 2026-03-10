@@ -238,7 +238,6 @@
             </button>
             <script>
                 (function() {
-                    // Функция для обновления текста кнопки при смене языка
                     function updateDonateButtonText() {
                         const donateBtn = document.getElementById('donate-button');
                         if (!donateBtn) return;
@@ -246,11 +245,9 @@
                         if (!span) return;
                         
                         const lang = localStorage.getItem('preferredLanguage') || 'ru';
-                        // Берём перевод из глобального объекта translations (из lang.js)
                         if (window.translations && translations[lang] && translations[lang].donateButton) {
                             span.textContent = translations[lang].donateButton;
                         } else {
-                            // Запасной вариант на случай, если translations ещё не загружен
                             span.textContent = (lang === 'en') ? 'Support' : 'Поддержать';
                         }
                     }
@@ -260,38 +257,28 @@
                         const donateBtn = document.getElementById('donate-button');
                         if (!donateBtn) return;
 
-                        // Прикрепляем кнопку к Itch.io API
-                        // ВНИМАНИЕ: замените 'NeonShadowYT' и 'starve-neon' на свои данные!
-                        // Можно оставить 'starve-neon' как основной проект для сбора донатов,
-                        // либо создать отдельную заглушку-игру для пожертвований.
                         Itch.attachBuyButton(donateBtn, {
-                            user: 'neon-imperium',      // Ваш username на Itch.io
-                            game: 'starve-neon',        // Slug игры (например, 'starve-neon' или 'donations')
-                            width: 700,                  // Ширина окна
-                            height: 500                   // Высота окна
+                            user: 'neon-imperium',
+                            game: 'starve-neon',
+                            width: 700,
+                            height: 500
                         });
 
-                        // Обновляем текст при загрузке
                         updateDonateButtonText();
                     }
 
-                    // Ждём загрузки DOM и объекта Itch
                     if (document.readyState === 'loading') {
                         document.addEventListener('DOMContentLoaded', function() {
-                            // Небольшая задержка, чтобы убедиться, что Itch API загрузился
                             setTimeout(initDonateButton, 100);
                         });
                     } else {
                         setTimeout(initDonateButton, 100);
                     }
 
-                    // Слушаем событие смены языка (если оно есть в вашем lang.js)
                     window.addEventListener('languageChanged', function(e) {
                         updateDonateButtonText();
                     });
                     
-                    // Также можно вручную вызвать обновление при изменении языка
-                    // (если в lang.js используется setLanguage, можно добавить туда dispatchEvent)
                     const originalSetLanguage = window.setLanguage;
                     if (originalSetLanguage) {
                         window.setLanguage = function(lang) {
