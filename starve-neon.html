@@ -247,17 +247,36 @@
                         }
                     }
 
-                    // Инициализация кнопки Itch.io
+                    function animateError() {
+                        const donateBtn = document.getElementById('donate-button');
+                        if (!donateBtn) return;
+                        donateBtn.classList.add('error-bounce');
+                        setTimeout(() => {
+                            donateBtn.classList.remove('error-bounce');
+                        }, 400);
+                    }
+
                     function initDonateButton() {
                         const donateBtn = document.getElementById('donate-button');
                         if (!donateBtn) return;
 
-                        Itch.attachBuyButton(donateBtn, {
-                            user: 'neon-imperium',
-                            game: 'starve-neon',
-                            width: 700,
-                            height: 500
-                        });
+                        if (typeof Itch === 'undefined') {
+                            console.warn('Itch API not loaded');
+                            animateError();
+                            return;
+                        }
+
+                        try {
+                            Itch.attachBuyButton(donateBtn, {
+                                user: 'neon-imperium',
+                                game: 'starve-neon',
+                                width: 700,
+                                height: 500
+                            });
+                        } catch (e) {
+                            console.error('Failed to attach Itch button:', e);
+                            animateError();
+                        }
 
                         updateDonateButtonText();
                     }
@@ -269,11 +288,11 @@
                     } else {
                         setTimeout(initDonateButton, 100);
                     }
-
-                    window.addEventListener('languageChanged', function(e) {
+                    
+                    window.addEventListener('languageChanged', function() {
                         updateDonateButtonText();
                     });
-                    
+
                     const originalSetLanguage = window.setLanguage;
                     if (originalSetLanguage) {
                         window.setLanguage = function(lang) {
