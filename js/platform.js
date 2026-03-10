@@ -8,11 +8,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Скрываем обычные кнопки, не соответствующие текущей ОС
     platformButtons.forEach(btn => {
         const btnPlatform = btn.dataset.platform;
-        if ((os === 'Windows' && btnPlatform === 'Windows') ||
-            (os === 'Android' && btnPlatform === 'Android') ||
-            (os === 'Mac' && btnPlatform === 'Mac') ||
-            (os === 'Linux' && btnPlatform === 'Linux') ||
-            (os === 'iOS' && btnPlatform === 'iOS')) {
+        // Приводим к нижнему регистру для сравнения
+        const currentOs = os.toLowerCase();
+        const btnOs = btnPlatform ? btnPlatform.toLowerCase() : '';
+        if (currentOs === btnOs) {
             btn.style.display = ''; // показать
         } else {
             btn.style.display = 'none'; // скрыть
@@ -55,22 +54,46 @@ async function getLatestRelease(owner, repo) {
 }
 
 /**
- * Ищет asset, в имени которого содержится название платформы (без учёта регистра).
+ * Ищет asset, подходящий для указанной платформы.
+ * Приоритет: для Windows и Android ищем по расширениям файлов.
+ * Для остальных платформ (Mac, Linux, iOS) используем поиск по подстроке в имени.
  */
 function findAssetByPlatform(assets, platform) {
     const platformLower = platform.toLowerCase();
-    return assets.find(asset => asset.name.toLowerCase().includes(platformLower));
+    
+    // Словарь допустимых расширений для каждой платформы
+    const extensions = {
+        windows: ['.exe', '.zip', '.7z'],        // исполняемые файлы и архивы
+        android: ['.apk'],                        // только APK
+        mac: ['.dmg', '.app', '.zip'],            // образы DMG, папки .app (в архиве), ZIP
+        linux: ['.appimage', '.x86_64', '.tar.gz', '.zip'] //常見 форматы для Linux
+    };
+
+    const allowedExts = extensions[platformLower];
+    
+    if (allowedExts && allowedExts.length > 0) {
+        // Ищем файл, имя которого заканчивается на одно из допустимых расширений
+        return assets.find(asset => {
+            const name = asset.name.toLowerCase();
+            return allowedExts.some(ext => name.endsWith(ext));
+        });
+    } else {
+        // Для платформ без явных расширений (например, iOS) ищем по подстроке
+        return assets.find(asset => asset.name.toLowerCase().includes(platformLower));
+    }
 }
 
 /**
  * Инициализация кнопок GitHub: подстановка ссылок на скачивание.
  */
 async function initGitHubDownloads(os, buttons) {
-    const REPO_OWNER = GithubCore.CONFIG.REPO_OWNER;      // NeonShadowYT
-    const REPO_NAME = GithubCore.CONFIG.REPO_NAME;        // NeonImperium
+    // Используем глобальный объект GithubCore, если он доступен
+    const REPO_OWNER = window.GithubCore?.CONFIG?.REPO_OWNER || 'NeonShadowYT';
+    const REPO_NAME = window.GithubCore?.CONFIG?.REPO_NAME || 'NeonImperium';
 
     const release = await getLatestRelease(REPO_OWNER, REPO_NAME);
     if (!release) {
+        // Если релиз не найден, деактивируем все кнопки
         buttons.forEach(btn => {
             btn.removeAttribute('href');
             btn.classList.add('disabled');
@@ -81,18 +104,21 @@ async function initGitHubDownloads(os, buttons) {
 
     buttons.forEach(btn => {
         const platform = btn.dataset.platform;
-        if (platform && platform.toLowerCase() === os.toLowerCase()) {
+        if (!platform) return;
+
+        // Показываем только кнопки для текущей ОС
+        if (platform.toLowerCase() === os.toLowerCase()) {
             const asset = findAssetByPlatform(release.assets, platform);
             if (asset) {
                 btn.href = asset.browser_download_url;
-                btn.target = '_blank'; // или убрать, чтобы скачивалось сразу
+                btn.target = '_blank'; // можно убрать, если хотим сразу скачивать
                 btn.classList.remove('disabled');
             } else {
                 btn.classList.add('disabled');
                 btn.textContent += ' (файл не найден)';
             }
         } else {
-            btn.style.display = 'none'; // скрываем неподходящие кнопки
+            btn.style.display = 'none';
         }
     });
 }
