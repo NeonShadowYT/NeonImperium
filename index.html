@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+    <script type="text/javascript" src="https://static.itch.io/api.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/features/ui-utils.js" defer></script>
@@ -230,6 +231,77 @@
                     </div>
                 </section>
             </div>
+
+            <button id="donate-button" class="donate-button-fixed">
+                <i class="fas fa-heart"></i>
+                <span data-lang="donateButton">Поддержать</span>
+            </button>
+            <script>
+                (function() {
+                    // Функция для обновления текста кнопки при смене языка
+                    function updateDonateButtonText() {
+                        const donateBtn = document.getElementById('donate-button');
+                        if (!donateBtn) return;
+                        const span = donateBtn.querySelector('span[data-lang="donateButton"]');
+                        if (!span) return;
+                        
+                        const lang = localStorage.getItem('preferredLanguage') || 'ru';
+                        // Берём перевод из глобального объекта translations (из lang.js)
+                        if (window.translations && translations[lang] && translations[lang].donateButton) {
+                            span.textContent = translations[lang].donateButton;
+                        } else {
+                            // Запасной вариант на случай, если translations ещё не загружен
+                            span.textContent = (lang === 'en') ? 'Support' : 'Поддержать';
+                        }
+                    }
+
+                    // Инициализация кнопки Itch.io
+                    function initDonateButton() {
+                        const donateBtn = document.getElementById('donate-button');
+                        if (!donateBtn) return;
+
+                        // Прикрепляем кнопку к Itch.io API
+                        // ВНИМАНИЕ: замените 'NeonShadowYT' и 'starve-neon' на свои данные!
+                        // Можно оставить 'starve-neon' как основной проект для сбора донатов,
+                        // либо создать отдельную заглушку-игру для пожертвований.
+                        Itch.attachBuyButton(donateBtn, {
+                            user: 'neon-imperium',      // Ваш username на Itch.io
+                            game: 'starve-neon',        // Slug игры (например, 'starve-neon' или 'donations')
+                            width: 700,                  // Ширина окна
+                            height: 500                   // Высота окна
+                        });
+
+                        // Обновляем текст при загрузке
+                        updateDonateButtonText();
+                    }
+
+                    // Ждём загрузки DOM и объекта Itch
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', function() {
+                            // Небольшая задержка, чтобы убедиться, что Itch API загрузился
+                            setTimeout(initDonateButton, 100);
+                        });
+                    } else {
+                        setTimeout(initDonateButton, 100);
+                    }
+
+                    // Слушаем событие смены языка (если оно есть в вашем lang.js)
+                    window.addEventListener('languageChanged', function(e) {
+                        updateDonateButtonText();
+                    });
+                    
+                    // Также можно вручную вызвать обновление при изменении языка
+                    // (если в lang.js используется setLanguage, можно добавить туда dispatchEvent)
+                    const originalSetLanguage = window.setLanguage;
+                    if (originalSetLanguage) {
+                        window.setLanguage = function(lang) {
+                            originalSetLanguage(lang);
+                            updateDonateButtonText();
+                            window.dispatchEvent(new Event('languageChanged'));
+                        };
+                    }
+                })();
+            </script>
         </main>
     </div>
 </body>

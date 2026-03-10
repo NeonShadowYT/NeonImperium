@@ -180,3 +180,46 @@
     background: var(--bg-primary);
     color: var(--accent);
 }
+
+/* ========== НОВЫЙ БЛОК: Кнопка пожертвований ========== */
+.donate-button-fixed {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 60px;
+    padding: 14px 28px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 1000;
+    transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    font-family: 'Russo One', sans-serif;
+}
+.donate-button-fixed i {
+    font-size: 22px;
+}
+.donate-button-fixed:hover {
+    background: var(--accent-light);
+    transform: scale(1.05);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.7);
+}
+.donate-button-fixed:active {
+    transform: scale(0.98);
+}
+/* На мобильных устройствах кнопка будет меньше */
+@media (max-width: 600px) {
+    .donate-button-fixed {
+        padding: 10px 20px;
+        font-size: 16px;
+        bottom: 16px;
+        right: 16px;
+    }
+}

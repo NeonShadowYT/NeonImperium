@@ -502,6 +502,8 @@ function setLanguage(lang) {
         btn.classList.toggle('active', btn.dataset.langCode === lang);
     });
     localStorage.setItem('preferredLanguage', lang);
+    
+    window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: lang } }));
 }
 
 document.addEventListener('DOMContentLoaded', () => {
