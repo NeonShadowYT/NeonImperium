@@ -70,37 +70,45 @@
 /* Split editor */
 .split-editor {
     display: flex;
+    flex-direction: column;
     gap: 16px;
-    height: 500px;
     margin-top: 10px;
 }
-.split-editor-left {
+.split-editor .split-editor-left,
+.split-editor .split-editor-right {
     flex: 1;
+}
+.split-editor .split-editor-left {
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
-.split-editor-right {
-    flex: 1;
+.split-editor .split-editor-right {
     overflow-y: auto;
     background: var(--bg-primary);
     border-radius: 16px;
     border: 1px solid var(--border);
     padding: 16px;
 }
-.split-editor-left .feedback-textarea {
+.split-editor .feedback-textarea {
     flex: 1;
     resize: vertical;
     min-height: 300px;
 }
-.split-editor .button-group {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 16px;
+.split-editor .button {
+    margin-left: auto;
 }
 
-/* Комментарии: поле ввода растянуто, кнопки рядом */
+/* Карточка настроек поста */
+.settings-card {
+    background: var(--bg-card-gradient);
+    border-radius: 20px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+}
+
+/* Комментарии */
 .comment-form > div {
     display: flex;
     gap: 8px;

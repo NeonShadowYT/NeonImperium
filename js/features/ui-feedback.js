@@ -637,21 +637,25 @@
     function createSplitEditor(initialContent, onSave, options = {}) {
         const container = document.createElement('div');
         container.className = 'split-editor';
-        container.style.cssText = 'display: flex; gap: 16px; height: 500px; margin-top: 10px;';
+        container.style.cssText = 'display: flex; flex-direction: column; gap: 16px; margin-top: 10px;';
+        
+        // Toolbar над обеими панелями
+        const toolbarContainer = document.createElement('div');
+        toolbarContainer.id = 'split-editor-toolbar';
+        toolbarContainer.style.marginBottom = '8px';
+        
+        const panelsRow = document.createElement('div');
+        panelsRow.style.cssText = 'display: flex; gap: 16px; min-height: 400px;';
         
         const leftPanel = document.createElement('div');
         leftPanel.className = 'split-editor-left';
         leftPanel.style.cssText = 'flex: 1; display: flex; flex-direction: column; overflow: hidden;';
-        
-        const toolbarContainer = document.createElement('div');
-        toolbarContainer.id = 'split-editor-toolbar';
         
         const textarea = document.createElement('textarea');
         textarea.className = 'feedback-textarea';
         textarea.value = initialContent || '';
         textarea.style.cssText = 'flex: 1; resize: vertical; min-height: 300px;';
         
-        leftPanel.appendChild(toolbarContainer);
         leftPanel.appendChild(textarea);
         
         const rightPanel = document.createElement('div');
@@ -662,8 +666,11 @@
         previewDiv.className = 'markdown-body';
         rightPanel.appendChild(previewDiv);
         
-        container.appendChild(leftPanel);
-        container.appendChild(rightPanel);
+        panelsRow.appendChild(leftPanel);
+        panelsRow.appendChild(rightPanel);
+        
+        container.appendChild(toolbarContainer);
+        container.appendChild(panelsRow);
         
         // Функция обновления предпросмотра (живой)
         let updateTimeout;
@@ -703,22 +710,18 @@
         });
         
         if (window.Editor) {
-            const toolbar = Editor.createEditorToolbar(textarea, { preview: false }); // отключаем встроенный предпросмотр
+            const toolbar = Editor.createEditorToolbar(textarea, { preview: false });
             toolbarContainer.appendChild(toolbar);
         }
         
-        const buttonGroup = document.createElement('div');
-        buttonGroup.className = 'button-group';
-        buttonGroup.style.cssText = 'display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;';
+        // Кнопка Сохранить справа снизу (без кнопки Отмена)
+        const buttonRow = document.createElement('div');
+        buttonRow.style.cssText = 'display: flex; justify-content: flex-end; margin-top: 16px;';
         const saveBtn = document.createElement('button');
         saveBtn.className = 'button';
         saveBtn.textContent = options.saveText || 'Сохранить';
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'button';
-        cancelBtn.textContent = 'Отмена';
-        buttonGroup.appendChild(cancelBtn);
-        buttonGroup.appendChild(saveBtn);
-        container.appendChild(buttonGroup);
+        buttonRow.appendChild(saveBtn);
+        container.appendChild(buttonRow);
         
         let isSubmitting = false;
         saveBtn.addEventListener('click', async () => {
@@ -733,11 +736,7 @@
             }
         });
         
-        cancelBtn.addEventListener('click', () => {
-            if (options.onCancel) options.onCancel();
-        });
-        
-        return { container, textarea, previewDiv };
+        return { container, textarea, previewDiv, updatePreview };
     }
 
     function openEditorModal(mode, data, postType = 'feedback') {
@@ -759,8 +758,8 @@
         }
 
         let categoryHtml = '';
+        let currentCategory = 'idea';
         if (postType === 'feedback') {
-            let currentCategory = 'idea';
             if (data.labels) {
                 const typeLabel = data.labels.find(l => l.startsWith('type:'));
                 if (typeLabel) currentCategory = typeLabel.split(':')[1];
@@ -779,7 +778,6 @@
             draftKey = `draft_${postType}_${mode}_${data.game || 'global'}_${data.number || 'new'}`;
         }
 
-        // Создаём модальное окно с пустым содержимым, которое заполним позже
         const { modal, closeModal } = UIUtils.createModal(title, '<div id="editor-container"></div>', { size: 'full' });
         const editorContainer = modal.querySelector('#editor-container');
         
@@ -881,13 +879,14 @@
         };
         
         if (postType === 'comment') {
-            const { container: editorUI, textarea } = createSplitEditor(bodyContent, handleSave, { saveText: mode === 'edit' ? 'Сохранить' : 'Отправить', onCancel: closeModal });
+            const { container: editorUI, textarea } = createSplitEditor(bodyContent, handleSave, { saveText: mode === 'edit' ? 'Сохранить' : 'Отправить' });
             editorContainer.appendChild(editorUI);
         } else {
-            // Для постов: добавляем дополнительные поля (заголовок, превью, доступ) над split-редактором
-            const formWrapper = document.createElement('div');
-            formWrapper.className = 'feedback-form';
-            formWrapper.style.gap = '12px';
+            // Верхняя карточка с настройками (название, превью, категория)
+            const settingsCard = document.createElement('div');
+            settingsCard.className = 'card';
+            settingsCard.style.padding = '20px';
+            settingsCard.style.marginBottom = '20px';
             
             const titleInput = document.createElement('input');
             titleInput.type = 'text';
@@ -895,11 +894,23 @@
             titleInput.className = 'feedback-input';
             titleInput.placeholder = 'Заголовок';
             titleInput.value = data.title || '';
-            formWrapper.appendChild(titleInput);
+            titleInput.style.marginBottom = '12px';
+            settingsCard.appendChild(titleInput);
             
+            // Краткое описание (summary) - будет синхронизироваться с телом поста через <!-- summary: -->
+            const summaryInput = document.createElement('input');
+            summaryInput.type = 'text';
+            summaryInput.id = 'modal-summary';
+            summaryInput.className = 'feedback-input';
+            summaryInput.placeholder = 'Краткое описание (будет видно в ленте)';
+            summaryInput.value = GithubCore.extractSummary(data.body) || '';
+            summaryInput.style.marginBottom = '12px';
+            settingsCard.appendChild(summaryInput);
+            
+            // Preview URL + кнопка хостингов
             const previewRow = document.createElement('div');
             previewRow.className = 'preview-url-wrapper';
-            previewRow.style.gap = '8px';
+            previewRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 12px;';
             const previewUrlInput = document.createElement('input');
             previewUrlInput.type = 'url';
             previewUrlInput.id = 'modal-preview-url';
@@ -911,12 +922,14 @@
             if (window.Editor) servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
             previewRow.appendChild(previewUrlInput);
             previewRow.appendChild(servicesPlaceholder);
-            formWrapper.appendChild(previewRow);
+            settingsCard.appendChild(previewRow);
             
+            // Превью изображения
             const thumbnailContainer = document.createElement('div');
             thumbnailContainer.id = 'preview-thumbnail-container';
             thumbnailContainer.className = 'preview-thumbnail';
             thumbnailContainer.style.display = previewUrl ? 'block' : 'none';
+            thumbnailContainer.style.marginBottom = '12px';
             const thumbnailImg = document.createElement('img');
             thumbnailImg.id = 'preview-thumbnail-img';
             thumbnailImg.src = previewUrl || '';
@@ -929,10 +942,11 @@
                 previewUrlInput.value = '';
                 thumbnailContainer.style.display = 'none';
                 thumbnailImg.src = '';
+                syncToBody();
             });
             thumbnailContainer.appendChild(thumbnailImg);
             thumbnailContainer.appendChild(removePreviewBtn);
-            formWrapper.appendChild(thumbnailContainer);
+            settingsCard.appendChild(thumbnailContainer);
             
             previewUrlInput.addEventListener('input', (e) => {
                 const val = e.target.value.trim();
@@ -943,28 +957,35 @@
                     thumbnailContainer.style.display = 'none';
                     thumbnailImg.src = '';
                 }
+                syncToBody();
             });
             
             if (postType === 'feedback') {
                 const categorySelect = document.createElement('select');
                 categorySelect.id = 'modal-category';
                 categorySelect.className = 'feedback-select';
-                let currentCategory = 'idea';
-                if (data.labels) {
-                    const typeLabel = data.labels.find(l => l.startsWith('type:'));
-                    if (typeLabel) currentCategory = typeLabel.split(':')[1];
-                }
                 categorySelect.innerHTML = `
                     <option value="idea" ${currentCategory==='idea'?'selected':''}>💡 Идея</option>
                     <option value="bug" ${currentCategory==='bug'?'selected':''}>🐛 Баг</option>
                     <option value="review" ${currentCategory==='review'?'selected':''}>⭐ Отзыв</option>
                 `;
-                formWrapper.appendChild(categorySelect);
+                categorySelect.style.marginBottom = '12px';
+                settingsCard.appendChild(categorySelect);
+                categorySelect.addEventListener('change', syncToBody);
             }
+            
+            editorContainer.appendChild(settingsCard);
+            
+            // Создаём split-редактор
+            const { container: editorUI, textarea, updatePreview } = createSplitEditor(bodyContent, handleSave, { saveText: mode === 'edit' ? 'Сохранить' : 'Опубликовать' });
+            
+            // Добавляем панель доступа и кнопку публикации в нижнюю часть редактора
+            const bottomBar = document.createElement('div');
+            bottomBar.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-top: 16px; gap: 16px; flex-wrap: wrap;';
             
             const accessRow = document.createElement('div');
             accessRow.className = 'access-settings';
-            accessRow.style.cssText = 'display: flex; align-items: center; gap: 12px; flex: 1; margin-top: 8px;';
+            accessRow.style.cssText = 'display: flex; align-items: center; gap: 12px; flex: 1;';
             const accessPlaceholder = document.createElement('div');
             accessPlaceholder.id = 'access-dropdown-placeholder';
             const privateUsersInput = document.createElement('input');
@@ -979,22 +1000,66 @@
                 currentIsPrivate = isPrivate;
                 privateUsersInput.style.display = isPrivate ? 'block' : 'none';
                 if (isPrivate && allowedVal) privateUsersInput.value = allowedVal;
+                syncToBody();
             };
             const accessDropdown = createAccessDropdown(currentIsPrivate, allowedUsers, onAccessToggle);
             accessPlaceholder.appendChild(accessDropdown);
             accessRow.appendChild(accessPlaceholder);
             privateUsersInput.style.display = currentIsPrivate ? 'block' : 'none';
+            privateUsersInput.style.flex = '1';
             accessRow.appendChild(privateUsersInput);
-            formWrapper.appendChild(accessRow);
+            bottomBar.appendChild(accessRow);
             
-            const { container: editorUI, textarea } = createSplitEditor(bodyContent, handleSave, { saveText: mode === 'edit' ? 'Сохранить' : 'Опубликовать', onCancel: closeModal });
-            formWrapper.appendChild(editorUI);
+            // Кнопка публикации (она уже есть в createSplitEditor, но мы её скроем и создадим свою)
+            // Удалим кнопку из createSplitEditor и добавим свою в bottomBar
+            // Модифицируем createSplitEditor, чтобы он не добавлял кнопку. Для этого передадим опцию noSaveButton: true
+            // Но проще заменить: удалим существующую кнопку и добавим новую.
+            const existingSaveBtn = editorUI.querySelector('.button:last-child');
+            if (existingSaveBtn) existingSaveBtn.remove();
             
-            editorContainer.appendChild(formWrapper);
+            const saveBtn = document.createElement('button');
+            saveBtn.className = 'button';
+            saveBtn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
+            bottomBar.appendChild(saveBtn);
+            
+            editorUI.appendChild(bottomBar);
+            editorContainer.appendChild(editorUI);
+            
+            // Функция синхронизации полей в тело поста
+            const syncToBody = () => {
+                let body = textarea.value;
+                // Удаляем старые мета-теги
+                body = body.replace(/<!--\s*preview:\s*https?:\/\/[^\s]+\s*-->\s*\n?/g, '');
+                body = body.replace(/<!--\s*summary:\s*.*?\s*-->\s*\n?/g, '');
+                body = body.replace(/<!--\s*allowed:\s*.*?\s*-->\s*\n?/g, '');
+                
+                const newPreview = previewUrlInput.value.trim();
+                if (newPreview) {
+                    body = `<!-- preview: ${newPreview} -->\n\n![Preview](${newPreview})\n\n` + body;
+                }
+                const newSummary = summaryInput.value.trim();
+                if (newSummary) {
+                    body = `<!-- summary: ${newSummary} -->\n\n` + body;
+                }
+                if (currentIsPrivate && privateUsersInput.value.trim()) {
+                    body = `<!-- allowed: ${privateUsersInput.value.trim()} -->\n\n` + body;
+                }
+                textarea.value = body;
+                updatePreview();
+            };
+            
+            titleInput.addEventListener('input', () => { /* заголовок не в теле */ });
+            summaryInput.addEventListener('input', syncToBody);
+            previewUrlInput.addEventListener('input', syncToBody);
+            privateUsersInput.addEventListener('input', syncToBody);
+            if (postType === 'feedback') {
+                const categorySelect = settingsCard.querySelector('#modal-category');
+                if (categorySelect) categorySelect.addEventListener('change', syncToBody);
+            }
             
             // Восстановление черновика
             const savedDraft = UIUtils.loadDraft(draftKey);
-            if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl || savedDraft.access || savedDraft.privateUsers)) {
+            if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl || savedDraft.summary || savedDraft.access || savedDraft.privateUsers)) {
                 if (confirm('Найден несохранённый черновик. Восстановить?')) {
                     titleInput.value = savedDraft.title || '';
                     if (savedDraft.previewUrl) {
@@ -1002,8 +1067,11 @@
                         thumbnailImg.src = savedDraft.previewUrl;
                         thumbnailContainer.style.display = 'block';
                     }
+                    if (savedDraft.summary) summaryInput.value = savedDraft.summary;
                     textarea.value = savedDraft.body || '';
-                    if (savedDraft.category && categorySelect) categorySelect.value = savedDraft.category;
+                    if (savedDraft.category && settingsCard.querySelector('#modal-category')) {
+                        settingsCard.querySelector('#modal-category').value = savedDraft.category;
+                    }
                     if (savedDraft.access) {
                         const isPrivate = savedDraft.access === 'private';
                         if (isPrivate !== currentIsPrivate) {
@@ -1014,8 +1082,7 @@
                         }
                     }
                     if (savedDraft.privateUsers) privateUsersInput.value = savedDraft.privateUsers;
-                    // Обновить предпросмотр (вызовется через input)
-                    textarea.dispatchEvent(new Event('input'));
+                    syncToBody();
                 } else {
                     UIUtils.clearDraft(draftKey);
                 }
@@ -1025,13 +1092,15 @@
             const updateDraft = () => {
                 const currentTitle = titleInput.value.trim();
                 const currentPreview = previewUrlInput.value.trim();
+                const currentSummary = summaryInput.value.trim();
                 const currentBody = textarea.value.trim();
-                const currentCategory = categorySelect ? categorySelect.value : null;
+                const currentCategory = settingsCard.querySelector('#modal-category') ? settingsCard.querySelector('#modal-category').value : null;
                 const currentAccess = currentIsPrivate ? 'private' : 'public';
                 const currentPrivateUsers = privateUsersInput.value.trim();
                 UIUtils.saveDraft(draftKey, {
                     title: currentTitle,
                     previewUrl: currentPreview,
+                    summary: currentSummary,
                     body: currentBody,
                     category: currentCategory,
                     access: currentAccess,
@@ -1041,8 +1110,11 @@
             };
             titleInput.addEventListener('input', updateDraft);
             previewUrlInput.addEventListener('input', updateDraft);
+            summaryInput.addEventListener('input', updateDraft);
             textarea.addEventListener('input', updateDraft);
-            if (categorySelect) categorySelect.addEventListener('change', updateDraft);
+            if (settingsCard.querySelector('#modal-category')) {
+                settingsCard.querySelector('#modal-category').addEventListener('change', updateDraft);
+            }
             privateUsersInput.addEventListener('input', updateDraft);
             
             const originalCloseModal = closeModal;
@@ -1065,6 +1137,23 @@
                 closeBtn.replaceWith(closeBtn.cloneNode(true));
                 modal.querySelector('.modal-close').addEventListener('click', (e) => { e.preventDefault(); closeWithCheck(); });
             }
+            
+            // Сохраняем обработчик для кнопки saveBtn
+            let isSubmitting = false;
+            const saveHandler = async () => {
+                if (isSubmitting) return;
+                isSubmitting = true;
+                saveBtn.disabled = true;
+                try {
+                    await handleSave(textarea.value.trim());
+                } catch (err) {
+                    // ошибка уже показана внутри handleSave
+                } finally {
+                    isSubmitting = false;
+                    saveBtn.disabled = false;
+                }
+            };
+            saveBtn.addEventListener('click', saveHandler);
         }
     }
 
