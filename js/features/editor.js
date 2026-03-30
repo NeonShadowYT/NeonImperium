@@ -219,6 +219,63 @@
         return container;
     }
 
+    function createPreviewDropdown(textarea, onPreview, onLiveToggle) {
+        const container = document.createElement('div');
+        container.className = 'preview-dropdown-container';
+        container.style.position = 'relative';
+        container.style.display = 'inline-block';
+        
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'editor-btn preview-btn';
+        btn.innerHTML = '<i class="fas fa-eye"></i> Предпросмотр';
+        btn.style.padding = '6px 16px';
+        btn.style.borderRadius = '30px';
+        
+        const dropdownMenu = document.createElement('div');
+        dropdownMenu.className = 'preview-dropdown';
+        dropdownMenu.style.position = 'absolute';
+        dropdownMenu.style.top = '100%';
+        dropdownMenu.style.right = '0';
+        dropdownMenu.style.minWidth = '180px';
+        dropdownMenu.style.zIndex = '1000';
+        dropdownMenu.style.background = 'var(--bg-card)';
+        dropdownMenu.style.border = '1px solid var(--border)';
+        dropdownMenu.style.borderRadius = '12px';
+        dropdownMenu.style.padding = '5px 0';
+        dropdownMenu.style.display = 'none';
+        
+        const previewOption = document.createElement('button');
+        previewOption.type = 'button';
+        previewOption.innerHTML = '<i class="fas fa-eye"></i> Предпросмотр';
+        previewOption.addEventListener('click', () => {
+            dropdownMenu.style.display = 'none';
+            if (onPreview) onPreview();
+            if (onLiveToggle) onLiveToggle(false);
+        });
+        const liveOption = document.createElement('button');
+        liveOption.type = 'button';
+        liveOption.innerHTML = '<i class="fas fa-sync-alt"></i> Живой предпросмотр';
+        liveOption.addEventListener('click', () => {
+            dropdownMenu.style.display = 'none';
+            if (onLiveToggle) onLiveToggle(true);
+        });
+        dropdownMenu.appendChild(previewOption);
+        dropdownMenu.appendChild(liveOption);
+        
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
+        });
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) dropdownMenu.style.display = 'none';
+        });
+        
+        container.appendChild(btn);
+        container.appendChild(dropdownMenu);
+        return container;
+    }
+
     function createEditorToolbar(textarea, options = {}) {
         const toolbar = document.createElement('div');
         toolbar.className = 'editor-toolbar';
@@ -252,62 +309,25 @@
             toolbar.appendChild(group);
         }
         if (options.preview !== false) {
-            const previewWrapper = document.createElement('div');
-            previewWrapper.className = 'preview-split';
-            previewWrapper.style.marginLeft = 'auto';
-            const previewBtn = document.createElement('button');
-            previewBtn.type = 'button';
-            previewBtn.className = 'editor-btn preview-btn';
-            previewBtn.textContent = 'Предпросмотр';
-            const dropdownBtn = document.createElement('button');
-            dropdownBtn.type = 'button';
-            dropdownBtn.className = 'editor-btn dropdown-toggle';
-            dropdownBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
-            const dropdownMenu = document.createElement('div');
-            dropdownMenu.className = 'preview-dropdown';
-            dropdownMenu.innerHTML = '<button data-mode="preview" class="active">Предпросмотр</button><button data-mode="live">Живой предпросмотр</button>';
-            previewWrapper.appendChild(previewBtn);
-            previewWrapper.appendChild(dropdownBtn);
-            previewWrapper.appendChild(dropdownMenu);
-            let liveMode = false, inputHandler = null;
+            let liveMode = false;
+            let inputHandler = null;
             const showPreview = () => { if (options.onPreview) options.onPreview(); };
-            previewBtn.addEventListener('click', showPreview);
-            dropdownBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                dropdownMenu.classList.toggle('show');
-            });
-            dropdownMenu.querySelectorAll('button').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const mode = btn.dataset.mode;
-                    dropdownMenu.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    if (mode === 'live') {
-                        previewBtn.textContent = 'Живой предпросмотр';
-                        if (!liveMode) {
-                            liveMode = true;
-                            if (inputHandler) textarea.removeEventListener('input', inputHandler);
-                            inputHandler = debounce(showPreview, 300);
-                            textarea.addEventListener('input', inputHandler);
-                            if (textarea.value.trim()) showPreview();
-                        }
-                    } else {
-                        previewBtn.textContent = 'Предпросмотр';
-                        if (liveMode) {
-                            liveMode = false;
-                            if (inputHandler) {
-                                textarea.removeEventListener('input', inputHandler);
-                                inputHandler = null;
-                            }
-                        }
+            const toggleLive = (enable) => {
+                liveMode = enable;
+                if (liveMode) {
+                    if (inputHandler) textarea.removeEventListener('input', inputHandler);
+                    inputHandler = debounce(showPreview, 300);
+                    textarea.addEventListener('input', inputHandler);
+                    if (textarea.value.trim()) showPreview();
+                } else {
+                    if (inputHandler) {
+                        textarea.removeEventListener('input', inputHandler);
+                        inputHandler = null;
                     }
-                    dropdownMenu.classList.remove('show');
-                });
-            });
-            document.addEventListener('click', (e) => {
-                if (!previewWrapper.contains(e.target)) dropdownMenu.classList.remove('show');
-            });
-            toolbar.appendChild(previewWrapper);
+                }
+            };
+            const previewDropdown = createPreviewDropdown(textarea, showPreview, toggleLive);
+            toolbar.appendChild(previewDropdown);
         }
         return toolbar;
     }

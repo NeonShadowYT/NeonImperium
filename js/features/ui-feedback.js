@@ -408,12 +408,13 @@
     }
 
     function setupCommentForm(container, item, currentUser) {
-        const commentForm = document.createElement('div'); commentForm.className = 'comment-form';
+        const commentForm = document.createElement('div');
+        commentForm.className = 'comment-form';
         commentForm.innerHTML = `
-            <input type="text" class="comment-input" placeholder="Написать комментарий...">
-            <div class="button-group">
-                <button class="button comment-submit">Отправить</button>
-                <button class="button comment-editor-btn"><i class="fas fa-pencil-alt"></i> Редактор</button>
+            <div style="display: flex; gap: 8px; width: 100%;">
+                <input type="text" class="comment-input" placeholder="Написать комментарий..." style="flex: 1;">
+                <button class="button comment-submit" style="flex-shrink: 0;">Отправить</button>
+                <button class="button comment-editor-btn" style="flex-shrink: 0; padding: 8px 12px;" title="Редактор"><i class="fas fa-pencil-alt"></i></button>
             </div>
         `;
         container.appendChild(commentForm);
@@ -568,7 +569,6 @@
         return allowedList.includes(currentUser);
     }
 
-    // Создаёт выпадающий список доступа (публичный/приватный)
     function createAccessDropdown(initialIsPrivate, allowedUsersValue, onToggle) {
         const container = document.createElement('div');
         container.className = 'access-dropdown-container';
@@ -899,7 +899,6 @@
             const title = modal.querySelector('#modal-input-title').value.trim();
             if (!title) { UIUtils.showToast('Заполните заголовок', 'error'); modal.querySelector('#modal-input-title').focus(); return; }
 
-            // Подготовка финального тела
             let finalBody = body;
             finalBody = finalBody.replace(/<!--\s*preview:\s*https?:\/\/[^\s]+\s*-->\s*\n?/g, '');
             finalBody = finalBody.replace(/<!--\s*allowed:\s*.*?\s*-->\s*\n?/g, '');
@@ -908,7 +907,6 @@
             const isPrivate = currentIsPrivate;
             const allowedUsersValue = privateUsersInput.value.trim();
 
-            // Обработка preview: если редактируем и preview не изменился, не добавляем повторно
             let existingPreviewUrl = null;
             if (mode === 'edit') {
                 const oldPreviewMatch = data.body?.match(/<!--\s*preview:\s*(https?:\/\/[^\s]+)\s*-->/);
@@ -918,7 +916,6 @@
                 if (mode !== 'edit' || newPreviewUrl !== existingPreviewUrl) {
                     finalBody = `<!-- preview: ${newPreviewUrl} -->\n\n![Preview](${newPreviewUrl})\n\n` + finalBody;
                 } else {
-                    // сохраняем оригинальный preview без дублирования
                     const originalPreviewTag = `<!-- preview: ${existingPreviewUrl} -->`;
                     if (!finalBody.includes(originalPreviewTag)) {
                         finalBody = originalPreviewTag + '\n\n![Preview](' + existingPreviewUrl + ')\n\n' + finalBody;
@@ -946,7 +943,6 @@
             btn.textContent = 'Сохранение...';
 
             try {
-                // Проверка изменений при редактировании
                 if (mode === 'edit') {
                     const originalTitle = data.title || '';
                     const originalBody = data.body || '';

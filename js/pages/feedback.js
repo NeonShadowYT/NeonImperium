@@ -6,7 +6,6 @@
 
     const ITEMS_PER_PAGE = 10;
     const MAX_DISPLAY_ITEMS = 30;
-    const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
 
     let currentGame = '', currentTab = 'all', currentPage = 1, hasMorePages = true, isLoading = false;
     let allIssues = [], displayedIssues = [], container, feedbackSection, gridContainer;
@@ -30,6 +29,10 @@
             const issue = e.detail;
             const hasGameLabel = issue.labels.some(l => l.name === `game:${currentGame}`);
             if (!hasGameLabel) return;
+            const typeLabel = issue.labels.find(l => l.name.startsWith('type:'));
+            if (!typeLabel) return;
+            const type = typeLabel.name.split(':')[1];
+            if (type === 'update' || type === 'news') return; // не показываем обновления и новости в обратной связи
             cacheRemoveByPrefix(`issues_${currentGame}_page_`);
             allIssues = [issue, ...allIssues];
             filterAndDisplayIssues(true);
@@ -191,6 +194,8 @@
         let filtered = allIssues.filter(issue => issue.state === 'open');
         filtered = filtered.filter(issue => {
             const labels = issue.labels.map(l => l.name);
+            // Исключаем обновления и новости из раздела обратной связи
+            if (labels.includes('type:update') || labels.includes('type:news')) return false;
             if (!labels.includes('private')) return true;
             if (isAdmin()) return true;
             const allowed = GithubCore.extractAllowed(issue.body);
@@ -198,7 +203,9 @@
             const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
             return allowedList.includes(currentUser);
         });
-        if (currentTab !== 'all') filtered = filtered.filter(issue => issue.labels.some(l => l.name === `type:${currentTab}`));
+        if (currentTab !== 'all') {
+            filtered = filtered.filter(issue => issue.labels.some(l => l.name === `type:${currentTab}`));
+        }
         displayedIssues = filtered;
         let issuesToRender = displayedIssues;
         if (displayedIssues.length > MAX_DISPLAY_ITEMS) issuesToRender = displayedIssues.slice(-MAX_DISPLAY_ITEMS);
@@ -231,7 +238,7 @@
         const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
         const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : '⭐';
         const previewUrl = extractPreviewUrl(issue.body);
-        const summary = GithubCore.extractSummary(issue.body) || (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
+        const summary = extractSummary(issue.body) || (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
         const date = new Date(issue.created_at).toLocaleDateString();
         
         const cardLink = document.createElement('div');
@@ -294,22 +301,17 @@
         previewP.style.webkitBoxOrient = 'vertical';
         previewP.textContent = summary.replace(/\n/g,' ');
         
-        const reactionsDiv = document.createElement('div');
-        reactionsDiv.className = 'reactions-container';
-        reactionsDiv.dataset.targetType = 'issue';
-        reactionsDiv.dataset.targetId = issue.number;
-        
         const footer = document.createElement('div');
         footer.style.display = 'flex';
         footer.style.justifyContent = 'space-between';
         footer.style.alignItems = 'center';
         footer.style.fontSize = '12px';
         footer.style.color = 'var(--text-secondary)';
-        footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${date}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span>`;
+        footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${date}</span>`;
         
-        card.append(imageWrapper, titleContainer, previewP, reactionsDiv, footer);
+        card.append(imageWrapper, titleContainer, previewP, footer);
         cardLink.appendChild(card);
-        loadAndRenderReactionsWithCache(issue.number, reactionsDiv);
+        
         cardLink.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
             openFullModal({
@@ -324,46 +326,5 @@
             });
         });
         return cardLink;
-    }
-
-    async function loadAndRenderReactionsWithCache(issueNumber, container) {
-        const cacheKey = `list_reactions_${issueNumber}`;
-        const cached = window.reactionsListCache?.get(cacheKey);
-        if (cached && Date.now() - cached.timestamp < REACTIONS_CACHE_TTL) {
-            renderReactionsFromCache(cached.data, container, issueNumber);
-            return;
-        }
-        try {
-            const reactions = await loadReactions(issueNumber);
-            if (!window.reactionsListCache) window.reactionsListCache = new Map();
-            window.reactionsListCache.set(cacheKey, { data: reactions, timestamp: Date.now() });
-            renderReactionsFromCache(reactions, container, issueNumber);
-        } catch (err) {
-            UIUtils.showToast('Ошибка загрузки реакций', 'error');
-        }
-    }
-
-    function renderReactionsFromCache(reactions, container, issueNumber) {
-        const handleAdd = async (num, content) => { 
-            try { 
-                await addReaction(num, content); 
-                if (window.reactionsListCache) window.reactionsListCache.delete(`list_reactions_${num}`);
-                if (window.UIFeedback) window.UIFeedback.invalidateCache(num);
-            } catch (err) { 
-                UIUtils.showToast('Ошибка при добавлении реакции', 'error');
-                throw err;
-            }
-        };
-        const handleRemove = async (num, reactionId) => { 
-            try { 
-                await removeReaction(num, reactionId); 
-                if (window.reactionsListCache) window.reactionsListCache.delete(`list_reactions_${num}`);
-                if (window.UIFeedback) window.UIFeedback.invalidateCache(num);
-            } catch (err) { 
-                UIUtils.showToast('Ошибка при удалении реакции', 'error');
-                throw err;
-            }
-        };
-        renderReactions(container, issueNumber, reactions, currentUser, handleAdd, handleRemove);
     }
 })();

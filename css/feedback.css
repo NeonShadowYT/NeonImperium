@@ -31,3 +31,39 @@
     flex: 1;
     min-width: 150px;
 }
+/* Стили для комментариев — поле ввода растянуто, кнопки справа */
+.comment-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    width: 100%;
+}
+.comment-form .comment-input {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    color: var(--text-primary);
+}
+.comment-form .comment-submit,
+.comment-form .comment-editor-btn {
+    flex-shrink: 0;
+}
+.comment-form .comment-editor-btn {
+    padding: 8px 12px;
+}
+
+/* Выпадающий список предпросмотра */
+.preview-dropdown-container {
+    position: relative;
+    display: inline-block;
+}
+.preview-dropdown-container .preview-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+}
+.preview-dropdown-container .preview-btn:hover {
+    background: var(--accent-light);
+}
