@@ -516,3 +516,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
+
+const langBtn = document.getElementById('current-lang-btn');
+const langDropdown = document.getElementById('lang-dropdown');
+langBtn.addEventListener('click', () => {
+    langDropdown.style.display = langDropdown.style.display === 'block' ? 'none' : 'block';
+});
+document.querySelectorAll('#lang-dropdown button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const lang = btn.dataset.langCode;
+        setLanguage(lang);
+        langBtn.textContent = lang.toUpperCase();
+        langBtn.dataset.langCode = lang;
+        langDropdown.style.display = 'none';
+    });
+});
+document.addEventListener('click', (e) => {
+    if (!langBtn.contains(e.target) && !langDropdown.contains(e.target)) {
+        langDropdown.style.display = 'none';
+    }
+});

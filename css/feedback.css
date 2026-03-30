@@ -67,3 +67,84 @@
 .preview-dropdown-container .preview-btn:hover {
     background: var(--accent-light);
 }
+/* Split editor */
+.split-editor {
+    display: flex;
+    gap: 16px;
+    height: 500px;
+    margin-top: 10px;
+}
+.split-editor-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.split-editor-right {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg-primary);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 16px;
+}
+.split-editor-left .feedback-textarea {
+    flex: 1;
+    resize: vertical;
+    min-height: 300px;
+}
+.split-editor .button-group {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+/* Комментарии: поле ввода растянуто, кнопки рядом */
+.comment-form > div {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+.comment-form .comment-input {
+    flex: 1;
+}
+.comment-form .comment-submit,
+.comment-form .comment-editor-btn {
+    flex-shrink: 0;
+}
+.comment-form .comment-editor-btn {
+    padding: 8px 12px;
+}
+
+/* Выпадающий список доступа */
+.access-dropdown-container {
+    position: relative;
+    display: inline-block;
+}
+.access-dropdown-btn {
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    border-radius: 30px;
+    cursor: pointer;
+    font-family: 'Russo One', sans-serif;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.access-dropdown-btn:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+.access-settings {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+#private-users {
+    flex: 1;
+    min-width: 150px;
+}

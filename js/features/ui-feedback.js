@@ -633,6 +633,113 @@
         return container;
     }
 
+    // Создаёт split-view редактор: левая панель (textarea), правая панель (preview)
+    function createSplitEditor(initialContent, onSave, options = {}) {
+        const container = document.createElement('div');
+        container.className = 'split-editor';
+        container.style.cssText = 'display: flex; gap: 16px; height: 500px; margin-top: 10px;';
+        
+        const leftPanel = document.createElement('div');
+        leftPanel.className = 'split-editor-left';
+        leftPanel.style.cssText = 'flex: 1; display: flex; flex-direction: column; overflow: hidden;';
+        
+        const toolbarContainer = document.createElement('div');
+        toolbarContainer.id = 'split-editor-toolbar';
+        
+        const textarea = document.createElement('textarea');
+        textarea.className = 'feedback-textarea';
+        textarea.value = initialContent || '';
+        textarea.style.cssText = 'flex: 1; resize: vertical; min-height: 300px;';
+        
+        leftPanel.appendChild(toolbarContainer);
+        leftPanel.appendChild(textarea);
+        
+        const rightPanel = document.createElement('div');
+        rightPanel.className = 'split-editor-right';
+        rightPanel.style.cssText = 'flex: 1; overflow-y: auto; background: var(--bg-primary); border-radius: 16px; border: 1px solid var(--border); padding: 16px;';
+        
+        const previewDiv = document.createElement('div');
+        previewDiv.className = 'markdown-body';
+        rightPanel.appendChild(previewDiv);
+        
+        container.appendChild(leftPanel);
+        container.appendChild(rightPanel);
+        
+        // Функция обновления предпросмотра (живой)
+        let updateTimeout;
+        const updatePreview = () => {
+            if (updateTimeout) clearTimeout(updateTimeout);
+            updateTimeout = setTimeout(() => {
+                const text = textarea.value;
+                if (text.trim()) {
+                    previewDiv.innerHTML = '';
+                    renderPostBody(previewDiv, text, null);
+                } else {
+                    previewDiv.innerHTML = '<p class="text-secondary">Предпросмотр будет здесь...</p>';
+                }
+            }, 150);
+        };
+        
+        textarea.addEventListener('input', updatePreview);
+        updatePreview();
+        
+        // Синхронизация прокрутки
+        let syncingLeft = false, syncingRight = false;
+        textarea.addEventListener('scroll', () => {
+            if (syncingLeft) return;
+            syncingRight = true;
+            const ratio = textarea.scrollTop / (textarea.scrollHeight - textarea.clientHeight);
+            const targetScroll = ratio * (rightPanel.scrollHeight - rightPanel.clientHeight);
+            rightPanel.scrollTop = targetScroll;
+            setTimeout(() => { syncingRight = false; }, 50);
+        });
+        rightPanel.addEventListener('scroll', () => {
+            if (syncingRight) return;
+            syncingLeft = true;
+            const ratio = rightPanel.scrollTop / (rightPanel.scrollHeight - rightPanel.clientHeight);
+            const targetScroll = ratio * (textarea.scrollHeight - textarea.clientHeight);
+            textarea.scrollTop = targetScroll;
+            setTimeout(() => { syncingLeft = false; }, 50);
+        });
+        
+        if (window.Editor) {
+            const toolbar = Editor.createEditorToolbar(textarea, { preview: false }); // отключаем встроенный предпросмотр
+            toolbarContainer.appendChild(toolbar);
+        }
+        
+        const buttonGroup = document.createElement('div');
+        buttonGroup.className = 'button-group';
+        buttonGroup.style.cssText = 'display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;';
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'button';
+        saveBtn.textContent = options.saveText || 'Сохранить';
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'button';
+        cancelBtn.textContent = 'Отмена';
+        buttonGroup.appendChild(cancelBtn);
+        buttonGroup.appendChild(saveBtn);
+        container.appendChild(buttonGroup);
+        
+        let isSubmitting = false;
+        saveBtn.addEventListener('click', async () => {
+            if (isSubmitting) return;
+            isSubmitting = true;
+            saveBtn.disabled = true;
+            try {
+                await onSave(textarea.value.trim());
+            } finally {
+                isSubmitting = false;
+                saveBtn.disabled = false;
+            }
+        });
+        
+        cancelBtn.addEventListener('click', () => {
+            if (options.onCancel) options.onCancel();
+        });
+        
+        return { container, textarea, previewDiv };
+    }
+
     function openEditorModal(mode, data, postType = 'feedback') {
         const currentUser = GithubAuth.getCurrentUser();
         const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
@@ -672,87 +779,202 @@
             draftKey = `draft_${postType}_${mode}_${data.game || 'global'}_${data.number || 'new'}`;
         }
 
-        let contentHtml = '';
-        if (postType === 'comment') {
-            contentHtml = `
-                <div class="feedback-form feedback-form-compact" style="gap:4px;">
-                    <div id="modal-editor-toolbar"></div>
-                    <textarea id="modal-body" class="feedback-textarea" placeholder="Текст комментария..." rows="10">${GithubCore.escapeHtml(bodyContent)}</textarea>
-                    <div class="preview-area" id="modal-preview-area" style="display:none;"></div>
-                    <div class="button-group" style="display: flex; justify-content: flex-end; margin-top:10px;">
-                        <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Отправить'}</button>
-                    </div>
-                </div>
-            `;
-        } else {
-            contentHtml = `
-                <div class="feedback-form feedback-form-compact" style="gap:4px;">
-                    <input type="text" id="modal-input-title" class="feedback-input" placeholder="Заголовок" value="${GithubCore.escapeHtml(data.title||'')}" style="margin-bottom:4px;">
-                    <div class="preview-url-wrapper" style="gap:4px;">
-                        <input type="url" id="modal-preview-url" class="feedback-input preview-url-input" placeholder="Ссылка на превью (необязательно)" value="${GithubCore.escapeHtml(previewUrl)}" style="margin-bottom:0;">
-                        <div id="preview-services-placeholder"></div>
-                    </div>
-                    <div id="preview-thumbnail-container" class="preview-thumbnail" style="${previewUrl ? '' : 'display:none;'} margin-top:4px;">
-                        <img id="preview-thumbnail-img" src="${previewUrl ? GithubCore.escapeHtml(previewUrl) : ''}" alt="Preview">
-                        <button type="button" class="remove-preview" id="remove-preview-btn" title="Удалить превью"><i class="fas fa-times"></i></button>
-                    </div>
-                    ${categoryHtml}
-                    <div id="modal-editor-toolbar"></div>
-                    <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(bodyContent)}</textarea>
-                    <div class="preview-area" id="modal-preview-area" style="display:none; margin-top:4px;"></div>
-                    <div class="button-group" style="display: flex; justify-content: space-between; align-items: center; margin-top:10px;">
-                        <div class="access-settings" style="display: flex; align-items: center; gap: 12px; flex: 1;">
-                            <div id="access-dropdown-placeholder"></div>
-                            <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" value="${GithubCore.escapeHtml(allowedUsers)}" style="flex: 1; ${data.labels?.includes('private') ? '' : 'display: none;'} margin-bottom:0;">
-                        </div>
-                        <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
-                    </div>
-                </div>
-            `;
-        }
-
-        const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
-
-        if (postType === 'comment') {
-            const previewArea = modal.querySelector('#modal-preview-area');
-            function updatePreview() {
-                if (!previewArea) return;
-                const text = modal.querySelector('#modal-body').value;
-                if (text.trim()) {
-                    previewArea.innerHTML = '';
-                    if (!previewArea.classList.contains('markdown-body')) previewArea.classList.add('markdown-body');
-                    renderPostBody(previewArea, text, null);
-                    previewArea.style.display = 'block';
+        // Создаём модальное окно с пустым содержимым, которое заполним позже
+        const { modal, closeModal } = UIUtils.createModal(title, '<div id="editor-container"></div>', { size: 'full' });
+        const editorContainer = modal.querySelector('#editor-container');
+        
+        // Функция сохранения для разных типов
+        const handleSave = async (finalBody) => {
+            if (!GithubAuth.getToken()) { UIUtils.showToast('Вы не авторизованы. Войдите через GitHub.', 'error'); throw new Error('No token'); }
+            
+            if (postType === 'comment') {
+                await GithubAPI.addComment(data.issueNumber, finalBody);
+                UIUtils.clearDraft(draftKey);
+                closeModal();
+                window.dispatchEvent(new CustomEvent('github-comment-created', { detail: { issueNumber: data.issueNumber } }));
+                UIUtils.showToast('Комментарий добавлен', 'success');
+                return;
+            }
+            
+            const titleInput = modal.querySelector('#modal-input-title');
+            const title = titleInput ? titleInput.value.trim() : '';
+            if (!title) { UIUtils.showToast('Заполните заголовок', 'error'); throw new Error('No title'); }
+            
+            let finalProcessedBody = finalBody;
+            finalProcessedBody = finalProcessedBody.replace(/<!--\s*preview:\s*https?:\/\/[^\s]+\s*-->\s*\n?/g, '');
+            finalProcessedBody = finalProcessedBody.replace(/<!--\s*allowed:\s*.*?\s*-->\s*\n?/g, '');
+            
+            const newPreviewUrl = modal.querySelector('#modal-preview-url').value.trim();
+            const isPrivate = currentIsPrivate;
+            const allowedUsersValue = privateUsersInput ? privateUsersInput.value.trim() : '';
+            
+            let existingPreviewUrl = null;
+            if (mode === 'edit') {
+                const oldPreviewMatch = data.body?.match(/<!--\s*preview:\s*(https?:\/\/[^\s]+)\s*-->/);
+                if (oldPreviewMatch) existingPreviewUrl = oldPreviewMatch[1];
+            }
+            if (newPreviewUrl) {
+                if (mode !== 'edit' || newPreviewUrl !== existingPreviewUrl) {
+                    finalProcessedBody = `<!-- preview: ${newPreviewUrl} -->\n\n![Preview](${newPreviewUrl})\n\n` + finalProcessedBody;
                 } else {
-                    previewArea.style.display = 'none';
+                    const originalPreviewTag = `<!-- preview: ${existingPreviewUrl} -->`;
+                    if (!finalProcessedBody.includes(originalPreviewTag)) {
+                        finalProcessedBody = originalPreviewTag + '\n\n![Preview](' + existingPreviewUrl + ')\n\n' + finalProcessedBody;
+                    }
                 }
             }
-            if (window.Editor) {
-                const toolbar = Editor.createEditorToolbar(modal.querySelector('#modal-body'), { onPreview: updatePreview, textarea: modal.querySelector('#modal-body') });
-                const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
-                if (toolbarContainer) toolbarContainer.appendChild(toolbar);
-            }
-        } else {
-            const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
-            if (servicesPlaceholder && window.Editor) {
-                servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
-            }
-            const previewUrlInput = modal.querySelector('#modal-preview-url');
-            const thumbnailContainer = modal.querySelector('#preview-thumbnail-container');
-            const thumbnailImg = modal.querySelector('#preview-thumbnail-img');
-            const removePreviewBtn = modal.querySelector('#remove-preview-btn');
-            function updateThumbnail(url) {
-                if (url && url.trim()) { thumbnailImg.src = url; thumbnailContainer.style.display = 'block'; }
-                else { thumbnailContainer.style.display = 'none'; thumbnailImg.src = ''; }
-            }
-            previewUrlInput.addEventListener('input', (e) => updateThumbnail(e.target.value.trim()));
-            removePreviewBtn.addEventListener('click', () => { previewUrlInput.value = ''; updateThumbnail(''); });
-
-            const isPrivateInit = data.labels?.includes('private') || false;
-            const privateUsersInput = modal.querySelector('#private-users');
-            const accessPlaceholder = modal.querySelector('#access-dropdown-placeholder');
-            let currentIsPrivate = isPrivateInit;
             
+            if (isPrivate && allowedUsersValue) {
+                finalProcessedBody = `<!-- allowed: ${allowedUsersValue} -->\n\n` + finalProcessedBody;
+            }
+            
+            const pollMatches = finalProcessedBody.match(/<!-- poll: .*? -->/g);
+            if (pollMatches && pollMatches.length > 1) {
+                if (!confirm('Обнаружено несколько блоков опроса. Будут сохранены только первые. Продолжить?')) throw new Error('Cancel');
+                const first = pollMatches[0];
+                finalProcessedBody = finalProcessedBody.replace(/<!-- poll: .*? -->/g, '');
+                finalProcessedBody = first + '\n' + finalProcessedBody;
+            }
+            
+            let category = 'idea';
+            if (postType === 'feedback' && modal.querySelector('#modal-category')) category = modal.querySelector('#modal-category').value;
+            
+            if (mode === 'edit') {
+                const originalTitle = data.title || '';
+                const originalBody = data.body || '';
+                if (title === originalTitle && finalProcessedBody === originalBody) {
+                    UIUtils.showToast('Нет изменений', 'warning');
+                    throw new Error('No changes');
+                }
+            }
+            
+            let labels;
+            if (postType === 'feedback') {
+                if (!data.game) throw new Error('Не указана игра');
+                labels = [`game:${data.game}`, `type:${category}`];
+            } else if (postType === 'news') {
+                labels = ['type:news'];
+            } else {
+                if (!data.game || data.game.trim() === '') throw new Error('Не указана игра для обновления');
+                labels = ['type:update', `game:${data.game}`];
+            }
+            if (isPrivate) {
+                if (!labels.includes('private')) labels.push('private');
+            } else {
+                labels = labels.filter(l => l !== 'private');
+            }
+            
+            if (mode === 'edit') {
+                await GithubAPI.updateIssue(data.number, { title, body: finalProcessedBody, labels });
+            } else {
+                await GithubAPI.createIssue(title, finalProcessedBody, labels);
+            }
+            
+            UIUtils.clearDraft(draftKey);
+            closeModal();
+            
+            if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
+            if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
+            if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
+            
+            UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
+        };
+        
+        if (postType === 'comment') {
+            const { container: editorUI, textarea } = createSplitEditor(bodyContent, handleSave, { saveText: mode === 'edit' ? 'Сохранить' : 'Отправить', onCancel: closeModal });
+            editorContainer.appendChild(editorUI);
+        } else {
+            // Для постов: добавляем дополнительные поля (заголовок, превью, доступ) над split-редактором
+            const formWrapper = document.createElement('div');
+            formWrapper.className = 'feedback-form';
+            formWrapper.style.gap = '12px';
+            
+            const titleInput = document.createElement('input');
+            titleInput.type = 'text';
+            titleInput.id = 'modal-input-title';
+            titleInput.className = 'feedback-input';
+            titleInput.placeholder = 'Заголовок';
+            titleInput.value = data.title || '';
+            formWrapper.appendChild(titleInput);
+            
+            const previewRow = document.createElement('div');
+            previewRow.className = 'preview-url-wrapper';
+            previewRow.style.gap = '8px';
+            const previewUrlInput = document.createElement('input');
+            previewUrlInput.type = 'url';
+            previewUrlInput.id = 'modal-preview-url';
+            previewUrlInput.className = 'feedback-input preview-url-input';
+            previewUrlInput.placeholder = 'Ссылка на превью (необязательно)';
+            previewUrlInput.value = previewUrl;
+            const servicesPlaceholder = document.createElement('div');
+            servicesPlaceholder.id = 'preview-services-placeholder';
+            if (window.Editor) servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
+            previewRow.appendChild(previewUrlInput);
+            previewRow.appendChild(servicesPlaceholder);
+            formWrapper.appendChild(previewRow);
+            
+            const thumbnailContainer = document.createElement('div');
+            thumbnailContainer.id = 'preview-thumbnail-container';
+            thumbnailContainer.className = 'preview-thumbnail';
+            thumbnailContainer.style.display = previewUrl ? 'block' : 'none';
+            const thumbnailImg = document.createElement('img');
+            thumbnailImg.id = 'preview-thumbnail-img';
+            thumbnailImg.src = previewUrl || '';
+            thumbnailImg.alt = 'Preview';
+            const removePreviewBtn = document.createElement('button');
+            removePreviewBtn.type = 'button';
+            removePreviewBtn.className = 'remove-preview';
+            removePreviewBtn.innerHTML = '<i class="fas fa-times"></i>';
+            removePreviewBtn.addEventListener('click', () => {
+                previewUrlInput.value = '';
+                thumbnailContainer.style.display = 'none';
+                thumbnailImg.src = '';
+            });
+            thumbnailContainer.appendChild(thumbnailImg);
+            thumbnailContainer.appendChild(removePreviewBtn);
+            formWrapper.appendChild(thumbnailContainer);
+            
+            previewUrlInput.addEventListener('input', (e) => {
+                const val = e.target.value.trim();
+                if (val) {
+                    thumbnailImg.src = val;
+                    thumbnailContainer.style.display = 'block';
+                } else {
+                    thumbnailContainer.style.display = 'none';
+                    thumbnailImg.src = '';
+                }
+            });
+            
+            if (postType === 'feedback') {
+                const categorySelect = document.createElement('select');
+                categorySelect.id = 'modal-category';
+                categorySelect.className = 'feedback-select';
+                let currentCategory = 'idea';
+                if (data.labels) {
+                    const typeLabel = data.labels.find(l => l.startsWith('type:'));
+                    if (typeLabel) currentCategory = typeLabel.split(':')[1];
+                }
+                categorySelect.innerHTML = `
+                    <option value="idea" ${currentCategory==='idea'?'selected':''}>💡 Идея</option>
+                    <option value="bug" ${currentCategory==='bug'?'selected':''}>🐛 Баг</option>
+                    <option value="review" ${currentCategory==='review'?'selected':''}>⭐ Отзыв</option>
+                `;
+                formWrapper.appendChild(categorySelect);
+            }
+            
+            const accessRow = document.createElement('div');
+            accessRow.className = 'access-settings';
+            accessRow.style.cssText = 'display: flex; align-items: center; gap: 12px; flex: 1; margin-top: 8px;';
+            const accessPlaceholder = document.createElement('div');
+            accessPlaceholder.id = 'access-dropdown-placeholder';
+            const privateUsersInput = document.createElement('input');
+            privateUsersInput.type = 'text';
+            privateUsersInput.id = 'private-users';
+            privateUsersInput.className = 'feedback-input';
+            privateUsersInput.placeholder = 'Ники через запятую';
+            privateUsersInput.value = allowedUsers;
+            const isPrivateInit = data.labels?.includes('private') || false;
+            let currentIsPrivate = isPrivateInit;
             const onAccessToggle = (isPrivate, allowedVal) => {
                 currentIsPrivate = isPrivate;
                 privateUsersInput.style.display = isPrivate ? 'block' : 'none';
@@ -760,24 +982,28 @@
             };
             const accessDropdown = createAccessDropdown(currentIsPrivate, allowedUsers, onAccessToggle);
             accessPlaceholder.appendChild(accessDropdown);
+            accessRow.appendChild(accessPlaceholder);
+            privateUsersInput.style.display = currentIsPrivate ? 'block' : 'none';
+            accessRow.appendChild(privateUsersInput);
+            formWrapper.appendChild(accessRow);
             
-            function updateAccessUI() {
-                privateUsersInput.style.display = currentIsPrivate ? 'block' : 'none';
-            }
-            updateAccessUI();
-
+            const { container: editorUI, textarea } = createSplitEditor(bodyContent, handleSave, { saveText: mode === 'edit' ? 'Сохранить' : 'Опубликовать', onCancel: closeModal });
+            formWrapper.appendChild(editorUI);
+            
+            editorContainer.appendChild(formWrapper);
+            
+            // Восстановление черновика
             const savedDraft = UIUtils.loadDraft(draftKey);
             if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl || savedDraft.access || savedDraft.privateUsers)) {
                 if (confirm('Найден несохранённый черновик. Восстановить?')) {
-                    document.getElementById('modal-input-title').value = savedDraft.title || '';
+                    titleInput.value = savedDraft.title || '';
                     if (savedDraft.previewUrl) {
-                        document.getElementById('modal-preview-url').value = savedDraft.previewUrl;
-                        updateThumbnail(savedDraft.previewUrl);
+                        previewUrlInput.value = savedDraft.previewUrl;
+                        thumbnailImg.src = savedDraft.previewUrl;
+                        thumbnailContainer.style.display = 'block';
                     }
-                    document.getElementById('modal-body').value = savedDraft.body || '';
-                    if (savedDraft.category && document.getElementById('modal-category')) {
-                        document.getElementById('modal-category').value = savedDraft.category;
-                    }
+                    textarea.value = savedDraft.body || '';
+                    if (savedDraft.category && categorySelect) categorySelect.value = savedDraft.category;
                     if (savedDraft.access) {
                         const isPrivate = savedDraft.access === 'private';
                         if (isPrivate !== currentIsPrivate) {
@@ -787,27 +1013,26 @@
                             privateUsersInput.style.display = isPrivate ? 'block' : 'none';
                         }
                     }
-                    if (savedDraft.privateUsers) {
-                        privateUsersInput.value = savedDraft.privateUsers;
-                    }
-                } else { UIUtils.clearDraft(draftKey); }
+                    if (savedDraft.privateUsers) privateUsersInput.value = savedDraft.privateUsers;
+                    // Обновить предпросмотр (вызовется через input)
+                    textarea.dispatchEvent(new Event('input'));
+                } else {
+                    UIUtils.clearDraft(draftKey);
+                }
             }
-
+            
             let hasChanges = false;
-            const titleInput = modal.querySelector('#modal-input-title');
-            const bodyTextarea = modal.querySelector('#modal-body');
-            const categorySelect = modal.querySelector('#modal-category');
             const updateDraft = () => {
                 const currentTitle = titleInput.value.trim();
                 const currentPreview = previewUrlInput.value.trim();
-                const currentBody = bodyTextarea.value.trim();
+                const currentBody = textarea.value.trim();
                 const currentCategory = categorySelect ? categorySelect.value : null;
                 const currentAccess = currentIsPrivate ? 'private' : 'public';
                 const currentPrivateUsers = privateUsersInput.value.trim();
-                UIUtils.saveDraft(draftKey, { 
-                    title: currentTitle, 
-                    previewUrl: currentPreview, 
-                    body: currentBody, 
+                UIUtils.saveDraft(draftKey, {
+                    title: currentTitle,
+                    previewUrl: currentPreview,
+                    body: currentBody,
                     category: currentCategory,
                     access: currentAccess,
                     privateUsers: currentPrivateUsers
@@ -816,12 +1041,10 @@
             };
             titleInput.addEventListener('input', updateDraft);
             previewUrlInput.addEventListener('input', updateDraft);
-            bodyTextarea.addEventListener('input', updateDraft);
+            textarea.addEventListener('input', updateDraft);
             if (categorySelect) categorySelect.addEventListener('change', updateDraft);
             privateUsersInput.addEventListener('input', updateDraft);
-            const observer = new MutationObserver(() => { updateDraft(); });
-            observer.observe(accessDropdown, { attributes: true, childList: true, subtree: true });
-
+            
             const originalCloseModal = closeModal;
             const closeWithCheck = () => {
                 if (hasChanges) {
@@ -842,161 +1065,7 @@
                 closeBtn.replaceWith(closeBtn.cloneNode(true));
                 modal.querySelector('.modal-close').addEventListener('click', (e) => { e.preventDefault(); closeWithCheck(); });
             }
-
-            const previewArea = modal.querySelector('#modal-preview-area');
-            function updatePreview() {
-                if (!previewArea) return;
-                const text = modal.querySelector('#modal-body').value;
-                if (text.trim()) {
-                    previewArea.innerHTML = '';
-                    if (!previewArea.classList.contains('markdown-body')) previewArea.classList.add('markdown-body');
-                    renderPostBody(previewArea, text, null);
-                    previewArea.style.display = 'block';
-                } else {
-                    previewArea.style.display = 'none';
-                }
-            }
-            if (window.Editor) {
-                const toolbar = Editor.createEditorToolbar(modal.querySelector('#modal-body'), { onPreview: updatePreview, textarea: modal.querySelector('#modal-body') });
-                const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
-                if (toolbarContainer) toolbarContainer.appendChild(toolbar);
-            }
         }
-
-        const submitBtn = modal.querySelector('#modal-submit');
-        submitBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            if (!GithubAuth.getToken()) { UIUtils.showToast('Вы не авторизованы. Войдите через GitHub.', 'error'); return; }
-
-            const body = modal.querySelector('#modal-body').value.trim();
-            if (!body) { UIUtils.showToast('Заполните описание', 'error'); modal.querySelector('#modal-body').focus(); return; }
-
-            if (postType === 'comment') {
-                const btn = submitBtn;
-                btn.disabled = true;
-                btn.textContent = 'Отправка...';
-                try {
-                    await GithubAPI.addComment(data.issueNumber, body);
-                    UIUtils.clearDraft(draftKey);
-                    closeModal();
-                    window.dispatchEvent(new CustomEvent('github-comment-created', { detail: { issueNumber: data.issueNumber } }));
-                    UIUtils.showToast('Комментарий добавлен', 'success');
-                } catch (err) {
-                    console.error('Submit error:', err);
-                    let errorMessage = 'Ошибка при отправке.';
-                    if (err.message.includes('NetworkError') || (err.name === 'TypeError' && err.message.includes('NetworkError'))) errorMessage = 'Ошибка сети. Проверьте подключение к интернету.';
-                    else if (err.message.includes('401')) errorMessage = 'Ошибка авторизации. Возможно, токен устарел. Войдите заново.';
-                    else if (err.message.includes('403')) errorMessage = 'Доступ запрещён. Проверьте права токена.';
-                    else if (err.message) errorMessage = 'Ошибка: ' + err.message;
-                    UIUtils.showToast(errorMessage, 'error');
-                } finally {
-                    btn.disabled = false;
-                    btn.textContent = 'Отправить';
-                }
-                return;
-            }
-
-            const title = modal.querySelector('#modal-input-title').value.trim();
-            if (!title) { UIUtils.showToast('Заполните заголовок', 'error'); modal.querySelector('#modal-input-title').focus(); return; }
-
-            let finalBody = body;
-            finalBody = finalBody.replace(/<!--\s*preview:\s*https?:\/\/[^\s]+\s*-->\s*\n?/g, '');
-            finalBody = finalBody.replace(/<!--\s*allowed:\s*.*?\s*-->\s*\n?/g, '');
-
-            const newPreviewUrl = modal.querySelector('#modal-preview-url').value.trim();
-            const isPrivate = currentIsPrivate;
-            const allowedUsersValue = privateUsersInput.value.trim();
-
-            let existingPreviewUrl = null;
-            if (mode === 'edit') {
-                const oldPreviewMatch = data.body?.match(/<!--\s*preview:\s*(https?:\/\/[^\s]+)\s*-->/);
-                if (oldPreviewMatch) existingPreviewUrl = oldPreviewMatch[1];
-            }
-            if (newPreviewUrl) {
-                if (mode !== 'edit' || newPreviewUrl !== existingPreviewUrl) {
-                    finalBody = `<!-- preview: ${newPreviewUrl} -->\n\n![Preview](${newPreviewUrl})\n\n` + finalBody;
-                } else {
-                    const originalPreviewTag = `<!-- preview: ${existingPreviewUrl} -->`;
-                    if (!finalBody.includes(originalPreviewTag)) {
-                        finalBody = originalPreviewTag + '\n\n![Preview](' + existingPreviewUrl + ')\n\n' + finalBody;
-                    }
-                }
-            }
-
-            if (isPrivate && allowedUsersValue) {
-                finalBody = `<!-- allowed: ${allowedUsersValue} -->\n\n` + finalBody;
-            }
-
-            const pollMatches = finalBody.match(/<!-- poll: .*? -->/g);
-            if (pollMatches && pollMatches.length > 1) {
-                if (!confirm('Обнаружено несколько блоков опроса. Будут сохранены только первые. Продолжить?')) return;
-                const first = pollMatches[0];
-                finalBody = finalBody.replace(/<!-- poll: .*? -->/g, '');
-                finalBody = first + '\n' + finalBody;
-            }
-
-            let category = 'idea';
-            if (postType === 'feedback' && modal.querySelector('#modal-category')) category = modal.querySelector('#modal-category').value;
-
-            const btn = submitBtn;
-            btn.disabled = true;
-            btn.textContent = 'Сохранение...';
-
-            try {
-                if (mode === 'edit') {
-                    const originalTitle = data.title || '';
-                    const originalBody = data.body || '';
-                    if (title === originalTitle && finalBody === originalBody) {
-                        UIUtils.showToast('Нет изменений', 'warning');
-                        btn.disabled = false;
-                        btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
-                        return;
-                    }
-                }
-
-                let labels;
-                if (postType === 'feedback') {
-                    if (!data.game) { UIUtils.showToast('Ошибка: не указана игра', 'error'); btn.disabled = false; btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать'; return; }
-                    labels = [`game:${data.game}`, `type:${category}`];
-                } else if (postType === 'news') {
-                    labels = ['type:news'];
-                } else {
-                    if (!data.game || data.game.trim() === '') { UIUtils.showToast('Ошибка: не указана игра для обновления', 'error'); btn.disabled = false; btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать'; return; }
-                    labels = ['type:update', `game:${data.game}`];
-                }
-                if (isPrivate) {
-                    if (!labels.includes('private')) labels.push('private');
-                } else {
-                    labels = labels.filter(l => l !== 'private');
-                }
-
-                if (mode === 'edit') {
-                    await GithubAPI.updateIssue(data.number, { title, body: finalBody, labels });
-                } else {
-                    await GithubAPI.createIssue(title, finalBody, labels);
-                }
-
-                UIUtils.clearDraft(draftKey);
-                closeModal();
-
-                if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
-                if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
-                if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
-
-                UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
-            } catch (err) {
-                console.error('Submit error:', err);
-                let errorMessage = 'Ошибка при сохранении.';
-                if (err.message.includes('NetworkError') || (err.name === 'TypeError' && err.message.includes('NetworkError'))) errorMessage = 'Ошибка сети. Проверьте подключение к интернету.';
-                else if (err.message.includes('401')) errorMessage = 'Ошибка авторизации. Возможно, токен устарел. Войдите заново.';
-                else if (err.message.includes('403')) errorMessage = 'Доступ запрещён. Проверьте права токена.';
-                else if (err.message) errorMessage = 'Ошибка: ' + err.message;
-                UIUtils.showToast(errorMessage, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
-            }
-        });
     }
 
     window.addEventListener('open-comment-editor', (e) => {

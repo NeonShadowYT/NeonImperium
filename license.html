@@ -132,8 +132,13 @@
                 <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
             </div>
             <div class="lang-switcher">
-                <button class="lang-btn active" data-lang-code="ru">RU</button>
-                <button class="lang-btn" data-lang-code="en">EN</button>
+                <div class="access-dropdown-container" style="position: relative;">
+                    <button class="lang-btn active" id="current-lang-btn" data-lang-code="ru">RU</button>
+                    <div class="preview-dropdown" id="lang-dropdown" style="display: none; position: absolute; top: 100%; right: 0; min-width: 80px;">
+                        <button data-lang-code="ru">RU</button>
+                        <button data-lang-code="en">EN</button>
+                    </div>
+                </div>
             </div>
         </nav>
 
