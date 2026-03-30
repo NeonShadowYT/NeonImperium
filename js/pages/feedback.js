@@ -220,29 +220,71 @@
         }
     }
 
+    function extractPreviewUrl(body) {
+        const match = body.match(/<!--\s*preview:\s*(https?:\/\/[^\s]+)\s*-->/);
+        if (match) return match[1];
+        const imgMatch = body.match(/!\[.*?\]\((https?:\/\/[^\s]+)\)/);
+        return imgMatch ? imgMatch[1] : null;
+    }
+
     function createIssueCard(issue) {
         const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
         const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : '⭐';
+        const previewUrl = extractPreviewUrl(issue.body);
         const summary = GithubCore.extractSummary(issue.body) || (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
-        const preview = summary;
         const date = new Date(issue.created_at).toLocaleDateString();
+        
         const cardLink = document.createElement('div');
         cardLink.className = 'project-card-link';
         cardLink.dataset.issueNumber = issue.number;
         cardLink.dataset.issueId = issue.id;
         cardLink.style.cursor = 'pointer';
+        
         const card = document.createElement('div');
         card.className = 'project-card';
+        
         const imageWrapper = document.createElement('div');
         imageWrapper.className = 'image-wrapper';
-        imageWrapper.style.display = 'flex';
-        imageWrapper.style.alignItems = 'center';
-        imageWrapper.style.justifyContent = 'center';
-        imageWrapper.style.background = 'var(--bg-primary)';
-        imageWrapper.style.fontSize = '48px';
-        imageWrapper.textContent = typeIcon;
+        if (previewUrl) {
+            const img = document.createElement('img');
+            img.src = previewUrl;
+            img.alt = issue.title;
+            img.loading = 'lazy';
+            img.className = 'project-image';
+            img.onerror = () => { img.src = 'images/default-news.webp'; };
+            imageWrapper.appendChild(img);
+        } else {
+            imageWrapper.style.display = 'flex';
+            imageWrapper.style.alignItems = 'center';
+            imageWrapper.style.justifyContent = 'center';
+            imageWrapper.style.background = 'var(--bg-primary)';
+            imageWrapper.style.fontSize = '48px';
+            imageWrapper.textContent = typeIcon;
+        }
+        
+        const titleContainer = document.createElement('div');
+        titleContainer.style.display = 'flex';
+        titleContainer.style.alignItems = 'center';
+        titleContainer.style.justifyContent = 'space-between';
+        titleContainer.style.flexWrap = 'wrap';
+        titleContainer.style.gap = '8px';
+        
         const title = document.createElement('h3');
         title.textContent = issue.title.length > 70 ? issue.title.substring(0,70)+'…' : issue.title;
+        title.style.margin = '0';
+        
+        const categoryLabel = document.createElement('span');
+        categoryLabel.className = 'feedback-label';
+        categoryLabel.style.background = 'var(--accent)';
+        categoryLabel.style.color = '#fff';
+        categoryLabel.style.padding = '2px 10px';
+        categoryLabel.style.borderRadius = '20px';
+        categoryLabel.style.fontSize = '11px';
+        categoryLabel.textContent = typeLabel === 'idea' ? 'Идея' : typeLabel === 'bug' ? 'Баг' : 'Отзыв';
+        
+        titleContainer.appendChild(title);
+        titleContainer.appendChild(categoryLabel);
+        
         const previewP = document.createElement('p');
         previewP.className = 'text-secondary';
         previewP.style.fontSize = '13px';
@@ -250,11 +292,13 @@
         previewP.style.display = '-webkit-box';
         previewP.style.webkitLineClamp = '2';
         previewP.style.webkitBoxOrient = 'vertical';
-        previewP.textContent = preview.replace(/\n/g,' ');
+        previewP.textContent = summary.replace(/\n/g,' ');
+        
         const reactionsDiv = document.createElement('div');
         reactionsDiv.className = 'reactions-container';
         reactionsDiv.dataset.targetType = 'issue';
         reactionsDiv.dataset.targetId = issue.number;
+        
         const footer = document.createElement('div');
         footer.style.display = 'flex';
         footer.style.justifyContent = 'space-between';
@@ -262,7 +306,8 @@
         footer.style.fontSize = '12px';
         footer.style.color = 'var(--text-secondary)';
         footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${date}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span>`;
-        card.append(imageWrapper, title, previewP, reactionsDiv, footer);
+        
+        card.append(imageWrapper, titleContainer, previewP, reactionsDiv, footer);
         cardLink.appendChild(card);
         loadAndRenderReactionsWithCache(issue.number, reactionsDiv);
         cardLink.addEventListener('click', (e) => {

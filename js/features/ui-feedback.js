@@ -268,6 +268,7 @@
         saveBtn.addEventListener('click', async () => {
             const newBody = textarea.value.trim();
             if (!newBody) { UIUtils.showToast('Комментарий не может быть пустым', 'error'); return; }
+            if (newBody === currentBody) { UIUtils.showToast('Нет изменений', 'warning'); return; }
             saveBtn.disabled = true;
             try {
                 await GithubAPI.updateComment(commentId, newBody);
@@ -567,17 +568,75 @@
         return allowedList.includes(currentUser);
     }
 
-    /**
-     * Открывает модальное окно редактора поста/комментария.
-     * @param {string} mode - 'new' или 'edit'
-     * @param {object} data - данные: { number?, title?, body?, game?, issueNumber? } для комментария
-     * @param {string} postType - 'feedback', 'news', 'update', 'comment'
-     */
+    // Создаёт выпадающий список доступа (публичный/приватный)
+    function createAccessDropdown(initialIsPrivate, allowedUsersValue, onToggle) {
+        const container = document.createElement('div');
+        container.className = 'access-dropdown-container';
+        container.style.position = 'relative';
+        container.style.display = 'inline-block';
+        
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'editor-btn access-dropdown-btn';
+        btn.innerHTML = initialIsPrivate ? '<i class="fas fa-lock"></i> Приватный' : '<i class="fas fa-globe"></i> Публичный';
+        btn.style.padding = '8px 16px';
+        btn.style.borderRadius = '30px';
+        
+        const dropdownMenu = document.createElement('div');
+        dropdownMenu.className = 'preview-dropdown';
+        dropdownMenu.style.position = 'absolute';
+        dropdownMenu.style.top = '100%';
+        dropdownMenu.style.left = '0';
+        dropdownMenu.style.minWidth = '160px';
+        dropdownMenu.style.zIndex = '1000';
+        dropdownMenu.style.background = 'var(--bg-card)';
+        dropdownMenu.style.border = '1px solid var(--border)';
+        dropdownMenu.style.borderRadius = '12px';
+        dropdownMenu.style.padding = '5px 0';
+        dropdownMenu.style.display = 'none';
+        
+        const publicOption = document.createElement('button');
+        publicOption.type = 'button';
+        publicOption.innerHTML = '<i class="fas fa-globe"></i> Публичный';
+        publicOption.addEventListener('click', () => {
+            dropdownMenu.style.display = 'none';
+            if (initialIsPrivate) {
+                initialIsPrivate = false;
+                btn.innerHTML = '<i class="fas fa-globe"></i> Публичный';
+                if (onToggle) onToggle(false, '');
+            }
+        });
+        const privateOption = document.createElement('button');
+        privateOption.type = 'button';
+        privateOption.innerHTML = '<i class="fas fa-lock"></i> Приватный';
+        privateOption.addEventListener('click', () => {
+            dropdownMenu.style.display = 'none';
+            if (!initialIsPrivate) {
+                initialIsPrivate = true;
+                btn.innerHTML = '<i class="fas fa-lock"></i> Приватный';
+                if (onToggle) onToggle(true, allowedUsersValue);
+            }
+        });
+        dropdownMenu.appendChild(publicOption);
+        dropdownMenu.appendChild(privateOption);
+        
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
+        });
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) dropdownMenu.style.display = 'none';
+        });
+        
+        container.appendChild(btn);
+        container.appendChild(dropdownMenu);
+        return container;
+    }
+
     function openEditorModal(mode, data, postType = 'feedback') {
         const currentUser = GithubAuth.getCurrentUser();
         const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
         
-        // Извлекаем preview и allowed из тела (если есть)
         let previewUrl = '';
         let allowedUsers = '';
         let bodyContent = data.body || '';
@@ -594,7 +653,6 @@
 
         let categoryHtml = '';
         if (postType === 'feedback') {
-            // Определяем текущую категорию из меток
             let currentCategory = 'idea';
             if (data.labels) {
                 const typeLabel = data.labels.find(l => l.startsWith('type:'));
@@ -607,7 +665,6 @@
             </select>`;
         }
 
-        // Определяем draftKey
         let draftKey;
         if (postType === 'comment') {
             draftKey = `draft_comment_${data.issueNumber || 'new'}`;
@@ -644,12 +701,9 @@
                     <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="10">${GithubCore.escapeHtml(bodyContent)}</textarea>
                     <div class="preview-area" id="modal-preview-area" style="display:none; margin-top:4px;"></div>
                     <div class="button-group" style="display: flex; justify-content: space-between; align-items: center; margin-top:10px;">
-                        <div class="access-settings" style="display: flex; align-items: center; gap: 8px;">
-                            <div class="preview-split" style="display: flex; border-radius: 30px; overflow: hidden;">
-                                <button type="button" class="editor-btn access-btn ${!data.labels?.includes('private') ? 'active' : ''}" data-access="public" style="border-radius: 30px 0 0 30px;">Публичный</button>
-                                <button type="button" class="editor-btn access-btn ${data.labels?.includes('private') ? 'active' : ''}" data-access="private" style="border-radius: 0 30px 30px 0;">Приватный</button>
-                            </div>
-                            <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" value="${GithubCore.escapeHtml(allowedUsers)}" style="width: 200px; ${data.labels?.includes('private') ? '' : 'display: none;'} margin-bottom:0;">
+                        <div class="access-settings" style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                            <div id="access-dropdown-placeholder"></div>
+                            <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" value="${GithubCore.escapeHtml(allowedUsers)}" style="flex: 1; ${data.labels?.includes('private') ? '' : 'display: none;'} margin-bottom:0;">
                         </div>
                         <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                     </div>
@@ -659,7 +713,6 @@
 
         const { modal, closeModal } = UIUtils.createModal(title, contentHtml, { size: 'full' });
 
-        // Для комментариев редактор и предпросмотр
         if (postType === 'comment') {
             const previewArea = modal.querySelector('#modal-preview-area');
             function updatePreview() {
@@ -680,7 +733,6 @@
                 if (toolbarContainer) toolbarContainer.appendChild(toolbar);
             }
         } else {
-            // Для постов: превью изображения, доступ, черновик
             const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
             if (servicesPlaceholder && window.Editor) {
                 servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
@@ -696,30 +748,24 @@
             previewUrlInput.addEventListener('input', (e) => updateThumbnail(e.target.value.trim()));
             removePreviewBtn.addEventListener('click', () => { previewUrlInput.value = ''; updateThumbnail(''); });
 
-            const accessPublicBtn = modal.querySelector('[data-access="public"]');
-            const accessPrivateBtn = modal.querySelector('[data-access="private"]');
+            const isPrivateInit = data.labels?.includes('private') || false;
             const privateUsersInput = modal.querySelector('#private-users');
-
+            const accessPlaceholder = modal.querySelector('#access-dropdown-placeholder');
+            let currentIsPrivate = isPrivateInit;
+            
+            const onAccessToggle = (isPrivate, allowedVal) => {
+                currentIsPrivate = isPrivate;
+                privateUsersInput.style.display = isPrivate ? 'block' : 'none';
+                if (isPrivate && allowedVal) privateUsersInput.value = allowedVal;
+            };
+            const accessDropdown = createAccessDropdown(currentIsPrivate, allowedUsers, onAccessToggle);
+            accessPlaceholder.appendChild(accessDropdown);
+            
             function updateAccessUI() {
-                const isPublic = accessPublicBtn.classList.contains('active');
-                privateUsersInput.style.display = isPublic ? 'none' : 'block';
-                accessPublicBtn.classList.toggle('active', isPublic);
-                accessPrivateBtn.classList.toggle('active', !isPublic);
+                privateUsersInput.style.display = currentIsPrivate ? 'block' : 'none';
             }
-
-            accessPublicBtn.addEventListener('click', () => {
-                accessPublicBtn.classList.add('active');
-                accessPrivateBtn.classList.remove('active');
-                updateAccessUI();
-            });
-            accessPrivateBtn.addEventListener('click', () => {
-                accessPrivateBtn.classList.add('active');
-                accessPublicBtn.classList.remove('active');
-                updateAccessUI();
-            });
             updateAccessUI();
 
-            // Восстановление черновика
             const savedDraft = UIUtils.loadDraft(draftKey);
             if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl || savedDraft.access || savedDraft.privateUsers)) {
                 if (confirm('Найден несохранённый черновик. Восстановить?')) {
@@ -733,10 +779,12 @@
                         document.getElementById('modal-category').value = savedDraft.category;
                     }
                     if (savedDraft.access) {
-                        if (savedDraft.access === 'private') {
-                            accessPrivateBtn.click();
-                        } else {
-                            accessPublicBtn.click();
+                        const isPrivate = savedDraft.access === 'private';
+                        if (isPrivate !== currentIsPrivate) {
+                            currentIsPrivate = isPrivate;
+                            const btn = accessDropdown.querySelector('.access-dropdown-btn');
+                            btn.innerHTML = isPrivate ? '<i class="fas fa-lock"></i> Приватный' : '<i class="fas fa-globe"></i> Публичный';
+                            privateUsersInput.style.display = isPrivate ? 'block' : 'none';
                         }
                     }
                     if (savedDraft.privateUsers) {
@@ -754,7 +802,7 @@
                 const currentPreview = previewUrlInput.value.trim();
                 const currentBody = bodyTextarea.value.trim();
                 const currentCategory = categorySelect ? categorySelect.value : null;
-                const currentAccess = accessPublicBtn.classList.contains('active') ? 'public' : 'private';
+                const currentAccess = currentIsPrivate ? 'private' : 'public';
                 const currentPrivateUsers = privateUsersInput.value.trim();
                 UIUtils.saveDraft(draftKey, { 
                     title: currentTitle, 
@@ -770,9 +818,9 @@
             previewUrlInput.addEventListener('input', updateDraft);
             bodyTextarea.addEventListener('input', updateDraft);
             if (categorySelect) categorySelect.addEventListener('change', updateDraft);
-            accessPublicBtn.addEventListener('click', updateDraft);
-            accessPrivateBtn.addEventListener('click', updateDraft);
             privateUsersInput.addEventListener('input', updateDraft);
+            const observer = new MutationObserver(() => { updateDraft(); });
+            observer.observe(accessDropdown, { attributes: true, childList: true, subtree: true });
 
             const originalCloseModal = closeModal;
             const closeWithCheck = () => {
@@ -795,7 +843,6 @@
                 modal.querySelector('.modal-close').addEventListener('click', (e) => { e.preventDefault(); closeWithCheck(); });
             }
 
-            // Предпросмотр Markdown
             const previewArea = modal.querySelector('#modal-preview-area');
             function updatePreview() {
                 if (!previewArea) return;
@@ -852,27 +899,37 @@
             const title = modal.querySelector('#modal-input-title').value.trim();
             if (!title) { UIUtils.showToast('Заполните заголовок', 'error'); modal.querySelector('#modal-input-title').focus(); return; }
 
-            // Подготавливаем финальное тело: удаляем старые мета-строки
+            // Подготовка финального тела
             let finalBody = body;
             finalBody = finalBody.replace(/<!--\s*preview:\s*https?:\/\/[^\s]+\s*-->\s*\n?/g, '');
             finalBody = finalBody.replace(/<!--\s*allowed:\s*.*?\s*-->\s*\n?/g, '');
 
-            // Добавляем preview если есть
-            const previewUrl = modal.querySelector('#modal-preview-url').value.trim();
-            if (previewUrl) {
-                finalBody = `<!-- preview: ${previewUrl} -->\n\n![Preview](${previewUrl})\n\n` + finalBody;
-            }
+            const newPreviewUrl = modal.querySelector('#modal-preview-url').value.trim();
+            const isPrivate = currentIsPrivate;
+            const allowedUsersValue = privateUsersInput.value.trim();
 
-            // Добавляем allowed если приватный
-            const isPrivate = modal.querySelector('[data-access="private"]')?.classList.contains('active');
-            if (isPrivate) {
-                const allowedUsers = modal.querySelector('#private-users').value.trim();
-                if (allowedUsers) {
-                    finalBody = `<!-- allowed: ${allowedUsers} -->\n\n` + finalBody;
+            // Обработка preview: если редактируем и preview не изменился, не добавляем повторно
+            let existingPreviewUrl = null;
+            if (mode === 'edit') {
+                const oldPreviewMatch = data.body?.match(/<!--\s*preview:\s*(https?:\/\/[^\s]+)\s*-->/);
+                if (oldPreviewMatch) existingPreviewUrl = oldPreviewMatch[1];
+            }
+            if (newPreviewUrl) {
+                if (mode !== 'edit' || newPreviewUrl !== existingPreviewUrl) {
+                    finalBody = `<!-- preview: ${newPreviewUrl} -->\n\n![Preview](${newPreviewUrl})\n\n` + finalBody;
+                } else {
+                    // сохраняем оригинальный preview без дублирования
+                    const originalPreviewTag = `<!-- preview: ${existingPreviewUrl} -->`;
+                    if (!finalBody.includes(originalPreviewTag)) {
+                        finalBody = originalPreviewTag + '\n\n![Preview](' + existingPreviewUrl + ')\n\n' + finalBody;
+                    }
                 }
             }
 
-            // Проверка на несколько опросов
+            if (isPrivate && allowedUsersValue) {
+                finalBody = `<!-- allowed: ${allowedUsersValue} -->\n\n` + finalBody;
+            }
+
             const pollMatches = finalBody.match(/<!-- poll: .*? -->/g);
             if (pollMatches && pollMatches.length > 1) {
                 if (!confirm('Обнаружено несколько блоков опроса. Будут сохранены только первые. Продолжить?')) return;
@@ -889,6 +946,18 @@
             btn.textContent = 'Сохранение...';
 
             try {
+                // Проверка изменений при редактировании
+                if (mode === 'edit') {
+                    const originalTitle = data.title || '';
+                    const originalBody = data.body || '';
+                    if (title === originalTitle && finalBody === originalBody) {
+                        UIUtils.showToast('Нет изменений', 'warning');
+                        btn.disabled = false;
+                        btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать';
+                        return;
+                    }
+                }
+
                 let labels;
                 if (postType === 'feedback') {
                     if (!data.game) { UIUtils.showToast('Ошибка: не указана игра', 'error'); btn.disabled = false; btn.textContent = mode === 'edit' ? 'Сохранить' : 'Опубликовать'; return; }
@@ -901,6 +970,8 @@
                 }
                 if (isPrivate) {
                     if (!labels.includes('private')) labels.push('private');
+                } else {
+                    labels = labels.filter(l => l !== 'private');
                 }
 
                 if (mode === 'edit') {
