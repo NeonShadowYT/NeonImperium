@@ -156,3 +156,41 @@
     flex: 1;
     min-width: 150px;
 }
+/* Мини-карточка поста в комментариях */
+.mini-post-card {
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px;
+    margin: 8px 0;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.mini-post-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+/* Фиксация тулбара при скролле */
+.split-editor .editor-toolbar {
+    position: sticky;
+    top: 0;
+    background: var(--bg-card);
+    z-index: 10;
+    padding: 8px 0;
+    border-radius: 12px;
+}
+
+/* Выравнивание высоты поля комментария и кнопок */
+.comment-form input.comment-input,
+.comment-form .comment-submit,
+.comment-form .comment-editor-btn {
+    height: 40px;
+    box-sizing: border-box;
+}
+
+/* Обеспечиваем прокрутку внутри модалки, чтобы приватный режим был виден */
+.modal-fullscreen .modal-body {
+    overflow-y: auto;
+    max-height: calc(100vh - 80px);
+}

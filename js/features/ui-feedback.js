@@ -8,6 +8,7 @@
     const reactionsCache = new Map();
     const commentsCache = new Map();
     const reactionLocks = new Map();
+    const postsCache = new Map(); // кеш для постов по номерам
 
     function getCached(key, cacheMap) {
         const cached = cacheMap.get(key);
@@ -17,6 +18,7 @@
     function invalidateCache(issueNumber) {
         reactionsCache.delete(`reactions_${issueNumber}`);
         commentsCache.delete(`comments_${issueNumber}`);
+        postsCache.delete(`post_${issueNumber}`);
         if (window.reactionsListCache) window.reactionsListCache.delete(`list_reactions_${issueNumber}`);
     }
 
@@ -191,9 +193,87 @@
         setTimeout(() => document.addEventListener('click', closeMenu), 100);
     }
 
+    async function loadPostByNumber(issueNumber) {
+        const cacheKey = `post_${issueNumber}`;
+        const cached = getCached(cacheKey, postsCache);
+        if (cached) return cached;
+        try {
+            const issue = await GithubAPI.loadIssue(issueNumber);
+            const postData = {
+                number: issue.number,
+                title: issue.title,
+                body: issue.body,
+                author: issue.user.login,
+                date: new Date(issue.created_at),
+                labels: issue.labels.map(l => l.name),
+                game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
+            };
+            setCached(cacheKey, postData, postsCache);
+            return postData;
+        } catch (err) {
+            console.warn('Failed to load post', issueNumber, err);
+            return null;
+        }
+    }
+
+    function extractPostLinks(text) {
+        const regex = /(?:https?:\/\/[^\s]*\?post=(\d+))|(?:\/(?:index\.html)?\?post=(\d+))/g;
+        const matches = [];
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            const id = match[1] || match[2];
+            if (id) matches.push(parseInt(id, 10));
+        }
+        return [...new Set(matches)];
+    }
+
+    async function renderMiniPostCard(container, postNumber) {
+        const post = await loadPostByNumber(postNumber);
+        if (!post) return;
+        const typeLabel = post.labels.find(l => l.startsWith('type:'))?.split(':')[1] || 'post';
+        const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : typeLabel === 'review' ? '⭐' : typeLabel === 'news' ? '📰' : typeLabel === 'update' ? '🔄' : '📌';
+        const card = document.createElement('div');
+        card.className = 'mini-post-card';
+        card.style.cssText = 'background: var(--bg-inner-gradient); border: 1px solid var(--border); border-radius: 16px; padding: 12px; margin: 8px 0; cursor: pointer; transition: all 0.2s;';
+        card.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 24px;">${typeIcon}</span>
+                <div style="flex: 1;">
+                    <div style="font-weight: bold; color: var(--accent);">${GithubCore.escapeHtml(post.title)}</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">${GithubCore.escapeHtml(post.author)} · ${post.date.toLocaleDateString()}</div>
+                </div>
+                <i class="fas fa-external-link-alt" style="color: var(--text-secondary);"></i>
+            </div>
+        `;
+        card.addEventListener('click', () => {
+            openFullModal({
+                type: 'issue',
+                id: post.number,
+                title: post.title,
+                body: post.body,
+                author: post.author,
+                date: post.date,
+                game: post.game,
+                labels: post.labels
+            });
+        });
+        container.appendChild(card);
+    }
+
+    async function processCommentLinks(commentBody, container) {
+        const links = extractPostLinks(commentBody);
+        for (const link of links) {
+            await renderMiniPostCard(container, link);
+        }
+    }
+
     function renderComments(container, comments, currentUser, issueNumber) {
         const regularComments = comments.filter(c => !c.body.trim().startsWith('!vote'));
-        container.innerHTML = regularComments.map(c => {
+        container.innerHTML = '';
+        for (const c of regularComments) {
+            const commentDiv = document.createElement('div');
+            commentDiv.className = 'comment';
+            commentDiv.dataset.commentId = c.id;
             const isAuthor = currentUser && c.user.login === currentUser;
             const isAdmin = GithubAuth.isAdmin();
             const canEditDelete = isAuthor || isAdmin;
@@ -201,8 +281,16 @@
             if (canEditDelete) {
                 actionsHtml = `<div class="comment-actions"><button class="comment-edit" data-comment-id="${c.id}" data-comment-body="${GithubCore.escapeHtml(c.body)}" title="Редактировать"><i class="fas fa-edit"></i></button><button class="comment-delete" data-comment-id="${c.id}" title="Удалить"><i class="fas fa-trash-alt"></i></button></div>`;
             }
-            return `<div class="comment" data-comment-id="${c.id}"><div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(c.user.login)}</span></div><div class="comment-body">${GithubCore.escapeHtml(c.body).replace(/\n/g,'<br>')}</div>${actionsHtml}</div>`;
-        }).join('');
+            commentDiv.innerHTML = `
+                <div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(c.user.login)}</span></div>
+                <div class="comment-body">${GithubCore.escapeHtml(c.body).replace(/\n/g,'<br>')}</div>
+                <div class="comment-mini-cards"></div>
+                ${actionsHtml}
+            `;
+            container.appendChild(commentDiv);
+            const miniCardsContainer = commentDiv.querySelector('.comment-mini-cards');
+            processCommentLinks(c.body, miniCardsContainer);
+        }
         if (currentUser) {
             container.querySelectorAll('.comment-edit').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -336,6 +424,11 @@
             if (issueNumber) await renderPoll(pollContainer, issueNumber, pollData);
             else renderStaticPoll(pollContainer, pollData);
         }
+        // Обработка ссылок на посты в теле
+        const links = extractPostLinks(body);
+        for (const link of links) {
+            await renderMiniPostCard(container, link);
+        }
     }
 
     function renderStaticPoll(container, pollData) {
@@ -411,10 +504,10 @@
         const commentForm = document.createElement('div');
         commentForm.className = 'comment-form';
         commentForm.innerHTML = `
-            <div style="display: flex; gap: 8px; width: 100%;">
-                <input type="text" class="comment-input" placeholder="Написать комментарий..." style="flex: 1;">
-                <button class="button comment-submit" style="flex-shrink: 0;">Отправить</button>
-                <button class="button comment-editor-btn" style="flex-shrink: 0; padding: 8px 12px;" title="Редактор"><i class="fas fa-pencil-alt"></i></button>
+            <div style="display: flex; gap: 8px; width: 100%; align-items: stretch;">
+                <input type="text" class="comment-input" placeholder="Написать комментарий..." style="flex: 1; height: 40px;">
+                <button class="button comment-submit" style="flex-shrink: 0; height: 40px;">Отправить</button>
+                <button class="button comment-editor-btn" style="flex-shrink: 0; height: 40px; padding: 0 12px;" title="Редактор"><i class="fas fa-pencil-alt"></i></button>
             </div>
         `;
         container.appendChild(commentForm);
@@ -430,7 +523,7 @@
             const tempCommentDiv = document.createElement('div');
             tempCommentDiv.className = 'comment';
             tempCommentDiv.dataset.commentId = tempId;
-            tempCommentDiv.innerHTML = `<div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(currentUser)}</span></div><div>${GithubCore.escapeHtml(comment).replace(/\n/g,'<br>')}</div>`;
+            tempCommentDiv.innerHTML = `<div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(currentUser)}</span></div><div>${GithubCore.escapeHtml(comment).replace(/\n/g,'<br>')}</div><div class="comment-mini-cards"></div>`;
             const commentsDiv = container.querySelector('.feedback-comments');
             commentsDiv.appendChild(tempCommentDiv);
             input.disabled = true; submitBtn.disabled = true; editorBtn.disabled = true;
@@ -633,19 +726,19 @@
         return container;
     }
 
-    // Создаёт split-view редактор: левая панель (textarea), правая панель (preview)
+    // Создаёт split-view редактор: левая панель (textarea), правая панель (preview) с фиксированным тулбаром
     function createSplitEditor(initialContent, onSave, options = {}) {
         const container = document.createElement('div');
         container.className = 'split-editor';
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 16px; margin-top: 10px;';
+        container.style.cssText = 'display: flex; flex-direction: column; gap: 16px; margin-top: 10px; height: 100%;';
         
-        // Toolbar над обеими панелями
+        // Toolbar над обеими панелями — фиксированный при скролле
         const toolbarContainer = document.createElement('div');
         toolbarContainer.id = 'split-editor-toolbar';
-        toolbarContainer.style.marginBottom = '8px';
+        toolbarContainer.style.cssText = 'position: sticky; top: 0; background: var(--bg-card); z-index: 10; padding: 8px 0; border-radius: 12px;';
         
         const panelsRow = document.createElement('div');
-        panelsRow.style.cssText = 'display: flex; gap: 16px; min-height: 400px;';
+        panelsRow.style.cssText = 'display: flex; gap: 16px; flex: 1; min-height: 400px;';
         
         const leftPanel = document.createElement('div');
         leftPanel.className = 'split-editor-left';
@@ -778,8 +871,11 @@
             draftKey = `draft_${postType}_${mode}_${data.game || 'global'}_${data.number || 'new'}`;
         }
 
-        const { modal, closeModal } = UIUtils.createModal(title, '<div id="editor-container"></div>', { size: 'full' });
+        const { modal, closeModal } = UIUtils.createModal(title, '<div id="editor-container" style="height: 100%; display: flex; flex-direction: column;"></div>', { size: 'full' });
         const editorContainer = modal.querySelector('#editor-container');
+        
+        // Функция синхронизации полей в тело поста (объявлена заранее)
+        let syncToBody = null;
         
         // Функция сохранения для разных типов
         const handleSave = async (finalBody) => {
@@ -800,6 +896,7 @@
             
             let finalProcessedBody = finalBody;
             finalProcessedBody = finalProcessedBody.replace(/<!--\s*preview:\s*https?:\/\/[^\s]+\s*-->\s*\n?/g, '');
+            finalProcessedBody = finalProcessedBody.replace(/<!--\s*summary:\s*.*?\s*-->\s*\n?/g, '');
             finalProcessedBody = finalProcessedBody.replace(/<!--\s*allowed:\s*.*?\s*-->\s*\n?/g, '');
             
             const newPreviewUrl = modal.querySelector('#modal-preview-url').value.trim();
@@ -820,6 +917,11 @@
                         finalProcessedBody = originalPreviewTag + '\n\n![Preview](' + existingPreviewUrl + ')\n\n' + finalProcessedBody;
                     }
                 }
+            }
+            
+            const newSummary = modal.querySelector('#modal-summary')?.value.trim();
+            if (newSummary) {
+                finalProcessedBody = `<!-- summary: ${newSummary} -->\n\n` + finalProcessedBody;
             }
             
             if (isPrivate && allowedUsersValue) {
@@ -942,7 +1044,7 @@
                 previewUrlInput.value = '';
                 thumbnailContainer.style.display = 'none';
                 thumbnailImg.src = '';
-                syncToBody();
+                if (syncToBody) syncToBody();
             });
             thumbnailContainer.appendChild(thumbnailImg);
             thumbnailContainer.appendChild(removePreviewBtn);
@@ -957,7 +1059,7 @@
                     thumbnailContainer.style.display = 'none';
                     thumbnailImg.src = '';
                 }
-                syncToBody();
+                if (syncToBody) syncToBody();
             });
             
             if (postType === 'feedback') {
@@ -971,7 +1073,7 @@
                 `;
                 categorySelect.style.marginBottom = '12px';
                 settingsCard.appendChild(categorySelect);
-                categorySelect.addEventListener('change', syncToBody);
+                categorySelect.addEventListener('change', () => { if (syncToBody) syncToBody(); });
             }
             
             editorContainer.appendChild(settingsCard);
@@ -1000,7 +1102,7 @@
                 currentIsPrivate = isPrivate;
                 privateUsersInput.style.display = isPrivate ? 'block' : 'none';
                 if (isPrivate && allowedVal) privateUsersInput.value = allowedVal;
-                syncToBody();
+                if (syncToBody) syncToBody();
             };
             const accessDropdown = createAccessDropdown(currentIsPrivate, allowedUsers, onAccessToggle);
             accessPlaceholder.appendChild(accessDropdown);
@@ -1010,10 +1112,7 @@
             accessRow.appendChild(privateUsersInput);
             bottomBar.appendChild(accessRow);
             
-            // Кнопка публикации (она уже есть в createSplitEditor, но мы её скроем и создадим свою)
-            // Удалим кнопку из createSplitEditor и добавим свою в bottomBar
-            // Модифицируем createSplitEditor, чтобы он не добавлял кнопку. Для этого передадим опцию noSaveButton: true
-            // Но проще заменить: удалим существующую кнопку и добавим новую.
+            // Удаляем существующую кнопку сохранения из createSplitEditor
             const existingSaveBtn = editorUI.querySelector('.button:last-child');
             if (existingSaveBtn) existingSaveBtn.remove();
             
@@ -1025,10 +1124,9 @@
             editorUI.appendChild(bottomBar);
             editorContainer.appendChild(editorUI);
             
-            // Функция синхронизации полей в тело поста
-            const syncToBody = () => {
+            // Определяем syncToBody после создания всех элементов
+            syncToBody = () => {
                 let body = textarea.value;
-                // Удаляем старые мета-теги
                 body = body.replace(/<!--\s*preview:\s*https?:\/\/[^\s]+\s*-->\s*\n?/g, '');
                 body = body.replace(/<!--\s*summary:\s*.*?\s*-->\s*\n?/g, '');
                 body = body.replace(/<!--\s*allowed:\s*.*?\s*-->\s*\n?/g, '');
