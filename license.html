@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Imperium — Лицензионное соглашение</title>
+    <title>Neon Imperium - Лицензионное соглашение</title>
     <meta name="description" content="Лицензионное соглашение игр Neon Imperium: Starve Neon, Alpha 01, ГК Адвенчур.">
-    <meta property="og:title" content="Лицензионное соглашение — Neon Imperium">
+    <meta property="og:title" content="Лицензионное соглашение - Neon Imperium">
     <meta property="og:description" content="Лицензионное соглашение игр Neon Imperium: Starve Neon, Alpha 01, ГК Адвенчур.">
     <meta property="og:image" content="images/logo-neon-imperium.webp">
-    <meta property="og:url" content="https://example.com/license.html">
-    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://neonshadowyt.github.io/NeonImperium/license.html">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
-    <!-- Preconnect -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
@@ -19,10 +17,7 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <style>
-        /* Дополнительные стили для страницы лицензии */
-        .license-header {
-            margin-bottom: 30px;
-        }
+        .license-header { margin-bottom: 30px; }
         .license-quick {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -64,13 +59,11 @@
             position: absolute;
             left: 0;
             top: 10px;
-            color: var(--accent);
             font-size: 16px;
         }
         .license-card.allowed li i { color: #4caf50; }
         .license-card.forbidden li i { color: #f44336; }
         .license-card.obligation li i { color: #ff9800; }
-        
         .license-section {
             margin-bottom: 30px;
         }
@@ -90,9 +83,6 @@
             margin-top: 10px;
             padding-left: 25px;
         }
-        .license-section li {
-            margin-bottom: 8px;
-        }
         .license-footer {
             margin-top: 40px;
             padding-top: 20px;
@@ -108,13 +98,23 @@
             text-decoration: none;
             font-size: 16px;
         }
-        .back-link:hover {
-            text-decoration: underline;
+        .back-link:hover { text-decoration: underline; }
+        .age-warning {
+            background: rgba(244, 67, 54, 0.1);
+            border-left: 4px solid #f44336;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 12px;
+        }
+        .telegram-contact {
+            background: var(--bg-inner-gradient);
+            border-radius: 16px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
         }
         @media (max-width: 700px) {
-            .license-quick {
-                grid-template-columns: 1fr;
-            }
+            .license-quick { grid-template-columns: 1fr; }
         }
     </style>
     <script src="js/features/ui-utils.js" defer></script>
@@ -122,127 +122,159 @@
     <script src="js/lang.js" defer></script>
 </head>
 <body>
-    <div class="page">
-        <nav class="nav-bar">
-            <div class="nav-links">
-                <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
-                <a href="starve-neon.html" class="nav-link" data-lang="navStarve">Starve Neon</a>
-                <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
-                <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
-            </div>
-            <div class="lang-switcher">
-                <div class="access-dropdown-container" style="position: relative;">
-                    <button class="lang-btn active" id="current-lang-btn" data-lang-code="ru">RU</button>
-                    <div class="preview-dropdown" id="lang-dropdown" style="display: none; position: absolute; top: 100%; right: 0; min-width: 80px;">
-                        <button data-lang-code="ru">RU</button>
-                        <button data-lang-code="en">EN</button>
-                    </div>
+<div class="page">
+    <nav class="nav-bar">
+        <div class="nav-links">
+            <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
+            <a href="starve-neon.html" class="nav-link" data-lang="navStarve">Starve Neon</a>
+            <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
+            <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
+        </div>
+        <div class="lang-switcher">
+            <div class="access-dropdown-container" style="position: relative;">
+                <button class="lang-btn active" id="current-lang-btn" data-lang-code="ru">RU</button>
+                <div class="preview-dropdown" id="lang-dropdown" style="display: none; position: absolute; top: 100%; right: 0; min-width: 80px;">
+                    <button data-lang-code="ru">RU</button>
+                    <button data-lang-code="en">EN</button>
                 </div>
             </div>
-        </nav>
-
-        <header class="card header-card license-header" style="background: var(--bg-card); padding: 40px 28px;">
-            <h1 style="font-size: 42px; margin-bottom: 10px; color: var(--text-primary);" data-lang="licenseTitle">Лицензионное соглашение</h1>
-            <p class="text-secondary" style="font-size: 16px;" data-lang="licenseLastUpdate">Последнее обновление: 9 апреля 2026 г.</p>
-        </header>
-
-        <div class="license-quick">
-            <div class="license-card allowed">
-                <h3><i class="fas fa-check-circle"></i> <span data-lang="licenseAllowedTitle">Разрешено</span></h3>
-                <ul>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed1">Коммерческое использование с отчислением % авторам</span></li>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed2">Распространение игры где угодно при условии упоминания оригинального сайта и наличия ссылки на него в игре</span></li>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed3">Конфиденциальность: без сбора статистики без согласия</span></li>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed4">Модификация в рамках правил игр</span></li>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed5">Бесплатный доступ к любому платному контенту через активность</span></li>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed6">Бесплатные обновления</span></li>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed7">Модификация игры с указанием неофициального статуса и ссылкой на оригинал</span></li>
-                </ul>
-            </div>
-            <div class="license-card forbidden">
-                <h3><i class="fas fa-times-circle"></i> <span data-lang="licenseForbiddenTitle">Запрещено</span></h3>
-                <ul>
-                    <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden1">Выдавать имена, товарные знаки, логотипы за свои</span></li>
-                    <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden2">Создание/использование/распространение вредоносных/читерских модификаций</span></li>
-                </ul>
-            </div>
-            <div class="license-card obligation">
-                <h3><i class="fas fa-exclamation-triangle"></i> <span data-lang="licenseObligationTitle">Обязанность</span></h3>
-                <ul>
-                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation1">Сохранять первоначальные авторские права</span></li>
-                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation2">В изменённых версиях обязательно указывать, что это неофициальная версия, и добавить кнопку/ссылку на оригинальный сайт</span></li>
-                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation3">Моды должны иметь открытый исходный код и ссылку на него</span></li>
-                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation4">Моды должны содержать доступ к лицензии оригинальных приложений</span></li>
-                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation5">Указывать ссылки на оригинальные страницы и автора</span></li>
-                    <li><i class="fas fa-heart" style="color: #ff4081;"></i> <span data-lang="licenseObligation6">Ты отдаёшь свою душу авторам приложений ;}</span></li>
-                </ul>
-            </div>
         </div>
+    </nav>
 
-        <div class="card">
-            <div class="license-section">
-                <h2 data-lang="licenseSection1Title">1. Общие положения</h2>
-                <p data-lang="licenseSection1Text">Настоящее Лицензионное соглашение (далее — «Соглашение») заключается между вами (далее — «Пользователь») и разработчиками игр Neon Imperium (далее — «Правообладатель») и регулирует порядок использования игр: Starve Neon, Alpha 01, ГК Адвенчур, а также всех связанных с ними материалов, обновлений и дополнений.</p>
-                <p data-lang="licenseSection1Text2">Устанавливая, копируя или иным образом используя игру, Пользователь выражает своё полное согласие с условиями настоящего Соглашения. Если Пользователь не принимает условия Соглашения, он обязан незамедлительно удалить все копии игры и не использовать её.</p>
-            </div>
+    <header class="card header-card license-header" style="background: var(--bg-card); padding: 40px 28px;">
+        <h1 style="font-size: 42px; margin-bottom: 10px; color: var(--text-primary);">Лицензионное соглашение</h1>
+        <p class="text-secondary" style="font-size: 16px;">Последнее обновление: 9 апреля 2026 г.</p>
+    </header>
 
-            <div class="license-section">
-                <h2 data-lang="licenseSection2Title">2. Права на игру</h2>
-                <p data-lang="licenseSection2Text">Все исключительные права на игру, включая, но не ограничиваясь: исходный код, графические и звуковые материалы, сценарии, персонажей, названия, товарные знаки принадлежат Правообладателю. Игра предоставляется Пользователю на условиях простой (неисключительной) лицензии, то есть Пользователю разрешается:</p>
-                <ul>
-                    <li data-lang="licenseSection2Li1">устанавливать игру на неограниченное количество принадлежащих ему устройств;</li>
-                    <li data-lang="licenseSection2Li2">воспроизводить игру в целях личного некоммерческого использования;</li>
-                    <li data-lang="licenseSection2Li3">записывать и публиковать видеоролики и стримы с игровым процессом на любых платформах (YouTube, Twitch, VK Видео и др.) при условии указания авторства (ссылка на страницу игры).</li>
-                </ul>
-            </div>
+    <div class="age-warning">
+        <i class="fas fa-exclamation-triangle" style="color: #f44336; margin-right: 10px;"></i>
+        <strong>⚠️ ВАЖНОЕ ПРЕДУПРЕЖДЕНИЕ</strong><br>
+        Используя данный сайт и/или загружая любую игру Neon Imperium, вы подтверждаете, что вам <strong>исполнилось 18 лет</strong>. Игры могут содержать сцены насилия, кровь, нецензурную лексику и элементы, не рекомендованные для лиц младше 18 лет. Если вам нет 18 лет, вы обязаны немедленно прекратить использование сайта и не загружать игры.
+    </div>
 
-            <div class="license-section">
-                <h2 data-lang="licenseSection3Title">3. Ограничения</h2>
-                <p data-lang="licenseSection3Text">Пользователю запрещается:</p>
-                <ul>
-                    <li data-lang="licenseSection3Li1">распространять игру (в том числе бесплатно) на сторонних сайтах, торрент-трекерах, в социальных сетях и иных ресурсах без письменного разрешения Правообладателя;</li>
-                    <li data-lang="licenseSection3Li2">изменять, декомпилировать, дизассемблировать, обфусцировать или создавать производные произведения на основе игры;</li>
-                    <li data-lang="licenseSection3Li3">использовать игру для любых коммерческих целей (в том числе продажа, сдача в аренду, прокат) без отдельного соглашения;</li>
-                    <li data-lang="licenseSection3Li4">удалять или изменять любые уведомления об авторских правах или товарных знаках;</li>
-                    <li data-lang="licenseSection3Li5">использовать игру способами, нарушающими законодательство Российской Федерации или международное право.</li>
-                </ul>
-            </div>
-
-            <div class="license-section">
-                <h2 data-lang="licenseSection4Title">4. Обновления и модификации</h2>
-                <p data-lang="licenseSection4Text">Правообладатель имеет право выпускать обновления, патчи и дополнительные материалы для игры. Все такие обновления являются неотъемлемой частью игры и регулируются настоящим Соглашением. Правообладатель не гарантирует постоянную обратную совместимость старых версий игры.</p>
-                <p data-lang="licenseSection4Text2">Игра может поддерживать пользовательские модификации (моды), созданные сообществом. Правообладатель не несёт ответственности за моды, созданные третьими лицами, и оставляет за собой право ограничивать использование модов в многопользовательских режимах.</p>
-            </div>
-
-            <div class="license-section">
-                <h2 data-lang="licenseSection5Title">5. Ответственность и гарантии</h2>
-                <p data-lang="licenseSection5Text">Игра предоставляется «как есть» (as is). Правообладатель не предоставляет никаких гарантий относительно:</p>
-                <ul>
-                    <li data-lang="licenseSection5Li1">безошибочной и бесперебойной работы игры;</li>
-                    <li data-lang="licenseSection5Li2">соответствия игры ожиданиям Пользователя;</li>
-                    <li data-lang="licenseSection5Li3">отсутствия ошибок, багов или сбоев;</li>
-                    <li data-lang="licenseSection5Li4">сохранности пользовательских данных (рекомендуется создавать резервные копии сохранений).</li>
-                </ul>
-                <p data-lang="licenseSection5Text2">Правообладатель не несёт ответственности за любой прямой или косвенный ущерб, возникший в результате использования или невозможности использования игры, включая потерю данных, финансовые убытки или моральный вред.</p>
-            </div>
-
-            <div class="license-section">
-                <h2 data-lang="licenseSection6Title">6. Сбор данных и конфиденциальность</h2>
-                <p data-lang="licenseSection6Text">Игра может собирать анонимную статистику использования (например, версию игры, время в игре, настройки графики) для улучшения качества продукта. Эти данные не позволяют идентифицировать конкретного Пользователя. Игра не собирает персональные данные без вашего согласия. Файлы сохранений хранятся локально на устройстве Пользователя.</p>
-            </div>
-
-            <div class="license-section">
-                <h2 data-lang="licenseSection7Title">7. Заключительные положения</h2>
-                <p data-lang="licenseSection7Text">Настоящее Соглашение регулируется и толкуется в соответствии с законодательством Российской Федерации. Все споры, возникающие из настоящего Соглашения или в связи с ним, подлежат рассмотрению в суде по месту нахождения Правообладателя.</p>
-                <p data-lang="licenseSection7Text2">Если какое-либо положение Соглашения будет признано недействительным или не имеющим юридической силы, это не влияет на действительность остальных положений.</p>
-                <p data-lang="licenseSection7Text3">Правообладатель оставляет за собой право в одностороннем порядке изменять условия настоящего Соглашения. Новая версия Соглашения вступает в силу с момента её публикации на данном сайте. Продолжение использования игры после изменения условий означает согласие с новой редакцией.</p>
-            </div>
-
-            <a href="javascript:history.back()" class="back-link" data-lang="licenseBack">← Вернуться к игре</a>
-            <div class="license-footer">
-                © 2024-2026 Neon Imperium. <span data-lang="allRightsReserved">Все права защищены.</span>
-            </div>
+    <div class="license-quick">
+        <div class="license-card allowed">
+            <h3><i class="fas fa-check-circle"></i> Разрешено</h3>
+            <ul>
+                <li><i class="fas fa-check"></i> Распространение игры где угодно при условии упоминания оригинального сайта (<strong>https://neonshadowyt.github.io/NeonImperium/</strong>) и наличия ссылки на него в игре (например, в меню «О игре»).</li>
+                <li><i class="fas fa-check"></i> Модификация игры (создание модов, патчей, альтернативных клиентов) для <strong>локального использования или на собственных серверах</strong>.</li>
+                <li><i class="fas fa-check"></i> Создание платных модов и получение дохода от них (контент-мейкеры, мододелы) - без каких-либо отчислений в пользу правообладателя.</li>
+                <li><i class="fas fa-check"></i> Запись и публикация видеороликов, стримов, летсплеев на любых платформах с указанием авторства (ссылка на игру).</li>
+                <li><i class="fas fa-check"></i> Бесплатные обновления для всех версий игры.</li>
+            </ul>
+        </div>
+        <div class="license-card forbidden">
+            <h3><i class="fas fa-times-circle"></i> Запрещено</h3>
+            <ul>
+                <li><i class="fas fa-times"></i> Выдавать названия, товарные знаки, логотипы, персонажей или код игры за свои.</li>
+                <li><i class="fas fa-times"></i> Создание, использование или распространение читов, модов, сторонних клиентов, которые <strong>дают преимущество на официальных серверах игры</strong> (например, ускорение, wallhack, автоприцел).</li>
+                <li><i class="fas fa-times"></i> Распространение вредоносных модификаций (вирусы, трояны, майнеры).</li>
+                <li><i class="fas fa-times"></i> Использование игры для коммерческих целей (продажа копий, включение в сборники, аренда) без отдельного письменного разрешения.</li>
+                <li><i class="fas fa-times"></i> Удаление или изменение уведомлений об авторских правах.</li>
+            </ul>
+        </div>
+        <div class="license-card obligation">
+            <h3><i class="fas fa-exclamation-triangle"></i> Обязанности</h3>
+            <ul>
+                <li><i class="fas fa-arrow-right"></i> Сохранять первоначальные авторские права (копирайты) в коде и файлах игры.</li>
+                <li><i class="fas fa-arrow-right"></i> В изменённых версиях (модах, патчах) обязательно указывать, что это <strong>неофициальная версия</strong>, и добавить кнопку/ссылку на оригинальный сайт в интерфейсе.</li>
+                <li><i class="fas fa-arrow-right"></i> Моды с открытым исходным кодом должны содержать ссылку на исходники (если они распространяются в бинарном виде).</li>
+                <li><i class="fas fa-arrow-right"></i> Указывать ссылки на оригинальные страницы игры и автора при публикации материалов.</li>
+            </ul>
         </div>
     </div>
+
+    <div class="card">
+        <div class="license-section">
+            <h2>1. Общие положения</h2>
+            <p>Настоящее Лицензионное соглашение (далее - «Соглашение») заключается между вами (далее - «Пользователь») и правообладателем игр Neon Imperium (далее - «Правообладатель»). Соглашение регулирует порядок использования игр <strong>Starve Neon, Alpha 01, ГК Адвенчур</strong>, а также всех связанных материалов, обновлений и дополнений.</p>
+            <p>Устанавливая, копируя или иным образом используя игру, Пользователь выражает полное согласие с условиями Соглашения. Если Пользователь не принимает условия, он обязан незамедлительно удалить все копии игры и не использовать её.</p>
+        </div>
+
+        <div class="license-section">
+            <h2>2. Права на игру</h2>
+            <p>Все исключительные права на игру (исходный код, графика, звук, сценарии, персонажи, названия, товарные знаки) принадлежат Правообладателю. Игра предоставляется Пользователю на условиях простой (неисключительной) лицензии. Пользователь имеет право:</p>
+            <ul>
+                <li>устанавливать игру на любое количество принадлежащих ему устройств;</li>
+                <li>воспроизводить игру для личного некоммерческого использования;</li>
+                <li>записывать и публиковать видеоролики и стримы с игровым процессом на любых платформах при условии указания авторства (ссылка на страницу игры).</li>
+            </ul>
+        </div>
+
+        <div class="license-section">
+            <h2>3. Модификации и читы</h2>
+            <p><strong>Разрешено:</strong> создание любых модификаций (модов), альтернативных клиентов, патчей для <strong>локальной игры или на собственных (неофициальных) серверах</strong>. Вы можете распространять такие моды бесплатно или платно, получать доход - без отчислений Правообладателю.</p>
+            <p><strong>Запрещено:</strong> создание, распространение или использование читов, модов, сторонних клиентов, которые <strong>дают нечестное преимущество на официальных серверах игры</strong> (например, ускорение передвижения, бесконечное здоровье, автоматическое прицеливание, чтение памяти игры для получения скрытой информации). Под «официальными серверами» понимаются любые серверы, запущенные Правообладателем или его доверенными лицами. За нарушение этого пункта Правообладатель может навсегда заблокировать доступ к игре и обратиться в суд.</p>
+        </div>
+
+        <div class="license-section">
+            <h2>4. Ответственность за пользовательский контент</h2>
+            <p>На сайте и через встроенную систему обратной связи (GitHub Issues) пользователи могут публиковать тексты, ссылки, изображения. Правообладатель <strong>не модерирует</strong> этот контент и <strong>не несёт ответственности</strong> за его законность, достоверность или безопасность. Вы несёте полную ответственность за всё, что публикуете.</p>
+            <p>Правообладатель оставляет за собой право удалить любой контент без объяснения причин.</p>
+            <div class="telegram-contact">
+                <i class="fab fa-telegram" style="font-size: 24px; color: var(--accent);"></i><br>
+                <strong>📢 Жалобы на пользовательский контент</strong><br>
+                Если вы обнаружили противоправный контент, вы можете сообщить об этом в Telegram: <strong>@NeonShindowsYT</strong><br>
+                <span style="font-size: 12px; color: var(--text-secondary);">Ответ не гарантируется, нет точных сроков. Сообщение будет прочитано по возможности.</span>
+            </div>
+        </div>
+
+        <div class="license-section">
+            <h2>5. Сбор данных и конфиденциальность</h2>
+            <p>В текущих версиях игр <strong>сбор статистики не производится</strong>. В будущем Правообладатель может добавить сбор анонимной технической информации (версия ОС, FPS, время игры) для улучшения продукта. <strong>Такой сбор будет производиться только после явного согласия пользователя</strong> (через диалоговое окно при первом запуске). Вы всегда сможете отключить сбор данных в настройках игры.</p>
+            <p>Игра не собирает персональные данные (имя, email, геолокацию) без вашего согласия. Файлы сохранений хранятся локально на вашем устройстве.</p>
+        </div>
+
+        <div class="license-section">
+            <h2>6. Возврат средств (при наличии платного контента)</h2>
+            <p>Если в будущем в играх появится платный контент (покупки, донаты, платная версия), то возврат средств возможен при следующих условиях:</p>
+            <ul>
+                <li>Вы направляете запрос на возврат в Telegram: <strong>@NeonShindowsYT</strong>.</li>
+                <li>В запросе вы указываете данные, позволяющие идентифицировать платёж (чек, номер транзакции, скриншот).</li>
+                <li>Правообладатель проверяет, действительно ли платёж поступил на его счёт.</li>
+                <li>Если платёж подтверждён, Правообладатель возвращает сумму, которая <strong>реально поступила к нему после вычета всех комиссий и налогов</strong> (то есть чистую сумму, которую он получил).</li>
+                <li>Срок возврата - не более 30 дней с момента подтверждения.</li>
+                <li>Возврат возможен только в течение 14 дней после совершения платежа, если платный контент ещё не был использован.</li>
+            </ul>
+            <p>Пожертвования (donate) через кнопку «Поддержать» являются добровольными и возврату не подлежат, если иное не оговорено отдельно.</p>
+        </div>
+
+        <div class="license-section">
+            <h2>7. Отказ от гарантий и ответственность</h2>
+            <p>Игра предоставляется «как есть» (as is). Правообладатель не гарантирует:</p>
+            <ul>
+                <li>безошибочную и бесперебойную работу;</li>
+                <li>соответствие игры ожиданиям пользователя;</li>
+                <li>отсутствие ошибок, багов или сбоев;</li>
+                <li>сохранность пользовательских данных (рекомендуется создавать резервные копии сохранений).</li>
+            </ul>
+            <p>Правообладатель не несёт ответственности за любой прямой или косвенный ущерб, возникший в результате использования или невозможности использования игры, включая потерю данных, финансовые убытки или моральный вред.</p>
+        </div>
+
+        <div class="license-section">
+            <h2>8. Порядок разрешения споров (с юмористическим отступлением)</h2>
+            <p>Все споры, возникающие из настоящего Соглашения или в связи с ним, подлежат рассмотрению <strong>на планете Марс</strong> (в шутку - на самом деле в соответствии с законодательством Российской Федерации).</p>
+            <p>Если серьёзно: при невозможности решить спор в досудебном порядке (претензия в Telegram @NeonShindowsYT, срок ответа 30 дней), дело передаётся в суд по месту нахождения ответчика (то есть пользователя). Правообладатель оставляет за собой право выбрать любой суд на территории РФ, если это не противоречит закону.</p>
+            <p><i class="fas fa-rocket"></i> Но мы надеемся, что до суда не дойдёт, и вы просто напишете в Telegram :)</p>
+        </div>
+
+        <div class="license-section">
+            <h2>9. Заключительные положения</h2>
+            <p>Правообладатель оставляет за собой право в одностороннем порядке изменять условия Соглашения. Новая версия вступает в силу с момента публикации на данном сайте. Продолжение использования игры после изменения условий означает согласие с новой редакцией.</p>
+            <p>Если какое-либо положение Соглашения будет признано недействительным, это не влияет на действительность остальных положений.</p>
+        </div>
+
+        <div class="license-section">
+            <h2>10. Юмористическое примечание</h2>
+            <p><i class="fas fa-heart" style="color: #ff4081;"></i> <strong>«Ты отдаёшь свою душу авторам приложений ;}»</strong> - данная фраза является шуткой и не порождает никаких юридических обязательств. Ваша душа остаётся при вас.</p>
+        </div>
+
+        <a href="javascript:history.back()" class="back-link">← Вернуться к игре</a>
+        <div class="license-footer">
+            © 2024-2026 Neon Imperium. Все права защищены.<br>
+            Оригинальный сайт: <strong>https://neonshadowyt.github.io/NeonImperium/</strong>
+        </div>
+    </div>
+</div>
 </body>
 </html>
