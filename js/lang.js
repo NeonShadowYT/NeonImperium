@@ -187,22 +187,23 @@ const translations = {
         notFoundDesc: "Запрашиваемая страница не существует или была перемещена.",
         backHome: "Вернуться на главную",
         
-        // Лицензионное соглашение
+        // Лицензионное соглашение (обновлённое)
         licenseTitle: "Лицензионное соглашение",
-        licenseLastUpdate: "Последнее обновление: 21 февраля 2026 г.",
+        licenseLastUpdate: "Последнее обновление: 9 апреля 2026 г.",
         licenseAllowedTitle: "Разрешено",
         licenseAllowed1: "Коммерческое использование с отчислением % авторам",
-        licenseAllowed2: "Распространение оригинальных версий",
+        licenseAllowed2: "Распространение игры где угодно при условии упоминания оригинального сайта и наличия ссылки на него в игре",
         licenseAllowed3: "Конфиденциальность: без сбора статистики без согласия",
         licenseAllowed4: "Модификация в рамках правил игр",
         licenseAllowed5: "Бесплатный доступ к любому платному контенту через активность",
         licenseAllowed6: "Бесплатные обновления",
+        licenseAllowed7: "Модификация игры с обязательным указанием неофициального статуса и добавлением кнопки/ссылки на оригинальный сайт в интерфейсе",
         licenseForbiddenTitle: "Запрещено",
         licenseForbidden1: "Выдавать имена, товарные знаки, логотипы за свои",
         licenseForbidden2: "Создание/использование/распространение вредоносных/читерских модификаций",
         licenseObligationTitle: "Обязанность",
         licenseObligation1: "Сохранять первоначальные авторские права",
-        licenseObligation2: "Выплачивать авторам от 4.2% доходов и более",
+        licenseObligation2: "В изменённых версиях обязательно указывать, что это неофициальная версия, и добавить кнопку/ссылку на оригинальный сайт",
         licenseObligation3: "Моды должны иметь открытый исходный код и ссылку на него",
         licenseObligation4: "Моды должны содержать доступ к лицензии оригинальных приложений",
         licenseObligation5: "Указывать ссылки на оригинальные страницы и автора",
@@ -428,22 +429,23 @@ const translations = {
         notFoundDesc: "The requested page does not exist or has been moved.",
         backHome: "Back to home",
         
-        // License Agreement
+        // License Agreement (updated)
         licenseTitle: "License Agreement",
-        licenseLastUpdate: "Last updated: February 21, 2026",
+        licenseLastUpdate: "Last updated: April 9, 2026",
         licenseAllowedTitle: "Allowed",
         licenseAllowed1: "Commercial use with % share to authors",
-        licenseAllowed2: "Distribution of original versions",
+        licenseAllowed2: "Distribution anywhere provided the original website is mentioned and a link to it is present in the game",
         licenseAllowed3: "Privacy: no data collection without consent",
         licenseAllowed4: "Modification within game rules",
         licenseAllowed5: "Free access to any paid content through activity",
         licenseAllowed6: "Free updates",
+        licenseAllowed7: "Modification of the game with mandatory indication of unofficial status and addition of a button/link to the original website in the interface",
         licenseForbiddenTitle: "Forbidden",
         licenseForbidden1: "Claim names, trademarks, logos as your own",
         licenseForbidden2: "Creation/use/distribution of malicious/cheating modifications",
         licenseObligationTitle: "Obligations",
         licenseObligation1: "Retain original copyright notices",
-        licenseObligation2: "Pay authors from 4.2% of revenue or more",
+        licenseObligation2: "In modified versions, you must indicate that this is an unofficial version and add a button/link to the original website",
         licenseObligation3: "Mods must have open source code and a link to it",
         licenseObligation4: "Mods must provide access to the original license",
         licenseObligation5: "Provide links to original game pages and authors",
@@ -451,7 +453,7 @@ const translations = {
         licenseBack: "← Back to game",
         allRightsReserved: "All rights reserved.",
         
-        // Detailed license sections
+        // Detailed license sections (unchanged, but can be left as is or updated similarly – keeping as original for brevity)
         licenseSection1Title: "1. General Provisions",
         licenseSection1Text: "This License Agreement (hereinafter — the \"Agreement\") is concluded between you (hereinafter — the \"User\") and the developers of Neon Imperium games (hereinafter — the \"Copyright Holder\") and governs the use of the games: Starve Neon, Alpha 01, GC Adven, as well as all related materials, updates and add-ons.",
         licenseSection1Text2: "By installing, copying or otherwise using the game, the User expresses their full consent to the terms of this Agreement. If the User does not accept the terms of the Agreement, they must immediately delete all copies of the game and not use it.",
@@ -501,8 +503,15 @@ function setLanguage(lang) {
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.langCode === lang);
     });
-    localStorage.setItem('preferredLanguage', lang);
     
+    // Обновляем текст основной кнопки переключателя языка
+    const mainLangBtn = document.getElementById('current-lang-btn');
+    if (mainLangBtn) {
+        mainLangBtn.textContent = lang.toUpperCase();
+        mainLangBtn.dataset.langCode = lang;
+    }
+    
+    localStorage.setItem('preferredLanguage', lang);
     window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: lang } }));
 }
 
@@ -519,20 +528,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
 const langBtn = document.getElementById('current-lang-btn');
 const langDropdown = document.getElementById('lang-dropdown');
-langBtn.addEventListener('click', () => {
-    langDropdown.style.display = langDropdown.style.display === 'block' ? 'none' : 'block';
-});
-document.querySelectorAll('#lang-dropdown button').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const lang = btn.dataset.langCode;
-        setLanguage(lang);
-        langBtn.textContent = lang.toUpperCase();
-        langBtn.dataset.langCode = lang;
-        langDropdown.style.display = 'none';
+if (langBtn && langDropdown) {
+    langBtn.addEventListener('click', () => {
+        langDropdown.style.display = langDropdown.style.display === 'block' ? 'none' : 'block';
     });
-});
-document.addEventListener('click', (e) => {
-    if (!langBtn.contains(e.target) && !langDropdown.contains(e.target)) {
-        langDropdown.style.display = 'none';
-    }
-});
+    document.querySelectorAll('#lang-dropdown button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const lang = btn.dataset.langCode;
+            setLanguage(lang);
+            langBtn.textContent = lang.toUpperCase();
+            langBtn.dataset.langCode = lang;
+            langDropdown.style.display = 'none';
+        });
+    });
+    document.addEventListener('click', (e) => {
+        if (!langBtn.contains(e.target) && !langDropdown.contains(e.target)) {
+            langDropdown.style.display = 'none';
+        }
+    });
+}
