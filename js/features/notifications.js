@@ -86,18 +86,7 @@
         const navBar = document.querySelector('.nav-bar');
         if (!navBar) return;
         
-        // Создаём правый блок, если его нет
-        let rightBlock = navBar.querySelector('.nav-right');
-        if (!rightBlock) {
-            rightBlock = document.createElement('div');
-            rightBlock.className = 'nav-right';
-            const langSwitcher = document.querySelector('.lang-switcher');
-            if (langSwitcher) {
-                navBar.insertBefore(rightBlock, langSwitcher);
-            } else {
-                navBar.appendChild(rightBlock);
-            }
-        }
+        const profile = document.querySelector('.nav-profile');
         
         bellButton = document.createElement('div');
         bellButton.className = 'notification-bell';
@@ -106,17 +95,15 @@
         bellButton.setAttribute('aria-label', 'Уведомления');
         bellButton.innerHTML = '<i class="fas fa-bell"></i><span class="notification-badge" style="display: none;">0</span>';
         
+        if (profile) {
+            navBar.insertBefore(bellButton, profile);
+        } else {
+            navBar.appendChild(bellButton);
+        }
+        
         dropdown = document.createElement('div');
         dropdown.className = 'notification-dropdown';
         bellButton.appendChild(dropdown);
-        
-        // Вставляем перед профилем или в конец правого блока
-        const profile = document.querySelector('.nav-profile');
-        if (profile) {
-            rightBlock.insertBefore(bellButton, profile);
-        } else {
-            rightBlock.appendChild(bellButton);
-        }
         
         bellButton.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -126,9 +113,7 @@
         });
         
         document.addEventListener('click', (e) => {
-            if (!bellButton.contains(e.target)) {
-                dropdown.style.display = 'none';
-            }
+            if (!bellButton.contains(e.target)) dropdown.style.display = 'none';
         });
         
         loadNotificationData();
@@ -221,7 +206,6 @@
                 for (const issue of issues) {
                     const issueDate = new Date(issue.created_at);
                     if (issueDate > lastVisit) {
-                        const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'feedback';
                         const title = `[${game}] ${issue.title}`;
                         const text = `Новое сообщение от ${issue.user.login}`;
                         const link = `${window.location.origin}${window.location.pathname}?post=${issue.number}`;
@@ -276,9 +260,13 @@
     }
     
     async function checkLicenseChange() {
+        const licenseUrl = `${window.location.origin}/NeonImperium/license.html`;
         try {
-            const licenseUrl = `${window.location.origin}/license.html`;
             const response = await fetch(licenseUrl);
+            if (!response.ok) {
+                console.warn('License file not found, skipping check');
+                return;
+            }
             const html = await response.text();
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
@@ -287,16 +275,20 @@
                 const text = lastUpdateElem.textContent;
                 const match = text.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
                 if (match) {
-                    const months = {
-                        'января':0,'февраля':1,'марта':2,'апреля':3,'мая':4,'июня':5,
-                        'июля':6,'августа':7,'сентября':8,'октября':9,'ноября':10,'декабря':11
-                    };
-                    let date = new Date(match[3], months[match[2].toLowerCase()], match[1]);
+                    let date = new Date(match[3], getMonthNumber(match[2]), match[1]);
                     if (date > lastVisit) {
-                        addNotification('license', 'Лицензионное соглашение', 'Обновлена лицензия. Пожалуйста, ознакомьтесь.', '/license.html');
+                        addNotification('license', 'Лицензионное соглашение', 'Обновлена лицензия. Пожалуйста, ознакомьтесь.', '/NeonImperium/license.html');
                     }
                 }
             }
         } catch(e) { console.warn('Ошибка проверки лицензии', e); }
+    }
+    
+    function getMonthNumber(monthName) {
+        const months = {
+            'января': 0, 'февраля': 1, 'марта': 2, 'апреля': 3, 'мая': 4, 'июня': 5,
+            'июля': 6, 'августа': 7, 'сентября': 8, 'октября': 9, 'ноября': 10, 'декабря': 11
+        };
+        return months[monthName.toLowerCase()] || 0;
     }
 })();
