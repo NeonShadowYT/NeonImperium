@@ -8,6 +8,8 @@
 @import url('css/layout.css');
 @import url('css/responsive.css');
 @import url('css/feedback.css');
+@import url('css/a11y.css');
+@import url('css/layout-fixes.css');
 
 /* Исправление положения кнопок в шапке модалки */
 .modal-header {

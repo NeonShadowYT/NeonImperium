@@ -10,8 +10,7 @@
     let currentGame = '', currentTab = 'all', currentPage = 1, hasMorePages = true, isLoading = false;
     let allIssues = [], displayedIssues = [], container, feedbackSection, gridContainer;
     let currentUser = null, currentAbort = null;
-    let observer = null;
-    let sentinel = null;
+    let loadMoreButton = null;
 
     document.addEventListener('DOMContentLoaded', init);
     function init() {
@@ -32,7 +31,7 @@
             const typeLabel = issue.labels.find(l => l.name.startsWith('type:'));
             if (!typeLabel) return;
             const type = typeLabel.name.split(':')[1];
-            if (type === 'update' || type === 'news') return; // не показываем обновления и новости в обратной связи
+            if (type === 'update' || type === 'news') return;
             cacheRemoveByPrefix(`issues_${currentGame}_page_`);
             allIssues = [issue, ...allIssues];
             filterAndDisplayIssues(true);
@@ -100,7 +99,6 @@
                 <button class="feedback-tab" data-tab="review" role="tab" aria-selected="false" aria-controls="feedback-panel">⭐ Отзывы</button>
             </div>
             <div class="projects-grid" id="feedback-panel" role="tabpanel" aria-labelledby="active-tab"></div>
-            <div id="sentinel" style="height: 10px; margin-top: 10px;"></div>
         `;
 
         if (currentUser) {
@@ -124,7 +122,7 @@
                 gridContainer = document.getElementById('feedback-panel');
                 if (gridContainer) gridContainer.innerHTML = '';
                 if (currentAbort) currentAbort.controller.abort();
-                if (observer) observer.disconnect();
+                if (loadMoreButton) loadMoreButton.remove();
                 loadIssuesPage(1, true);
             });
 
@@ -146,16 +144,6 @@
         });
 
         gridContainer = document.getElementById('feedback-panel');
-        sentinel = document.getElementById('sentinel');
-
-        observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting && !isLoading && hasMorePages) {
-                loadIssuesPage(currentPage + 1, false);
-            }
-        }, { threshold: 0.1 });
-
-        observer.observe(sentinel);
-
         await loadIssuesPage(1, true);
     }
 
@@ -180,6 +168,17 @@
             else allIssues = deduplicateByNumber([...allIssues, ...issues]);
             currentPage = page;
             filterAndDisplayIssues(reset);
+            
+            // Управление кнопкой "Загрузить ещё"
+            if (reset) {
+                if (loadMoreButton) loadMoreButton.remove();
+                if (hasMorePages) {
+                    createLoadMoreButton();
+                }
+            } else if (!hasMorePages && loadMoreButton) {
+                loadMoreButton.remove();
+                loadMoreButton = null;
+            }
         } catch (error) {
             if (error.name === 'AbortError') return;
             UIUtils.showToast('Ошибка загрузки', 'error');
@@ -190,11 +189,27 @@
         }
     }
 
+    function createLoadMoreButton() {
+        if (loadMoreButton) return;
+        loadMoreButton = document.createElement('button');
+        loadMoreButton.className = 'load-more-btn';
+        loadMoreButton.textContent = 'Загрузить ещё';
+        loadMoreButton.setAttribute('aria-label', 'Загрузить следующие сообщения');
+        loadMoreButton.addEventListener('click', async () => {
+            if (isLoading || !hasMorePages) return;
+            UIUtils.setButtonLoading(loadMoreButton, true, 'Загрузить ещё');
+            await loadIssuesPage(currentPage + 1, false);
+            UIUtils.setButtonLoading(loadMoreButton, false);
+        });
+        if (gridContainer && gridContainer.parentNode) {
+            gridContainer.parentNode.insertBefore(loadMoreButton, gridContainer.nextSibling);
+        }
+    }
+
     function filterAndDisplayIssues(reset = false) {
         let filtered = allIssues.filter(issue => issue.state === 'open');
         filtered = filtered.filter(issue => {
             const labels = issue.labels.map(l => l.name);
-            // Исключаем обновления и новости из раздела обратной связи
             if (labels.includes('type:update') || labels.includes('type:news')) return false;
             if (!labels.includes('private')) return true;
             if (isAdmin()) return true;
@@ -246,6 +261,7 @@
         cardLink.dataset.issueNumber = issue.number;
         cardLink.dataset.issueId = issue.id;
         cardLink.style.cursor = 'pointer';
+        cardLink.setAttribute('aria-label', `Открыть: ${issue.title}`);
         
         const card = document.createElement('div');
         card.className = 'project-card';

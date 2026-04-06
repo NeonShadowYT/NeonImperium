@@ -107,5 +107,22 @@
         sessionStorage.removeItem(key);
     }
 
-    window.UIUtils = { showToast, createModal, saveDraft, loadDraft, clearDraft };
+    function setButtonLoading(button, isLoading, originalText = null) {
+        if (!button) return;
+        if (isLoading) {
+            button.dataset.originalText = originalText || button.textContent;
+            button.classList.add('loading');
+            button.disabled = true;
+            button.textContent = 'Загрузка...';
+        } else {
+            button.classList.remove('loading');
+            button.disabled = false;
+            if (button.dataset.originalText) {
+                button.textContent = button.dataset.originalText;
+                delete button.dataset.originalText;
+            }
+        }
+    }
+
+    window.UIUtils = { showToast, createModal, saveDraft, loadDraft, clearDraft, setButtonLoading };
 })();
