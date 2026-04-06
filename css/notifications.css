@@ -4,19 +4,18 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     background: var(--bg-inner-gradient);
     cursor: pointer;
     transition: background 0.2s;
-    margin-right: 8px;
 }
 .notification-bell:hover {
     background: var(--accent);
 }
 .notification-bell i {
-    font-size: 20px;
+    font-size: 18px;
     color: var(--text-secondary);
 }
 .notification-bell:hover i {
@@ -24,15 +23,15 @@
 }
 .notification-badge {
     position: absolute;
-    top: -5px;
-    right: -5px;
+    top: -4px;
+    right: -4px;
     background: #f44336;
     color: white;
     font-size: 10px;
     font-weight: bold;
-    min-width: 18px;
-    height: 18px;
-    border-radius: 18px;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;

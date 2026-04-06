@@ -13,6 +13,19 @@
         navBar = document.querySelector('.nav-bar');
         if (!navBar) return;
 
+        // Создаём правый блок, если его нет
+        let rightBlock = navBar.querySelector('.nav-right');
+        if (!rightBlock) {
+            rightBlock = document.createElement('div');
+            rightBlock.className = 'nav-right';
+            const langSwitcher = document.querySelector('.lang-switcher');
+            if (langSwitcher) {
+                navBar.insertBefore(rightBlock, langSwitcher);
+            } else {
+                navBar.appendChild(rightBlock);
+            }
+        }
+
         profileContainer = document.createElement('div');
         profileContainer.className = 'nav-profile';
         profileContainer.setAttribute('role', 'button');
@@ -20,12 +33,7 @@
         profileContainer.setAttribute('aria-haspopup', 'true');
         profileContainer.setAttribute('aria-expanded', 'false');
 
-        const langSwitcher = document.querySelector('.lang-switcher');
-        if (langSwitcher) {
-            navBar.insertBefore(profileContainer, langSwitcher);
-        } else {
-            navBar.appendChild(profileContainer);
-        }
+        rightBlock.appendChild(profileContainer);
 
         createModal();
 

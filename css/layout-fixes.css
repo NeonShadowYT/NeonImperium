@@ -1,3 +1,87 @@
+/* layout-fixes.css – исправления выравнивания и адаптива */
+
+/* Кнопка "Загрузить ещё" – по центру внизу, небольшая */
+.load-more-btn {
+    display: block;
+    margin: 24px auto 16px auto;
+    padding: 8px 20px;
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 40px;
+    cursor: pointer;
+    font-family: 'Russo One', sans-serif;
+    font-size: 14px;
+    transition: all 0.2s;
+    width: fit-content;
+    text-align: center;
+}
+.load-more-btn:hover {
+    background: var(--accent);
+    color: white;
+    transform: translateY(-2px);
+}
+.load-more-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Навигация: прижимаем элементы вплотную */
+.nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 16px;
+}
+.nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.lang-switcher,
+.notification-bell,
+.nav-profile {
+    margin: 0;
+}
+.lang-switcher .lang-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+}
+.notification-bell {
+    width: 36px;
+    height: 36px;
+    margin: 0;
+}
+.nav-profile {
+    padding: 4px 8px 4px 12px;
+    margin: 0;
+}
+
+/* Адаптив для мобильных */
+@media (max-width: 700px) {
+    .nav-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .nav-links {
+        justify-content: center;
+        overflow-x: auto;
+    }
+    .nav-right {
+        justify-content: flex-end;
+    }
+}
+
+/* Остальные исправления */
 .preview-url-wrapper,
 .comment-form,
 .modal-header-actions,
@@ -55,29 +139,6 @@
     .modal-body {
         padding: 16px;
     }
-}
-
-.load-more-btn {
-    display: block;
-    margin: 20px auto;
-    padding: 10px 24px;
-    background: var(--bg-inner-gradient);
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    border-radius: 40px;
-    cursor: pointer;
-    font-family: 'Russo One', sans-serif;
-    transition: all 0.2s;
-}
-.load-more-btn:hover {
-    background: var(--accent);
-    color: white;
-    transform: translateY(-2px);
-}
-.load-more-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
 }
 
 .loading-indicator {
