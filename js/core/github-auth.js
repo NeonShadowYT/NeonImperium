@@ -276,6 +276,10 @@
                     <i class="fas fa-external-link-alt"></i> <span data-lang="githubRevoke">Управление токенами</span>
                 </div>
                 <div class="profile-dropdown-divider"></div>
+                <div class="profile-dropdown-item" data-action="support">
+                    <i class="fas fa-headset"></i> <span data-lang="supportMenuItem">Поддержка</span>
+                </div>
+                <div class="profile-dropdown-divider"></div>
                 <div class="profile-dropdown-item" data-action="clear-cache">
                     <i class="fas fa-trash-alt"></i> <span data-lang="githubClearCache">Очистить кеш</span>
                 </div>
@@ -349,6 +353,13 @@
             case 'revoke-token':
                 window.open('https://github.com/settings/tokens', '_blank');
                 UIUtils.showToast('Перейдите в раздел токенов, чтобы удалить ненужные', 'info');
+                break;
+            case 'support':
+                if (window.UIFeedback && window.UIFeedback.openSupportModal) {
+                    window.UIFeedback.openSupportModal();
+                } else {
+                    UIUtils.showToast('Система поддержки временно недоступна', 'error');
+                }
                 break;
             case 'clear-cache':
                 handleClearCache();

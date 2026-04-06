@@ -1,13 +1,13 @@
 // ==================== СЛОВАРИ ====================
 const translations = {
     ru: {
-        // Навигация
+        // Navigation
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
         navGc: "ГК Адвенчур",
         
-        // Главная
+        // Home
         siteTitle: "Neon Imperium",
         mainProjectsTitle: "Главные проекты",
         mainProjectsDesc: "Игры с приоритетом разработки",
@@ -26,7 +26,7 @@ const translations = {
         newsDesc: "Свежие видео и обновления",
         newsLoading: "Загрузка новостей...",
         
-        // Общие для страниц игр
+        // Common for game pages
         trailerTitle: "Трейлер",
         developerTitle: "Разработчик",
         nextUpdateProgress: "Следующее обновление:",
@@ -95,8 +95,10 @@ const translations = {
         githubNetworkError: "Ошибка сети. Проверьте подключение.",
         supportMenuItem: "Поддержка",
         supportPrivateNote: "⚠️ Ваше сообщение будет приватным: его увидят только вы и администратор. Оно не отображается в публичных разделах сайта, но сохраняется в репозитории GitHub (видят админы).",
+        supportTitle: "Поддержка",
+        supportNewBtn: "Новое обращение",
 
-        // Фраза про лицензию
+        // License accept
         licenseAccept: "Скачивая игру, вы принимаете ",
         licenseLink: "лицензионное соглашение",
         
@@ -173,7 +175,7 @@ const translations = {
         spoilerGraphics: "Графика",
         graphicsContent: "Улучшение меню",
         
-        // ГК Адвенчур
+        // GC Adven
         gcVersion: "Обновление 0.1.0",
         gcDownloadNote: "Версия 0.1.0 · Обновление от 01.11.2023",
         gcAboutTitle: "Об игре",
@@ -189,7 +191,7 @@ const translations = {
         notFoundDesc: "Запрашиваемая страница не существует или была перемещена.",
         backHome: "Вернуться на главную",
         
-        // Лицензионное соглашение (основные ключи)
+        // License Agreement
         licenseTitle: "Лицензионное соглашение",
         licenseLastUpdate: "Последнее обновление: 9 апреля 2026 г.",
         licenseAllowedTitle: "Разрешено",
@@ -212,7 +214,7 @@ const translations = {
         licenseBack: "← Вернуться к игре",
         allRightsReserved: "Все права защищены.",
         
-        // Разделы лицензии (детальные)
+        // Detailed license sections
         licenseSection1Title: "Общие положения",
         licenseSection1Text: "Настоящее Соглашение заключено между вами (Пользователь) и правообладателем игр Neon Imperium. Оно регулирует использование игр Starve Neon, Alpha 01, ГК Адвенчур и всех связанных материалов.",
         licenseSection1Text2: "Устанавливая или используя игру, вы полностью соглашаетесь с условиями. Если вы не согласны — удалите игру.",
@@ -247,8 +249,6 @@ const translations = {
         licenseOriginalSite: "Оригинальный сайт: https://neonshadowyt.github.io/NeonImperium/",
         licenseAgeWarningTitle: "⚠️ Вам должно быть 18 лет",
         licenseAgeWarningText: "Используя сайт или загружая игры Neon Imperium, вы подтверждаете, что вам исполнилось 18 лет. Игры содержат сцены насилия, кровь и нецензурную лексику.",
-
-        // Новые ключи
         licenseOriginalNote: "Русская версия является оригинальной и имеет юридическую силу. Английский перевод предоставлен для удобства.",
         licenseCommercialAllowed: "Разрешено продавать копии игры, включать в платные сборники, сдавать в аренду — коммерческое использование без отдельного разрешения. Вы можете зарабатывать на наших наработках, если они качественно изменены.",
         licenseSellingFreeForbidden: "Продавать бесплатные копии игры или моды (если вы распространяете бесплатную версию — не берите за неё деньги).",
@@ -353,6 +353,8 @@ const translations = {
         githubNetworkError: "Network error. Check your connection.",
         supportMenuItem: "Support",
         supportPrivateNote: "⚠️ Your message will be private: only you and the admin can see it. It is not displayed in public sections of the site, but is stored in the GitHub repository (visible to admins).",
+        supportTitle: "Support",
+        supportNewBtn: "New ticket",
 
         licenseAccept: "By downloading the game, you accept the ",
         licenseLink: "license agreement",
@@ -446,7 +448,7 @@ const translations = {
         notFoundDesc: "The requested page does not exist or has been moved.",
         backHome: "Back to home",
         
-        // License Agreement (main keys)
+        // License Agreement
         licenseTitle: "License Agreement",
         licenseLastUpdate: "Last updated: April 9, 2026",
         licenseAllowedTitle: "Allowed",
@@ -504,8 +506,6 @@ const translations = {
         licenseOriginalSite: "Original website: https://neonshadowyt.github.io/NeonImperium/",
         licenseAgeWarningTitle: "⚠️ You must be 18 years old",
         licenseAgeWarningText: "By using the site or downloading Neon Imperium games, you confirm that you are at least 18 years old. Games contain violence, blood, and profanity.",
-
-        // New keys
         licenseOriginalNote: "The Russian version is the original and legally binding. English translation is provided for convenience.",
         licenseCommercialAllowed: "Allowed to sell copies of the game, include in paid compilations, rent out — commercial use without separate permission. You can earn money on our work if it is qualitatively modified.",
         licenseSellingFreeForbidden: "Selling free copies of the game or mods (if you distribute a free version — don't charge for it).",
@@ -516,7 +516,7 @@ const translations = {
     }
 };
 
-// ==================== ФУНКЦИИ ПЕРЕКЛЮЧЕНИЯ ЯЗЫКА ====================
+// ==================== FUNCTIONS ====================
 function setLanguage(lang) {
     document.querySelectorAll('[data-lang]').forEach(element => {
         const key = element.getAttribute('data-lang');

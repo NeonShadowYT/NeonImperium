@@ -8,7 +8,7 @@
     const reactionsCache = new Map();
     const commentsCache = new Map();
     const reactionLocks = new Map();
-    const postsCache = new Map(); // кеш для постов по номерам
+    const postsCache = new Map();
 
     function getCached(key, cacheMap) {
         const cached = cacheMap.get(key);
@@ -231,7 +231,7 @@
         const post = await loadPostByNumber(postNumber);
         if (!post) return;
         const typeLabel = post.labels.find(l => l.startsWith('type:'))?.split(':')[1] || 'post';
-        const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : typeLabel === 'review' ? '⭐' : typeLabel === 'news' ? '📰' : typeLabel === 'update' ? '🔄' : '📌';
+        const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : typeLabel === 'review' ? '⭐' : typeLabel === 'news' ? '📰' : typeLabel === 'update' ? '🔄' : typeLabel === 'support' ? '🛟' : '📌';
         const card = document.createElement('div');
         card.className = 'mini-post-card';
         card.style.cssText = 'background: var(--bg-inner-gradient); border: 1px solid var(--border); border-radius: 16px; padding: 12px; margin: 8px 0; cursor: pointer; transition: all 0.2s;';
@@ -424,7 +424,6 @@
             if (issueNumber) await renderPoll(pollContainer, issueNumber, pollData);
             else renderStaticPoll(pollContainer, pollData);
         }
-        // Обработка ссылок на посты в теле
         const links = extractPostLinks(body);
         for (const link of links) {
             await renderMiniPostCard(container, link);
@@ -578,6 +577,7 @@
             let postType = 'feedback';
             if (item.labels?.includes('type:news')) postType = 'news';
             else if (item.labels?.includes('type:update')) postType = 'update';
+            else if (item.labels?.includes('type:support')) postType = 'support';
             openEditorModal('edit', { number: item.id, title: issue.title, body: issue.body, game: item.game }, postType);
         });
 
@@ -624,6 +624,7 @@
             else if (item.labels?.includes('type:idea')) typeIcon = '💡';
             else if (item.labels?.includes('type:bug')) typeIcon = '🐛';
             else if (item.labels?.includes('type:review')) typeIcon = '⭐';
+            else if (item.labels?.includes('type:support')) typeIcon = '🛟';
             else typeIcon = '📌';
             header.innerHTML = `
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -726,13 +727,11 @@
         return container;
     }
 
-    // Создаёт split-view редактор: левая панель (textarea), правая панель (preview) с фиксированным тулбаром
     function createSplitEditor(initialContent, onSave, options = {}) {
         const container = document.createElement('div');
         container.className = 'split-editor';
         container.style.cssText = 'display: flex; flex-direction: column; gap: 16px; margin-top: 10px; height: 100%;';
         
-        // Toolbar над обеими панелями — фиксированный при скролле
         const toolbarContainer = document.createElement('div');
         toolbarContainer.id = 'split-editor-toolbar';
         toolbarContainer.style.cssText = 'position: sticky; top: 0; background: var(--bg-card); z-index: 10; padding: 8px 0; border-radius: 12px;';
@@ -765,7 +764,6 @@
         container.appendChild(toolbarContainer);
         container.appendChild(panelsRow);
         
-        // Функция обновления предпросмотра (живой)
         let updateTimeout;
         const updatePreview = () => {
             if (updateTimeout) clearTimeout(updateTimeout);
@@ -783,7 +781,6 @@
         textarea.addEventListener('input', updatePreview);
         updatePreview();
         
-        // Синхронизация прокрутки
         let syncingLeft = false, syncingRight = false;
         textarea.addEventListener('scroll', () => {
             if (syncingLeft) return;
@@ -807,7 +804,6 @@
             toolbarContainer.appendChild(toolbar);
         }
         
-        // Кнопка Сохранить справа снизу (без кнопки Отмена)
         const buttonRow = document.createElement('div');
         buttonRow.style.cssText = 'display: flex; justify-content: flex-end; margin-top: 16px;';
         const saveBtn = document.createElement('button');
@@ -874,10 +870,8 @@
         const { modal, closeModal } = UIUtils.createModal(title, '<div id="editor-container" style="height: 100%; display: flex; flex-direction: column;"></div>', { size: 'full' });
         const editorContainer = modal.querySelector('#editor-container');
         
-        // Функция синхронизации полей в тело поста (объявлена заранее)
         let syncToBody = null;
         
-        // Функция сохранения для разных типов
         const handleSave = async (finalBody) => {
             if (!GithubAuth.getToken()) { UIUtils.showToast('Вы не авторизованы. Войдите через GitHub.', 'error'); throw new Error('No token'); }
             
@@ -900,7 +894,7 @@
             finalProcessedBody = finalProcessedBody.replace(/<!--\s*allowed:\s*.*?\s*-->\s*\n?/g, '');
             
             const newPreviewUrl = modal.querySelector('#modal-preview-url').value.trim();
-            const isPrivate = currentIsPrivate;
+            const isPrivate = postType === 'support' ? true : currentIsPrivate;
             const allowedUsersValue = privateUsersInput ? privateUsersInput.value.trim() : '';
             
             let existingPreviewUrl = null;
@@ -924,8 +918,10 @@
                 finalProcessedBody = `<!-- summary: ${newSummary} -->\n\n` + finalProcessedBody;
             }
             
-            if (isPrivate && allowedUsersValue) {
+            if (isPrivate && allowedUsersValue && postType !== 'support') {
                 finalProcessedBody = `<!-- allowed: ${allowedUsersValue} -->\n\n` + finalProcessedBody;
+            } else if (postType === 'support') {
+                finalProcessedBody = `<!-- allowed: ${currentUser} -->\n\n` + finalProcessedBody;
             }
             
             const pollMatches = finalProcessedBody.match(/<!-- poll: .*? -->/g);
@@ -954,14 +950,14 @@
                 labels = [`game:${data.game}`, `type:${category}`];
             } else if (postType === 'news') {
                 labels = ['type:news'];
+            } else if (postType === 'support') {
+                labels = ['type:support', 'private'];
             } else {
                 if (!data.game || data.game.trim() === '') throw new Error('Не указана игра для обновления');
                 labels = ['type:update', `game:${data.game}`];
             }
-            if (isPrivate) {
-                if (!labels.includes('private')) labels.push('private');
-            } else {
-                labels = labels.filter(l => l !== 'private');
+            if (isPrivate && !labels.includes('private') && postType !== 'support') {
+                labels.push('private');
             }
             
             if (mode === 'edit') {
@@ -976,6 +972,9 @@
             if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
             if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
             if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
+            if (postType === 'support') {
+                // refresh support list if modal is open? not needed
+            }
             
             UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
         };
@@ -984,7 +983,6 @@
             const { container: editorUI, textarea } = createSplitEditor(bodyContent, handleSave, { saveText: mode === 'edit' ? 'Сохранить' : 'Отправить' });
             editorContainer.appendChild(editorUI);
         } else {
-            // Верхняя карточка с настройками (название, превью, категория)
             const settingsCard = document.createElement('div');
             settingsCard.className = 'card';
             settingsCard.style.padding = '20px';
@@ -999,7 +997,6 @@
             titleInput.style.marginBottom = '12px';
             settingsCard.appendChild(titleInput);
             
-            // Краткое описание (summary) - будет синхронизироваться с телом поста через <!-- summary: -->
             const summaryInput = document.createElement('input');
             summaryInput.type = 'text';
             summaryInput.id = 'modal-summary';
@@ -1009,7 +1006,6 @@
             summaryInput.style.marginBottom = '12px';
             settingsCard.appendChild(summaryInput);
             
-            // Preview URL + кнопка хостингов
             const previewRow = document.createElement('div');
             previewRow.className = 'preview-url-wrapper';
             previewRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 12px;';
@@ -1026,7 +1022,6 @@
             previewRow.appendChild(servicesPlaceholder);
             settingsCard.appendChild(previewRow);
             
-            // Превью изображения
             const thumbnailContainer = document.createElement('div');
             thumbnailContainer.id = 'preview-thumbnail-container';
             thumbnailContainer.className = 'preview-thumbnail';
@@ -1078,10 +1073,8 @@
             
             editorContainer.appendChild(settingsCard);
             
-            // Создаём split-редактор
             const { container: editorUI, textarea, updatePreview } = createSplitEditor(bodyContent, handleSave, { saveText: mode === 'edit' ? 'Сохранить' : 'Опубликовать' });
             
-            // Добавляем панель доступа и кнопку публикации в нижнюю часть редактора
             const bottomBar = document.createElement('div');
             bottomBar.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-top: 16px; gap: 16px; flex-wrap: wrap;';
             
@@ -1096,23 +1089,33 @@
             privateUsersInput.className = 'feedback-input';
             privateUsersInput.placeholder = 'Ники через запятую';
             privateUsersInput.value = allowedUsers;
-            const isPrivateInit = data.labels?.includes('private') || false;
+            const isPrivateInit = (postType === 'support') ? true : (data.labels?.includes('private') || false);
             let currentIsPrivate = isPrivateInit;
             const onAccessToggle = (isPrivate, allowedVal) => {
+                if (postType === 'support') return;
                 currentIsPrivate = isPrivate;
                 privateUsersInput.style.display = isPrivate ? 'block' : 'none';
                 if (isPrivate && allowedVal) privateUsersInput.value = allowedVal;
                 if (syncToBody) syncToBody();
             };
             const accessDropdown = createAccessDropdown(currentIsPrivate, allowedUsers, onAccessToggle);
-            accessPlaceholder.appendChild(accessDropdown);
+            if (postType === 'support') {
+                accessDropdown.style.display = 'none';
+                // show info that support is always private
+                const supportInfo = document.createElement('span');
+                supportInfo.className = 'text-secondary';
+                supportInfo.style.fontSize = '12px';
+                supportInfo.innerHTML = '<i class="fas fa-lock"></i> Приватно (только вы и администратор)';
+                accessPlaceholder.appendChild(supportInfo);
+            } else {
+                accessPlaceholder.appendChild(accessDropdown);
+            }
             accessRow.appendChild(accessPlaceholder);
-            privateUsersInput.style.display = currentIsPrivate ? 'block' : 'none';
+            privateUsersInput.style.display = (currentIsPrivate && postType !== 'support') ? 'block' : 'none';
             privateUsersInput.style.flex = '1';
             accessRow.appendChild(privateUsersInput);
             bottomBar.appendChild(accessRow);
             
-            // Удаляем существующую кнопку сохранения из createSplitEditor
             const existingSaveBtn = editorUI.querySelector('.button:last-child');
             if (existingSaveBtn) existingSaveBtn.remove();
             
@@ -1124,7 +1127,6 @@
             editorUI.appendChild(bottomBar);
             editorContainer.appendChild(editorUI);
             
-            // Определяем syncToBody после создания всех элементов
             syncToBody = () => {
                 let body = textarea.value;
                 body = body.replace(/<!--\s*preview:\s*https?:\/\/[^\s]+\s*-->\s*\n?/g, '');
@@ -1139,23 +1141,24 @@
                 if (newSummary) {
                     body = `<!-- summary: ${newSummary} -->\n\n` + body;
                 }
-                if (currentIsPrivate && privateUsersInput.value.trim()) {
+                if (postType === 'support') {
+                    body = `<!-- allowed: ${currentUser} -->\n\n` + body;
+                } else if (currentIsPrivate && privateUsersInput.value.trim()) {
                     body = `<!-- allowed: ${privateUsersInput.value.trim()} -->\n\n` + body;
                 }
                 textarea.value = body;
                 updatePreview();
             };
             
-            titleInput.addEventListener('input', () => { /* заголовок не в теле */ });
+            titleInput.addEventListener('input', () => {});
             summaryInput.addEventListener('input', syncToBody);
             previewUrlInput.addEventListener('input', syncToBody);
-            privateUsersInput.addEventListener('input', syncToBody);
+            if (postType !== 'support') privateUsersInput.addEventListener('input', syncToBody);
             if (postType === 'feedback') {
                 const categorySelect = settingsCard.querySelector('#modal-category');
                 if (categorySelect) categorySelect.addEventListener('change', syncToBody);
             }
             
-            // Восстановление черновика
             const savedDraft = UIUtils.loadDraft(draftKey);
             if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl || savedDraft.summary || savedDraft.access || savedDraft.privateUsers)) {
                 if (confirm('Найден несохранённый черновик. Восстановить?')) {
@@ -1170,12 +1173,12 @@
                     if (savedDraft.category && settingsCard.querySelector('#modal-category')) {
                         settingsCard.querySelector('#modal-category').value = savedDraft.category;
                     }
-                    if (savedDraft.access) {
+                    if (postType !== 'support' && savedDraft.access) {
                         const isPrivate = savedDraft.access === 'private';
                         if (isPrivate !== currentIsPrivate) {
                             currentIsPrivate = isPrivate;
                             const btn = accessDropdown.querySelector('.access-dropdown-btn');
-                            btn.innerHTML = isPrivate ? '<i class="fas fa-lock"></i> Приватный' : '<i class="fas fa-globe"></i> Публичный';
+                            if (btn) btn.innerHTML = isPrivate ? '<i class="fas fa-lock"></i> Приватный' : '<i class="fas fa-globe"></i> Публичный';
                             privateUsersInput.style.display = isPrivate ? 'block' : 'none';
                         }
                     }
@@ -1213,7 +1216,7 @@
             if (settingsCard.querySelector('#modal-category')) {
                 settingsCard.querySelector('#modal-category').addEventListener('change', updateDraft);
             }
-            privateUsersInput.addEventListener('input', updateDraft);
+            if (postType !== 'support') privateUsersInput.addEventListener('input', updateDraft);
             
             const originalCloseModal = closeModal;
             const closeWithCheck = () => {
@@ -1236,7 +1239,6 @@
                 modal.querySelector('.modal-close').addEventListener('click', (e) => { e.preventDefault(); closeWithCheck(); });
             }
             
-            // Сохраняем обработчик для кнопки saveBtn
             let isSubmitting = false;
             const saveHandler = async () => {
                 if (isSubmitting) return;
@@ -1244,14 +1246,97 @@
                 saveBtn.disabled = true;
                 try {
                     await handleSave(textarea.value.trim());
-                } catch (err) {
-                    // ошибка уже показана внутри handleSave
                 } finally {
                     isSubmitting = false;
                     saveBtn.disabled = false;
                 }
             };
             saveBtn.addEventListener('click', saveHandler);
+        }
+    }
+
+    // Support Modal: list all support tickets (admin sees all, user sees own)
+    async function openSupportModal() {
+        const currentUser = GithubAuth.getCurrentUser();
+        if (!currentUser) {
+            UIUtils.showToast('Войдите в аккаунт, чтобы использовать поддержку', 'error');
+            window.dispatchEvent(new CustomEvent('github-login-requested'));
+            return;
+        }
+
+        const modalContent = `
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <h3 style="margin: 0;"><i class="fas fa-headset"></i> <span data-lang="supportTitle">Поддержка</span></h3>
+                    <button class="button" id="new-support-btn"><i class="fas fa-plus"></i> <span data-lang="supportNewBtn">Новое обращение</span></button>
+                </div>
+                <div id="support-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 500px; overflow-y: auto;">
+                    <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
+                </div>
+                <div class="text-secondary" style="font-size: 12px; text-align: center; border-top: 1px solid var(--border); padding-top: 12px;">
+                    <i class="fas fa-lock"></i> Все обращения приватны: их видят только вы и администратор.
+                </div>
+            </div>
+        `;
+        const { modal, closeModal } = UIUtils.createModal('Поддержка', modalContent, { size: 'full' });
+        const listContainer = modal.querySelector('#support-list');
+        const newBtn = modal.querySelector('#new-support-btn');
+
+        newBtn.addEventListener('click', () => {
+            closeModal();
+            openEditorModal('new', { game: null }, 'support');
+        });
+
+        try {
+            const issues = await GithubAPI.loadIssues({ labels: 'type:support', state: 'open', per_page: 100 });
+            const isAdmin = GithubAuth.isAdmin();
+            let filtered = issues.filter(issue => {
+                if (isAdmin) return true;
+                const allowed = GithubCore.extractAllowed(issue.body);
+                return allowed === currentUser;
+            });
+            filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            if (filtered.length === 0) {
+                listContainer.innerHTML = '<p class="text-secondary" style="text-align: center;">У вас нет обращений. Нажмите «Новое обращение».</p>';
+                return;
+            }
+
+            listContainer.innerHTML = '';
+            for (const issue of filtered) {
+                const card = document.createElement('div');
+                card.className = 'support-ticket-card';
+                card.style.cssText = 'background: var(--bg-inner-gradient); border: 1px solid var(--border); border-radius: 16px; padding: 12px 16px; cursor: pointer; transition: all 0.2s;';
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <div style="font-weight: bold; color: var(--accent);">${GithubCore.escapeHtml(issue.title)}</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">${new Date(issue.created_at).toLocaleString()}</div>
+                        </div>
+                        <div style="font-size: 12px; background: var(--bg-primary); padding: 4px 8px; border-radius: 20px;">#${issue.number}</div>
+                    </div>
+                    <div class="text-secondary" style="font-size: 13px; margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                        ${GithubCore.stripHtml(issue.body).substring(0, 100)}...
+                    </div>
+                `;
+                card.addEventListener('click', () => {
+                    closeModal();
+                    openFullModal({
+                        type: 'issue',
+                        id: issue.number,
+                        title: issue.title,
+                        body: issue.body,
+                        author: issue.user.login,
+                        date: new Date(issue.created_at),
+                        game: null,
+                        labels: issue.labels.map(l => l.name)
+                    });
+                });
+                listContainer.appendChild(card);
+            }
+        } catch (err) {
+            console.error('Failed to load support tickets', err);
+            listContainer.innerHTML = '<p class="error-message">Ошибка загрузки обращений</p>';
         }
     }
 
@@ -1267,6 +1352,7 @@
         renderComments,
         openFullModal,
         openEditorModal,
+        openSupportModal,
         renderPostBody,
         canViewPost,
         REACTION_TYPES,
