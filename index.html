@@ -19,10 +19,8 @@
     <link rel="preconnect" href="https://img.youtube.com">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
-    <!-- Основные скрипты (без defer для критических) -->
+    <!-- Основные скрипты -->
     <script src="js/core/cache.js"></script>
-    <script src="js/features/accessibility.js"></script>
-    <script src="js/features/load-more.js"></script>
     <script src="js/core/loader.js"></script>
     <script src="js/core/github-core.js"></script>
     <script src="js/features/ui-utils.js"></script>
@@ -30,10 +28,12 @@
     <script src="js/core/github-auth.js"></script>
     <script src="js/features/ui-feedback.js"></script>
     <script src="js/features/editor.js"></script>
+    <script src="js/features/load-more.js"></script>
+    <script src="js/features/accessibility.js"></script>
     <script src="js/pages/news-feed.js"></script>
+    <script src="js/features/notifications.js" defer></script>
     <script src="js/lang.js"></script>
     <script src="js/effects.js"></script>
-    <!-- Динамическая загрузка остальных зависимостей -->
     <script src="js/init.js"></script>
 </head>
 <body>
@@ -60,7 +60,7 @@
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
-                        <img src="images/logo-neon-imperium.webp" alt="Neon Imperium Logo" class="game-icon" width="80" height="80">
+                        <img src="images/logo-neon-imperium.webp" alt="Neon Imperium Logo" class="game-icon" width="80" height="80" loading="lazy">
                     </div>
                     <h1 class="game-title" data-lang="siteTitle">Neon Imperium</h1>
                     <div class="social-icons">

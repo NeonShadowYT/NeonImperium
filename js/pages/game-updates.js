@@ -2,6 +2,12 @@
     const DEFAULT_IMAGE = 'images/default-news.webp';
     let currentAbort = null;
     let currentGame = null;
+    let loadMoreButton = null;
+    let currentPage = 1;
+    let hasMorePages = true;
+    let isLoading = false;
+    let allUpdates = [];
+    let displayLimit = 6;
 
     document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('game-updates');
@@ -32,21 +38,20 @@
                 game: currentGame,
                 labels: issue.labels.map(l => l.name)
             };
-            let grid = container.querySelector('.projects-grid');
-            if (!grid) {
-                grid = document.createElement('div');
-                grid.className = 'projects-grid';
-                container.innerHTML = '';
-                container.appendChild(grid);
-            }
-            const card = createUpdateCard(newPost);
-            grid.insertBefore(card, grid.firstChild);
+            allUpdates = [newPost, ...allUpdates];
+            displayLimit = 6;
+            renderUpdates(container);
         });
     });
 
     window.refreshGameUpdates = (game) => {
         const container = document.getElementById('game-updates');
-        if (container && container.dataset.game === game) loadGameUpdates(container, game);
+        if (container && container.dataset.game === game) {
+            currentGame = game;
+            allUpdates = [];
+            displayLimit = 6;
+            loadGameUpdates(container, game);
+        }
     };
 
     async function loadGameUpdates(container, game) {
@@ -59,14 +64,14 @@
             let posts = null;
             if (window.Cache) posts = window.Cache.get(cacheKey);
             if (!posts) {
-                const issues = await GithubAPI.loadIssues({ labels: `type:update,game:${game}`, per_page: 10, signal: controller.signal });
+                const issues = await GithubAPI.loadIssues({ labels: `type:update,game:${game}`, per_page: 20, signal: controller.signal });
                 posts = GithubCore.deduplicateByNumber(issues)
                     .filter(issue => GithubCore.CONFIG.ALLOWED_AUTHORS.includes(issue.user.login))
                     .map(issue => ({ number: issue.number, title: issue.title, body: issue.body, date: new Date(issue.created_at), author: issue.user.login, game, labels: issue.labels.map(l => l.name) }));
                 if (window.Cache) window.Cache.set(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
             } else posts = posts.map(p => ({ ...p, date: new Date(p.date) }));
             const currentUser = GithubAuth.getCurrentUser();
-            posts = posts.filter(post => {
+            allUpdates = posts.filter(post => {
                 if (!post.labels.includes('private')) return true;
                 if (GithubAuth.isAdmin()) return true;
                 const allowed = GithubCore.extractAllowed(post.body);
@@ -74,10 +79,8 @@
                 const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
                 return allowedList.includes(currentUser);
             });
-            if (posts.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; return; }
-            container.innerHTML = '';
-            const grid = document.createElement('div'); grid.className = 'projects-grid'; container.appendChild(grid);
-            posts.forEach(post => grid.appendChild(createUpdateCard(post)));
+            allUpdates.sort((a, b) => b.date - a.date);
+            renderUpdates(container);
         } catch (err) {
             if (err.name === 'AbortError') return;
             container.innerHTML = '<p class="error-message">Ошибка загрузки</p>';
@@ -87,8 +90,40 @@
         }
     }
 
+    function renderUpdates(container) {
+        if (allUpdates.length === 0) {
+            container.innerHTML = '<p class="text-secondary">Нет обновлений</p>';
+            return;
+        }
+
+        const itemsToShow = allUpdates.slice(0, displayLimit);
+        const hasMore = allUpdates.length > displayLimit;
+
+        container.innerHTML = '';
+        const grid = document.createElement('div');
+        grid.className = 'projects-grid';
+        itemsToShow.forEach(post => grid.appendChild(createUpdateCard(post)));
+        container.appendChild(grid);
+
+        let loadMoreBtn = container.querySelector('.load-more-btn');
+        if (!loadMoreBtn && hasMore) {
+            loadMoreBtn = document.createElement('button');
+            loadMoreBtn.className = 'load-more-btn';
+            loadMoreBtn.textContent = 'Загрузить ещё';
+            loadMoreBtn.setAttribute('aria-label', 'Загрузить следующие обновления');
+            loadMoreBtn.addEventListener('click', () => {
+                displayLimit += 6;
+                renderUpdates(container);
+            });
+            container.appendChild(loadMoreBtn);
+        } else if (loadMoreBtn && !hasMore) {
+            loadMoreBtn.remove();
+        }
+    }
+
     function createUpdateCard(post) {
         const card = document.createElement('div'); card.className = 'project-card-link no-tilt'; card.style.cursor = 'pointer';
+        card.setAttribute('aria-label', `Открыть обновление: ${post.title}`);
         const inner = document.createElement('div'); inner.className = 'project-card';
         const imgMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
         const thumbnail = imgMatch ? imgMatch[1] : DEFAULT_IMAGE;
