@@ -828,6 +828,9 @@
         return { container, textarea, previewDiv, updatePreview };
     }
 
+    // Global variables for editor modal
+    let currentPrivateUsersInput = null;
+
     function openEditorModal(mode, data, postType = 'feedback') {
         const currentUser = GithubAuth.getCurrentUser();
         const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
@@ -871,6 +874,7 @@
         const editorContainer = modal.querySelector('#editor-container');
         
         let syncToBody = null;
+        let privateUsersInput = null;
         
         const handleSave = async (finalBody) => {
             if (!GithubAuth.getToken()) { UIUtils.showToast('Вы не авторизованы. Войдите через GitHub.', 'error'); throw new Error('No token'); }
@@ -895,7 +899,7 @@
             
             const newPreviewUrl = modal.querySelector('#modal-preview-url').value.trim();
             const isPrivate = postType === 'support' ? true : currentIsPrivate;
-            const allowedUsersValue = privateUsersInput ? privateUsersInput.value.trim() : '';
+            const allowedUsersValue = (privateUsersInput && postType !== 'support') ? privateUsersInput.value.trim() : '';
             
             let existingPreviewUrl = null;
             if (mode === 'edit') {
@@ -972,9 +976,6 @@
             if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
             if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
             if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
-            if (postType === 'support') {
-                // refresh support list if modal is open? not needed
-            }
             
             UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
         };
@@ -1083,7 +1084,7 @@
             accessRow.style.cssText = 'display: flex; align-items: center; gap: 12px; flex: 1;';
             const accessPlaceholder = document.createElement('div');
             accessPlaceholder.id = 'access-dropdown-placeholder';
-            const privateUsersInput = document.createElement('input');
+            privateUsersInput = document.createElement('input');
             privateUsersInput.type = 'text';
             privateUsersInput.id = 'private-users';
             privateUsersInput.className = 'feedback-input';
@@ -1101,19 +1102,20 @@
             const accessDropdown = createAccessDropdown(currentIsPrivate, allowedUsers, onAccessToggle);
             if (postType === 'support') {
                 accessDropdown.style.display = 'none';
-                // show info that support is always private
-                const supportInfo = document.createElement('span');
-                supportInfo.className = 'text-secondary';
-                supportInfo.style.fontSize = '12px';
-                supportInfo.innerHTML = '<i class="fas fa-lock"></i> Приватно (только вы и администратор)';
+                // Предупреждение о видимости в репозитории GitHub
+                const supportInfo = document.createElement('div');
+                supportInfo.style.cssText = 'background: rgba(244,67,54,0.15); border-left: 4px solid #f44336; padding: 10px 12px; border-radius: 12px; margin-bottom: 10px;';
+                supportInfo.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #f44336;"></i> <strong>Внимание:</strong> На сайте это обращение увидят только вы и администратор. Однако оно сохраняется в <strong>публичном репозитории GitHub</strong>, и любой, у кого есть прямая ссылка, потенциально может его увидеть. Не публикуйте конфиденциальные данные (пароли, ключи).';
                 accessPlaceholder.appendChild(supportInfo);
             } else {
                 accessPlaceholder.appendChild(accessDropdown);
             }
             accessRow.appendChild(accessPlaceholder);
-            privateUsersInput.style.display = (currentIsPrivate && postType !== 'support') ? 'block' : 'none';
-            privateUsersInput.style.flex = '1';
-            accessRow.appendChild(privateUsersInput);
+            if (postType !== 'support') {
+                privateUsersInput.style.display = currentIsPrivate ? 'block' : 'none';
+                privateUsersInput.style.flex = '1';
+                accessRow.appendChild(privateUsersInput);
+            }
             bottomBar.appendChild(accessRow);
             
             const existingSaveBtn = editorUI.querySelector('.button:last-child');
@@ -1179,10 +1181,10 @@
                             currentIsPrivate = isPrivate;
                             const btn = accessDropdown.querySelector('.access-dropdown-btn');
                             if (btn) btn.innerHTML = isPrivate ? '<i class="fas fa-lock"></i> Приватный' : '<i class="fas fa-globe"></i> Публичный';
-                            privateUsersInput.style.display = isPrivate ? 'block' : 'none';
+                            if (privateUsersInput) privateUsersInput.style.display = isPrivate ? 'block' : 'none';
                         }
                     }
-                    if (savedDraft.privateUsers) privateUsersInput.value = savedDraft.privateUsers;
+                    if (savedDraft.privateUsers && privateUsersInput) privateUsersInput.value = savedDraft.privateUsers;
                     syncToBody();
                 } else {
                     UIUtils.clearDraft(draftKey);
@@ -1197,7 +1199,7 @@
                 const currentBody = textarea.value.trim();
                 const currentCategory = settingsCard.querySelector('#modal-category') ? settingsCard.querySelector('#modal-category').value : null;
                 const currentAccess = currentIsPrivate ? 'private' : 'public';
-                const currentPrivateUsers = privateUsersInput.value.trim();
+                const currentPrivateUsers = privateUsersInput ? privateUsersInput.value.trim() : '';
                 UIUtils.saveDraft(draftKey, {
                     title: currentTitle,
                     previewUrl: currentPreview,
@@ -1216,7 +1218,7 @@
             if (settingsCard.querySelector('#modal-category')) {
                 settingsCard.querySelector('#modal-category').addEventListener('change', updateDraft);
             }
-            if (postType !== 'support') privateUsersInput.addEventListener('input', updateDraft);
+            if (postType !== 'support' && privateUsersInput) privateUsersInput.addEventListener('input', updateDraft);
             
             const originalCloseModal = closeModal;
             const closeWithCheck = () => {
@@ -1270,11 +1272,14 @@
                     <h3 style="margin: 0;"><i class="fas fa-headset"></i> <span data-lang="supportTitle">Поддержка</span></h3>
                     <button class="button" id="new-support-btn"><i class="fas fa-plus"></i> <span data-lang="supportNewBtn">Новое обращение</span></button>
                 </div>
+                <div class="text-secondary" style="font-size: 12px; background: rgba(244,67,54,0.1); border-left: 3px solid #f44336; padding: 8px 12px; border-radius: 8px;">
+                    <i class="fas fa-exclamation-triangle"></i> <strong>Конфиденциальность:</strong> На сайте ваше обращение увидят только вы и администратор. Но оно хранится в <strong>публичном репозитории GitHub</strong>. Любой, у кого есть прямая ссылка, может его прочитать. Не публикуйте пароли или личные данные.
+                </div>
                 <div id="support-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 500px; overflow-y: auto;">
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
                 </div>
                 <div class="text-secondary" style="font-size: 12px; text-align: center; border-top: 1px solid var(--border); padding-top: 12px;">
-                    <i class="fas fa-lock"></i> Все обращения приватны: их видят только вы и администратор.
+                    <i class="fas fa-lock"></i> Все обращения приватны на сайте: их видят только вы и администратор.
                 </div>
             </div>
         `;
