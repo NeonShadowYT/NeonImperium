@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Imperium — Лицензионное соглашение</title>
+    <title>Neon Imperium - Лицензионное соглашение</title>
     <meta name="description" content="Лицензионное соглашение игр Neon Imperium: Starve Neon, Alpha 01, ГК Адвенчур.">
-    <meta property="og:title" content="Лицензионное соглашение — Neon Imperium">
+    <meta property="og:title" content="Лицензионное соглашение - Neon Imperium">
     <meta property="og:description" content="Лицензионное соглашение игр Neon Imperium: Starve Neon, Alpha 01, ГК Адвенчур.">
     <meta property="og:image" content="images/logo-neon-imperium.webp">
     <meta property="og:url" content="https://neonshadowyt.github.io/NeonImperium/license.html">
@@ -16,7 +16,6 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <style>
-        /* Дополнительные стили для страницы лицензии (не конфликтуют с основными) */
         .license-header { text-align: center; margin-bottom: 30px; }
         .license-header h1 { font-size: 48px; color: var(--text-primary); }
         .last-update { color: var(--text-secondary); margin-top: 8px; }
@@ -45,10 +44,7 @@
             border: 1px solid var(--border);
             transition: transform 0.2s, border-color 0.2s;
         }
-        .license-card:hover {
-            transform: translateY(-5px);
-            border-color: var(--accent);
-        }
+        .license-card:hover { transform: translateY(-5px); border-color: var(--accent); }
         .license-card h2 {
             display: flex;
             align-items: center;
@@ -57,61 +53,44 @@
             margin-bottom: 20px;
             font-size: 24px;
         }
-        .license-card ul { list-style: none; }
+        .license-card ul { list-style: none; padding: 0; margin: 0; }
         .license-card li {
             margin-bottom: 12px;
             padding-left: 28px;
             position: relative;
             line-height: 1.4;
         }
-        .license-card li i {
-            position: absolute;
-            left: 0;
-            top: 2px;
-            width: 20px;
-            text-align: center;
-        }
+        .license-card li i { position: absolute; left: 0; top: 2px; width: 20px; text-align: center; }
         .allowed li i { color: #4caf50; }
         .forbidden li i { color: #f44336; }
         .obligation li i { color: #ff9800; }
-        .detail-section {
+        .section-card {
             background: var(--bg-card);
             border-radius: 24px;
+            padding: 24px;
             margin-bottom: 24px;
             border: 1px solid var(--border);
-            overflow: hidden;
+            transition: border-color 0.2s;
         }
-        .detail-header {
-            background: var(--bg-inner-gradient);
-            padding: 18px 24px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: bold;
-            font-size: 20px;
+        .section-card:hover { border-color: var(--accent); }
+        .section-card h2 {
             color: var(--accent);
+            font-size: 24px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
-        .detail-header i { transition: transform 0.3s; }
-        .detail-header.open i { transform: rotate(180deg); }
-        .detail-content {
-            padding: 0 24px;
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-out, padding 0.3s;
-        }
-        .detail-content.open {
-            padding: 20px 24px;
-            max-height: 2000px;
-        }
-        .telegram-box {
+        .section-card p, .section-card li { color: var(--text-secondary); line-height: 1.5; }
+        .section-card ul { padding-left: 20px; margin-top: 8px; }
+        .support-box {
             background: var(--bg-inner-gradient);
             border-radius: 20px;
             padding: 20px;
             text-align: center;
             margin: 20px 0;
         }
-        .telegram-box i { font-size: 40px; color: var(--accent); margin-bottom: 10px; }
+        .support-box i { font-size: 40px; color: var(--accent); margin-bottom: 10px; }
         .footer-note {
             text-align: center;
             margin-top: 40px;
@@ -127,32 +106,11 @@
             margin-bottom: 20px;
             font-size: 13px;
         }
-        @media (max-width: 700px) {
-            .cards-grid { grid-template-columns: 1fr; }
-            .detail-header { font-size: 18px; }
-        }
+        @media (max-width: 700px) { .cards-grid { grid-template-columns: 1fr; } }
     </style>
     <script src="js/features/ui-utils.js" defer></script>
     <script src="js/core/github-auth.js" defer></script>
     <script src="js/lang.js" defer></script>
-    <script>
-        // Аккордеон для детальных разделов (после загрузки DOM)
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.detail-header').forEach(header => {
-                header.addEventListener('click', () => {
-                    const content = header.nextElementSibling;
-                    const isOpen = content.classList.contains('open');
-                    // Закрываем все
-                    document.querySelectorAll('.detail-content').forEach(c => c.classList.remove('open'));
-                    document.querySelectorAll('.detail-header').forEach(h => h.classList.remove('open'));
-                    if (!isOpen) {
-                        content.classList.add('open');
-                        header.classList.add('open');
-                    }
-                });
-            });
-        });
-    </script>
 </head>
 <body>
 <div class="page">
@@ -174,159 +132,136 @@
         </div>
     </nav>
 
-    <div class="lang-note" data-lang="licenseOriginalNote">
-        Русская версия является оригинальной и имеет юридическую силу. Английский перевод предоставлен для удобства.
-    </div>
+    <div class="lang-note" data-lang="licenseOriginalNote"></div>
 
     <div class="license-header">
-        <h1 data-lang="licenseTitle">📜 Лицензионное соглашение</h1>
-        <div class="last-update" data-lang="licenseLastUpdate">Последнее обновление: 9 апреля 2026 г.</div>
+        <h1 data-lang="licenseTitle"></h1>
+        <div class="last-update" data-lang="licenseLastUpdate"></div>
     </div>
 
     <div class="age-warning">
         <i class="fas fa-exclamation-triangle"></i>
         <div>
-            <strong data-lang="licenseAgeWarningTitle">⚠️ Вам должно быть 18 лет</strong><br>
-            <span data-lang="licenseAgeWarningText">Используя сайт или загружая игры Neon Imperium, вы подтверждаете, что вам исполнилось 18 лет. Игры содержат сцены насилия, кровь и нецензурную лексику.</span>
+            <strong data-lang="licenseAgeWarningTitle"></strong><br>
+            <span data-lang="licenseAgeWarningText"></span>
         </div>
     </div>
 
+    <!-- Три главные карточки -->
     <div class="cards-grid">
         <div class="license-card allowed">
-            <h2><i class="fas fa-check-circle"></i> <span data-lang="licenseAllowedTitle">Разрешено</span></h2>
+            <h2><i class="fas fa-check-circle"></i> <span data-lang="licenseAllowedTitle"></span></h2>
             <ul>
-                <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed1">Распространение игры где угодно при условии упоминания оригинального сайта и наличия ссылки на него в игре</span></li>
-                <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed2">Модификация для локального использования или на собственных серверах</span></li>
-                <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed3">Создание платных модов и получение дохода (без отчислений)</span></li>
-                <li><i class="fas fa-check"></i> <span data-lang="licenseCommercialAllowed">Продавать копии игры, включать в платные сборники, сдавать в аренду — коммерческое использование без отдельного разрешения</span></li>
-                <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed4">Запись и публикация видеороликов с указанием авторства</span></li>
-                <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed5">Бесплатные обновления</span></li>
+                <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed1"></span></li>
+                <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed2"></span></li>
+                <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed3"></span></li>
+                <li><i class="fas fa-check"></i> <span data-lang="licenseCommercialAllowed"></span></li>
+                <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed4"></span></li>
+                <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed5"></span></li>
             </ul>
         </div>
         <div class="license-card forbidden">
-            <h2><i class="fas fa-times-circle"></i> <span data-lang="licenseForbiddenTitle">Запрещено</span></h2>
+            <h2><i class="fas fa-times-circle"></i> <span data-lang="licenseForbiddenTitle"></span></h2>
             <ul>
-                <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden1">Выдавать имена, товарные знаки, логотипы за свои</span></li>
-                <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden2">Читы/моды, дающие преимущество на официальных серверах</span></li>
-                <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden3">Вредоносные модификации (вирусы, майнеры)</span></li>
-                <li><i class="fas fa-times"></i> <span data-lang="licenseSellingFreeForbidden">Продавать бесплатные копии игры или моды (если вы распространяете бесплатную версию — не берите за неё деньги)</span></li>
-                <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden4">Удаление уведомлений об авторских правах</span></li>
+                <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden1"></span></li>
+                <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden2"></span></li>
+                <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden3"></span></li>
+                <li><i class="fas fa-times"></i> <span data-lang="licenseSellingFreeForbidden"></span></li>
+                <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden4"></span></li>
+                <li><i class="fas fa-times"></i> <span data-lang="licenseBrandUsage"></span></li>
             </ul>
         </div>
         <div class="license-card obligation">
-            <h2><i class="fas fa-exclamation-triangle"></i> <span data-lang="licenseObligationTitle">Обязанности</span></h2>
+            <h2><i class="fas fa-exclamation-triangle"></i> <span data-lang="licenseObligationTitle"></span></h2>
             <ul>
-                <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation1">Сохранять первоначальные авторские права</span></li>
-                <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation2">В изменённых версиях указывать неофициальный статус и ссылку на оригинальный сайт</span></li>
-                <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation3">Моды с открытым исходным кодом должны содержать ссылку на исходники</span></li>
-                <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation4">Указывать ссылки на оригинальные страницы и автора</span></li>
+                <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation1"></span></li>
+                <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation2"></span></li>
+                <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation3"></span></li>
+                <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation4"></span></li>
             </ul>
         </div>
     </div>
 
-    <!-- Детальные разделы (аккордеон) -->
-    <div class="detail-section">
-        <div class="detail-header"><span>📌 1. <span data-lang="licenseSection1Title">Общие положения</span></span><i class="fas fa-chevron-down"></i></div>
-        <div class="detail-content">
-            <p data-lang="licenseSection1Text">Настоящее Соглашение заключено между вами (Пользователь) и правообладателем игр Neon Imperium. Оно регулирует использование игр Starve Neon, Alpha 01, ГК Адвенчур и всех связанных материалов.</p>
-            <p data-lang="licenseSection1Text2">Устанавливая или используя игру, вы полностью соглашаетесь с условиями. Если вы не согласны — удалите игру.</p>
+    <!-- Горизонтальные карточки разделов -->
+    <div class="section-card">
+        <h2><i class="fas fa-file-alt"></i> <span data-lang="licenseSection1Title"></span></h2>
+        <p data-lang="licenseSection1Text"></p>
+        <p data-lang="licenseSection1Text2"></p>
+    </div>
+
+    <div class="section-card">
+        <h2><i class="fas fa-gamepad"></i> <span data-lang="licenseSection2Title"></span></h2>
+        <p data-lang="licenseSection2Text"></p>
+        <ul>
+            <li data-lang="licenseSection2Li1"></li>
+            <li data-lang="licenseSection2Li2"></li>
+            <li data-lang="licenseSection2Li3"></li>
+        </ul>
+    </div>
+
+    <div class="section-card">
+        <h2><i class="fas fa-tools"></i> <span data-lang="licenseSection3Title"></span></h2>
+        <p data-lang="licenseSection3Text"></p>
+    </div>
+
+    <div class="section-card">
+        <h2><i class="fas fa-money-bill-wave"></i> <span data-lang="licenseSection4Title"></span></h2>
+        <p data-lang="licenseCommercialAllowed"></p>
+        <p data-lang="licenseSellingFreeForbidden"></p>
+    </div>
+
+    <div class="section-card">
+        <h2><i class="fas fa-user-shield"></i> <span data-lang="licenseSection5Title"></span></h2>
+        <p data-lang="licenseSection5Text"></p>
+        <div class="support-box">
+            <i class="fas fa-headset"></i>
+            <h3 data-lang="licenseSupportTitle"></h3>
+            <p data-lang="licenseSupportContact"></p>
+            <p style="font-size: 12px;" data-lang="licenseSupportNote"></p>
         </div>
     </div>
 
-    <div class="detail-section">
-        <div class="detail-header"><span>🎮 2. <span data-lang="licenseSection2Title">Права на игру</span></span><i class="fas fa-chevron-down"></i></div>
-        <div class="detail-content">
-            <p data-lang="licenseSection2Text">Все права (код, графика, звук, персонажи, названия) принадлежат правообладателю. Вы получаете простую (неисключительную) лицензию на:</p>
-            <ul>
-                <li data-lang="licenseSection2Li1">установку на любые свои устройства;</li>
-                <li data-lang="licenseSection2Li2">личное некоммерческое воспроизведение;</li>
-                <li data-lang="licenseSection2Li3">запись видео и стримов с указанием авторства.</li>
-            </ul>
-        </div>
+    <div class="section-card">
+        <h2><i class="fas fa-chart-line"></i> <span data-lang="licenseSection6Title"></span></h2>
+        <p data-lang="licenseSection6Text"></p>
+        <p data-lang="licenseStatsSettings"></p>
     </div>
 
-    <div class="detail-section">
-        <div class="detail-header"><span>🛠️ 3. <span data-lang="licenseSection3Title">Модификации и читы</span></span><i class="fas fa-chevron-down"></i></div>
-        <div class="detail-content">
-            <p data-lang="licenseSection3Text">Разрешено: любые моды, альтернативные клиенты, патчи для локальной игры или на своих серверах. Можно продавать моды — все деньги оставляете себе. Запрещено: читы, моды или клиенты, дающие преимущество на официальных серверах (ускорение, бесконечное здоровье, автоприцел и т.п.). За нарушение — блокировка и возможный суд.</p>
-        </div>
+    <div class="section-card">
+        <h2><i class="fas fa-hand-holding-usd"></i> <span data-lang="licenseRefundTitle"></span></h2>
+        <p data-lang="licenseRefundText1"></p>
+        <ul>
+            <li data-lang="licenseRefundText2"></li>
+            <li data-lang="licenseRefundText3"></li>
+            <li data-lang="licenseRefundText4"></li>
+            <li data-lang="licenseRefundText5"></li>
+        </ul>
+        <p data-lang="licenseRefundText6"></p>
     </div>
 
-    <div class="detail-section">
-        <div class="detail-header"><span>💸 4. <span data-lang="licenseSection4Title">Коммерческое использование</span></span><i class="fas fa-chevron-down"></i></div>
-        <div class="detail-content">
-            <p data-lang="licenseCommercialAllowed">Разрешено: продавать копии игры, включать в платные сборники, сдавать в аренду, использовать в коммерческих проектах — без нашего отдельного разрешения. Вы зарабатываете — мы не просим процентов.</p>
-            <p data-lang="licenseSellingFreeForbidden">Запрещено: продавать бесплатные версии игры (если вы взяли бесплатную копию и продаёте её — это нарушение). Также нельзя продавать бесплатные моды.</p>
-        </div>
+    <div class="section-card">
+        <h2><i class="fas fa-gavel"></i> <span data-lang="licenseSection8Title"></span></h2>
+        <p data-lang="licenseSection8Text"></p>
     </div>
 
-    <div class="detail-section">
-        <div class="detail-header"><span>🔞 5. <span data-lang="licenseSection5Title">Возраст и пользовательский контент</span></span><i class="fas fa-chevron-down"></i></div>
-        <div class="detail-content">
-            <p data-lang="licenseSection5Text">Использование сайта и игр разрешено только с 18 лет. Вы несёте полную ответственность за всё, что публикуете через систему обратной связи (GitHub Issues). Мы не модерируем контент и не отвечаем за него.</p>
-            <div class="telegram-box">
-                <i class="fab fa-telegram"></i>
-                <h3 data-lang="licenseTelegramTitle">📢 Жалобы на противоправный контент</h3>
-                <p data-lang="licenseTelegramContact">Вы можете сообщить в Telegram: <strong>@NeonShindowsYT</strong><br>
-                <span style="font-size: 12px;" data-lang="licenseTelegramNote">Ответ не гарантируется, сроков нет. Сообщение будет прочитано по возможности.</span></p>
-            </div>
-        </div>
+    <div class="section-card">
+        <h2><i class="fas fa-balance-scale"></i> <span data-lang="licenseSection9Title"></span></h2>
+        <p data-lang="licenseDisputeMars"></p>
     </div>
 
-    <div class="detail-section">
-        <div class="detail-header"><span>📊 6. <span data-lang="licenseSection6Title">Сбор статистики и конфиденциальность</span></span><i class="fas fa-chevron-down"></i></div>
-        <div class="detail-content">
-            <p data-lang="licenseSection6Text">Сейчас сбор статистики не ведётся. В будущем может появиться анонимный сбор технической информации (версия ОС, FPS, время игры) только с вашего явного согласия (диалоговое окно при первом запуске).</p>
-            <p data-lang="licenseStatsSettings">В играх будут настройки сбора статистики, где вы сможете включить или отключить её в любой момент. Персональные данные не собираются. Сохранения хранятся локально.</p>
-        </div>
+    <div class="section-card">
+        <h2><i class="fas fa-pen-alt"></i> <span data-lang="licenseSection10Title"></span></h2>
+        <p data-lang="licenseSection10Text"></p>
     </div>
 
-    <div class="detail-section">
-        <div class="detail-header"><span>💰 7. <span data-lang="licenseRefundTitle">Возврат средств</span></span><i class="fas fa-chevron-down"></i></div>
-        <div class="detail-content">
-            <p data-lang="licenseRefundText1">Если в будущем появятся платные покупки или платная версия игры, возврат возможен:</p>
-            <ul>
-                <li data-lang="licenseRefundText2">Напишите в Telegram @NeonShindowsYT с подтверждением платежа (чек, скриншот).</li>
-                <li data-lang="licenseRefundText3">Мы проверим, что платёж действительно поступил.</li>
-                <li data-lang="licenseRefundText4">Вернём чистую сумму, которая дошла до нас (после вычета всех комиссий и налогов).</li>
-                <li data-lang="licenseRefundText5">Срок — до 30 дней. Возврат возможен в течение 14 дней после покупки, если контент ещё не использован.</li>
-            </ul>
-            <p data-lang="licenseRefundText6"><strong>Пожертвования (donate) возврату не подлежат.</strong></p>
-        </div>
-    </div>
-
-    <div class="detail-section">
-        <div class="detail-header"><span>⚖️ 8. <span data-lang="licenseSection8Title">Ответственность и отказ от гарантий</span></span><i class="fas fa-chevron-down"></i></div>
-        <div class="detail-content">
-            <p data-lang="licenseSection8Text">Игра предоставляется «как есть». Мы не гарантируем безошибочную работу, соответствие вашим ожиданиям или сохранность данных (делайте бэкапы). Мы не несём ответственности за любой ущерб от использования игры.</p>
-        </div>
-    </div>
-
-    <div class="detail-section">
-        <div class="detail-header"><span>🚀 9. <span data-lang="licenseSection9Title">Разрешение споров</span></span><i class="fas fa-chevron-down"></i></div>
-        <div class="detail-content">
-            <p data-lang="licenseDisputeMars"></p>
-        </div>
-    </div>
-
-    <div class="detail-section">
-        <div class="detail-header"><span>📝 10. <span data-lang="licenseSection10Title">Заключительные положения</span></span><i class="fas fa-chevron-down"></i></div>
-        <div class="detail-content">
-            <p data-lang="licenseSection10Text">Мы можем менять условия, публикуя новую версию на этом сайте. Продолжение использования игры означает согласие с изменениями. Если какой-то пункт признают недействительным, остальные остаются в силе.</p>
-        </div>
-    </div>
-
-    <div class="detail-section">
-        <div class="detail-header"><span>❤️ 11. <span data-lang="licenseSection11Title">Юмористическое примечание</span></span><i class="fas fa-chevron-down"></i></div>
-        <div class="detail-content">
-            <p data-lang="licenseJokeSoul"></p>
-        </div>
+    <div class="section-card">
+        <h2><i class="fas fa-heart"></i> <span data-lang="licenseSection11Title"></span></h2>
+        <p data-lang="licenseJokeSoul"></p>
     </div>
 
     <div class="footer-note">
-        <p>© 2024-2026 Neon Imperium. <span data-lang="allRightsReserved">Все права защищены.</span></p>
-        <p data-lang="licenseOriginalSite">Оригинальный сайт: <strong>https://neonshadowyt.github.io/NeonImperium/</strong></p>
-        <p>По всем вопросам: Telegram <strong>@NeonShindowsYT</strong></p>
+        <p>© 2024-2026 Neon Imperium. <span data-lang="allRightsReserved"></span></p>
+        <p data-lang="licenseOriginalSite"></p>
     </div>
 </div>
 </body>
