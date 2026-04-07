@@ -1,4 +1,3 @@
-// news-feed.js – лента новостей (посты + видео YouTube)
 (function() {
     const YT_CHANNELS = [
         { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
@@ -11,6 +10,7 @@
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
     let currentUser = null, currentAbort = null;
     let videoLoading = false, videoError = false;
+    let allItemsAll = [];
     let displayLimit = 6;
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -38,12 +38,13 @@
         }
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; refreshNewsFeed(); });
         window.addEventListener('github-logout', () => { currentUser = null; refreshNewsFeed(); });
+
         window.addEventListener('github-issue-created', (e) => {
             const issue = e.detail;
             const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
             if (!typeLabel) return;
-            if (!GithubAuth.isAdmin()) return;
-            Core.cacheRemoveByPrefix('posts_news+update_v4');
+            if (!GithubCore.CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+            if (window.Cache) window.Cache.removeByPrefix('posts_news+update_v3');
             const newPost = {
                 type: 'post',
                 number: issue.number,
@@ -64,9 +65,10 @@
         if (postId) {
             setTimeout(async () => {
                 try {
+                    if (!GithubAPI || !UIFeedback) return;
                     const issue = await GithubAPI.loadIssue(postId);
                     if (issue.state === 'closed') {
-                        Core.showToast('Этот пост был закрыт и больше не доступен', 'error');
+                        UIUtils.showToast('Этот пост был закрыт и больше не доступен', 'error');
                         return;
                     }
                     const item = {
@@ -80,13 +82,13 @@
                         labels: issue.labels.map(l => l.name)
                     };
                     if (!UIFeedback.canViewPost(issue.body, issue.labels.map(l => l.name), currentUser)) {
-                        Core.showToast('У вас нет доступа к этому посту', 'error');
+                        UIUtils.showToast('У вас нет доступа к этому посту', 'error');
                         return;
                     }
                     UIFeedback.openFullModal(item);
                 } catch (err) {
                     console.error('Ошибка загрузки поста по ссылке:', err);
-                    Core.showToast('Пост не найден или произошла ошибка', 'error');
+                    if (UIUtils) UIUtils.showToast('Пост не найден или произошла ошибка', 'error');
                 }
             }, 1500);
         }
@@ -132,11 +134,12 @@
     }
 
     async function loadVideosFromRSS2JSON() {
-        const cacheKey = 'youtube_videos_rss2json_v4';
-        let cached = Core.cacheGet(cacheKey);
+        const cacheKey = 'youtube_videos_rss2json_v3';
+        let cached = null;
+        if (window.Cache) cached = window.Cache.get(cacheKey);
         if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
 
-        const { controller, timeoutId } = Core.createAbortable(15000);
+        const { controller, timeoutId } = GithubCore.createAbortable(15000);
         currentAbort = { controller };
         try {
             const allVideos = [];
@@ -158,7 +161,9 @@
                         } else {
                             videoId = url.searchParams.get('v');
                         }
-                    } catch (e) { return null; }
+                    } catch (e) {
+                        return null;
+                    }
                     if (!videoId) return null;
                     return {
                         type: 'video',
@@ -172,11 +177,14 @@
                 }).filter(v => v !== null);
                 allVideos.push(...videosFromChannel);
             }
+
             const sorted = allVideos.sort((a, b) => b.date - a.date).slice(0, 20);
-            Core.cacheSet(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
+            if (window.Cache) window.Cache.set(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
             return sorted;
         } catch (err) {
-            if (err.name === 'AbortError') Core.showToast('Таймаут при загрузке видео', 'warning');
+            if (err.name === 'AbortError') {
+                UIUtils.showToast('Таймаут при загрузке видео', 'warning');
+            }
             throw err;
         } finally {
             clearTimeout(timeoutId);
@@ -185,20 +193,21 @@
     }
 
     async function loadPosts() {
-        const cacheKey = 'posts_news+update_v4';
-        let cached = Core.cacheGet(cacheKey);
+        const cacheKey = 'posts_news+update_v3';
+        let cached = null;
+        if (window.Cache) cached = window.Cache.get(cacheKey);
         if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
 
-        const { controller, timeoutId } = Core.createAbortable(10000);
+        const { controller, timeoutId } = GithubCore.createAbortable(10000);
         currentAbort = { controller };
         try {
             const [newsIssues, updateIssues] = await Promise.all([
                 GithubAPI.loadIssues({ labels: 'type:news', per_page: 15, signal: controller.signal }),
                 GithubAPI.loadIssues({ labels: 'type:update', per_page: 15, signal: controller.signal })
             ]);
-            const allIssues = Core.deduplicateByNumber([...newsIssues, ...updateIssues]);
-            const postsData = allIssues
-                .filter(issue => issue.state === 'open' && GithubAuth.isAdmin())
+            const allIssues = GithubCore.deduplicateByNumber([...newsIssues, ...updateIssues]);
+            const posts = allIssues
+                .filter(issue => issue.state === 'open' && GithubCore.CONFIG.ALLOWED_AUTHORS.includes(issue.user.login))
                 .map(issue => ({
                     type: 'post',
                     number: issue.number,
@@ -209,10 +218,12 @@
                     labels: issue.labels.map(l => l.name),
                     game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
                 }));
-            Core.cacheSet(cacheKey, postsData.map(p => ({ ...p, date: p.date.toISOString() })));
-            return postsData;
+            if (window.Cache) window.Cache.set(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
+            return posts;
         } catch (err) {
-            if (err.name === 'AbortError') Core.showToast('Таймаут при загрузке новостей', 'warning');
+            if (err.name === 'AbortError') {
+                UIUtils.showToast('Таймаут при загрузке новостей', 'warning');
+            }
             throw err;
         } finally {
             clearTimeout(timeoutId);
@@ -229,26 +240,32 @@
         let filteredPosts = posts.filter(post => {
             if (!post.labels.includes('private')) return true;
             if (GithubAuth.isAdmin()) return true;
-            const allowed = Core.extractAllowed(post.body);
+            const allowed = GithubCore.extractAllowed(post.body);
             if (!allowed) return false;
             const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
             return allowedList.includes(currentUser);
         });
 
-        let allItems = [...filteredPosts];
-        if (videosLoaded) allItems = allItems.concat(videos);
-        allItems.sort((a, b) => b.date - a.date);
+        allItemsAll = [...filteredPosts];
+        if (videosLoaded) {
+            allItemsAll = allItemsAll.concat(videos);
+        }
+        allItemsAll.sort((a, b) => b.date - a.date);
         
-        const itemsToShow = allItems.slice(0, displayLimit);
-        const hasMore = allItems.length > displayLimit;
+        const itemsToShow = allItemsAll.slice(0, displayLimit);
+        const hasMore = allItemsAll.length > displayLimit;
 
         const grid = document.createElement('div'); grid.className = 'projects-grid';
+        
         if (itemsToShow.length === 0) {
             grid.innerHTML = '<p class="text-secondary" style="grid-column:1/-1; text-align:center;">Пока нет новостей</p>';
         } else {
             itemsToShow.forEach(item => {
-                if (item.type === 'video') grid.appendChild(createVideoCard(item));
-                else grid.appendChild(createPostCard(item));
+                if (item.type === 'video') {
+                    grid.appendChild(createVideoCard(item));
+                } else {
+                    grid.appendChild(createPostCard(item));
+                }
             });
         }
 
@@ -279,7 +296,7 @@
         const img = document.createElement('img'); img.src = video.thumbnail; img.alt = video.title; img.loading = 'lazy'; img.className = 'project-image';
         imgWrapper.appendChild(img);
         const title = document.createElement('h3'); title.textContent = video.title.length > 70 ? video.title.substring(0,70)+'…' : video.title;
-        const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${Core.escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
+        const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${GithubCore.escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
         const button = document.createElement('span'); button.className = 'button'; button.innerHTML = '<i class="fas fa-play"></i> Смотреть';
         inner.append(imgWrapper, title, meta, button); card.appendChild(inner);
         card.addEventListener('click', (e) => { e.preventDefault(); window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank'); });
@@ -296,8 +313,8 @@
         const img = document.createElement('img'); img.src = thumbnail; img.alt = post.title; img.loading = 'lazy'; img.className = 'project-image'; img.onerror = () => img.src = DEFAULT_IMAGE;
         imgWrapper.appendChild(img);
         const title = document.createElement('h3'); title.textContent = post.title.length > 70 ? post.title.substring(0,70)+'…' : post.title;
-        const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${Core.escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
-        const summary = Core.extractSummary(post.body) || Core.stripHtml(post.body).substring(0,120)+'…';
+        const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${GithubCore.escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
+        const summary = GithubCore.extractSummary(post.body) || GithubCore.stripHtml(post.body).substring(0,120)+'…';
         const preview = document.createElement('p'); preview.className = 'text-secondary'; preview.style.fontSize='13px'; preview.style.overflow='hidden'; preview.style.display='-webkit-box'; preview.style.webkitLineClamp='2'; preview.style.webkitBoxOrient='vertical'; preview.textContent = summary;
         inner.append(imgWrapper, title, meta, preview); card.appendChild(inner);
         card.addEventListener('click', (e) => { e.preventDefault(); UIFeedback.openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); });
