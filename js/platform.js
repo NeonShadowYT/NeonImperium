@@ -1,23 +1,15 @@
-// platform.js – автоматическое скрытие кнопок под платформу + интеграция с GitHub Releases + версия Starve Neon
-
+// platform.js – определение ОС и подстановка ссылок из GitHub Releases
 document.addEventListener('DOMContentLoaded', function() {
     const os = getOS();
     const platformButtons = document.querySelectorAll('.download-button[data-platform]');
     const githubButtons = document.querySelectorAll('.download-button.github');
 
-    // Скрываем обычные кнопки, не соответствующие текущей ОС
     platformButtons.forEach(btn => {
         const btnPlatform = btn.dataset.platform;
-        const currentOs = os.toLowerCase();
-        const btnOs = btnPlatform ? btnPlatform.toLowerCase() : '';
-        if (currentOs === btnOs) {
-            btn.style.display = '';
-        } else {
-            btn.style.display = 'none';
-        }
+        if (os.toLowerCase() === btnPlatform?.toLowerCase()) btn.style.display = '';
+        else btn.style.display = 'none';
     });
 
-    // Если есть GitHub-кнопки, подставляем ссылки из последнего релиза и обновляем версию Starve Neon
     if (githubButtons.length > 0 || document.querySelector('.game-title')?.textContent === 'Starve Neon') {
         initGitHubDownloads(os, githubButtons);
     }
@@ -54,16 +46,15 @@ function findAssetByPlatform(assets, platform) {
         linux: ['.appimage', '.x86_64', '.tar.gz', '.zip']
     };
     const allowedExts = extensions[platformLower];
-    if (allowedExts && allowedExts.length > 0) {
+    if (allowedExts) {
         return assets.find(asset => allowedExts.some(ext => asset.name.toLowerCase().endsWith(ext)));
-    } else {
-        return assets.find(asset => asset.name.toLowerCase().includes(platformLower));
     }
+    return assets.find(asset => asset.name.toLowerCase().includes(platformLower));
 }
 
 async function initGitHubDownloads(os, buttons) {
-    const REPO_OWNER = window.GithubCore?.CONFIG?.REPO_OWNER || 'NeonShadowYT';
-    const REPO_NAME = window.GithubCore?.CONFIG?.REPO_NAME || 'NeonImperium';
+    const REPO_OWNER = 'NeonShadowYT';
+    const REPO_NAME = 'NeonImperium';
     const release = await getLatestRelease(REPO_OWNER, REPO_NAME);
     if (!release) {
         buttons.forEach(btn => {
@@ -73,10 +64,7 @@ async function initGitHubDownloads(os, buttons) {
         });
         return;
     }
-
-    // Обновляем версию и дату для Starve Neon
     updateStarveNeonVersion(release);
-
     buttons.forEach(btn => {
         const platform = btn.dataset.platform;
         if (!platform) return;
@@ -100,20 +88,9 @@ function updateStarveNeonVersion(release) {
     const versionBadge = document.querySelector('.version-badge[data-lang="starveVersion"]');
     const downloadNote = document.querySelector('.small-note[data-lang="starveDownloadNote"]');
     if (!versionBadge && !downloadNote) return;
-
     const tag = release.tag_name;
     const published = new Date(release.published_at);
-    const formattedDate = published.toLocaleDateString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\./g, '.');
-
-    if (versionBadge) {
-        versionBadge.textContent = tag;
-    }
-    if (downloadNote) {
-        downloadNote.textContent = `Версия ${tag} · Обновление от ${formattedDate}`;
-        // Также обновляем английскую версию, если переключится язык
-        const enNote = document.querySelector('.small-note[data-lang="starveDownloadNote"][lang="en"]');
-        if (enNote) {
-            enNote.textContent = `Version ${tag} · Update ${published.toISOString().slice(0,10)}`;
-        }
-    }
+    const formattedDate = published.toLocaleDateString('ru-RU', { year:'numeric', month:'2-digit', day:'2-digit' }).replace(/\./g, '.');
+    if (versionBadge) versionBadge.textContent = tag;
+    if (downloadNote) downloadNote.textContent = `Версия ${tag} · Обновление от ${formattedDate}`;
 }

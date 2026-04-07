@@ -1,3 +1,4 @@
+// accessibility.js – улучшение доступности (aria-метки, клавиатурные модалки, объявления)
 (function() {
     function addAriaLabels() {
         document.querySelectorAll('.nav-link').forEach(link => {
@@ -53,9 +54,6 @@
         window.announceDynamicContent = announceDynamicContent;
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
 })();
