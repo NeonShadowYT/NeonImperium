@@ -1,6 +1,5 @@
-// cache.js — единый модуль кеширования с поддержкой версий
 const CACHE_VERSION = 'v3';
-const CACHE_TTL = 10 * 60 * 1000; // 10 минут
+const CACHE_TTL = 10 * 60 * 1000;
 
 function getCacheKey(key) {
     return `${CACHE_VERSION}_${key}`;

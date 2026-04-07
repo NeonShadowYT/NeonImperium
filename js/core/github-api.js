@@ -12,15 +12,14 @@
             ...options.headers
         };
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        
+
         const response = await fetch(url, { ...options, headers });
         if (!response.ok) {
             let errorMsg = `HTTP ${response.status}`;
             try {
                 const errorData = await response.json();
                 errorMsg = errorData.message || errorMsg;
-            } catch {
-            }
+            } catch {}
             throw new Error(errorMsg);
         }
         return response;

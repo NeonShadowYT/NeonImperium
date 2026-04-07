@@ -1,6 +1,9 @@
+// init.js
 (async function() {
+    // Загрузка стилей
     await ScriptLoader.loadStylesheet('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css');
     
+    // Определяем страницу
     const isGamePage = window.location.pathname.includes('starve-neon') ||
                        window.location.pathname.includes('alpha-01') ||
                        window.location.pathname.includes('gc-adven');
@@ -9,8 +12,8 @@
     const hasUpdates = document.getElementById('game-updates') !== null;
     const hasDonate = document.getElementById('donate-button') !== null;
     
+    // Загружаем marked, если нужен
     if (hasFeedback || hasNews || hasUpdates) {
-        // Пытаемся загрузить marked с основного CDN, при ошибке используем fallback
         try {
             await ScriptLoader.loadScript('https://cdn.jsdelivr.net/npm/marked/marked.min.js');
         } catch (e) {
@@ -19,6 +22,7 @@
         }
     }
     
+    // Загружаем Itch API для донатов
     if (hasDonate) {
         try {
             await ScriptLoader.scripts.itch();
@@ -26,4 +30,7 @@
             console.warn('Itch API not loaded, donate button may not work');
         }
     }
+    
+    // Инициализируем языковой переключатель и прочее
+    // (остальное уже инициализируется в других скриптах)
 })();

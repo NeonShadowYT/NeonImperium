@@ -1,49 +1,10 @@
-// github-core.js — базовые утилиты, использует Cache
-window.GithubCore = (function() {
+(function() {
     const CONFIG = {
         REPO_OWNER: 'NeonShadowYT',
         REPO_NAME: 'NeonImperium',
         CACHE_TTL: 10 * 60 * 1000,
         ALLOWED_AUTHORS: ['NeonShadowYT', 'GoldenCreeper567']
     };
-
-    // Используем глобальный Cache, если доступен
-    function cacheGet(key) {
-        if (window.Cache) return window.Cache.get(key);
-        const cached = sessionStorage.getItem(key);
-        const time = sessionStorage.getItem(`${key}_time`);
-        if (cached && time && (Date.now() - parseInt(time) < CONFIG.CACHE_TTL)) {
-            return JSON.parse(cached);
-        }
-        return null;
-    }
-
-    function cacheSet(key, data) {
-        if (window.Cache) return window.Cache.set(key, data);
-        sessionStorage.setItem(key, JSON.stringify(data));
-        sessionStorage.setItem(`${key}_time`, Date.now().toString());
-    }
-
-    function cacheRemove(key) {
-        if (window.Cache) return window.Cache.remove(key);
-        sessionStorage.removeItem(key);
-        sessionStorage.removeItem(`${key}_time`);
-    }
-
-    function cacheRemoveByPrefix(prefix) {
-        if (window.Cache) return window.Cache.removeByPrefix(prefix);
-        const keysToRemove = [];
-        for (let i = 0; i < sessionStorage.length; i++) {
-            const key = sessionStorage.key(i);
-            if (key && key.startsWith(prefix)) {
-                keysToRemove.push(key);
-            }
-        }
-        keysToRemove.forEach(key => {
-            sessionStorage.removeItem(key);
-            sessionStorage.removeItem(key + '_time');
-        });
-    }
 
     function escapeHtml(text) {
         if (!text) return '';
@@ -55,10 +16,23 @@ window.GithubCore = (function() {
     async function renderMarkdown(text) {
         if (!text) return '';
         if (!window.marked) {
-            await ScriptLoader.scripts.marked();
+            if (typeof ScriptLoader !== 'undefined' && ScriptLoader.scripts && ScriptLoader.scripts.marked) {
+                await ScriptLoader.scripts.marked();
+            } else {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
         }
-        marked.setOptions({ gfm: true, breaks: true, pedantic: false, headerIds: false, mangle: false });
-        return marked.parse(text);
+        if (window.marked) {
+            marked.setOptions({ gfm: true, breaks: true, pedantic: false, headerIds: false, mangle: false });
+            return marked.parse(text);
+        }
+        return escapeHtml(text);
     }
 
     function deduplicateByNumber(items) {
@@ -96,12 +70,22 @@ window.GithubCore = (function() {
         return extractMeta(body, 'summary');
     }
 
-    return {
+    function cacheGet(key) {
+        if (window.Cache) return window.Cache.get(key);
+        return null;
+    }
+    function cacheSet(key, data) {
+        if (window.Cache) window.Cache.set(key, data);
+    }
+    function cacheRemove(key) {
+        if (window.Cache) window.Cache.remove(key);
+    }
+    function cacheRemoveByPrefix(prefix) {
+        if (window.Cache) window.Cache.removeByPrefix(prefix);
+    }
+
+    window.GithubCore = {
         CONFIG,
-        cacheGet,
-        cacheSet,
-        cacheRemove,
-        cacheRemoveByPrefix,
         escapeHtml,
         renderMarkdown,
         deduplicateByNumber,
@@ -109,6 +93,10 @@ window.GithubCore = (function() {
         stripHtml,
         extractMeta,
         extractAllowed,
-        extractSummary
+        extractSummary,
+        cacheGet,
+        cacheSet,
+        cacheRemove,
+        cacheRemoveByPrefix
     };
 })();

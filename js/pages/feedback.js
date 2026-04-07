@@ -1,17 +1,20 @@
+// feedback.js
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable, extractSummary } = GithubCore;
-    const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
-    const { renderReactions, renderComments, openFullModal, openEditorModal, canViewPost } = UIFeedback;
+    const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, updateComment, deleteComment, loadReactions, addReaction, removeReaction } = GithubAPI;
+    const { renderReactions, showReactionMenu } = window.FeedbackReactions || {};
+    const { renderComments, openEditCommentModal } = window.FeedbackComments || {};
+    const { openFullModal, renderPostBody, invalidateCache } = window.UIFeedbackModal || {};
     const { isAdmin, getCurrentUser } = GithubAuth;
-
+    
     const ITEMS_PER_PAGE = 10;
     const MAX_DISPLAY_ITEMS = 30;
-
+    
     let currentGame = '', currentTab = 'all', currentPage = 1, hasMorePages = true, isLoading = false;
     let allIssues = [], displayedIssues = [], container, feedbackSection, gridContainer;
     let currentUser = null, currentAbort = null;
     let loadMoreButton = null;
-
+    
     document.addEventListener('DOMContentLoaded', init);
     function init() {
         feedbackSection = document.getElementById('feedback-section');
@@ -20,10 +23,10 @@
         if (!currentGame) return;
         container = feedbackSection.querySelector('.feedback-container');
         if (!container) return;
-
+        
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; checkAuthAndRender(); });
         window.addEventListener('github-logout', () => { currentUser = null; checkAuthAndRender(); });
-
+        
         window.addEventListener('github-issue-created', (e) => {
             const issue = e.detail;
             const hasGameLabel = issue.labels.some(l => l.name === `game:${currentGame}`);
@@ -36,17 +39,17 @@
             allIssues = [issue, ...allIssues];
             filterAndDisplayIssues(true);
         });
-
+        
         currentUser = getCurrentUser();
         checkAuthAndRender();
-
+        
         const urlParams = new URLSearchParams(window.location.search);
         const postId = urlParams.get('post');
         if (postId) {
             setTimeout(() => openPostFromUrl(postId), 1000);
         }
     }
-
+    
     async function openPostFromUrl(postId) {
         try {
             const issue = await loadIssue(postId);
@@ -66,22 +69,31 @@
                 UIUtils.showToast('У вас нет доступа к этому посту', 'error');
                 return;
             }
-            openFullModal(item);
+            if (openFullModal) openFullModal(item);
         } catch (err) {
             UIUtils.showToast('Не удалось загрузить пост', 'error');
         }
     }
-
+    
+    function canViewPost(body, labels, currentUser) {
+        if (!labels.includes('private')) return true;
+        if (isAdmin()) return true;
+        const allowed = GithubCore.extractAllowed(body);
+        if (!allowed) return false;
+        const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
+        return allowedList.includes(currentUser);
+    }
+    
     function checkAuthAndRender() {
         if (currentUser) renderFeedbackInterface();
         else renderLoginPrompt();
     }
-
+    
     function renderLoginPrompt() {
         container.innerHTML = `<div class="login-prompt"><i class="fab fa-github"></i><h3 data-lang="feedbackLoginPrompt">Войдите через GitHub, чтобы участвовать</h3><p class="text-secondary" data-lang="feedbackTokenNote">Ваш токен останется только у вас в браузере.</p><button class="button" id="feedback-login-btn" data-lang="feedbackLoginBtn">Войти</button></div>`;
         document.getElementById('feedback-login-btn').addEventListener('click', () => window.dispatchEvent(new CustomEvent('github-login-requested')));
     }
-
+    
     async function renderFeedbackInterface() {
         container.innerHTML = `
             <div class="feedback-header">
@@ -100,11 +112,15 @@
             </div>
             <div class="projects-grid" id="feedback-panel" role="tabpanel" aria-labelledby="active-tab"></div>
         `;
-
+        
         if (currentUser) {
-            document.getElementById('toggle-form-btn').addEventListener('click', () => openEditorModal('new', { game: currentGame }, 'feedback'));
+            document.getElementById('toggle-form-btn').addEventListener('click', () => {
+                if (window.UIFeedback && window.UIFeedback.openEditorModal) {
+                    window.UIFeedback.openEditorModal('new', { game: currentGame }, 'feedback');
+                }
+            });
         }
-
+        
         const tabs = document.querySelectorAll('.feedback-tab');
         tabs.forEach(tab => {
             tab.addEventListener('click', (e) => {
@@ -114,7 +130,7 @@
                 });
                 e.target.classList.add('active');
                 e.target.setAttribute('aria-selected', 'true');
-
+                
                 currentTab = e.target.dataset.tab;
                 currentPage = 1;
                 allIssues = [];
@@ -126,7 +142,7 @@
                 loadMoreButton = null;
                 loadIssuesPage(1, true);
             });
-
+            
             tab.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
                     e.preventDefault();
@@ -143,18 +159,18 @@
                 }
             });
         });
-
+        
         gridContainer = document.getElementById('feedback-panel');
         await loadIssuesPage(1, true);
     }
-
+    
     async function loadIssuesPage(page, reset = false) {
         if (isLoading) return;
         isLoading = true;
         if (currentAbort) currentAbort.controller.abort();
         const { controller, timeoutId } = createAbortable(10000);
         currentAbort = { controller };
-
+        
         try {
             const cacheKey = `issues_${currentGame}_page_${page}`;
             let issues;
@@ -188,7 +204,7 @@
             isLoading = false;
         }
     }
-
+    
     function createLoadMoreButton() {
         if (loadMoreButton) return;
         loadMoreButton = document.createElement('button');
@@ -205,7 +221,7 @@
             gridContainer.parentNode.insertBefore(loadMoreButton, gridContainer.nextSibling);
         }
     }
-
+    
     function filterAndDisplayIssues(reset = false) {
         let filtered = allIssues.filter(issue => issue.state === 'open');
         filtered = filtered.filter(issue => {
@@ -227,7 +243,7 @@
         if (reset) gridContainer.innerHTML = '';
         renderIssuesList(issuesToRender, reset);
     }
-
+    
     function renderIssuesList(issues, reset) {
         if (reset) gridContainer.innerHTML = '';
         issues.forEach(issue => {
@@ -241,14 +257,14 @@
             for (let i = 0; i < toRemove; i++) cards[i].remove();
         }
     }
-
+    
     function extractPreviewUrl(body) {
         const match = body.match(/<!--\s*preview:\s*(https?:\/\/[^\s]+)\s*-->/);
         if (match) return match[1];
         const imgMatch = body.match(/!\[.*?\]\((https?:\/\/[^\s]+)\)/);
         return imgMatch ? imgMatch[1] : null;
     }
-
+    
     function createIssueCard(issue) {
         const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
         const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : '⭐';
@@ -330,17 +346,24 @@
         
         cardLink.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
-            openFullModal({
-                type: 'issue',
-                id: issue.number,
-                title: issue.title,
-                body: issue.body,
-                author: issue.user.login,
-                date: new Date(issue.created_at),
-                game: currentGame,
-                labels: issue.labels.map(l => l.name)
-            });
+            if (openFullModal) {
+                openFullModal({
+                    type: 'issue',
+                    id: issue.number,
+                    title: issue.title,
+                    body: issue.body,
+                    author: issue.user.login,
+                    date: new Date(issue.created_at),
+                    game: currentGame,
+                    labels: issue.labels.map(l => l.name)
+                });
+            }
         });
         return cardLink;
     }
+    
+    // Экспортируем функции для использования в других модулях
+    window.Feedback = {
+        refresh: () => { if (feedbackSection) loadIssuesPage(1, true); }
+    };
 })();
