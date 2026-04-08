@@ -1,4 +1,4 @@
-// feedback.js – лента обратной связи
+// feedback.js
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable, extractSummary } = GithubCore;
     const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, updateComment, deleteComment, loadReactions, addReaction, removeReaction } = GithubAPI;
@@ -362,6 +362,7 @@
         return cardLink;
     }
     
+    // Экспортируем функции для использования в других модулях
     window.Feedback = {
         refresh: () => { if (feedbackSection) loadIssuesPage(1, true); }
     };

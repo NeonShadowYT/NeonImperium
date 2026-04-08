@@ -19,21 +19,19 @@
     <link rel="preconnect" href="https://img.youtube.com">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
-    
-    <!-- Основные скрипты (новый порядок) -->
+    <!-- Основные скрипты -->
     <script src="js/core/cache.js"></script>
     <script src="js/core/loader.js"></script>
     <script src="js/core/github-core.js"></script>
-    <script src="js/core/utils.js"></script>
+    <script src="js/features/ui-utils.js"></script>
     <script src="js/core/github-api.js"></script>
     <script src="js/core/github-auth.js"></script>
-    <script src="js/features/editor-toolbar.js"></script>
+    <script src="js/features/ui-feedback.js"></script>
+    <script src="js/features/editor.js"></script>
     <script src="js/features/load-more.js"></script>
     <script src="js/features/accessibility.js"></script>
+    <script src="js/pages/news-feed.js"></script>
     <script src="js/features/notifications.js" defer></script>
-    <script src="js/modules/feedback-ui.js"></script>
-    <script src="js/modules/editor.js"></script>
-    <script src="js/modules/news-feed.js"></script>
     <script src="js/lang.js"></script>
     <script src="js/effects.js"></script>
     <script src="js/init.js"></script>
@@ -252,6 +250,7 @@
                         if (!donateBtn) return;
                         const span = donateBtn.querySelector('span[data-lang="donateButton"]');
                         if (!span) return;
+                        
                         const lang = localStorage.getItem('preferredLanguage') || 'ru';
                         if (window.translations && translations[lang] && translations[lang].donateButton) {
                             span.textContent = translations[lang].donateButton;
@@ -259,20 +258,26 @@
                             span.textContent = (lang === 'en') ? 'Support' : 'Поддержать';
                         }
                     }
+
                     function animateError() {
                         const donateBtn = document.getElementById('donate-button');
                         if (!donateBtn) return;
                         donateBtn.classList.add('error-bounce');
-                        setTimeout(() => donateBtn.classList.remove('error-bounce'), 400);
+                        setTimeout(() => {
+                            donateBtn.classList.remove('error-bounce');
+                        }, 400);
                     }
+
                     function initDonateButton() {
                         const donateBtn = document.getElementById('donate-button');
                         if (!donateBtn) return;
+
                         if (typeof Itch === 'undefined') {
                             console.warn('Itch API not loaded');
                             animateError();
                             return;
                         }
+
                         try {
                             Itch.attachBuyButton(donateBtn, {
                                 user: 'neon-imperium',
@@ -284,14 +289,22 @@
                             console.error('Failed to attach Itch button:', e);
                             animateError();
                         }
+
                         updateDonateButtonText();
                     }
+
                     if (document.readyState === 'loading') {
-                        document.addEventListener('DOMContentLoaded', () => setTimeout(initDonateButton, 100));
+                        document.addEventListener('DOMContentLoaded', function() {
+                            setTimeout(initDonateButton, 100);
+                        });
                     } else {
                         setTimeout(initDonateButton, 100);
                     }
-                    window.addEventListener('languageChanged', updateDonateButtonText);
+                    
+                    window.addEventListener('languageChanged', function() {
+                        updateDonateButtonText();
+                    });
+
                     const originalSetLanguage = window.setLanguage;
                     if (originalSetLanguage) {
                         window.setLanguage = function(lang) {

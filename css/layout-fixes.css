@@ -1,0 +1,180 @@
+/* layout-fixes.css – исправления выравнивания и адаптива */
+
+/* Кнопка "Загрузить ещё" – по центру внизу, небольшая */
+.load-more-btn {
+    display: block;
+    margin: 24px auto 16px auto;
+    padding: 8px 20px;
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 40px;
+    cursor: pointer;
+    font-family: 'Russo One', sans-serif;
+    font-size: 14px;
+    transition: all 0.2s;
+    width: fit-content;
+    text-align: center;
+}
+.load-more-btn:hover {
+    background: var(--accent);
+    color: white;
+    transform: translateY(-2px);
+}
+.load-more-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Навигация: прижимаем элементы вплотную */
+.nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 16px;
+}
+.nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.lang-switcher,
+.notification-bell,
+.nav-profile {
+    margin: 0;
+}
+.lang-switcher .lang-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+}
+.notification-bell {
+    width: 36px;
+    height: 36px;
+    margin: 0;
+}
+.nav-profile {
+    padding: 4px 8px 4px 12px;
+    margin: 0;
+}
+
+/* Адаптив для мобильных */
+@media (max-width: 700px) {
+    .nav-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .nav-links {
+        justify-content: center;
+        overflow-x: auto;
+    }
+    .nav-right {
+        justify-content: flex-end;
+    }
+}
+
+/* Остальные исправления */
+.preview-url-wrapper,
+.comment-form,
+.modal-header-actions,
+.access-settings,
+.download-buttons,
+.feedback-header,
+.updates-header,
+.news-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+@media (max-width: 600px) {
+    .preview-url-wrapper,
+    .access-settings,
+    .comment-form > div {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .preview-url-wrapper .preview-url-input,
+    .access-settings .feedback-input,
+    .comment-form .comment-input {
+        width: 100%;
+    }
+    .image-services-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    .modal-header-actions {
+        justify-content: flex-end;
+        margin-top: 8px;
+    }
+    .updates-header,
+    .news-header {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    .updates-header .button,
+    .news-header .button {
+        width: 100%;
+    }
+}
+
+.modal-content-full {
+    max-width: 95vw;
+    width: 100%;
+}
+@media (max-width: 700px) {
+    .modal-content-full {
+        max-width: 98vw;
+    }
+    .modal-body {
+        padding: 16px;
+    }
+}
+
+.loading-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--bg-card);
+    border-radius: 30px;
+    color: var(--text-secondary);
+}
+.loading-indicator i {
+    font-size: 16px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.button.loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.7;
+}
+.button.loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    left: 50%;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid white;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}

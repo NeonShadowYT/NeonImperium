@@ -1,4 +1,4 @@
-/* style.css — основной импорт */
+/* style.css — основной файл, подключаем все части */
 @import url('css/variables.css');
 @import url('css/base.css');
 @import url('css/typography.css');
@@ -7,10 +7,10 @@
 @import url('css/cards.css');
 @import url('css/layout.css');
 @import url('css/responsive.css');
-@import url('css/a11y.css');
 @import url('css/feedback.css');
+@import url('css/a11y.css');
+@import url('css/layout-fixes.css');
 @import url('css/notifications.css');
-@import url('css/markdown.css');
 
 /* Исправление положения кнопок в шапке модалки */
 .modal-header {
@@ -26,7 +26,7 @@
     display: flex;
     gap: 4px;
     align-items: center;
-    margin-right: auto;
+    margin-right: auto; /* чтобы быть слева от спейсера */
 }
 .modal-header-actions .action-btn {
     background: var(--bg-card);
@@ -191,36 +191,45 @@
     background: var(--accent);
     color: white;
     border: none;
-    border-radius: 40px;
-    padding: 10px 20px;
-    font-size: 15px;
+    border-radius: 40px;               /* чуть скруглённее */
+    padding: 10px 20px;                 /* уменьшенный размер */
+    font-size: 15px;                    /* поменьше */
     font-weight: bold;
     cursor: pointer;
-    box-shadow: 0 6px 14px rgba(0,0,0,0.4);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
     display: flex;
     align-items: center;
     gap: 8px;
     z-index: 1000;
     transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     font-family: 'Russo One', sans-serif;
 }
-.donate-button-fixed i { font-size: 18px; }
+.donate-button-fixed i {
+    font-size: 18px;                    /* иконка поменьше */
+}
 .donate-button-fixed:hover {
     background: var(--accent-light);
-    transform: scale(1.03);
-    box-shadow: 0 10px 22px rgba(0,0,0,0.6);
+    transform: scale(1.03);              /* меньше увеличение */
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.6);
 }
-.donate-button-fixed:active { transform: scale(0.98); }
+.donate-button-fixed:active {
+    transform: scale(0.98);
+}
+
+/* Анимация "подъёма" при ошибке */
 .donate-button-fixed.error-bounce {
     animation: bounceUp 0.4s ease;
 }
+
 @keyframes bounceUp {
     0% { transform: translateY(0); }
-    30% { transform: translateY(-15px); }
-    70% { transform: translateY(5px); }
+    30% { transform: translateY(-15px); }  /* подпрыгнула вверх */
+    70% { transform: translateY(5px); }    /* слегка перелетела */
     100% { transform: translateY(0); }
 }
+
+/* На мобильных */
 @media (max-width: 600px) {
     .donate-button-fixed {
         padding: 8px 16px;
@@ -228,5 +237,7 @@
         bottom: 16px;
         right: 16px;
     }
-    .donate-button-fixed i { font-size: 16px; }
+    .donate-button-fixed i {
+        font-size: 16px;
+    }
 }

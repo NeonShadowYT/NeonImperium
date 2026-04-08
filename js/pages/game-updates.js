@@ -1,4 +1,4 @@
-// game-updates.js – лента обновлений для конкретной игры
+// game-updates.js
 (function() {
     const DEFAULT_IMAGE = 'images/default-news.webp';
     let currentAbort = null;
@@ -26,11 +26,18 @@
             if (!GithubCore.CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
             
             if (window.Cache) window.Cache.removeByPrefix(`game_updates_${currentGame}`);
+            
             const container = document.getElementById('game-updates');
             if (!container) return;
+            
             const newPost = {
-                number: issue.number, title: issue.title, body: issue.body, date: new Date(issue.created_at),
-                author: issue.user.login, game: currentGame, labels: issue.labels.map(l => l.name)
+                number: issue.number,
+                title: issue.title,
+                body: issue.body,
+                date: new Date(issue.created_at),
+                author: issue.user.login,
+                game: currentGame,
+                labels: issue.labels.map(l => l.name)
             };
             allUpdates = [newPost, ...allUpdates];
             displayLimit = 6;
@@ -55,7 +62,8 @@
         currentAbort = { controller };
         try {
             const cacheKey = `game_updates_${game}`;
-            let posts = window.Cache ? window.Cache.get(cacheKey) : null;
+            let posts = null;
+            if (window.Cache) posts = window.Cache.get(cacheKey);
             if (!posts) {
                 const issues = await GithubAPI.loadIssues({ labels: `type:update,game:${game}`, per_page: 20, signal: controller.signal });
                 posts = GithubCore.deduplicateByNumber(issues)
@@ -74,27 +82,44 @@
             });
             allUpdates.sort((a, b) => b.date - a.date);
             renderUpdates(container);
-        } catch (err) { if (err.name !== 'AbortError') container.innerHTML = '<p class="error-message">Ошибка загрузки</p>'; }
-        finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
+        } catch (err) {
+            if (err.name === 'AbortError') return;
+            container.innerHTML = '<p class="error-message">Ошибка загрузки</p>';
+        } finally {
+            clearTimeout(timeoutId);
+            if (currentAbort?.controller === controller) currentAbort = null;
+        }
     }
     
     function renderUpdates(container) {
-        if (allUpdates.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; return; }
+        if (allUpdates.length === 0) {
+            container.innerHTML = '<p class="text-secondary">Нет обновлений</p>';
+            return;
+        }
+        
         const itemsToShow = allUpdates.slice(0, displayLimit);
         const hasMore = allUpdates.length > displayLimit;
+        
         container.innerHTML = '';
-        const grid = document.createElement('div'); grid.className = 'projects-grid';
+        const grid = document.createElement('div');
+        grid.className = 'projects-grid';
         itemsToShow.forEach(post => grid.appendChild(createUpdateCard(post)));
         container.appendChild(grid);
+        
         let loadMoreBtn = container.querySelector('.load-more-btn');
         if (!loadMoreBtn && hasMore) {
             loadMoreBtn = document.createElement('button');
             loadMoreBtn.className = 'load-more-btn';
             loadMoreBtn.textContent = 'Загрузить ещё';
             loadMoreBtn.setAttribute('aria-label', 'Загрузить следующие обновления');
-            loadMoreBtn.addEventListener('click', () => { displayLimit += 6; renderUpdates(container); });
+            loadMoreBtn.addEventListener('click', () => {
+                displayLimit += 6;
+                renderUpdates(container);
+            });
             container.appendChild(loadMoreBtn);
-        } else if (loadMoreBtn && !hasMore) loadMoreBtn.remove();
+        } else if (loadMoreBtn && !hasMore) {
+            loadMoreBtn.remove();
+        }
     }
     
     function createUpdateCard(post) {

@@ -1,20 +1,29 @@
-// utils.js – toast, модалки, черновики, загрузка кнопок
 (function() {
     function showToast(message, type = 'info', duration = 3000) {
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
         toast.textContent = message;
         toast.setAttribute('role', 'alert');
-        Object.assign(toast.style, {
-            position: 'fixed', bottom: '20px', right: '20px',
-            background: type === 'error' ? '#f44336' : type === 'success' ? '#4caf50' : 'var(--accent)',
-            color: 'white', padding: '12px 24px', borderRadius: '30px',
-            boxShadow: '0 5px 15px rgba(0,0,0,0.3)', zIndex: '10001',
-            opacity: '0', transform: 'translateY(20px)',
-            transition: 'opacity 0.3s, transform 0.3s', fontFamily: "'Russo One', sans-serif"
-        });
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: ${type === 'error' ? '#f44336' : type === 'success' ? '#4caf50' : 'var(--accent)'};
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            z-index: 10001;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s, transform 0.3s;
+            font-family: 'Russo One', sans-serif;
+        `;
         document.body.appendChild(toast);
-        setTimeout(() => { toast.style.opacity = '1'; toast.style.transform = 'translateY(0)'; }, 10);
+        setTimeout(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+        }, 10);
         setTimeout(() => {
             toast.style.opacity = '0';
             toast.style.transform = 'translateY(20px)';
@@ -24,44 +33,79 @@
 
     function createModal(title, contentHtml, options = {}) {
         const { onClose, size = 'full', closeButton = true } = options;
+        
         document.querySelectorAll('.modal-fullscreen, .modal').forEach(m => m.remove());
+        
         const modal = document.createElement('div');
-        modal.className = size === 'full' ? 'modal modal-fullscreen' : 'modal';
+        let modalClass = 'modal';
+        let contentClass = 'modal-content';
+        if (size === 'full') {
+            modalClass += ' modal-fullscreen';
+            contentClass += ' modal-content-full';
+        }
+        modal.className = modalClass;
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
         modal.setAttribute('aria-labelledby', 'modal-header-title');
+        
+        const headerHtml = `
+            <div class="modal-header">
+                <h2 id="modal-header-title">${GithubCore.escapeHtml(title)}</h2>
+                <div class="modal-header-spacer"></div>
+                ${closeButton ? '<button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>' : ''}
+            </div>
+        `;
         modal.innerHTML = `
-            <div class="${size === 'full' ? 'modal-content-full' : 'modal-content'}">
-                <div class="modal-header">
-                    <h2 id="modal-header-title">${GithubCore.escapeHtml(title)}</h2>
-                    <div class="modal-header-spacer"></div>
-                    ${closeButton ? '<button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>' : ''}
-                </div>
+            <div class="${contentClass}">
+                ${headerHtml}
                 <div class="modal-body">${contentHtml}</div>
             </div>
         `;
         document.body.appendChild(modal);
         document.body.style.overflow = 'hidden';
         modal.classList.add('active');
+
         const closeModal = () => {
             modal.remove();
             document.body.style.overflow = '';
             if (onClose) onClose();
         };
+
         modal.querySelector('.modal-close')?.addEventListener('click', closeModal);
-        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-        const escHandler = (e) => { if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', escHandler); } };
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
         document.addEventListener('keydown', escHandler);
+
         return { modal, closeModal };
     }
 
     function saveDraft(key, data) {
-        try { sessionStorage.setItem(key, JSON.stringify({ ...data, timestamp: Date.now() })); } catch(e) {}
+        try {
+            sessionStorage.setItem(key, JSON.stringify({ ...data, timestamp: Date.now() }));
+        } catch (e) {
+            console.warn('Failed to save draft', e);
+        }
     }
+
     function loadDraft(key) {
-        try { const draft = sessionStorage.getItem(key); return draft ? JSON.parse(draft) : null; } catch(e) { return null; }
+        try {
+            const draft = sessionStorage.getItem(key);
+            if (draft) return JSON.parse(draft);
+        } catch (e) {}
+        return null;
     }
-    function clearDraft(key) { sessionStorage.removeItem(key); }
+
+    function clearDraft(key) {
+        sessionStorage.removeItem(key);
+    }
 
     function setButtonLoading(button, isLoading, originalText = null) {
         if (!button) return;
