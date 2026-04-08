@@ -1,8 +1,8 @@
-// notifications.js – система уведомлений
+// notifications.js – система уведомлений о новых комментариях, постах, обновлениях и изменениях лицензии
 (function() {
     const NOTIFICATION_KEY = 'neon_notifications_last_visit';
     const NOTIFICATION_DATA_KEY = 'neon_notifications_data';
-    const CHECK_INTERVAL = 60 * 60 * 1000;
+    const CHECK_INTERVAL = 60 * 60 * 1000; // проверка раз в час (только если вкладка активна)
     
     let currentUser = null;
     let lastVisit = null;
@@ -11,6 +11,7 @@
     let bellButton = null;
     let dropdown = null;
     
+    // Инициализация
     document.addEventListener('DOMContentLoaded', init);
     window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; checkAll(); });
     window.addEventListener('github-logout', () => { currentUser = null; clearNotifications(); });
@@ -20,18 +21,21 @@
         loadLastVisit();
         createNotificationBell();
         
+        // Периодическая проверка
         setInterval(() => {
             if (document.visibilityState === 'visible') {
                 checkAll();
             }
         }, CHECK_INTERVAL);
         
+        // Проверка при возвращении на вкладку
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 checkAll();
             }
         });
         
+        // Первая проверка
         setTimeout(checkAll, 2000);
     }
     
@@ -40,7 +44,7 @@
         if (stored) {
             lastVisit = new Date(parseInt(stored));
         } else {
-            lastVisit = new Date(0);
+            lastVisit = new Date(0); // если никогда не заходил
             updateLastVisit();
         }
     }
@@ -48,6 +52,7 @@
     function updateLastVisit() {
         lastVisit = new Date();
         localStorage.setItem(NOTIFICATION_KEY, lastVisit.getTime().toString());
+        // Очищаем список уведомлений после просмотра
         notificationList = [];
         notificationCount = 0;
         updateBellBadge();
@@ -83,21 +88,12 @@
     }
     
     function createNotificationBell() {
+        // Ищем место для кнопки – справа от профиля
         const navBar = document.querySelector('.nav-bar');
         if (!navBar) return;
         
-        // Создаём правый блок, если его нет
-        let rightBlock = navBar.querySelector('.nav-right');
-        if (!rightBlock) {
-            rightBlock = document.createElement('div');
-            rightBlock.className = 'nav-right';
-            const langSwitcher = document.querySelector('.lang-switcher');
-            if (langSwitcher) {
-                navBar.insertBefore(rightBlock, langSwitcher);
-            } else {
-                navBar.appendChild(rightBlock);
-            }
-        }
+        const langSwitcher = document.querySelector('.lang-switcher');
+        const profile = document.querySelector('.nav-profile');
         
         bellButton = document.createElement('div');
         bellButton.className = 'notification-bell';
@@ -106,23 +102,44 @@
         bellButton.setAttribute('aria-label', 'Уведомления');
         bellButton.innerHTML = '<i class="fas fa-bell"></i><span class="notification-badge" style="display: none;">0</span>';
         
+        // Вставляем перед профилем или после языкового переключателя
+        if (profile) {
+            navBar.insertBefore(bellButton, profile);
+        } else if (langSwitcher) {
+            navBar.insertBefore(bellButton, langSwitcher);
+        } else {
+            navBar.appendChild(bellButton);
+        }
+        
+        // Выпадающий список уведомлений
         dropdown = document.createElement('div');
         dropdown.className = 'notification-dropdown';
+        dropdown.style.cssText = `
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 320px;
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: var(--shadow);
+        `;
         bellButton.appendChild(dropdown);
-        
-        // Вставляем перед профилем или в конец правого блока
-        const profile = document.querySelector('.nav-profile');
-        if (profile) {
-            rightBlock.insertBefore(bellButton, profile);
-        } else {
-            rightBlock.appendChild(bellButton);
-        }
         
         bellButton.addEventListener('click', (e) => {
             e.stopPropagation();
             const isVisible = dropdown.style.display === 'block';
             dropdown.style.display = isVisible ? 'none' : 'block';
-            if (!isVisible) renderDropdown();
+            if (!isVisible) {
+                renderDropdown();
+                // Отмечаем уведомления как просмотренные только при открытии?
+                // По желанию: можно сбросить счётчик при открытии
+                // Но по заданию – при следующем заходе. Оставляем счётчик до обновления страницы.
+            }
         });
         
         document.addEventListener('click', (e) => {
@@ -201,8 +218,11 @@
         notificationCount++;
         updateBellBadge();
         saveNotificationData();
+        // Показываем тост
         UIUtils.showToast(`${title}: ${text.substring(0, 60)}`, 'info', 5000);
     }
+    
+    // ========== ПРОВЕРКИ ==========
     
     async function checkAll() {
         if (!currentUser) return;
@@ -210,10 +230,11 @@
         await checkGameUpdates();
         await checkNewsPosts();
         await checkLicenseChange();
-        updateLastVisit();
+        updateLastVisit(); // после проверки обновляем время последнего визита
     }
     
     async function checkFeedbackIssues() {
+        // Загружаем все issues для игр (можно ограничить)
         const games = ['starve-neon', 'alpha-01', 'gc-adven'];
         for (const game of games) {
             try {
@@ -227,6 +248,7 @@
                         const link = `${window.location.origin}${window.location.pathname}?post=${issue.number}`;
                         addNotification('post', title, text, link);
                     }
+                    // Проверяем комментарии
                     const comments = await GithubAPI.loadComments(issue.number);
                     for (const comment of comments) {
                         const commentDate = new Date(comment.created_at);
@@ -276,6 +298,8 @@
     }
     
     async function checkLicenseChange() {
+        // Проверяем дату последнего обновления лицензии
+        // Можно получить из HTML мета-тега или из GitHub
         try {
             const licenseUrl = `${window.location.origin}/license.html`;
             const response = await fetch(licenseUrl);
@@ -287,16 +311,20 @@
                 const text = lastUpdateElem.textContent;
                 const match = text.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
                 if (match) {
-                    const months = {
-                        'января':0,'февраля':1,'марта':2,'апреля':3,'мая':4,'июня':5,
-                        'июля':6,'августа':7,'сентября':8,'октября':9,'ноября':10,'декабря':11
-                    };
-                    let date = new Date(match[3], months[match[2].toLowerCase()], match[1]);
+                    let date = new Date(match[3], getMonthNumber(match[2]), match[1]);
                     if (date > lastVisit) {
                         addNotification('license', 'Лицензионное соглашение', 'Обновлена лицензия. Пожалуйста, ознакомьтесь.', '/license.html');
                     }
                 }
             }
         } catch(e) { console.warn('Ошибка проверки лицензии', e); }
+    }
+    
+    function getMonthNumber(monthName) {
+        const months = {
+            'января': 0, 'февраля': 1, 'марта': 2, 'апреля': 3, 'мая': 4, 'июня': 5,
+            'июля': 6, 'августа': 7, 'сентября': 8, 'октября': 9, 'ноября': 10, 'декабря': 11
+        };
+        return months[monthName.toLowerCase()] || 0;
     }
 })();

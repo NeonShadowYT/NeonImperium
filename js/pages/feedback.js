@@ -123,7 +123,6 @@
                 if (gridContainer) gridContainer.innerHTML = '';
                 if (currentAbort) currentAbort.controller.abort();
                 if (loadMoreButton) loadMoreButton.remove();
-                loadMoreButton = null;
                 loadIssuesPage(1, true);
             });
 
@@ -170,6 +169,7 @@
             currentPage = page;
             filterAndDisplayIssues(reset);
             
+            // Управление кнопкой "Загрузить ещё"
             if (reset) {
                 if (loadMoreButton) loadMoreButton.remove();
                 if (hasMorePages) {
