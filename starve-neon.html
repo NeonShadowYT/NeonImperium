@@ -19,23 +19,25 @@
     <link rel="preconnect" href="https://img.youtube.com">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
-    <!-- Основные скрипты -->
-    <script src="js/core/cache.js"></script>
-    <script src="js/core/loader.js"></script>
-    <script src="js/core/github-core.js"></script>
-    <script src="js/features/ui-utils.js"></script>
-    <script src="js/core/github-api.js"></script>
-    <script src="js/core/github-auth.js"></script>
-    <script src="js/features/ui-feedback.js"></script>
-    <script src="js/features/editor.js"></script>
-    <script src="js/features/load-more.js"></script>
-    <script src="js/features/accessibility.js"></script>
-    <script src="js/pages/feedback.js"></script>
-    <script src="js/pages/game-updates.js"></script>
-    <script src="js/features/notifications.js" defer></script>
+    
+    <!-- Единое ядро -->
+    <script src="js/core.js"></script>
+    <!-- GitHub API и авторизация -->
+    <script src="js/github-api.js"></script>
+    <script src="js/github-auth.js"></script>
+    <!-- UI обратной связи и редактор -->
+    <script src="js/ui-feedback.js"></script>
+    <script src="js/editor.js"></script>
+    <!-- Страничные модули -->
+    <script src="js/feedback.js"></script>
+    <script src="js/game-updates.js"></script>
+    <!-- Уведомления, доступность, определение ОС, переводы, эффекты -->
+    <script src="js/notifications.js" defer></script>
+    <script src="js/accessibility.js"></script>
     <script src="js/platform.js"></script>
     <script src="js/lang.js"></script>
     <script src="js/effects.js"></script>
+    <!-- Инициализация -->
     <script src="js/init.js"></script>
 </head>
 <body>
