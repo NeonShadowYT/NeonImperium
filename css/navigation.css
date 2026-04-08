@@ -1,6 +1,4 @@
 /* navigation.css – стили навигации, профиля, переключателя языка, модалки токена */
-
-/* Основная панель навигации */
 .nav-bar {
     background: var(--bg-card);
     border-radius: 50px;
@@ -17,15 +15,17 @@
     top: 0;
     z-index: 100;
 }
-
-/* Контейнер ссылок */
 .nav-links {
     display: flex;
     flex-wrap: wrap;
     gap: 5px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
 }
-
-/* Отдельная ссылка */
+.nav-links::-webkit-scrollbar {
+    height: 3px;
+}
 .nav-link {
     color: var(--text-secondary);
     padding: 10px 20px;
@@ -42,8 +42,6 @@
     background: var(--accent);
     color: white;
 }
-
-/* Фокус для доступности */
 .nav-link:focus-visible,
 .lang-btn:focus-visible {
     outline: 2px solid var(--accent);
@@ -53,16 +51,12 @@
 .lang-btn:focus-visible {
     border-radius: 20px;
 }
-
-/* Правая группа кнопок (уведомления, профиль, язык) – впритык */
 .nav-right {
     display: flex;
     align-items: center;
     gap: 0;
     margin-left: auto;
 }
-
-/* Переключатель языка */
 .lang-switcher {
     display: flex;
     gap: 5px;
@@ -92,8 +86,6 @@
     color: white;
     border-color: var(--accent);
 }
-
-/* Блок профиля (аватар + логин + выпадашка) */
 .nav-profile {
     display: flex;
     align-items: center;
@@ -136,8 +128,6 @@
 .nav-profile:hover .nav-profile-chevron {
     transform: rotate(90deg);
 }
-
-/* Выпадающее меню профиля */
 .profile-dropdown {
     position: absolute;
     top: calc(100% + 8px);
@@ -178,8 +168,6 @@
     background: var(--border);
     margin: 8px 0;
 }
-
-/* Модальное окно ввода токена GitHub */
 .modal {
     display: none;
     position: fixed;
@@ -233,8 +221,6 @@
 .modal-buttons .button {
     min-width: 80px;
 }
-
-/* Адаптивные корректировки для мобильных устройств */
 @media (max-width: 700px) {
     .nav-bar {
         flex-direction: column;
@@ -242,6 +228,6 @@
     }
     .nav-right {
         justify-content: flex-end;
-        gap: 8px; /* небольшой отступ на мобильных, чтобы не слипались */
+        gap: 8px;
     }
 }

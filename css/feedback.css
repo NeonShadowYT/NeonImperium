@@ -1,4 +1,4 @@
-/* feedback.css – стили ленты обратной связи, карточек, комментариев, реакций */
+/* feedback.css – стили обратной связи, карточек, комментариев, реакций */
 .feedback-container {
     margin-top: 24px;
 }
@@ -310,29 +310,4 @@
     padding: 20px;
     text-align: center;
     color: #f44336;
-}
-.load-more-btn {
-    display: block;
-    margin: 24px auto 16px auto;
-    padding: 8px 20px;
-    background: var(--bg-inner-gradient);
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    border-radius: 40px;
-    cursor: pointer;
-    font-family: 'Russo One', sans-serif;
-    font-size: 14px;
-    transition: all 0.2s;
-    width: fit-content;
-    text-align: center;
-}
-.load-more-btn:hover {
-    background: var(--accent);
-    color: white;
-    transform: translateY(-2px);
-}
-.load-more-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
 }

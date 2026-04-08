@@ -150,7 +150,6 @@
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
-            // Исправлено: не передаём недопустимые символы в заголовках, используем только стандартные заголовки
             const userResponse = await fetch('https://api.github.com/user', {
                 headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' },
                 signal: controller.signal
@@ -158,7 +157,6 @@
             clearTimeout(timeoutId);
             if (!userResponse.ok) throw new Error(userResponse.status === 401 ? 'unauthorized' : `http_${userResponse.status}`);
             const userData = await userResponse.json();
-            // Проверка доступа к репозиторию (опционально)
             await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}`, {
                 headers: { 'Authorization': `Bearer ${token}` },
                 signal: AbortSignal.timeout(5000)

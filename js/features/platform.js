@@ -1,11 +1,9 @@
 // platform.js – автоматическое скрытие кнопок под платформу + интеграция с GitHub Releases + версия Starve Neon
-
 document.addEventListener('DOMContentLoaded', function() {
     const os = getOS();
     const platformButtons = document.querySelectorAll('.download-button[data-platform]');
     const githubButtons = document.querySelectorAll('.download-button.github');
 
-    // Скрываем обычные кнопки, не соответствующие текущей ОС
     platformButtons.forEach(btn => {
         const btnPlatform = btn.dataset.platform;
         const currentOs = os.toLowerCase();
@@ -17,7 +15,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Если есть GitHub-кнопки, подставляем ссылки из последнего релиза и обновляем версию Starve Neon
     if (githubButtons.length > 0 || document.querySelector('.game-title')?.textContent === 'Starve Neon') {
         initGitHubDownloads(os, githubButtons);
     }
@@ -74,7 +71,6 @@ async function initGitHubDownloads(os, buttons) {
         return;
     }
 
-    // Обновляем версию и дату для Starve Neon
     updateStarveNeonVersion(release);
 
     buttons.forEach(btn => {
@@ -110,7 +106,6 @@ function updateStarveNeonVersion(release) {
     }
     if (downloadNote) {
         downloadNote.textContent = `Версия ${tag} · Обновление от ${formattedDate}`;
-        // Также обновляем английскую версию, если переключится язык
         const enNote = document.querySelector('.small-note[data-lang="starveDownloadNote"][lang="en"]');
         if (enNote) {
             enNote.textContent = `Version ${tag} · Update ${published.toISOString().slice(0,10)}`;

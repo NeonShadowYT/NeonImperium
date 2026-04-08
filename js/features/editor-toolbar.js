@@ -1,3 +1,4 @@
+// editor-toolbar.js – панель инструментов Markdown
 (function() {
     function createImageServicesMenu() {
         const container = document.createElement('div');
@@ -140,7 +141,7 @@
                 const newText = textarea.value.substring(0, start) + `![${alt || ''}](${url})` + textarea.value.substring(start);
                 textarea.value = newText;
                 textarea.focus();
-                textarea.setSelectionRange(start + alt.length + url.length + 5, start + alt.length + url.length + 5);
+                textarea.setSelectionRange(start + (alt?.length || 0) + url.length + 5, start + (alt?.length || 0) + url.length + 5);
                 textarea.dispatchEvent(new Event('input'));
             }
         }
