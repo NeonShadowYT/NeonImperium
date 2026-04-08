@@ -1,9 +1,5 @@
+// feedback.js – лента обратной связи (идеи, баги, отзывы) для конкретной игры
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable, extractSummary } = GithubCore;
-    const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
-    const { renderReactions, renderComments, openFullModal, openEditorModal, canViewPost } = UIFeedback;
-    const { isAdmin, getCurrentUser } = GithubAuth;
-
     const ITEMS_PER_PAGE = 10;
     const MAX_DISPLAY_ITEMS = 30;
 
@@ -13,6 +9,7 @@
     let loadMoreButton = null;
 
     document.addEventListener('DOMContentLoaded', init);
+
     function init() {
         feedbackSection = document.getElementById('feedback-section');
         if (!feedbackSection) return;
@@ -23,7 +20,6 @@
 
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; checkAuthAndRender(); });
         window.addEventListener('github-logout', () => { currentUser = null; checkAuthAndRender(); });
-
         window.addEventListener('github-issue-created', (e) => {
             const issue = e.detail;
             const hasGameLabel = issue.labels.some(l => l.name === `game:${currentGame}`);
@@ -32,12 +28,12 @@
             if (!typeLabel) return;
             const type = typeLabel.name.split(':')[1];
             if (type === 'update' || type === 'news') return;
-            cacheRemoveByPrefix(`issues_${currentGame}_page_`);
+            Core.cacheRemoveByPrefix(`issues_${currentGame}_page_`);
             allIssues = [issue, ...allIssues];
             filterAndDisplayIssues(true);
         });
 
-        currentUser = getCurrentUser();
+        currentUser = GithubAuth.getCurrentUser();
         checkAuthAndRender();
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -49,7 +45,7 @@
 
     async function openPostFromUrl(postId) {
         try {
-            const issue = await loadIssue(postId);
+            const issue = await GithubAPI.loadIssue(postId);
             const gameLabel = issue.labels.find(l => l.name.startsWith('game:'));
             if (!gameLabel || gameLabel.name.split(':')[1] !== currentGame) return;
             const item = {
@@ -62,13 +58,13 @@
                 game: currentGame,
                 labels: issue.labels.map(l => l.name)
             };
-            if (!canViewPost(issue.body, issue.labels.map(l => l.name), currentUser)) {
-                UIUtils.showToast('У вас нет доступа к этому посту', 'error');
+            if (!UIFeedback.canViewPost(issue.body, issue.labels.map(l => l.name), currentUser)) {
+                Core.showToast('У вас нет доступа к этому посту', 'error');
                 return;
             }
-            openFullModal(item);
+            UIFeedback.openFullModal(item);
         } catch (err) {
-            UIUtils.showToast('Не удалось загрузить пост', 'error');
+            Core.showToast('Не удалось загрузить пост', 'error');
         }
     }
 
@@ -93,16 +89,16 @@
             </div>
             <p class="text-secondary" style="margin:0 0 20px; font-size:14px;" data-lang="feedbackDesc">Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.</p>
             <div class="feedback-tabs" role="tablist" aria-label="Категории обратной связи">
-                <button class="feedback-tab active" data-tab="all" role="tab" aria-selected="true" aria-controls="feedback-panel">Все</button>
-                <button class="feedback-tab" data-tab="idea" role="tab" aria-selected="false" aria-controls="feedback-panel">💡 Идеи</button>
-                <button class="feedback-tab" data-tab="bug" role="tab" aria-selected="false" aria-controls="feedback-panel">🐛 Баги</button>
-                <button class="feedback-tab" data-tab="review" role="tab" aria-selected="false" aria-controls="feedback-panel">⭐ Отзывы</button>
+                <button class="feedback-tab active" data-tab="all" role="tab" aria-selected="true">Все</button>
+                <button class="feedback-tab" data-tab="idea" role="tab" aria-selected="false">💡 Идеи</button>
+                <button class="feedback-tab" data-tab="bug" role="tab" aria-selected="false">🐛 Баги</button>
+                <button class="feedback-tab" data-tab="review" role="tab" aria-selected="false">⭐ Отзывы</button>
             </div>
-            <div class="projects-grid" id="feedback-panel" role="tabpanel" aria-labelledby="active-tab"></div>
+            <div class="projects-grid" id="feedback-panel" role="tabpanel"></div>
         `;
 
         if (currentUser) {
-            document.getElementById('toggle-form-btn').addEventListener('click', () => openEditorModal('new', { game: currentGame }, 'feedback'));
+            document.getElementById('toggle-form-btn').addEventListener('click', () => UIFeedback.openEditorModal('new', { game: currentGame }, 'feedback'));
         }
 
         const tabs = document.querySelectorAll('.feedback-tab');
@@ -114,7 +110,6 @@
                 });
                 e.target.classList.add('active');
                 e.target.setAttribute('aria-selected', 'true');
-
                 currentTab = e.target.dataset.tab;
                 currentPage = 1;
                 allIssues = [];
@@ -126,18 +121,12 @@
                 loadMoreButton = null;
                 loadIssuesPage(1, true);
             });
-
             tab.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
                     e.preventDefault();
                     const tabsArray = Array.from(tabs);
                     const currentIndex = tabsArray.indexOf(e.target);
-                    let newIndex;
-                    if (e.key === 'ArrowRight') {
-                        newIndex = (currentIndex + 1) % tabsArray.length;
-                    } else {
-                        newIndex = (currentIndex - 1 + tabsArray.length) % tabsArray.length;
-                    }
+                    let newIndex = e.key === 'ArrowRight' ? (currentIndex + 1) % tabsArray.length : (currentIndex - 1 + tabsArray.length) % tabsArray.length;
                     tabsArray[newIndex].focus();
                     tabsArray[newIndex].click();
                 }
@@ -152,36 +141,34 @@
         if (isLoading) return;
         isLoading = true;
         if (currentAbort) currentAbort.controller.abort();
-        const { controller, timeoutId } = createAbortable(10000);
+        const { controller, timeoutId } = Core.createAbortable(10000);
         currentAbort = { controller };
 
         try {
             const cacheKey = `issues_${currentGame}_page_${page}`;
             let issues;
-            const cached = cacheGet(cacheKey);
+            const cached = Core.cacheGet(cacheKey);
             if (cached) issues = cached;
             else {
-                issues = await loadIssues({ labels: `game:${currentGame}`, state: 'open', per_page: ITEMS_PER_PAGE, page: page, signal: controller.signal });
+                issues = await GithubAPI.loadIssues({ labels: `game:${currentGame}`, state: 'open', per_page: ITEMS_PER_PAGE, page: page, signal: controller.signal });
                 hasMorePages = issues.length === ITEMS_PER_PAGE;
-                cacheSet(cacheKey, issues);
+                Core.cacheSet(cacheKey, issues);
             }
-            if (reset) allIssues = deduplicateByNumber(issues);
-            else allIssues = deduplicateByNumber([...allIssues, ...issues]);
+            if (reset) allIssues = Core.deduplicateByNumber(issues);
+            else allIssues = Core.deduplicateByNumber([...allIssues, ...issues]);
             currentPage = page;
             filterAndDisplayIssues(reset);
             
             if (reset) {
                 if (loadMoreButton) loadMoreButton.remove();
-                if (hasMorePages) {
-                    createLoadMoreButton();
-                }
+                if (hasMorePages) createLoadMoreButton();
             } else if (!hasMorePages && loadMoreButton) {
                 loadMoreButton.remove();
                 loadMoreButton = null;
             }
         } catch (error) {
             if (error.name === 'AbortError') return;
-            UIUtils.showToast('Ошибка загрузки', 'error');
+            Core.showToast('Ошибка загрузки', 'error');
         } finally {
             clearTimeout(timeoutId);
             if (currentAbort?.controller === controller) currentAbort = null;
@@ -191,19 +178,12 @@
 
     function createLoadMoreButton() {
         if (loadMoreButton) return;
-        loadMoreButton = document.createElement('button');
-        loadMoreButton.className = 'load-more-btn';
-        loadMoreButton.textContent = 'Загрузить ещё';
-        loadMoreButton.setAttribute('aria-label', 'Загрузить следующие сообщения');
-        loadMoreButton.addEventListener('click', async () => {
-            if (isLoading || !hasMorePages) return;
-            UIUtils.setButtonLoading(loadMoreButton, true, 'Загрузить ещё');
+        const loadMore = Core.createLoadMoreButton(gridContainer, async () => {
             await loadIssuesPage(currentPage + 1, false);
-            UIUtils.setButtonLoading(loadMoreButton, false);
-        });
-        if (gridContainer && gridContainer.parentNode) {
-            gridContainer.parentNode.insertBefore(loadMoreButton, gridContainer.nextSibling);
-        }
+            return { hasMore: hasMorePages };
+        }, { label: 'Загрузить ещё', loadingLabel: 'Загрузка...' });
+        loadMore.show();
+        loadMoreButton = loadMore;
     }
 
     function filterAndDisplayIssues(reset = false) {
@@ -212,8 +192,8 @@
             const labels = issue.labels.map(l => l.name);
             if (labels.includes('type:update') || labels.includes('type:news')) return false;
             if (!labels.includes('private')) return true;
-            if (isAdmin()) return true;
-            const allowed = GithubCore.extractAllowed(issue.body);
+            if (GithubAuth.isAdmin()) return true;
+            const allowed = Core.extractAllowed(issue.body);
             if (!allowed) return false;
             const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
             return allowedList.includes(currentUser);
@@ -253,7 +233,7 @@
         const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
         const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : '⭐';
         const previewUrl = extractPreviewUrl(issue.body);
-        const summary = extractSummary(issue.body) || (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
+        const summary = Core.extractSummary(issue.body) || (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
         const date = new Date(issue.created_at).toLocaleDateString();
         
         const cardLink = document.createElement('div');
@@ -323,14 +303,14 @@
         footer.style.alignItems = 'center';
         footer.style.fontSize = '12px';
         footer.style.color = 'var(--text-secondary)';
-        footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${date}</span>`;
+        footer.innerHTML = `<span><i class="fas fa-user"></i> ${Core.escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${date}</span>`;
         
         card.append(imageWrapper, titleContainer, previewP, footer);
         cardLink.appendChild(card);
         
         cardLink.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('.reaction-button') || e.target.closest('.reaction-add-btn')) return;
-            openFullModal({
+            UIFeedback.openFullModal({
                 type: 'issue',
                 id: issue.number,
                 title: issue.title,

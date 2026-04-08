@@ -1,4 +1,4 @@
-// notifications.js – система уведомлений
+// notifications.js – система уведомлений (исправлена вставка колокольчика)
 (function() {
     const NOTIFICATION_KEY = 'neon_notifications_last_visit';
     const NOTIFICATION_DATA_KEY = 'neon_notifications_data';
@@ -19,30 +19,15 @@
         currentUser = GithubAuth.getCurrentUser();
         loadLastVisit();
         createNotificationBell();
-        
-        setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                checkAll();
-            }
-        }, CHECK_INTERVAL);
-        
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                checkAll();
-            }
-        });
-        
+        setInterval(() => { if (document.visibilityState === 'visible') checkAll(); }, CHECK_INTERVAL);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkAll(); });
         setTimeout(checkAll, 2000);
     }
     
     function loadLastVisit() {
         const stored = localStorage.getItem(NOTIFICATION_KEY);
-        if (stored) {
-            lastVisit = new Date(parseInt(stored));
-        } else {
-            lastVisit = new Date(0);
-            updateLastVisit();
-        }
+        lastVisit = stored ? new Date(parseInt(stored)) : new Date(0);
+        updateLastVisit();
     }
     
     function updateLastVisit() {
@@ -55,12 +40,7 @@
     }
     
     function saveNotificationData() {
-        const data = {
-            count: notificationCount,
-            list: notificationList,
-            lastUpdate: Date.now()
-        };
-        localStorage.setItem(NOTIFICATION_DATA_KEY, JSON.stringify(data));
+        localStorage.setItem(NOTIFICATION_DATA_KEY, JSON.stringify({ count: notificationCount, list: notificationList, lastUpdate: Date.now() }));
     }
     
     function loadNotificationData() {
@@ -87,6 +67,11 @@
         if (!navBar) return;
         
         const profile = document.querySelector('.nav-profile');
+        let referenceNode = profile;
+        if (!referenceNode) {
+            const children = Array.from(navBar.children);
+            referenceNode = children.find(child => !child.classList?.contains('notification-bell')) || null;
+        }
         
         bellButton = document.createElement('div');
         bellButton.className = 'notification-bell';
@@ -95,11 +80,8 @@
         bellButton.setAttribute('aria-label', 'Уведомления');
         bellButton.innerHTML = '<i class="fas fa-bell"></i><span class="notification-badge" style="display: none;">0</span>';
         
-        if (profile) {
-            navBar.insertBefore(bellButton, profile);
-        } else {
-            navBar.appendChild(bellButton);
-        }
+        if (referenceNode) navBar.insertBefore(bellButton, referenceNode);
+        else navBar.appendChild(bellButton);
         
         dropdown = document.createElement('div');
         dropdown.className = 'notification-dropdown';
@@ -143,16 +125,14 @@
             item.innerHTML = `
                 <div class="notification-icon">${notif.icon}</div>
                 <div class="notification-content">
-                    <div class="notification-title">${GithubCore.escapeHtml(notif.title)}</div>
-                    <div class="notification-text">${GithubCore.escapeHtml(notif.text)}</div>
+                    <div class="notification-title">${Core.escapeHtml(notif.title)}</div>
+                    <div class="notification-text">${Core.escapeHtml(notif.text)}</div>
                     <div class="notification-time">${notif.timeAgo}</div>
                 </div>
             `;
             if (notif.link) {
                 item.style.cursor = 'pointer';
-                item.addEventListener('click', () => {
-                    window.location.href = notif.link;
-                });
+                item.addEventListener('click', () => { window.location.href = notif.link; });
             }
             dropdown.appendChild(item);
         });
@@ -165,28 +145,13 @@
     }
     
     function addNotification(type, title, text, link = null) {
-        const iconMap = {
-            'comment': '💬',
-            'post': '📰',
-            'update': '🔄',
-            'license': '📜',
-            'support': '🛟'
-        };
+        const iconMap = { 'comment': '💬', 'post': '📰', 'update': '🔄', 'license': '📜', 'support': '🛟' };
         const icon = iconMap[type] || '🔔';
-        const timeAgo = 'только что';
-        notificationList.unshift({
-            type,
-            icon,
-            title,
-            text,
-            link,
-            timeAgo,
-            timestamp: Date.now()
-        });
+        notificationList.unshift({ type, icon, title, text, link, timeAgo: 'только что', timestamp: Date.now() });
         notificationCount++;
         updateBellBadge();
         saveNotificationData();
-        UIUtils.showToast(`${title}: ${text.substring(0, 60)}`, 'info', 5000);
+        Core.showToast(`${title}: ${text.substring(0, 60)}`, 'info', 5000);
     }
     
     async function checkAll() {
@@ -206,19 +171,13 @@
                 for (const issue of issues) {
                     const issueDate = new Date(issue.created_at);
                     if (issueDate > lastVisit) {
-                        const title = `[${game}] ${issue.title}`;
-                        const text = `Новое сообщение от ${issue.user.login}`;
-                        const link = `${window.location.origin}${window.location.pathname}?post=${issue.number}`;
-                        addNotification('post', title, text, link);
+                        addNotification('post', `[${game}] ${issue.title}`, `Новое сообщение от ${issue.user.login}`, `${window.location.origin}${window.location.pathname}?post=${issue.number}`);
                     }
                     const comments = await GithubAPI.loadComments(issue.number);
                     for (const comment of comments) {
                         const commentDate = new Date(comment.created_at);
                         if (commentDate > lastVisit && comment.user.login !== currentUser) {
-                            const title = `Ответ в "${issue.title}"`;
-                            const text = `${comment.user.login}: ${comment.body.substring(0, 60)}`;
-                            const link = `${window.location.origin}${window.location.pathname}?post=${issue.number}`;
-                            addNotification('comment', title, text, link);
+                            addNotification('comment', `Ответ в "${issue.title}"`, `${comment.user.login}: ${comment.body.substring(0, 60)}`, `${window.location.origin}${window.location.pathname}?post=${issue.number}`);
                         }
                     }
                 }
@@ -232,12 +191,8 @@
             try {
                 const issues = await GithubAPI.loadIssues({ labels: `type:update,game:${game}`, state: 'open', per_page: 30 });
                 for (const issue of issues) {
-                    const issueDate = new Date(issue.created_at);
-                    if (issueDate > lastVisit) {
-                        const title = `Обновление игры ${game}`;
-                        const text = issue.title;
-                        const link = `${window.location.origin}/${game}.html?post=${issue.number}`;
-                        addNotification('update', title, text, link);
+                    if (new Date(issue.created_at) > lastVisit) {
+                        addNotification('update', `Обновление игры ${game}`, issue.title, `${window.location.origin}/${game}.html?post=${issue.number}`);
                     }
                 }
             } catch(e) { console.warn('Ошибка загрузки обновлений', game, e); }
@@ -248,25 +203,17 @@
         try {
             const issues = await GithubAPI.loadIssues({ labels: 'type:news', state: 'open', per_page: 30 });
             for (const issue of issues) {
-                const issueDate = new Date(issue.created_at);
-                if (issueDate > lastVisit) {
-                    const title = `Новость`;
-                    const text = issue.title;
-                    const link = `${window.location.origin}/index.html?post=${issue.number}`;
-                    addNotification('post', title, text, link);
+                if (new Date(issue.created_at) > lastVisit) {
+                    addNotification('post', `Новость`, issue.title, `${window.location.origin}/index.html?post=${issue.number}`);
                 }
             }
         } catch(e) { console.warn('Ошибка загрузки новостей', e); }
     }
     
     async function checkLicenseChange() {
-        const licenseUrl = `${window.location.origin}/NeonImperium/license.html`;
         try {
-            const response = await fetch(licenseUrl);
-            if (!response.ok) {
-                console.warn('License file not found, skipping check');
-                return;
-            }
+            const response = await fetch('/NeonImperium/license.html');
+            if (!response.ok) return;
             const html = await response.text();
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
@@ -275,20 +222,13 @@
                 const text = lastUpdateElem.textContent;
                 const match = text.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
                 if (match) {
-                    let date = new Date(match[3], getMonthNumber(match[2]), match[1]);
+                    const months = { 'января':0, 'февраля':1, 'марта':2, 'апреля':3, 'мая':4, 'июня':5, 'июля':6, 'августа':7, 'сентября':8, 'октября':9, 'ноября':10, 'декабря':11 };
+                    let date = new Date(match[3], months[match[2].toLowerCase()], match[1]);
                     if (date > lastVisit) {
                         addNotification('license', 'Лицензионное соглашение', 'Обновлена лицензия. Пожалуйста, ознакомьтесь.', '/NeonImperium/license.html');
                     }
                 }
             }
         } catch(e) { console.warn('Ошибка проверки лицензии', e); }
-    }
-    
-    function getMonthNumber(monthName) {
-        const months = {
-            'января': 0, 'февраля': 1, 'марта': 2, 'апреля': 3, 'мая': 4, 'июня': 5,
-            'июля': 6, 'августа': 7, 'сентября': 8, 'октября': 9, 'ноября': 10, 'декабря': 11
-        };
-        return months[monthName.toLowerCase()] || 0;
     }
 })();

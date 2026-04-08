@@ -1,9 +1,10 @@
+// github-auth.js – авторизация через GitHub (использует Core)
 (function() {
-    const CONFIG = GithubCore.CONFIG;
     const TOKEN_KEY = 'github_token';
     const USER_CACHE_KEY = 'github_user';
     const LAST_CLEAR_KEY = 'last_cache_clear';
     const CLEAR_COOLDOWN = 10000;
+    const ALLOWED_AUTHORS = ['NeonShadowYT', 'GoldenCreeper567'];
 
     let navBar, profileContainer, modal, tokenInput, tokenToggle;
 
@@ -13,17 +14,13 @@
         navBar = document.querySelector('.nav-bar');
         if (!navBar) return;
 
-        // Создаём правый блок, если его нет
         let rightBlock = navBar.querySelector('.nav-right');
         if (!rightBlock) {
             rightBlock = document.createElement('div');
             rightBlock.className = 'nav-right';
             const langSwitcher = document.querySelector('.lang-switcher');
-            if (langSwitcher) {
-                navBar.insertBefore(rightBlock, langSwitcher);
-            } else {
-                navBar.appendChild(rightBlock);
-            }
+            if (langSwitcher) navBar.insertBefore(rightBlock, langSwitcher);
+            else navBar.appendChild(rightBlock);
         }
 
         profileContainer = document.createElement('div');
@@ -31,8 +28,6 @@
         profileContainer.setAttribute('role', 'button');
         profileContainer.setAttribute('tabindex', '0');
         profileContainer.setAttribute('aria-haspopup', 'true');
-        profileContainer.setAttribute('aria-expanded', 'false');
-
         rightBlock.appendChild(profileContainer);
 
         createModal();
@@ -44,9 +39,7 @@
             try {
                 const user = JSON.parse(cachedUser);
                 renderProfile(user, savedToken);
-                if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) {
-                    loadAdminScript();
-                }
+                if (ALLOWED_AUTHORS.includes(user.login)) loadAdminScript();
             } catch {
                 validateAndShowProfile(savedToken);
             }
@@ -55,20 +48,6 @@
         } else {
             showNotLoggedIn();
         }
-
-        window.addEventListener('click', (e) => {
-            if (modal && e.target === modal) {
-                modal.classList.remove('active');
-                clearModalError();
-            }
-        });
-
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && modal?.classList.contains('active')) {
-                modal.classList.remove('active');
-                clearModalError();
-            }
-        });
 
         window.addEventListener('github-login-requested', () => {
             clearModalError();
@@ -89,35 +68,24 @@
         modal.className = 'modal';
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
-        modal.setAttribute('aria-labelledby', 'github-modal-title');
-
         modal.innerHTML = `
             <div class="modal-content">
                 <h3 id="github-modal-title"><i class="fab fa-github"></i> <span data-lang="githubLoginTitle">Вход через GitHub</span></h3>
-                <div class="modal-instructions" style="max-height: 350px; overflow-y: auto; padding-right: 10px;">
+                <div class="modal-instructions" style="max-height:350px; overflow-y:auto; padding-right:10px;">
                     <p><strong>🔒 <span data-lang="githubSecure">Безопасно и прозрачно:</span></strong> <span data-lang="githubTokenNote">токен хранится в вашем браузере и передаётся только в GitHub API.</span></p>
                     <p><strong>📝 <span data-lang="githubHowTo">Как получить токен (простой способ):</span></strong></p>
-                    <ol style="text-align: left; margin: 10px 0 20px 20px;">
+                    <ol style="text-align:left; margin:10px 0 20px 20px;">
                         <li><span data-lang="githubStep1">Перейдите в </span><a href="https://github.com/settings/tokens" target="_blank">Personal access tokens (classic)</a>.</li>
                         <li><span data-lang="githubStep2">Нажмите "Generate new token (classic)".</span></li>
                         <li><span data-lang="githubStep3">Дайте имя, выберите срок (например, 30 дней).</span></li>
                         <li><span data-lang="githubStep4">В разделе "Select scopes" отметьте только </span><strong>repo</strong>.</li>
                         <li><span data-lang="githubStep5">Скопируйте токен и вставьте сюда.</span></li>
                     </ol>
-                    <p class="text-secondary" style="font-size: 12px; background: var(--bg-primary); padding: 8px; border-radius: 8px;">
-                        ⚠️ <span data-lang="githubWarning">Classic токен даёт доступ ко всем вашим репозиториям. Это нормально для участия в обсуждениях.</span>
-                    </p>
-                    <p style="margin-top: 15px; text-align: center;">
-                        <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color: var(--accent);">
-                            <i class="fas fa-external-link-alt"></i> <span data-lang="githubRevokeLink">Управление токенами GitHub (для отзыва)</span>
-                        </a>
-                    </p>
+                    <p class="text-secondary" style="font-size:12px; background:var(--bg-primary); padding:8px; border-radius:8px;">⚠️ <span data-lang="githubWarning">Classic токен даёт доступ ко всем вашим репозиториям. Это нормально для участия в обсуждениях.</span></p>
                 </div>
-                <div style="position: relative; margin-bottom: 16px;">
-                    <input type="password" id="github-token-input" placeholder="github_pat_xxx..." autocomplete="off" style="width: 100%; padding: 12px; padding-right: 40px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 12px; color: var(--text-primary);">
-                    <button type="button" id="token-toggle" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-secondary); cursor: pointer;" aria-label="Показать/скрыть токен">
-                        <i class="fas fa-eye"></i>
-                    </button>
+                <div style="position:relative; margin-bottom:16px;">
+                    <input type="password" id="github-token-input" placeholder="github_pat_xxx..." autocomplete="off" style="width:100%; padding:12px 40px 12px 12px; background:var(--bg-primary); border:1px solid var(--border); border-radius:12px; color:var(--text-primary);">
+                    <button type="button" id="token-toggle" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:var(--text-secondary); cursor:pointer;"><i class="fas fa-eye"></i></button>
                 </div>
                 <div id="modal-error-container"></div>
                 <div class="modal-buttons">
@@ -134,11 +102,9 @@
             if (tokenInput.type === 'password') {
                 tokenInput.type = 'text';
                 tokenToggle.innerHTML = '<i class="fas fa-eye-slash"></i>';
-                tokenToggle.setAttribute('aria-label', 'Скрыть токен');
             } else {
                 tokenInput.type = 'password';
                 tokenToggle.innerHTML = '<i class="fas fa-eye"></i>';
-                tokenToggle.setAttribute('aria-label', 'Показать токен');
             }
         });
 
@@ -146,14 +112,10 @@
             const token = tokenInput.value.trim();
             if (token) validateAndShowProfile(token, true);
         });
-
         document.getElementById('modal-cancel').addEventListener('click', () => {
             modal.classList.remove('active');
             clearModalError();
             tokenInput.value = '';
-            tokenInput.type = 'password';
-            tokenToggle.innerHTML = '<i class="fas fa-eye"></i>';
-            tokenToggle.setAttribute('aria-label', 'Показать токен');
         });
     }
 
@@ -166,56 +128,32 @@
         const container = document.getElementById('modal-error-container');
         if (!container) return;
         const lang = localStorage.getItem('preferredLanguage') || 'ru';
-        const errorMsg = translations[lang] && translations[lang][messageKey] ? translations[lang][messageKey] : messageKey;
-        container.innerHTML = `
-            <div class="error-message" style="margin-bottom: 15px; padding: 10px; background: rgba(244,67,54,0.1); color: #f44336; border-radius: 8px; text-align: center;">
-                <i class="fas fa-exclamation-triangle"></i> ${errorMsg}
-                ${details ? `<br><small>${details}</small>` : ''}
-            </div>
-        `;
+        const errorMsg = (window.translations && window.translations[lang] && window.translations[lang][messageKey]) ? window.translations[lang][messageKey] : messageKey;
+        container.innerHTML = `<div class="error-message" style="margin-bottom:15px; padding:10px; background:rgba(244,67,54,0.1); color:#f44336; border-radius:8px; text-align:center;"><i class="fas fa-exclamation-triangle"></i> ${errorMsg}${details ? `<br><small>${details}</small>` : ''}</div>`;
     }
 
     async function validateAndShowProfile(token, shouldSave = false) {
-        if (!token) {
-            showModalError('githubTokenMissing');
-            return;
-        }
-
-        profileContainer.innerHTML = `<i class="fas fa-circle-notch fa-spin" style="color: var(--accent); margin: 8px;"></i>`;
+        if (!token) { showModalError('githubTokenMissing'); return; }
+        profileContainer.innerHTML = `<i class="fas fa-circle-notch fa-spin" style="color:var(--accent); margin:8px;"></i>`;
         clearModalError();
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-
+        const { controller, timeoutId } = Core.createAbortable(10000);
         try {
             const userResponse = await fetch('https://api.github.com/user', {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                },
+                headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' },
                 signal: controller.signal
             });
-
             clearTimeout(timeoutId);
-
-            if (!userResponse.ok) {
-                if (userResponse.status === 401) {
-                    throw new Error('unauthorized');
-                } else {
-                    throw new Error(`http_${userResponse.status}`);
-                }
-            }
-
+            if (!userResponse.ok) throw new Error(userResponse.status === 401 ? 'unauthorized' : `http_${userResponse.status}`);
             const userData = await userResponse.json();
 
+            // Проверка доступа к репозиторию (необязательно)
             try {
-                await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}`, {
+                await fetch(`https://api.github.com/repos/NeonShadowYT/NeonImperium`, {
                     headers: { 'Authorization': `Bearer ${token}` },
                     signal: AbortSignal.timeout(5000)
                 });
-            } catch (repoErr) {
-                console.warn('Could not verify repository access:', repoErr);
-            }
+            } catch(e) { console.warn('Repo access check failed:', e); }
 
             if (shouldSave) {
                 localStorage.setItem(TOKEN_KEY, token);
@@ -223,90 +161,47 @@
             }
 
             window.dispatchEvent(new CustomEvent('github-login-success', { detail: { login: userData.login } }));
-
             renderProfile(userData, token);
-            if (CONFIG.ALLOWED_AUTHORS.includes(userData.login)) {
-                loadAdminScript();
-            }
-
+            if (ALLOWED_AUTHORS.includes(userData.login)) loadAdminScript();
             modal.classList.remove('active');
             tokenInput.value = '';
-            tokenInput.type = 'password';
-            tokenToggle.innerHTML = '<i class="fas fa-eye"></i>';
-            tokenToggle.setAttribute('aria-label', 'Показать токен');
-            clearModalError();
-
-        } catch (error) {
+        } catch(error) {
             clearTimeout(timeoutId);
-            console.error('Auth error:', error);
-
             localStorage.removeItem(TOKEN_KEY);
             sessionStorage.removeItem(USER_CACHE_KEY);
-
-            if (error.name === 'AbortError') {
-                showModalError('githubTimeout');
-            } else if (error.message === 'unauthorized') {
-                showModalError('githubAuthError', 'Токен недействителен или истёк');
-            } else if (error.message.startsWith('http_')) {
+            if (error.name === 'AbortError') showModalError('githubTimeout');
+            else if (error.message === 'unauthorized') showModalError('githubAuthError', 'Токен недействителен или истёк');
+            else if (error.message.startsWith('http_')) {
                 const status = error.message.split('_')[1];
-                if (status === '403') {
-                    showModalError('githubForbidden', 'Проверьте права токена (нужен scope repo)');
-                } else if (status === '404') {
-                    showModalError('githubNotFound', 'Репозиторий не найден');
-                } else {
-                    showModalError('githubServerError', `HTTP ${status}`);
-                }
-            } else {
-                showModalError('githubNetworkError', error.message);
-            }
-
-            setTimeout(() => {
-                modal.classList.add('active');
-                tokenInput.focus();
-            }, 100);
+                if (status === '403') showModalError('githubForbidden', 'Проверьте права токена (нужен scope repo)');
+                else if (status === '404') showModalError('githubNotFound');
+                else showModalError('githubServerError', `HTTP ${status}`);
+            } else showModalError('githubNetworkError', error.message);
+            setTimeout(() => { modal.classList.add('active'); tokenInput.focus(); }, 100);
         }
     }
 
     function renderProfile(user, token) {
         const avatarUrl = user.avatar_url || 'images/default-avatar.webp';
-        const login = user.login || 'User';
-
+        const login = user.login;
         profileContainer.innerHTML = `
             <img src="${avatarUrl}" alt="${login}" class="nav-profile-avatar" onerror="this.src='images/default-avatar.webp'" width="32" height="32">
             <span class="nav-profile-login">${login}</span>
             <i class="fas fa-chevron-right nav-profile-chevron"></i>
             <div class="profile-dropdown">
-                <div class="profile-dropdown-item" data-action="profile">
-                    <i class="fas fa-user"></i> <span data-lang="githubProfile">Профиль</span> (${login})
-                </div>
-                <div class="profile-dropdown-item" data-action="token-info">
-                    <i class="fas fa-key"></i> <span data-lang="githubTokenActive">Токен активен</span>
-                </div>
-                <div class="profile-dropdown-item" data-action="revoke-token">
-                    <i class="fas fa-external-link-alt"></i> <span data-lang="githubRevoke">Управление токенами</span>
-                </div>
+                <div class="profile-dropdown-item" data-action="profile"><i class="fas fa-user"></i> <span data-lang="githubProfile">Профиль</span> (${login})</div>
+                <div class="profile-dropdown-item" data-action="token-info"><i class="fas fa-key"></i> <span data-lang="githubTokenActive">Токен активен</span></div>
+                <div class="profile-dropdown-item" data-action="revoke-token"><i class="fas fa-external-link-alt"></i> <span data-lang="githubRevoke">Управление токенами</span></div>
                 <div class="profile-dropdown-divider"></div>
-                <div class="profile-dropdown-item" data-action="support">
-                    <i class="fas fa-headset"></i> <span data-lang="supportMenuItem">Поддержка</span>
-                </div>
+                <div class="profile-dropdown-item" data-action="support"><i class="fas fa-headset"></i> <span data-lang="supportMenuItem">Поддержка</span></div>
                 <div class="profile-dropdown-divider"></div>
-                <div class="profile-dropdown-item" data-action="clear-cache">
-                    <i class="fas fa-trash-alt"></i> <span data-lang="githubClearCache">Очистить кеш</span>
-                </div>
-                <div class="profile-dropdown-item" data-action="logout">
-                    <i class="fas fa-sign-out-alt"></i> <span data-lang="githubLogout">Выйти</span>
-                </div>
+                <div class="profile-dropdown-item" data-action="clear-cache"><i class="fas fa-trash-alt"></i> <span data-lang="githubClearCache">Очистить кеш</span></div>
+                <div class="profile-dropdown-item" data-action="logout"><i class="fas fa-sign-out-alt"></i> <span data-lang="githubLogout">Выйти</span></div>
             </div>
         `;
-
         profileContainer.dataset.githubToken = token;
         profileContainer.dataset.githubLogin = login;
-
         profileContainer.addEventListener('click', toggleDropdown);
-        profileContainer.addEventListener('blur', () => {
-            setTimeout(() => profileContainer.classList.remove('active'), 200);
-        });
-
         attachDropdownHandlers();
     }
 
@@ -315,16 +210,10 @@
             <span class="nav-profile-login placeholder" data-lang="githubLogin">Войти</span>
             <i class="fas fa-chevron-right nav-profile-chevron"></i>
             <div class="profile-dropdown">
-                <div class="profile-dropdown-item" data-action="login">
-                    <i class="fab fa-github"></i> <span data-lang="githubLoginVia">Войти через GitHub</span>
-                </div>
-                <div class="profile-dropdown-item" data-action="about">
-                    <i class="fas fa-info-circle"></i> <span data-lang="githubWhy">Зачем это нужно?</span>
-                </div>
+                <div class="profile-dropdown-item" data-action="login"><i class="fab fa-github"></i> <span data-lang="githubLoginVia">Войти через GitHub</span></div>
+                <div class="profile-dropdown-item" data-action="about"><i class="fas fa-info-circle"></i> <span data-lang="githubWhy">Зачем это нужно?</span></div>
                 <div class="profile-dropdown-divider"></div>
-                <div class="profile-dropdown-item" data-action="clear-cache">
-                    <i class="fas fa-trash-alt"></i> <span data-lang="githubClearCache">Очистить кеш</span>
-                </div>
+                <div class="profile-dropdown-item" data-action="clear-cache"><i class="fas fa-trash-alt"></i> <span data-lang="githubClearCache">Очистить кеш</span></div>
             </div>
         `;
         profileContainer.addEventListener('click', toggleDropdown);
@@ -345,34 +234,24 @@
     function handleDropdownAction(action) {
         const token = localStorage.getItem(TOKEN_KEY);
         const userLogin = profileContainer.dataset.githubLogin;
-
         switch(action) {
-            case 'login':
-                modal.classList.add('active');
-                tokenInput.focus();
-                break;
-            case 'about':
-                UIUtils.showToast('Вход через GitHub позволяет оставлять идеи, голосовать и участвовать.', 'info');
-                break;
-            case 'profile':
-                if (userLogin) window.open(`https://github.com/${userLogin}`, '_blank');
-                break;
-            case 'token-info':
-                if (token) UIUtils.showToast(`Вы вошли как ${userLogin}. Токен сохранён в браузере.`, 'success');
-                break;
-            case 'revoke-token':
-                window.open('https://github.com/settings/tokens', '_blank');
-                UIUtils.showToast('Перейдите в раздел токенов, чтобы удалить ненужные', 'info');
-                break;
-            case 'support':
-                if (window.UIFeedback && window.UIFeedback.openSupportModal) {
-                    window.UIFeedback.openSupportModal();
-                } else {
-                    UIUtils.showToast('Система поддержки временно недоступна', 'error');
-                }
-                break;
+            case 'login': modal.classList.add('active'); tokenInput.focus(); break;
+            case 'about': Core.showToast('Вход через GitHub позволяет оставлять идеи, голосовать и участвовать.', 'info'); break;
+            case 'profile': if (userLogin) window.open(`https://github.com/${userLogin}`, '_blank'); break;
+            case 'token-info': if (token) Core.showToast(`Вы вошли как ${userLogin}. Токен сохранён в браузере.`, 'success'); break;
+            case 'revoke-token': window.open('https://github.com/settings/tokens', '_blank'); Core.showToast('Перейдите в раздел токенов, чтобы удалить ненужные', 'info'); break;
+            case 'support': if (window.UIFeedback?.openSupportModal) window.UIFeedback.openSupportModal(); else Core.showToast('Система поддержки временно недоступна', 'error'); break;
             case 'clear-cache':
-                handleClearCache();
+                const lastClear = localStorage.getItem(LAST_CLEAR_KEY);
+                if (lastClear && Date.now() - parseInt(lastClear) < CLEAR_COOLDOWN) {
+                    const remaining = Math.ceil((CLEAR_COOLDOWN - (Date.now() - parseInt(lastClear))) / 1000);
+                    Core.showToast(`Очистка кеша доступна раз в 10 секунд. Подождите ${remaining} секунд.`, 'warning');
+                    return;
+                }
+                sessionStorage.clear();
+                localStorage.setItem(LAST_CLEAR_KEY, Date.now().toString());
+                Core.showToast('Кеш очищен, страница будет перезагружена.', 'info');
+                setTimeout(() => location.reload(), 1000);
                 break;
             case 'logout':
                 localStorage.removeItem(TOKEN_KEY);
@@ -381,23 +260,10 @@
                 delete profileContainer.dataset.githubToken;
                 delete profileContainer.dataset.githubLogin;
                 showNotLoggedIn();
-                UIUtils.showToast('Вы вышли из аккаунта.', 'info');
+                Core.showToast('Вы вышли из аккаунта.', 'info');
                 location.reload();
                 break;
         }
-    }
-
-    function handleClearCache() {
-        const lastClear = localStorage.getItem(LAST_CLEAR_KEY);
-        if (lastClear && Date.now() - parseInt(lastClear) < CLEAR_COOLDOWN) {
-            const remaining = Math.ceil((CLEAR_COOLDOWN - (Date.now() - parseInt(lastClear))) / 1000);
-            UIUtils.showToast(`Очистка кеша доступна раз в 10 секунд. Подождите ${remaining} секунд.`, 'warning');
-            return;
-        }
-        sessionStorage.clear();
-        localStorage.setItem(LAST_CLEAR_KEY, Date.now().toString());
-        UIUtils.showToast('Кеш очищен, страница будет перезагружена.', 'info');
-        setTimeout(() => location.reload(), 1000);
     }
 
     function toggleDropdown(e) {
@@ -408,14 +274,11 @@
     }
 
     window.GithubAuth = {
-        getCurrentUser: () => {
-            const profile = document.querySelector('.nav-profile');
-            return profile ? profile.dataset.githubLogin : null;
-        },
+        getCurrentUser: () => profileContainer ? profileContainer.dataset.githubLogin : null,
         getToken: () => localStorage.getItem(TOKEN_KEY),
         isAdmin: () => {
             const user = window.GithubAuth.getCurrentUser();
-            return user && GithubCore.CONFIG.ALLOWED_AUTHORS.includes(user);
+            return user && ALLOWED_AUTHORS.includes(user);
         }
     };
 })();
