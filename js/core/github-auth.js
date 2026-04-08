@@ -17,8 +17,6 @@
         profileContainer.className = 'nav-profile';
         profileContainer.setAttribute('role', 'button');
         profileContainer.setAttribute('tabindex', '0');
-        profileContainer.setAttribute('aria-haspopup', 'true');
-        profileContainer.setAttribute('aria-expanded', 'false');
 
         const langSwitcher = document.querySelector('.lang-switcher');
         if (langSwitcher) {
@@ -394,9 +392,7 @@
 
     function toggleDropdown(e) {
         e.stopPropagation();
-        const isActive = profileContainer.classList.contains('active');
         profileContainer.classList.toggle('active');
-        profileContainer.setAttribute('aria-expanded', (!isActive).toString());
     }
 
     window.GithubAuth = {

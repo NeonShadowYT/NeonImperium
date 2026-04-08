@@ -4,24 +4,22 @@
         { content: 'confused', emoji: '😕' }, { content: 'heart', emoji: '❤️' }, { content: 'hooray', emoji: '🎉' },
         { content: 'rocket', emoji: '🚀' }, { content: 'eyes', emoji: '👀' }
     ];
-    
-    // Используем глобальный кеш с версионированием
-    const reactionsCache = new Map(); // для реакций и комментариев оставляем in-memory кеш, так как они часто меняются
+    const CACHE_TTL = 5 * 60 * 1000;
+    const reactionsCache = new Map();
     const commentsCache = new Map();
     const reactionLocks = new Map();
+    const postsCache = new Map();
 
     function getCached(key, cacheMap) {
         const cached = cacheMap.get(key);
-        return (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) ? cached.data : null;
+        return (cached && Date.now() - cached.timestamp < CACHE_TTL) ? cached.data : null;
     }
     function setCached(key, data, cacheMap) { cacheMap.set(key, { data, timestamp: Date.now() }); }
     function invalidateCache(issueNumber) {
         reactionsCache.delete(`reactions_${issueNumber}`);
         commentsCache.delete(`comments_${issueNumber}`);
-        if (window.Cache) {
-            window.Cache.remove(`post_${issueNumber}`);
-            window.Cache.remove(`reactions_list_${issueNumber}`);
-        }
+        postsCache.delete(`post_${issueNumber}`);
+        if (window.reactionsListCache) window.reactionsListCache.delete(`list_reactions_${issueNumber}`);
     }
 
     function groupReactions(reactions, currentUser) {
@@ -197,8 +195,7 @@
 
     async function loadPostByNumber(issueNumber) {
         const cacheKey = `post_${issueNumber}`;
-        let cached = null;
-        if (window.Cache) cached = window.Cache.get(cacheKey);
+        const cached = getCached(cacheKey, postsCache);
         if (cached) return cached;
         try {
             const issue = await GithubAPI.loadIssue(issueNumber);
@@ -211,7 +208,7 @@
                 labels: issue.labels.map(l => l.name),
                 game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
             };
-            if (window.Cache) window.Cache.set(cacheKey, postData);
+            setCached(cacheKey, postData, postsCache);
             return postData;
         } catch (err) {
             console.warn('Failed to load post', issueNumber, err);
@@ -415,23 +412,10 @@
         return null;
     }
 
-    // Добавляем lazy loading для всех изображений в рендеренном контенте
-    function addLazyLoadingToImages(container) {
-        if (!container) return;
-        const images = container.querySelectorAll('img:not([loading])');
-        images.forEach(img => {
-            if (!img.hasAttribute('loading')) {
-                img.setAttribute('loading', 'lazy');
-            }
-        });
-    }
-
     async function renderPostBody(container, body, issueNumber) {
-        let html = await GithubCore.renderMarkdown(body);
+        let html = GithubCore.renderMarkdown(body);
         container.innerHTML = html;
         if (!container.classList.contains('markdown-body')) container.classList.add('markdown-body');
-        addLazyLoadingToImages(container);
-        
         const pollData = extractPollFromBody(body);
         if (pollData) {
             const pollContainer = document.createElement('div');
@@ -844,6 +828,7 @@
         return { container, textarea, previewDiv, updatePreview };
     }
 
+    // Global variables for editor modal
     let currentPrivateUsersInput = null;
 
     function openEditorModal(mode, data, postType = 'feedback') {
@@ -1047,7 +1032,6 @@
             thumbnailImg.id = 'preview-thumbnail-img';
             thumbnailImg.src = previewUrl || '';
             thumbnailImg.alt = 'Preview';
-            thumbnailImg.loading = 'lazy';
             const removePreviewBtn = document.createElement('button');
             removePreviewBtn.type = 'button';
             removePreviewBtn.className = 'remove-preview';
@@ -1118,6 +1102,7 @@
             const accessDropdown = createAccessDropdown(currentIsPrivate, allowedUsers, onAccessToggle);
             if (postType === 'support') {
                 accessDropdown.style.display = 'none';
+                // Предупреждение о видимости в репозитории GitHub
                 const supportInfo = document.createElement('div');
                 supportInfo.style.cssText = 'background: rgba(244,67,54,0.15); border-left: 4px solid #f44336; padding: 10px 12px; border-radius: 12px; margin-bottom: 10px;';
                 supportInfo.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #f44336;"></i> <strong>Внимание:</strong> На сайте это обращение увидят только вы и администратор. Однако оно сохраняется в <strong>публичном репозитории GitHub</strong>, и любой, у кого есть прямая ссылка, потенциально может его увидеть. Не публикуйте конфиденциальные данные (пароли, ключи).';
@@ -1272,6 +1257,7 @@
         }
     }
 
+    // Support Modal: list all support tickets (admin sees all, user sees own)
     async function openSupportModal() {
         const currentUser = GithubAuth.getCurrentUser();
         if (!currentUser) {

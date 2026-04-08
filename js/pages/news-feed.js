@@ -1,4 +1,9 @@
 (function() {
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed } = GithubCore;
+    const { loadIssues, loadIssue } = GithubAPI;
+    const { openFullModal, canViewPost } = UIFeedback;
+    const { getCurrentUser, isAdmin } = GithubAuth;
+
     const YT_CHANNELS = [
         { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
         { id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' },
@@ -10,8 +15,6 @@
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
     let currentUser = null, currentAbort = null;
     let videoLoading = false, videoError = false;
-    let allItemsAll = [];
-    let displayLimit = 6;
 
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('news-section');
@@ -33,7 +36,7 @@
         }
         container = document.getElementById('news-feed');
         if (container) {
-            currentUser = GithubAuth.getCurrentUser();
+            currentUser = getCurrentUser();
             loadNewsFeed();
         }
         window.addEventListener('github-login-success', (e) => { currentUser = e.detail.login; refreshNewsFeed(); });
@@ -43,8 +46,8 @@
             const issue = e.detail;
             const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
             if (!typeLabel) return;
-            if (!GithubCore.CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
-            if (window.Cache) window.Cache.removeByPrefix('posts_news+update_v3');
+            if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+            cacheRemoveByPrefix('posts_news+update_v3');
             const newPost = {
                 type: 'post',
                 number: issue.number,
@@ -56,7 +59,6 @@
                 game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
             };
             posts = [newPost, ...posts];
-            displayLimit = 6;
             renderMixed();
         });
 
@@ -65,8 +67,11 @@
         if (postId) {
             setTimeout(async () => {
                 try {
-                    if (!GithubAPI || !UIFeedback) return;
-                    const issue = await GithubAPI.loadIssue(postId);
+                    if (!GithubAPI || !UIFeedback) {
+                        console.warn('GithubAPI или UIFeedback не доступны');
+                        return;
+                    }
+                    const issue = await loadIssue(postId);
                     if (issue.state === 'closed') {
                         UIUtils.showToast('Этот пост был закрыт и больше не доступен', 'error');
                         return;
@@ -85,7 +90,7 @@
                         UIUtils.showToast('У вас нет доступа к этому посту', 'error');
                         return;
                     }
-                    UIFeedback.openFullModal(item);
+                    openFullModal(item);
                 } catch (err) {
                     console.error('Ошибка загрузки поста по ссылке:', err);
                     if (UIUtils) UIUtils.showToast('Пост не найден или произошла ошибка', 'error');
@@ -99,7 +104,6 @@
             if (currentAbort) currentAbort.controller.abort();
             posts = []; videos = []; postsLoaded = false; videosLoaded = false;
             videoLoading = false; videoError = false;
-            displayLimit = 6;
             loadNewsFeed();
         }
     };
@@ -135,11 +139,10 @@
 
     async function loadVideosFromRSS2JSON() {
         const cacheKey = 'youtube_videos_rss2json_v3';
-        let cached = null;
-        if (window.Cache) cached = window.Cache.get(cacheKey);
+        const cached = cacheGet(cacheKey);
         if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
 
-        const { controller, timeoutId } = GithubCore.createAbortable(15000);
+        const { controller, timeoutId } = createAbortable(15000);
         currentAbort = { controller };
         try {
             const allVideos = [];
@@ -179,7 +182,8 @@
             }
 
             const sorted = allVideos.sort((a, b) => b.date - a.date).slice(0, 20);
-            if (window.Cache) window.Cache.set(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
+            const serialized = sorted.map(v => ({ ...v, date: v.date.toISOString() }));
+            cacheSet(cacheKey, serialized);
             return sorted;
         } catch (err) {
             if (err.name === 'AbortError') {
@@ -194,20 +198,19 @@
 
     async function loadPosts() {
         const cacheKey = 'posts_news+update_v3';
-        let cached = null;
-        if (window.Cache) cached = window.Cache.get(cacheKey);
+        const cached = cacheGet(cacheKey);
         if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
 
-        const { controller, timeoutId } = GithubCore.createAbortable(10000);
+        const { controller, timeoutId } = createAbortable(10000);
         currentAbort = { controller };
         try {
             const [newsIssues, updateIssues] = await Promise.all([
-                GithubAPI.loadIssues({ labels: 'type:news', per_page: 15, signal: controller.signal }),
-                GithubAPI.loadIssues({ labels: 'type:update', per_page: 15, signal: controller.signal })
+                loadIssues({ labels: 'type:news', per_page: 15, signal: controller.signal }),
+                loadIssues({ labels: 'type:update', per_page: 15, signal: controller.signal })
             ]);
-            const allIssues = GithubCore.deduplicateByNumber([...newsIssues, ...updateIssues]);
+            const allIssues = deduplicateByNumber([...newsIssues, ...updateIssues]);
             const posts = allIssues
-                .filter(issue => issue.state === 'open' && GithubCore.CONFIG.ALLOWED_AUTHORS.includes(issue.user.login))
+                .filter(issue => issue.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(issue.user.login))
                 .map(issue => ({
                     type: 'post',
                     number: issue.number,
@@ -218,7 +221,8 @@
                     labels: issue.labels.map(l => l.name),
                     game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
                 }));
-            if (window.Cache) window.Cache.set(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
+            const serialized = posts.map(p => ({ ...p, date: p.date.toISOString() }));
+            cacheSet(cacheKey, serialized);
             return posts;
         } catch (err) {
             if (err.name === 'AbortError') {
@@ -239,21 +243,19 @@
 
         let filteredPosts = posts.filter(post => {
             if (!post.labels.includes('private')) return true;
-            if (GithubAuth.isAdmin()) return true;
-            const allowed = GithubCore.extractAllowed(post.body);
+            if (isAdmin()) return true;
+            const allowed = extractAllowed(post.body);
             if (!allowed) return false;
             const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
             return allowedList.includes(currentUser);
         });
 
-        allItemsAll = [...filteredPosts];
+        let allItems = [...filteredPosts];
         if (videosLoaded) {
-            allItemsAll = allItemsAll.concat(videos);
+            allItems = allItems.concat(videos);
         }
-        allItemsAll.sort((a, b) => b.date - a.date);
-        
-        const itemsToShow = allItemsAll.slice(0, displayLimit);
-        const hasMore = allItemsAll.length > displayLimit;
+        allItems.sort((a, b) => b.date - a.date);
+        const itemsToShow = allItems.slice(0, 6);
 
         const grid = document.createElement('div'); grid.className = 'projects-grid';
         
@@ -271,21 +273,6 @@
 
         container.innerHTML = '';
         container.appendChild(grid);
-        
-        let loadMoreBtn = container.querySelector('.load-more-btn');
-        if (!loadMoreBtn && hasMore) {
-            loadMoreBtn = document.createElement('button');
-            loadMoreBtn.className = 'load-more-btn';
-            loadMoreBtn.textContent = 'Загрузить ещё';
-            loadMoreBtn.setAttribute('aria-label', 'Загрузить следующие новости');
-            loadMoreBtn.addEventListener('click', () => {
-                displayLimit += 6;
-                renderMixed();
-            });
-            container.appendChild(loadMoreBtn);
-        } else if (loadMoreBtn && !hasMore) {
-            loadMoreBtn.remove();
-        }
     }
 
     function createVideoCard(video) {
@@ -296,7 +283,7 @@
         const img = document.createElement('img'); img.src = video.thumbnail; img.alt = video.title; img.loading = 'lazy'; img.className = 'project-image';
         imgWrapper.appendChild(img);
         const title = document.createElement('h3'); title.textContent = video.title.length > 70 ? video.title.substring(0,70)+'…' : video.title;
-        const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${GithubCore.escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
+        const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
         const button = document.createElement('span'); button.className = 'button'; button.innerHTML = '<i class="fas fa-play"></i> Смотреть';
         inner.append(imgWrapper, title, meta, button); card.appendChild(inner);
         card.addEventListener('click', (e) => { e.preventDefault(); window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank'); });
@@ -313,11 +300,11 @@
         const img = document.createElement('img'); img.src = thumbnail; img.alt = post.title; img.loading = 'lazy'; img.className = 'project-image'; img.onerror = () => img.src = DEFAULT_IMAGE;
         imgWrapper.appendChild(img);
         const title = document.createElement('h3'); title.textContent = post.title.length > 70 ? post.title.substring(0,70)+'…' : post.title;
-        const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${GithubCore.escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
-        const summary = GithubCore.extractSummary(post.body) || GithubCore.stripHtml(post.body).substring(0,120)+'…';
+        const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
+        const summary = extractSummary(post.body) || stripHtml(post.body).substring(0,120)+'…';
         const preview = document.createElement('p'); preview.className = 'text-secondary'; preview.style.fontSize='13px'; preview.style.overflow='hidden'; preview.style.display='-webkit-box'; preview.style.webkitLineClamp='2'; preview.style.webkitBoxOrient='vertical'; preview.textContent = summary;
         inner.append(imgWrapper, title, meta, preview); card.appendChild(inner);
-        card.addEventListener('click', (e) => { e.preventDefault(); UIFeedback.openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); });
+        card.addEventListener('click', (e) => { e.preventDefault(); openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); });
         return card;
     }
 })();
