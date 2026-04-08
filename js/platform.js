@@ -62,8 +62,14 @@ function findAssetByPlatform(assets, platform) {
 }
 
 async function initGitHubDownloads(os, buttons) {
-    const REPO_OWNER = window.GithubCore?.CONFIG?.REPO_OWNER || 'NeonShadowYT';
-    const REPO_NAME = window.GithubCore?.CONFIG?.REPO_NAME || 'NeonImperium';
+    // Проверяем наличие GithubCore
+    if (!window.GithubCore || !window.GithubCore.CONFIG) {
+        console.warn('GithubCore not available yet, retrying in 500ms');
+        setTimeout(() => initGitHubDownloads(os, buttons), 500);
+        return;
+    }
+    const REPO_OWNER = window.GithubCore.CONFIG.REPO_OWNER || 'NeonShadowYT';
+    const REPO_NAME = window.GithubCore.CONFIG.REPO_NAME || 'NeonImperium';
     const release = await getLatestRelease(REPO_OWNER, REPO_NAME);
     if (!release) {
         buttons.forEach(btn => {

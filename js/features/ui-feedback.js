@@ -340,7 +340,7 @@
                 if (text.trim()) {
                     previewArea.innerHTML = '';
                     if (!previewArea.classList.contains('markdown-body')) previewArea.classList.add('markdown-body');
-                    renderPostBody(previewArea, text, null);
+                    renderPostBody(previewArea, text, null).catch(e => console.warn('Preview error', e));
                     previewArea.style.display = 'block';
                 } else {
                     previewArea.style.display = 'none';
@@ -765,13 +765,18 @@
         container.appendChild(panelsRow);
         
         let updateTimeout;
-        const updatePreview = () => {
+        const updatePreview = async () => {
             if (updateTimeout) clearTimeout(updateTimeout);
-            updateTimeout = setTimeout(() => {
+            updateTimeout = setTimeout(async () => {
                 const text = textarea.value;
                 if (text.trim()) {
                     previewDiv.innerHTML = '';
-                    renderPostBody(previewDiv, text, null);
+                    try {
+                        await renderPostBody(previewDiv, text, null);
+                    } catch (e) {
+                        console.warn('Preview render error', e);
+                        previewDiv.innerHTML = '<p class="error-message">Ошибка предпросмотра</p>';
+                    }
                 } else {
                     previewDiv.innerHTML = '<p class="text-secondary">Предпросмотр будет здесь...</p>';
                 }
@@ -828,7 +833,6 @@
         return { container, textarea, previewDiv, updatePreview };
     }
 
-    // Global variables for editor modal
     let currentPrivateUsersInput = null;
 
     function openEditorModal(mode, data, postType = 'feedback') {
@@ -1102,7 +1106,6 @@
             const accessDropdown = createAccessDropdown(currentIsPrivate, allowedUsers, onAccessToggle);
             if (postType === 'support') {
                 accessDropdown.style.display = 'none';
-                // Предупреждение о видимости в репозитории GitHub
                 const supportInfo = document.createElement('div');
                 supportInfo.style.cssText = 'background: rgba(244,67,54,0.15); border-left: 4px solid #f44336; padding: 10px 12px; border-radius: 12px; margin-bottom: 10px;';
                 supportInfo.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #f44336;"></i> <strong>Внимание:</strong> На сайте это обращение увидят только вы и администратор. Однако оно сохраняется в <strong>публичном репозитории GitHub</strong>, и любой, у кого есть прямая ссылка, потенциально может его увидеть. Не публикуйте конфиденциальные данные (пароли, ключи).';
@@ -1257,7 +1260,6 @@
         }
     }
 
-    // Support Modal: list all support tickets (admin sees all, user sees own)
     async function openSupportModal() {
         const currentUser = GithubAuth.getCurrentUser();
         if (!currentUser) {

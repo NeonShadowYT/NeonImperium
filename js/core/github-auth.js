@@ -252,7 +252,7 @@
 
             setTimeout(() => {
                 modal.classList.add('active');
-                tokenInput.focus();
+                if (tokenInput) tokenInput.focus();
             }, 100);
         }
     }
@@ -339,25 +339,25 @@
         switch(action) {
             case 'login':
                 modal.classList.add('active');
-                tokenInput.focus();
+                if (tokenInput) tokenInput.focus();
                 break;
             case 'about':
-                UIUtils.showToast('Вход через GitHub позволяет оставлять идеи, голосовать и участвовать.', 'info');
+                if (UIUtils) UIUtils.showToast('Вход через GitHub позволяет оставлять идеи, голосовать и участвовать.', 'info');
                 break;
             case 'profile':
                 if (userLogin) window.open(`https://github.com/${userLogin}`, '_blank');
                 break;
             case 'token-info':
-                if (token) UIUtils.showToast(`Вы вошли как ${userLogin}. Токен сохранён в браузере.`, 'success');
+                if (token && UIUtils) UIUtils.showToast(`Вы вошли как ${userLogin}. Токен сохранён в браузере.`, 'success');
                 break;
             case 'revoke-token':
                 window.open('https://github.com/settings/tokens', '_blank');
-                UIUtils.showToast('Перейдите в раздел токенов, чтобы удалить ненужные', 'info');
+                if (UIUtils) UIUtils.showToast('Перейдите в раздел токенов, чтобы удалить ненужные', 'info');
                 break;
             case 'support':
                 if (window.UIFeedback && window.UIFeedback.openSupportModal) {
                     window.UIFeedback.openSupportModal();
-                } else {
+                } else if (UIUtils) {
                     UIUtils.showToast('Система поддержки временно недоступна', 'error');
                 }
                 break;
@@ -371,7 +371,7 @@
                 delete profileContainer.dataset.githubToken;
                 delete profileContainer.dataset.githubLogin;
                 showNotLoggedIn();
-                UIUtils.showToast('Вы вышли из аккаунта.', 'info');
+                if (UIUtils) UIUtils.showToast('Вы вышли из аккаунта.', 'info');
                 location.reload();
                 break;
         }
@@ -381,12 +381,12 @@
         const lastClear = localStorage.getItem(LAST_CLEAR_KEY);
         if (lastClear && Date.now() - parseInt(lastClear) < CLEAR_COOLDOWN) {
             const remaining = Math.ceil((CLEAR_COOLDOWN - (Date.now() - parseInt(lastClear))) / 1000);
-            UIUtils.showToast(`Очистка кеша доступна раз в 10 секунд. Подождите ${remaining} секунд.`, 'warning');
+            if (UIUtils) UIUtils.showToast(`Очистка кеша доступна раз в 10 секунд. Подождите ${remaining} секунд.`, 'warning');
             return;
         }
         sessionStorage.clear();
         localStorage.setItem(LAST_CLEAR_KEY, Date.now().toString());
-        UIUtils.showToast('Кеш очищен, страница будет перезагружена.', 'info');
+        if (UIUtils) UIUtils.showToast('Кеш очищен, страница будет перезагружена.', 'info');
         setTimeout(() => location.reload(), 1000);
     }
 

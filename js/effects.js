@@ -15,7 +15,7 @@ function throttleAnimation(fn) {
 // 3D Tilt для карточек (только на десктопе)
 function initTiltEffect() {
     const cards = document.querySelectorAll('.tilt-card');
-    if (cards.length === 0) return;
+    if (!cards.length) return;
 
     cards.forEach(card => {
         if (card.classList.contains('feature-item') ||
@@ -59,7 +59,7 @@ function initTiltEffect() {
 // Параллакс для шапок игр (на десктопе)
 function initHeaderParallax() {
     const headers = document.querySelectorAll('.game-header');
-    if (headers.length === 0) return;
+    if (!headers.length) return;
 
     headers.forEach(header => {
         const handleMove = throttleAnimation((e) => {
