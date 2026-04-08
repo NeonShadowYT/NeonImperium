@@ -1,6 +1,6 @@
-// init.js
+// init.js – точка входа
 (async function() {
-    // Загрузка стилей
+    // Загрузка стилей Font Awesome
     await ScriptLoader.loadStylesheet('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css');
     
     // Определяем страницу
@@ -15,22 +15,18 @@
     // Загружаем marked, если нужен
     if (hasFeedback || hasNews || hasUpdates) {
         try {
-            await ScriptLoader.loadScript('https://cdn.jsdelivr.net/npm/marked/marked.min.js');
+            // Исправлено: используем ScriptLoader.load (функция определена в loader.js)
+            await ScriptLoader.load('https://cdn.jsdelivr.net/npm/marked/marked.min.js');
         } catch (e) {
             console.warn('Failed to load marked from primary CDN, trying fallback...');
-            await ScriptLoader.loadScript('https://unpkg.com/marked/marked.min.js');
+            await ScriptLoader.load('https://unpkg.com/marked/marked.min.js');
         }
     }
     
     // Загружаем Itch API для донатов
-    if (hasDonate) {
+    if (hasDonate && typeof Itch === 'undefined') {
         try {
             await ScriptLoader.scripts.itch();
-        } catch(e) {
-            console.warn('Itch API not loaded, donate button may not work');
-        }
+        } catch(e) { console.warn('Itch API not loaded, donate button may not work'); }
     }
-    
-    // Инициализируем языковой переключатель и прочее
-    // (остальное уже инициализируется в других скриптах)
 })();

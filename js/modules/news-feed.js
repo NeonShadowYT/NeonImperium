@@ -1,3 +1,4 @@
+// news-feed.js – главная страница, лента новостей и видео
 (function() {
     const YT_CHANNELS = [
         { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
@@ -81,18 +82,24 @@
                         game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
                         labels: issue.labels.map(l => l.name)
                     };
-                    if (!UIFeedback.canViewPost(issue.body, issue.labels.map(l => l.name), currentUser)) {
+                    if (!canViewPost(issue.body, issue.labels.map(l => l.name), currentUser)) {
                         UIUtils.showToast('У вас нет доступа к этому посту', 'error');
                         return;
                     }
-                    UIFeedback.openFullModal(item);
-                } catch (err) {
-                    console.error('Ошибка загрузки поста по ссылке:', err);
-                    if (UIUtils) UIUtils.showToast('Пост не найден или произошла ошибка', 'error');
-                }
+                    if (window.UIFeedbackModal && window.UIFeedbackModal.openFullModal) window.UIFeedbackModal.openFullModal(item);
+                } catch (err) { console.error('Ошибка загрузки поста по ссылке:', err); UIUtils.showToast('Пост не найден или произошла ошибка', 'error'); }
             }, 1500);
         }
     });
+
+    function canViewPost(body, labels, currentUser) {
+        if (!labels.includes('private')) return true;
+        if (GithubAuth.isAdmin()) return true;
+        const allowed = GithubCore.extractAllowed(body);
+        if (!allowed) return false;
+        const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
+        return allowedList.includes(currentUser);
+    }
 
     window.refreshNewsFeed = () => {
         if (container) {
@@ -109,10 +116,7 @@
         try {
             posts = await loadPosts();
             postsLoaded = true;
-        } catch (err) {
-            if (err.name === 'AbortError') return;
-            posts = []; postsLoaded = true;
-        }
+        } catch (err) { if (err.name !== 'AbortError') { posts = []; postsLoaded = true; } }
         loadVideosAsync();
     }
 
@@ -123,22 +127,14 @@
         try {
             videos = await loadVideosFromRSS2JSON();
             videosLoaded = true;
-        } catch (err) {
-            if (err.name === 'AbortError') return;
-            videos = []; videosLoaded = true;
-            videoError = true;
-        } finally {
-            videoLoading = false;
-            renderMixed();
-        }
+        } catch (err) { if (err.name !== 'AbortError') { videos = []; videosLoaded = true; videoError = true; } }
+        finally { videoLoading = false; renderMixed(); }
     }
 
     async function loadVideosFromRSS2JSON() {
         const cacheKey = 'youtube_videos_rss2json_v3';
-        let cached = null;
-        if (window.Cache) cached = window.Cache.get(cacheKey);
+        let cached = window.Cache ? window.Cache.get(cacheKey) : null;
         if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
-
         const { controller, timeoutId } = GithubCore.createAbortable(15000);
         currentAbort = { controller };
         try {
@@ -150,54 +146,33 @@
                 if (!response.ok) continue;
                 const data = await response.json();
                 if (data.status !== 'ok') continue;
-
                 const videosFromChannel = (data.items || []).slice(0, 9).map(item => {
                     const link = item.link;
                     let videoId = null;
                     try {
                         const url = new URL(link);
-                        if (url.hostname === 'youtu.be') {
-                            videoId = url.pathname.slice(1);
-                        } else {
-                            videoId = url.searchParams.get('v');
-                        }
-                    } catch (e) {
-                        return null;
-                    }
+                        if (url.hostname === 'youtu.be') videoId = url.pathname.slice(1);
+                        else videoId = url.searchParams.get('v');
+                    } catch(e) { return null; }
                     if (!videoId) return null;
                     return {
-                        type: 'video',
-                        id: videoId,
-                        title: item.title,
-                        author: channel.name,
-                        date: new Date(item.pubDate),
-                        thumbnail: item.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-                        channel: channel.name
+                        type: 'video', id: videoId, title: item.title, author: channel.name,
+                        date: new Date(item.pubDate), thumbnail: item.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`, channel: channel.name
                     };
                 }).filter(v => v !== null);
                 allVideos.push(...videosFromChannel);
             }
-
             const sorted = allVideos.sort((a, b) => b.date - a.date).slice(0, 20);
             if (window.Cache) window.Cache.set(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
             return sorted;
-        } catch (err) {
-            if (err.name === 'AbortError') {
-                UIUtils.showToast('Таймаут при загрузке видео', 'warning');
-            }
-            throw err;
-        } finally {
-            clearTimeout(timeoutId);
-            if (currentAbort?.controller === controller) currentAbort = null;
-        }
+        } catch(err) { if (err.name === 'AbortError') UIUtils.showToast('Таймаут при загрузке видео', 'warning'); throw err; }
+        finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
     }
 
     async function loadPosts() {
         const cacheKey = 'posts_news+update_v3';
-        let cached = null;
-        if (window.Cache) cached = window.Cache.get(cacheKey);
+        let cached = window.Cache ? window.Cache.get(cacheKey) : null;
         if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
-
         const { controller, timeoutId } = GithubCore.createAbortable(10000);
         currentAbort = { controller };
         try {
@@ -209,34 +184,18 @@
             const posts = allIssues
                 .filter(issue => issue.state === 'open' && GithubCore.CONFIG.ALLOWED_AUTHORS.includes(issue.user.login))
                 .map(issue => ({
-                    type: 'post',
-                    number: issue.number,
-                    title: issue.title,
-                    body: issue.body,
-                    author: issue.user.login,
-                    date: new Date(issue.created_at),
-                    labels: issue.labels.map(l => l.name),
+                    type: 'post', number: issue.number, title: issue.title, body: issue.body,
+                    author: issue.user.login, date: new Date(issue.created_at), labels: issue.labels.map(l => l.name),
                     game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
                 }));
             if (window.Cache) window.Cache.set(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
             return posts;
-        } catch (err) {
-            if (err.name === 'AbortError') {
-                UIUtils.showToast('Таймаут при загрузке новостей', 'warning');
-            }
-            throw err;
-        } finally {
-            clearTimeout(timeoutId);
-            if (currentAbort?.controller === controller) currentAbort = null;
-        }
+        } catch(err) { if (err.name === 'AbortError') UIUtils.showToast('Таймаут при загрузке новостей', 'warning'); throw err; }
+        finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
     }
 
     function renderMixed() {
-        if (!postsLoaded) {
-            container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>`;
-            return;
-        }
-
+        if (!postsLoaded) { container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>`; return; }
         let filteredPosts = posts.filter(post => {
             if (!post.labels.includes('private')) return true;
             if (GithubAuth.isAdmin()) return true;
@@ -245,47 +204,24 @@
             const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
             return allowedList.includes(currentUser);
         });
-
         allItemsAll = [...filteredPosts];
-        if (videosLoaded) {
-            allItemsAll = allItemsAll.concat(videos);
-        }
+        if (videosLoaded) allItemsAll = allItemsAll.concat(videos);
         allItemsAll.sort((a, b) => b.date - a.date);
-        
         const itemsToShow = allItemsAll.slice(0, displayLimit);
         const hasMore = allItemsAll.length > displayLimit;
-
         const grid = document.createElement('div'); grid.className = 'projects-grid';
-        
-        if (itemsToShow.length === 0) {
-            grid.innerHTML = '<p class="text-secondary" style="grid-column:1/-1; text-align:center;">Пока нет новостей</p>';
-        } else {
-            itemsToShow.forEach(item => {
-                if (item.type === 'video') {
-                    grid.appendChild(createVideoCard(item));
-                } else {
-                    grid.appendChild(createPostCard(item));
-                }
-            });
-        }
-
-        container.innerHTML = '';
-        container.appendChild(grid);
-        
+        if (itemsToShow.length === 0) grid.innerHTML = '<p class="text-secondary" style="grid-column:1/-1; text-align:center;">Пока нет новостей</p>';
+        else itemsToShow.forEach(item => { if (item.type === 'video') grid.appendChild(createVideoCard(item)); else grid.appendChild(createPostCard(item)); });
+        container.innerHTML = ''; container.appendChild(grid);
         let loadMoreBtn = container.querySelector('.load-more-btn');
         if (!loadMoreBtn && hasMore) {
             loadMoreBtn = document.createElement('button');
             loadMoreBtn.className = 'load-more-btn';
             loadMoreBtn.textContent = 'Загрузить ещё';
             loadMoreBtn.setAttribute('aria-label', 'Загрузить следующие новости');
-            loadMoreBtn.addEventListener('click', () => {
-                displayLimit += 6;
-                renderMixed();
-            });
+            loadMoreBtn.addEventListener('click', () => { displayLimit += 6; renderMixed(); });
             container.appendChild(loadMoreBtn);
-        } else if (loadMoreBtn && !hasMore) {
-            loadMoreBtn.remove();
-        }
+        } else if (loadMoreBtn && !hasMore) loadMoreBtn.remove();
     }
 
     function createVideoCard(video) {
@@ -317,7 +253,7 @@
         const summary = GithubCore.extractSummary(post.body) || GithubCore.stripHtml(post.body).substring(0,120)+'…';
         const preview = document.createElement('p'); preview.className = 'text-secondary'; preview.style.fontSize='13px'; preview.style.overflow='hidden'; preview.style.display='-webkit-box'; preview.style.webkitLineClamp='2'; preview.style.webkitBoxOrient='vertical'; preview.textContent = summary;
         inner.append(imgWrapper, title, meta, preview); card.appendChild(inner);
-        card.addEventListener('click', (e) => { e.preventDefault(); UIFeedback.openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); });
+        card.addEventListener('click', (e) => { e.preventDefault(); if (window.UIFeedbackModal && window.UIFeedbackModal.openFullModal) window.UIFeedbackModal.openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); });
         return card;
     }
 })();

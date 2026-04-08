@@ -1,3 +1,4 @@
+// github-core.js – базовые конфиги и хелперы
 (function() {
     const CONFIG = {
         REPO_OWNER: 'NeonShadowYT',
@@ -62,27 +63,14 @@
         return match ? match[1].trim() : null;
     }
 
-    function extractAllowed(body) {
-        return extractMeta(body, 'allowed');
-    }
+    function extractAllowed(body) { return extractMeta(body, 'allowed'); }
+    function extractSummary(body) { return extractMeta(body, 'summary'); }
 
-    function extractSummary(body) {
-        return extractMeta(body, 'summary');
-    }
-
-    function cacheGet(key) {
-        if (window.Cache) return window.Cache.get(key);
-        return null;
-    }
-    function cacheSet(key, data) {
-        if (window.Cache) window.Cache.set(key, data);
-    }
-    function cacheRemove(key) {
-        if (window.Cache) window.Cache.remove(key);
-    }
-    function cacheRemoveByPrefix(prefix) {
-        if (window.Cache) window.Cache.removeByPrefix(prefix);
-    }
+    // Прокси к глобальному кешу
+    function cacheGet(key) { return window.Cache ? window.Cache.get(key) : null; }
+    function cacheSet(key, data) { if (window.Cache) window.Cache.set(key, data); }
+    function cacheRemove(key) { if (window.Cache) window.Cache.remove(key); }
+    function cacheRemoveByPrefix(prefix) { if (window.Cache) window.Cache.removeByPrefix(prefix); }
 
     window.GithubCore = {
         CONFIG,

@@ -1,0 +1,308 @@
+/* markdown.css – общие стили для рендера Markdown, опросов, превью и редактора */
+
+/* Markdown body */
+.markdown-body {
+    overflow-x: auto;
+}
+.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+    color: var(--text-primary);
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+}
+.markdown-body h1 { font-size: 2em; }
+.markdown-body h2 { font-size: 1.5em; }
+.markdown-body h3 { font-size: 1.3em; }
+.markdown-body h4 { font-size: 1.1em; }
+.markdown-body p {
+    margin: 0.5em 0;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+.markdown-body blockquote {
+    border-left: 4px solid var(--accent);
+    margin: 1em 0;
+    padding: 0.5em 1em;
+    background: var(--bg-card);
+    border-radius: 8px;
+}
+.markdown-body code {
+    background: var(--bg-card-solid);
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-family: monospace;
+}
+.markdown-body pre {
+    background: var(--bg-card-solid);
+    padding: 1em;
+    border-radius: 8px;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+}
+.markdown-body pre code {
+    background: none;
+    padding: 0;
+}
+.markdown-body table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+}
+.markdown-body th, .markdown-body td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+}
+.markdown-body th {
+    background: var(--bg-card);
+}
+.markdown-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+.markdown-body details {
+    margin: 1em 0;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+.markdown-body summary {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--bg-inner-gradient);
+    list-style: none;
+    transition: background 0.2s;
+    border-bottom: 1px solid transparent;
+}
+.markdown-body summary:hover {
+    background: var(--bg-card-solid);
+}
+.markdown-body summary::before {
+    content: '▶';
+    display: inline-block;
+    margin-right: 8px;
+    transition: transform 0.2s;
+    font-size: 14px;
+    color: var(--accent);
+}
+.markdown-body details[open] summary::before {
+    transform: rotate(90deg);
+}
+.markdown-body details > :not(summary) {
+    padding: 16px;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+}
+
+/* Preview area */
+.preview-area {
+    background: var(--bg-primary);
+    border-radius: 16px;
+    padding: 20px;
+    margin-top: 10px;
+    border: 1px solid var(--border);
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+    transition: opacity 0.2s;
+}
+
+/* Poll styles */
+.poll {
+    margin: 20px 0;
+}
+.poll h3 {
+    margin-bottom: 15px;
+    color: var(--accent);
+}
+.poll-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.poll-option {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.poll-option-text {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+.poll-option .button {
+    align-self: flex-start;
+}
+.poll .progress-bar {
+    width: 100%;
+    margin-top: 5px;
+}
+.poll .progress-bar > div {
+    text-align: center;
+    color: #fff;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+.poll .small {
+    margin-top: 10px;
+    font-size: 12px;
+}
+
+/* Editor toolbar */
+.editor-toolbar {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    padding: 8px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+.editor-btn-group {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+    padding: 0 5px;
+    border-right: 1px solid var(--border);
+}
+.editor-btn {
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'Russo One', sans-serif;
+}
+.editor-btn:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+.editor-btn.preview-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+}
+.editor-btn.preview-btn:hover {
+    background: var(--accent-light);
+}
+
+/* Split editor */
+.split-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 10px;
+}
+.split-editor .split-editor-left,
+.split-editor .split-editor-right {
+    flex: 1;
+}
+.split-editor .split-editor-left {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.split-editor .split-editor-right {
+    overflow-y: auto;
+    background: var(--bg-primary);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 16px;
+}
+.split-editor .feedback-textarea {
+    flex: 1;
+    resize: vertical;
+    min-height: 300px;
+}
+.split-editor .button {
+    margin-left: auto;
+}
+.split-editor .editor-toolbar {
+    position: sticky;
+    top: 0;
+    background: var(--bg-card);
+    z-index: 10;
+    padding: 8px 0;
+    border-radius: 12px;
+}
+
+/* Dropdown menus */
+.preview-dropdown {
+    position: absolute;
+    top: calc(100% + 5px);
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 5px 0;
+    min-width: 160px;
+    z-index: 100;
+    box-shadow: var(--shadow);
+    display: none;
+}
+.preview-dropdown.show {
+    display: block;
+}
+.preview-dropdown button {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    text-align: left;
+    cursor: pointer;
+    font-family: 'Russo One', sans-serif;
+    font-size: 13px;
+    transition: background 0.2s;
+}
+.preview-dropdown button:hover {
+    background: var(--bg-inner-gradient);
+    color: var(--text-primary);
+}
+.preview-dropdown button.active {
+    background: var(--accent);
+    color: #fff;
+}
+
+/* Access dropdown */
+.access-dropdown-container {
+    position: relative;
+    display: inline-block;
+}
+.access-dropdown-btn {
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    border-radius: 30px;
+    cursor: pointer;
+    font-family: 'Russo One', sans-serif;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.access-dropdown-btn:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+.access-settings {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+#private-users {
+    flex: 1;
+    min-width: 150px;
+}
