@@ -1,14 +1,14 @@
-// admin-news.js
 (function() {
     const { cacheRemove, CONFIG } = GithubCore;
     const { isAdmin, getCurrentUser } = GithubAuth;
-    
+    const { openEditorModal } = UIFeedback;
+
     function renderAdminPanels() {
         if (!isAdmin()) {
             document.querySelectorAll('.admin-panel, .admin-news-btn, .admin-update-btn').forEach(el => el.remove());
             return;
         }
-        
+
         const newsSection = document.getElementById('news-section');
         if (newsSection) {
             let header = newsSection.querySelector('.news-header');
@@ -27,15 +27,11 @@
                 btn.className = 'button admin-news-btn';
                 btn.innerHTML = '<i class="fas fa-plus"></i> Добавить новость';
                 btn.setAttribute('aria-label', 'Добавить новость');
-                btn.addEventListener('click', () => {
-                    if (window.UIFeedback && window.UIFeedback.openEditorModal) {
-                        window.UIFeedback.openEditorModal('new', { game: null }, 'news');
-                    }
-                });
+                btn.addEventListener('click', () => openEditorModal('new', { game: null }, 'news'));
                 header.appendChild(btn);
             }
         }
-        
+
         const updatesContainer = document.getElementById('game-updates');
         if (updatesContainer && updatesContainer.dataset.game) {
             const game = String(updatesContainer.dataset.game).trim();
@@ -66,20 +62,16 @@
                 btn.className = 'button admin-update-btn';
                 btn.innerHTML = '<i class="fas fa-plus"></i> Добавить обновление';
                 btn.setAttribute('aria-label', 'Добавить обновление');
-                btn.addEventListener('click', () => {
-                    if (window.UIFeedback && window.UIFeedback.openEditorModal) {
-                        window.UIFeedback.openEditorModal('new', { game: game }, 'update');
-                    }
-                });
+                btn.addEventListener('click', () => openEditorModal('new', { game: game }, 'update'));
                 header.appendChild(btn);
             }
         }
     }
-    
+
     function removeAdminPanels() {
         document.querySelectorAll('.admin-panel, .admin-news-btn, .admin-update-btn').forEach(el => el.remove());
     }
-    
+
     function init() {
         setTimeout(() => {
             if (isAdmin()) {
@@ -88,7 +80,7 @@
                 removeAdminPanels();
             }
         }, 0);
-        
+
         window.addEventListener('github-login-success', () => {
             setTimeout(() => {
                 if (isAdmin()) {
@@ -98,12 +90,12 @@
                 }
             }, 100);
         });
-        
+
         window.addEventListener('github-logout', () => {
             removeAdminPanels();
         });
     }
-    
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

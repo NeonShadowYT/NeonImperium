@@ -1,4 +1,4 @@
-// notifications.js
+// notifications.js – система уведомлений
 (function() {
     const NOTIFICATION_KEY = 'neon_notifications_last_visit';
     const NOTIFICATION_DATA_KEY = 'neon_notifications_data';
@@ -186,7 +186,7 @@
         notificationCount++;
         updateBellBadge();
         saveNotificationData();
-        if (window.UIUtils) UIUtils.showToast(`${title}: ${text.substring(0, 60)}`, 'info', 5000);
+        UIUtils.showToast(`${title}: ${text.substring(0, 60)}`, 'info', 5000);
     }
     
     async function checkAll() {

@@ -1,4 +1,3 @@
-// game-updates.js
 (function() {
     const DEFAULT_IMAGE = 'images/default-news.webp';
     let currentAbort = null;
@@ -9,14 +8,14 @@
     let isLoading = false;
     let allUpdates = [];
     let displayLimit = 6;
-    
+
     document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('game-updates');
         if (container && container.dataset.game) {
             currentGame = container.dataset.game;
             loadGameUpdates(container, currentGame);
         }
-        
+
         window.addEventListener('github-issue-created', (e) => {
             const issue = e.detail;
             if (!currentGame) return;
@@ -24,12 +23,12 @@
             const hasGameLabel = issue.labels.some(l => l.name === `game:${currentGame}`);
             if (!hasUpdateLabel || !hasGameLabel) return;
             if (!GithubCore.CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
-            
+
             if (window.Cache) window.Cache.removeByPrefix(`game_updates_${currentGame}`);
-            
+
             const container = document.getElementById('game-updates');
             if (!container) return;
-            
+
             const newPost = {
                 number: issue.number,
                 title: issue.title,
@@ -44,7 +43,7 @@
             renderUpdates(container);
         });
     });
-    
+
     window.refreshGameUpdates = (game) => {
         const container = document.getElementById('game-updates');
         if (container && container.dataset.game === game) {
@@ -54,7 +53,7 @@
             loadGameUpdates(container, game);
         }
     };
-    
+
     async function loadGameUpdates(container, game) {
         container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>`;
         if (currentAbort) currentAbort.controller.abort();
@@ -90,22 +89,22 @@
             if (currentAbort?.controller === controller) currentAbort = null;
         }
     }
-    
+
     function renderUpdates(container) {
         if (allUpdates.length === 0) {
             container.innerHTML = '<p class="text-secondary">Нет обновлений</p>';
             return;
         }
-        
+
         const itemsToShow = allUpdates.slice(0, displayLimit);
         const hasMore = allUpdates.length > displayLimit;
-        
+
         container.innerHTML = '';
         const grid = document.createElement('div');
         grid.className = 'projects-grid';
         itemsToShow.forEach(post => grid.appendChild(createUpdateCard(post)));
         container.appendChild(grid);
-        
+
         let loadMoreBtn = container.querySelector('.load-more-btn');
         if (!loadMoreBtn && hasMore) {
             loadMoreBtn = document.createElement('button');
@@ -121,7 +120,7 @@
             loadMoreBtn.remove();
         }
     }
-    
+
     function createUpdateCard(post) {
         const card = document.createElement('div'); card.className = 'project-card-link no-tilt'; card.style.cursor = 'pointer';
         card.setAttribute('aria-label', `Открыть обновление: ${post.title}`);
@@ -136,7 +135,7 @@
         const summary = GithubCore.extractSummary(post.body) || GithubCore.stripHtml(post.body).substring(0,120)+'…';
         const preview = document.createElement('p'); preview.className = 'text-secondary'; preview.style.fontSize='13px'; preview.style.overflow='hidden'; preview.style.display='-webkit-box'; preview.style.webkitLineClamp='2'; preview.style.webkitBoxOrient='vertical'; preview.textContent = summary;
         inner.append(imgWrapper, title, meta, preview); card.appendChild(inner);
-        card.addEventListener('click', (e) => { e.preventDefault(); if (window.UIFeedbackModal && window.UIFeedbackModal.openFullModal) window.UIFeedbackModal.openFullModal({ type: 'update', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); });
+        card.addEventListener('click', (e) => { e.preventDefault(); UIFeedback.openFullModal({ type: 'update', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); });
         return card;
     }
 })();

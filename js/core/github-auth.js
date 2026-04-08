@@ -1,6 +1,5 @@
-// github-auth.js
 (function() {
-    const { CONFIG } = GithubCore;
+    const CONFIG = GithubCore.CONFIG;
     const TOKEN_KEY = 'github_token';
     const USER_CACHE_KEY = 'github_user';
     const LAST_CLEAR_KEY = 'last_cache_clear';
@@ -14,6 +13,7 @@
         navBar = document.querySelector('.nav-bar');
         if (!navBar) return;
 
+        // Создаём правый блок, если его нет
         let rightBlock = navBar.querySelector('.nav-right');
         if (!rightBlock) {
             rightBlock = document.createElement('div');
@@ -77,9 +77,9 @@
     }
 
     function loadAdminScript() {
-        if (document.querySelector('script[src="js/admin-news.js"]')) return;
+        if (document.querySelector('script[src="js/features/admin-news.js"]')) return;
         const script = document.createElement('script');
-        script.src = 'js/admin-news.js';
+        script.src = 'js/features/admin-news.js';
         script.defer = true;
         document.body.appendChild(script);
     }
@@ -166,7 +166,7 @@
         const container = document.getElementById('modal-error-container');
         if (!container) return;
         const lang = localStorage.getItem('preferredLanguage') || 'ru';
-        const errorMsg = (window.translations && window.translations[lang] && window.translations[lang][messageKey]) ? window.translations[lang][messageKey] : messageKey;
+        const errorMsg = translations[lang] && translations[lang][messageKey] ? translations[lang][messageKey] : messageKey;
         container.innerHTML = `
             <div class="error-message" style="margin-bottom: 15px; padding: 10px; background: rgba(244,67,54,0.1); color: #f44336; border-radius: 8px; text-align: center;">
                 <i class="fas fa-exclamation-triangle"></i> ${errorMsg}
@@ -352,22 +352,22 @@
                 tokenInput.focus();
                 break;
             case 'about':
-                if (window.UIUtils) UIUtils.showToast('Вход через GitHub позволяет оставлять идеи, голосовать и участвовать.', 'info');
+                UIUtils.showToast('Вход через GitHub позволяет оставлять идеи, голосовать и участвовать.', 'info');
                 break;
             case 'profile':
                 if (userLogin) window.open(`https://github.com/${userLogin}`, '_blank');
                 break;
             case 'token-info':
-                if (token && window.UIUtils) UIUtils.showToast(`Вы вошли как ${userLogin}. Токен сохранён в браузере.`, 'success');
+                if (token) UIUtils.showToast(`Вы вошли как ${userLogin}. Токен сохранён в браузере.`, 'success');
                 break;
             case 'revoke-token':
                 window.open('https://github.com/settings/tokens', '_blank');
-                if (window.UIUtils) UIUtils.showToast('Перейдите в раздел токенов, чтобы удалить ненужные', 'info');
+                UIUtils.showToast('Перейдите в раздел токенов, чтобы удалить ненужные', 'info');
                 break;
             case 'support':
                 if (window.UIFeedback && window.UIFeedback.openSupportModal) {
                     window.UIFeedback.openSupportModal();
-                } else if (window.UIUtils) {
+                } else {
                     UIUtils.showToast('Система поддержки временно недоступна', 'error');
                 }
                 break;
@@ -381,7 +381,7 @@
                 delete profileContainer.dataset.githubToken;
                 delete profileContainer.dataset.githubLogin;
                 showNotLoggedIn();
-                if (window.UIUtils) UIUtils.showToast('Вы вышли из аккаунта.', 'info');
+                UIUtils.showToast('Вы вышли из аккаунта.', 'info');
                 location.reload();
                 break;
         }
@@ -391,12 +391,12 @@
         const lastClear = localStorage.getItem(LAST_CLEAR_KEY);
         if (lastClear && Date.now() - parseInt(lastClear) < CLEAR_COOLDOWN) {
             const remaining = Math.ceil((CLEAR_COOLDOWN - (Date.now() - parseInt(lastClear))) / 1000);
-            if (window.UIUtils) UIUtils.showToast(`Очистка кеша доступна раз в 10 секунд. Подождите ${remaining} секунд.`, 'warning');
+            UIUtils.showToast(`Очистка кеша доступна раз в 10 секунд. Подождите ${remaining} секунд.`, 'warning');
             return;
         }
         sessionStorage.clear();
         localStorage.setItem(LAST_CLEAR_KEY, Date.now().toString());
-        if (window.UIUtils) UIUtils.showToast('Кеш очищен, страница будет перезагружена.', 'info');
+        UIUtils.showToast('Кеш очищен, страница будет перезагружена.', 'info');
         setTimeout(() => location.reload(), 1000);
     }
 
