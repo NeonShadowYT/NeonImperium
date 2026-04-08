@@ -1,7 +1,10 @@
-// admin-news.js – добавление кнопок администрирования (новости, обновления)
 (function() {
+    const { cacheRemove, CONFIG } = GithubCore;
+    const { isAdmin, getCurrentUser } = GithubAuth;
+    const { openEditorModal } = UIFeedback;
+
     function renderAdminPanels() {
-        if (!GithubAuth.isAdmin()) {
+        if (!isAdmin()) {
             document.querySelectorAll('.admin-panel, .admin-news-btn, .admin-update-btn').forEach(el => el.remove());
             return;
         }
@@ -24,7 +27,7 @@
                 btn.className = 'button admin-news-btn';
                 btn.innerHTML = '<i class="fas fa-plus"></i> Добавить новость';
                 btn.setAttribute('aria-label', 'Добавить новость');
-                btn.addEventListener('click', () => UIFeedback.openEditorModal('new', { game: null }, 'news'));
+                btn.addEventListener('click', () => openEditorModal('new', { game: null }, 'news'));
                 header.appendChild(btn);
             }
         }
@@ -59,7 +62,7 @@
                 btn.className = 'button admin-update-btn';
                 btn.innerHTML = '<i class="fas fa-plus"></i> Добавить обновление';
                 btn.setAttribute('aria-label', 'Добавить обновление');
-                btn.addEventListener('click', () => UIFeedback.openEditorModal('new', { game: game }, 'update'));
+                btn.addEventListener('click', () => openEditorModal('new', { game: game }, 'update'));
                 header.appendChild(btn);
             }
         }
@@ -71,19 +74,31 @@
 
     function init() {
         setTimeout(() => {
-            if (GithubAuth.isAdmin()) renderAdminPanels();
-            else removeAdminPanels();
+            if (isAdmin()) {
+                renderAdminPanels();
+            } else {
+                removeAdminPanels();
+            }
         }, 0);
 
         window.addEventListener('github-login-success', () => {
             setTimeout(() => {
-                if (GithubAuth.isAdmin()) renderAdminPanels();
-                else removeAdminPanels();
+                if (isAdmin()) {
+                    renderAdminPanels();
+                } else {
+                    removeAdminPanels();
+                }
             }, 100);
         });
-        window.addEventListener('github-logout', () => removeAdminPanels());
+
+        window.addEventListener('github-logout', () => {
+            removeAdminPanels();
+        });
     }
 
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-    else init();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();

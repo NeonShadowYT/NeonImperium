@@ -1,13 +1,12 @@
-// ui-feedback.js – реакции, комментарии, модальные окна, редактор (использует Core, GithubAPI, GithubAuth)
 (function() {
     const REACTION_TYPES = [
         { content: '+1', emoji: '👍' }, { content: '-1', emoji: '👎' }, { content: 'laugh', emoji: '😄' },
         { content: 'confused', emoji: '😕' }, { content: 'heart', emoji: '❤️' }, { content: 'hooray', emoji: '🎉' },
         { content: 'rocket', emoji: '🚀' }, { content: 'eyes', emoji: '👀' }
     ];
-
-    // Кеши для реакций и комментариев (in-memory)
-    const reactionsCache = new Map();
+    
+    // Используем глобальный кеш с версионированием
+    const reactionsCache = new Map(); // для реакций и комментариев оставляем in-memory кеш, так как они часто меняются
     const commentsCache = new Map();
     const reactionLocks = new Map();
 
@@ -19,8 +18,10 @@
     function invalidateCache(issueNumber) {
         reactionsCache.delete(`reactions_${issueNumber}`);
         commentsCache.delete(`comments_${issueNumber}`);
-        Core.cacheRemove(`post_${issueNumber}`);
-        Core.cacheRemove(`reactions_list_${issueNumber}`);
+        if (window.Cache) {
+            window.Cache.remove(`post_${issueNumber}`);
+            window.Cache.remove(`reactions_list_${issueNumber}`);
+        }
     }
 
     function groupReactions(reactions, currentUser) {
@@ -65,7 +66,7 @@
                     try {
                         await onRemove(issueNumber, parseInt(reactionId, 10));
                     } catch (err) {
-                        Core.showToast('Ошибка при удалении реакции', 'error');
+                        UIUtils.showToast('Ошибка при удалении реакции', 'error');
                         btn.classList.add('active');
                         countSpan.textContent = oldCount;
                         if (wasZero) btn.style.display = '';
@@ -80,7 +81,7 @@
                     try {
                         await onAdd(issueNumber, content);
                     } catch (err) {
-                        Core.showToast('Ошибка при добавлении реакции', 'error');
+                        UIUtils.showToast('Ошибка при добавлении реакции', 'error');
                         btn.classList.remove('active');
                         countSpan.textContent = oldCount;
                         btn.dataset.reactionId = '';
@@ -112,7 +113,7 @@
                             try {
                                 await onAdd(issueNumber, selected);
                             } catch (err) {
-                                Core.showToast('Ошибка при добавлении реакции', 'error');
+                                UIUtils.showToast('Ошибка при добавлении реакции', 'error');
                                 existingBtn.classList.remove('active');
                                 countSpan.textContent = oldCount;
                                 existingBtn.dataset.reactionId = '';
@@ -132,7 +133,7 @@
                         try {
                             await onAdd(issueNumber, selected);
                         } catch (err) {
-                            Core.showToast('Ошибка при добавлении реакции', 'error');
+                            UIUtils.showToast('Ошибка при добавлении реакции', 'error');
                             if (tempBtn.parentNode) tempBtn.remove();
                         } finally {
                             reactionLocks.delete(lockKey);
@@ -196,7 +197,8 @@
 
     async function loadPostByNumber(issueNumber) {
         const cacheKey = `post_${issueNumber}`;
-        let cached = Core.cacheGet(cacheKey);
+        let cached = null;
+        if (window.Cache) cached = window.Cache.get(cacheKey);
         if (cached) return cached;
         try {
             const issue = await GithubAPI.loadIssue(issueNumber);
@@ -209,7 +211,7 @@
                 labels: issue.labels.map(l => l.name),
                 game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
             };
-            Core.cacheSet(cacheKey, postData);
+            if (window.Cache) window.Cache.set(cacheKey, postData);
             return postData;
         } catch (err) {
             console.warn('Failed to load post', issueNumber, err);
@@ -240,8 +242,8 @@
             <div style="display: flex; align-items: center; gap: 12px;">
                 <span style="font-size: 24px;">${typeIcon}</span>
                 <div style="flex: 1;">
-                    <div style="font-weight: bold; color: var(--accent);">${Core.escapeHtml(post.title)}</div>
-                    <div style="font-size: 12px; color: var(--text-secondary);">${Core.escapeHtml(post.author)} · ${post.date.toLocaleDateString()}</div>
+                    <div style="font-weight: bold; color: var(--accent);">${GithubCore.escapeHtml(post.title)}</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">${GithubCore.escapeHtml(post.author)} · ${post.date.toLocaleDateString()}</div>
                 </div>
                 <i class="fas fa-external-link-alt" style="color: var(--text-secondary);"></i>
             </div>
@@ -280,11 +282,11 @@
             const canEditDelete = isAuthor || isAdmin;
             let actionsHtml = '';
             if (canEditDelete) {
-                actionsHtml = `<div class="comment-actions"><button class="comment-edit" data-comment-id="${c.id}" data-comment-body="${Core.escapeHtml(c.body)}" title="Редактировать"><i class="fas fa-edit"></i></button><button class="comment-delete" data-comment-id="${c.id}" title="Удалить"><i class="fas fa-trash-alt"></i></button></div>`;
+                actionsHtml = `<div class="comment-actions"><button class="comment-edit" data-comment-id="${c.id}" data-comment-body="${GithubCore.escapeHtml(c.body)}" title="Редактировать"><i class="fas fa-edit"></i></button><button class="comment-delete" data-comment-id="${c.id}" title="Удалить"><i class="fas fa-trash-alt"></i></button></div>`;
             }
             commentDiv.innerHTML = `
-                <div class="comment-meta"><span class="comment-author">${Core.escapeHtml(c.user.login)}</span></div>
-                <div class="comment-body">${Core.escapeHtml(c.body).replace(/\n/g,'<br>')}</div>
+                <div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(c.user.login)}</span></div>
+                <div class="comment-body">${GithubCore.escapeHtml(c.body).replace(/\n/g,'<br>')}</div>
                 <div class="comment-mini-cards"></div>
                 ${actionsHtml}
             `;
@@ -308,9 +310,9 @@
                     try {
                         await GithubAPI.deleteComment(commentId);
                         invalidateCache(issueNumber);
-                        Core.showToast('Комментарий удалён', 'success');
+                        UIUtils.showToast('Комментарий удалён', 'success');
                     } catch (err) {
-                        Core.showToast('Ошибка при удалении', 'error');
+                        UIUtils.showToast('Ошибка при удалении', 'error');
                         if (!commentDiv.parentNode) container.appendChild(commentDiv);
                     }
                 });
@@ -322,7 +324,7 @@
         const modalHtml = `
             <div class="feedback-form">
                 <div id="modal-editor-toolbar"></div>
-                <textarea id="edit-comment-body" class="feedback-textarea" rows="10">${Core.escapeHtml(currentBody)}</textarea>
+                <textarea id="edit-comment-body" class="feedback-textarea" rows="10">${GithubCore.escapeHtml(currentBody)}</textarea>
                 <div class="preview-area" id="modal-preview-area" style="display:none;"></div>
                 <div class="button-group" style="margin-top:15px;">
                     <button class="button" id="edit-comment-save">Сохранить</button>
@@ -330,7 +332,7 @@
                 </div>
             </div>
         `;
-        const { modal, closeModal } = Core.createModal('Редактировать комментарий', modalHtml, { size: 'full' });
+        const { modal, closeModal } = UIUtils.createModal('Редактировать комментарий', modalHtml, { size: 'full' });
         const textarea = modal.querySelector('#edit-comment-body');
         const previewArea = modal.querySelector('#modal-preview-area');
         const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
@@ -356,8 +358,8 @@
 
         saveBtn.addEventListener('click', async () => {
             const newBody = textarea.value.trim();
-            if (!newBody) { Core.showToast('Комментарий не может быть пустым', 'error'); return; }
-            if (newBody === currentBody) { Core.showToast('Нет изменений', 'warning'); return; }
+            if (!newBody) { UIUtils.showToast('Комментарий не может быть пустым', 'error'); return; }
+            if (newBody === currentBody) { UIUtils.showToast('Нет изменений', 'warning'); return; }
             saveBtn.disabled = true;
             try {
                 await GithubAPI.updateComment(commentId, newBody);
@@ -369,9 +371,9 @@
                     renderComments(commentsContainer, updatedComments, GithubAuth.getCurrentUser(), issueNumber);
                 }
                 closeModal();
-                Core.showToast('Комментарий обновлён', 'success');
+                UIUtils.showToast('Комментарий обновлён', 'success');
             } catch (err) {
-                Core.showToast('Ошибка при сохранении', 'error');
+                UIUtils.showToast('Ошибка при сохранении', 'error');
                 saveBtn.disabled = false;
             }
         });
@@ -387,7 +389,7 @@
             setCached(cacheKey, reactions, reactionsCache);
             return reactions;
         } catch (err) {
-            Core.showToast('Ошибка загрузки реакций', 'error');
+            UIUtils.showToast('Ошибка загрузки реакций', 'error');
             throw err;
         }
     }
@@ -401,7 +403,7 @@
             setCached(cacheKey, comments, commentsCache);
             return comments;
         } catch (err) {
-            Core.showToast('Ошибка загрузки комментариев', 'error');
+            UIUtils.showToast('Ошибка загрузки комментариев', 'error');
             throw err;
         }
     }
@@ -413,14 +415,19 @@
         return null;
     }
 
+    // Добавляем lazy loading для всех изображений в рендеренном контенте
     function addLazyLoadingToImages(container) {
         if (!container) return;
         const images = container.querySelectorAll('img:not([loading])');
-        images.forEach(img => img.setAttribute('loading', 'lazy'));
+        images.forEach(img => {
+            if (!img.hasAttribute('loading')) {
+                img.setAttribute('loading', 'lazy');
+            }
+        });
     }
 
     async function renderPostBody(container, body, issueNumber) {
-        let html = await Core.renderMarkdown(body);
+        let html = await GithubCore.renderMarkdown(body);
         container.innerHTML = html;
         if (!container.classList.contains('markdown-body')) container.classList.add('markdown-body');
         addLazyLoadingToImages(container);
@@ -442,7 +449,7 @@
     function renderStaticPoll(container, pollData) {
         const pollDiv = document.createElement('div');
         pollDiv.className = 'poll card';
-        pollDiv.innerHTML = `<h3>📊 ${Core.escapeHtml(pollData.question)}</h3><div class="poll-options static">${pollData.options.map(opt => `<div class="poll-option"><span class="poll-option-text">${Core.escapeHtml(opt)}</span></div>`).join('')}</div><p class="text-secondary small">(опрос будет доступен после публикации)</p>`;
+        pollDiv.innerHTML = `<h3>📊 ${GithubCore.escapeHtml(pollData.question)}</h3><div class="poll-options static">${pollData.options.map(opt => `<div class="poll-option"><span class="poll-option-text">${GithubCore.escapeHtml(opt)}</span></div>`).join('')}</div><p class="text-secondary small">(опрос будет доступен после публикации)</p>`;
         container.appendChild(pollDiv);
     }
 
@@ -457,10 +464,10 @@
         pollDiv.className = 'poll card';
         pollDiv.dataset.issue = issueNumber;
         pollDiv.dataset.options = JSON.stringify(pollData.options);
-        let html = `<h3>📊 ${Core.escapeHtml(pollData.question)}</h3><div class="poll-options">`;
+        let html = `<h3>📊 ${GithubCore.escapeHtml(pollData.question)}</h3><div class="poll-options">`;
         pollData.options.forEach((option, index) => {
             const count = voteCounts[index], percent = totalVotes > 0 ? Math.round((count/totalVotes)*100) : 0;
-            html += `<div class="poll-option" data-index="${index}"><div class="poll-option-text">${Core.escapeHtml(option)}</div>`;
+            html += `<div class="poll-option" data-index="${index}"><div class="poll-option-text">${GithubCore.escapeHtml(option)}</div>`;
             if (!currentUser) {}
             else if (!userVoted) html += `<button class="button poll-vote-btn" data-option="${index}">Голосовать</button>`;
             else html += `<div class="progress-bar"><div style="width:${percent}%;">${percent}% (${count})</div></div>`;
@@ -480,10 +487,10 @@
                     btn.disabled = true;
                     try {
                         await GithubAPI.addComment(issueNumber, `!vote ${optionIndex}`);
-                        Core.showToast('Голос учтён', 'success');
+                        UIUtils.showToast('Голос учтён', 'success');
                         await renderPoll(container, issueNumber, pollData);
                     } catch (err) {
-                        Core.showToast('Ошибка при голосовании', 'error');
+                        UIUtils.showToast('Ошибка при голосовании', 'error');
                         await renderPoll(container, issueNumber, pollData);
                     }
                 });
@@ -501,8 +508,8 @@
         container.appendChild(reactionsDiv);
         container.appendChild(commentsDiv);
         const reactions = await loadReactionsWithCache(item.id);
-        const handleAdd = async (num, content) => { try { await GithubAPI.addReaction(num, content); invalidateCache(num); } catch (err) { Core.showToast('Ошибка при добавлении реакции', 'error'); throw err; } };
-        const handleRemove = async (num, reactionId) => { try { await GithubAPI.removeReaction(num, reactionId); invalidateCache(num); } catch (err) { Core.showToast('Ошибка при удалении реакции', 'error'); throw err; } };
+        const handleAdd = async (num, content) => { try { await GithubAPI.addReaction(num, content); invalidateCache(num); } catch (err) { UIUtils.showToast('Ошибка при добавлении реакции', 'error'); throw err; } };
+        const handleRemove = async (num, reactionId) => { try { await GithubAPI.removeReaction(num, reactionId); invalidateCache(num); } catch (err) { UIUtils.showToast('Ошибка при удалении реакции', 'error'); throw err; } };
         renderReactions(reactionsDiv, item.id, reactions, currentUser, handleAdd, handleRemove);
         const comments = await loadCommentsWithCache(item.id);
         renderComments(commentsDiv, comments, currentUser, item.id);
@@ -531,7 +538,7 @@
             const tempCommentDiv = document.createElement('div');
             tempCommentDiv.className = 'comment';
             tempCommentDiv.dataset.commentId = tempId;
-            tempCommentDiv.innerHTML = `<div class="comment-meta"><span class="comment-author">${Core.escapeHtml(currentUser)}</span></div><div>${Core.escapeHtml(comment).replace(/\n/g,'<br>')}</div><div class="comment-mini-cards"></div>`;
+            tempCommentDiv.innerHTML = `<div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(currentUser)}</span></div><div>${GithubCore.escapeHtml(comment).replace(/\n/g,'<br>')}</div><div class="comment-mini-cards"></div>`;
             const commentsDiv = container.querySelector('.feedback-comments');
             commentsDiv.appendChild(tempCommentDiv);
             input.disabled = true; submitBtn.disabled = true; editorBtn.disabled = true;
@@ -542,9 +549,9 @@
                 const updated = await GithubAPI.loadComments(item.id);
                 setCached(`comments_${item.id}`, updated, commentsCache);
                 renderComments(commentsDiv, updated, currentUser, item.id);
-                Core.showToast('Комментарий добавлен', 'success');
+                UIUtils.showToast('Комментарий добавлен', 'success');
             } catch (err) {
-                Core.showToast('Ошибка при отправке комментария', 'error');
+                UIUtils.showToast('Ошибка при отправке комментария', 'error');
                 tempCommentDiv.remove();
             } finally {
                 input.disabled = false; submitBtn.disabled = false; editorBtn.disabled = false; input.value = '';
@@ -597,30 +604,33 @@
                 closeModal(); document.removeEventListener('keydown', escHandler);
                 if (window.refreshNewsFeed) window.refreshNewsFeed();
                 if (window.refreshGameUpdates && item.game) window.refreshGameUpdates(item.game);
-                Core.showToast('Закрыто', 'success');
-            } catch (err) { Core.showToast('Ошибка при закрытии', 'error'); }
+                UIUtils.showToast('Закрыто', 'success');
+            } catch (err) { UIUtils.showToast('Ошибка при закрытии', 'error'); }
         });
 
         actionsContainer.querySelector('.share-post')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            navigator.clipboard.writeText(postUrl).then(() => Core.showToast('Ссылка скопирована', 'success')).catch(() => Core.showToast('Ошибка копирования', 'error'));
+            navigator.clipboard.writeText(postUrl).then(() => UIUtils.showToast('Ссылка скопирована', 'success')).catch(() => UIUtils.showToast('Ошибка копирования', 'error'));
         });
     }
 
     async function openFullModal(item) {
         const currentUser = GithubAuth.getCurrentUser();
         const contentHtml = '<div class="loading-spinner" id="modal-loader"><i class="fas fa-circle-notch fa-spin"></i></div>';
-        const { modal, closeModal } = Core.createModal(item.title, contentHtml, { size: 'full' });
+        const { modal, closeModal } = UIUtils.createModal(item.title, contentHtml, { size: 'full' });
         const container = modal.querySelector('.modal-body');
         const escHandler = (e) => { if (e.key === 'Escape') closeModal(); };
         document.addEventListener('keydown', escHandler);
         try {
             const issue = await GithubAPI.loadIssue(item.id);
+            
             if (issue.state === 'closed') {
                 container.innerHTML = '<p class="error-message">Этот пост был закрыт и больше не доступен.</p>';
                 return;
             }
+
             container.innerHTML = '';
+
             const header = document.createElement('div');
             header.className = 'modal-post-header';
             header.style.cssText = 'display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap;';
@@ -636,18 +646,20 @@
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <span style="font-size:24px;">${typeIcon}</span>
                     <div>
-                        <div style="font-size:14px;color:var(--accent);">${Core.escapeHtml(item.author || 'Unknown')}</div>
+                        <div style="font-size:14px;color:var(--accent);">${GithubCore.escapeHtml(item.author || 'Unknown')}</div>
                     </div>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0;">
-                    ${item.game ? `<span class="feedback-label">${Core.escapeHtml(item.game)}</span>` : ''}
+                    ${item.game ? `<span class="feedback-label">${GithubCore.escapeHtml(item.game)}</span>` : ''}
                 </div>
             `;
             container.appendChild(header);
+
             const modalHeader = modal.querySelector('.modal-header');
             if (modalHeader) {
                 addHeaderActions(modalHeader, item, issue, currentUser, closeModal, escHandler);
             }
+
             await renderPostBody(container, issue.body, item.id);
             await loadReactionsAndComments(container, item, currentUser, issue);
             if (currentUser) setupCommentForm(container, item, currentUser);
@@ -661,7 +673,7 @@
     function canViewPost(body, labels, currentUser) {
         if (!labels.includes('private')) return true;
         if (GithubAuth.isAdmin()) return true;
-        const allowed = Core.extractAllowed(body);
+        const allowed = GithubCore.extractAllowed(body);
         if (!allowed) return false;
         const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
         return allowedList.includes(currentUser);
@@ -832,8 +844,7 @@
         return { container, textarea, previewDiv, updatePreview };
     }
 
-    // Глобальная переменная для приватности в редакторе
-    let currentEditorIsPrivate = false;
+    let currentPrivateUsersInput = null;
 
     function openEditorModal(mode, data, postType = 'feedback') {
         const currentUser = GithubAuth.getCurrentUser();
@@ -874,30 +885,27 @@
             draftKey = `draft_${postType}_${mode}_${data.game || 'global'}_${data.number || 'new'}`;
         }
 
-        const { modal, closeModal } = Core.createModal(title, '<div id="editor-container" style="height: 100%; display: flex; flex-direction: column;"></div>', { size: 'full' });
+        const { modal, closeModal } = UIUtils.createModal(title, '<div id="editor-container" style="height: 100%; display: flex; flex-direction: column;"></div>', { size: 'full' });
         const editorContainer = modal.querySelector('#editor-container');
         
         let syncToBody = null;
         let privateUsersInput = null;
         
-        // Определяем начальное состояние приватности
-        currentEditorIsPrivate = (postType === 'support') ? true : (data.labels?.includes('private') || false);
-        
         const handleSave = async (finalBody) => {
-            if (!GithubAuth.getToken()) { Core.showToast('Вы не авторизованы. Войдите через GitHub.', 'error'); throw new Error('No token'); }
+            if (!GithubAuth.getToken()) { UIUtils.showToast('Вы не авторизованы. Войдите через GitHub.', 'error'); throw new Error('No token'); }
             
             if (postType === 'comment') {
                 await GithubAPI.addComment(data.issueNumber, finalBody);
-                Core.clearDraft(draftKey);
+                UIUtils.clearDraft(draftKey);
                 closeModal();
                 window.dispatchEvent(new CustomEvent('github-comment-created', { detail: { issueNumber: data.issueNumber } }));
-                Core.showToast('Комментарий добавлен', 'success');
+                UIUtils.showToast('Комментарий добавлен', 'success');
                 return;
             }
             
             const titleInput = modal.querySelector('#modal-input-title');
             const title = titleInput ? titleInput.value.trim() : '';
-            if (!title) { Core.showToast('Заполните заголовок', 'error'); throw new Error('No title'); }
+            if (!title) { UIUtils.showToast('Заполните заголовок', 'error'); throw new Error('No title'); }
             
             let finalProcessedBody = finalBody;
             finalProcessedBody = finalProcessedBody.replace(/<!--\s*preview:\s*https?:\/\/[^\s]+\s*-->\s*\n?/g, '');
@@ -905,7 +913,7 @@
             finalProcessedBody = finalProcessedBody.replace(/<!--\s*allowed:\s*.*?\s*-->\s*\n?/g, '');
             
             const newPreviewUrl = modal.querySelector('#modal-preview-url').value.trim();
-            const isPrivate = postType === 'support' ? true : currentEditorIsPrivate;
+            const isPrivate = postType === 'support' ? true : currentIsPrivate;
             const allowedUsersValue = (privateUsersInput && postType !== 'support') ? privateUsersInput.value.trim() : '';
             
             let existingPreviewUrl = null;
@@ -950,7 +958,7 @@
                 const originalTitle = data.title || '';
                 const originalBody = data.body || '';
                 if (title === originalTitle && finalProcessedBody === originalBody) {
-                    Core.showToast('Нет изменений', 'warning');
+                    UIUtils.showToast('Нет изменений', 'warning');
                     throw new Error('No changes');
                 }
             }
@@ -977,14 +985,14 @@
                 await GithubAPI.createIssue(title, finalProcessedBody, labels);
             }
             
-            Core.clearDraft(draftKey);
+            UIUtils.clearDraft(draftKey);
             closeModal();
             
             if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
             if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
             if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
             
-            Core.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
+            UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
         };
         
         if (postType === 'comment') {
@@ -1010,7 +1018,7 @@
             summaryInput.id = 'modal-summary';
             summaryInput.className = 'feedback-input';
             summaryInput.placeholder = 'Краткое описание (будет видно в ленте)';
-            summaryInput.value = Core.extractSummary(data.body) || '';
+            summaryInput.value = GithubCore.extractSummary(data.body) || '';
             summaryInput.style.marginBottom = '12px';
             settingsCard.appendChild(summaryInput);
             
@@ -1098,15 +1106,16 @@
             privateUsersInput.className = 'feedback-input';
             privateUsersInput.placeholder = 'Ники через запятую';
             privateUsersInput.value = allowedUsers;
-            
+            const isPrivateInit = (postType === 'support') ? true : (data.labels?.includes('private') || false);
+            let currentIsPrivate = isPrivateInit;
             const onAccessToggle = (isPrivate, allowedVal) => {
                 if (postType === 'support') return;
-                currentEditorIsPrivate = isPrivate;
+                currentIsPrivate = isPrivate;
                 privateUsersInput.style.display = isPrivate ? 'block' : 'none';
                 if (isPrivate && allowedVal) privateUsersInput.value = allowedVal;
                 if (syncToBody) syncToBody();
             };
-            const accessDropdown = createAccessDropdown(currentEditorIsPrivate, allowedUsers, onAccessToggle);
+            const accessDropdown = createAccessDropdown(currentIsPrivate, allowedUsers, onAccessToggle);
             if (postType === 'support') {
                 accessDropdown.style.display = 'none';
                 const supportInfo = document.createElement('div');
@@ -1118,7 +1127,7 @@
             }
             accessRow.appendChild(accessPlaceholder);
             if (postType !== 'support') {
-                privateUsersInput.style.display = currentEditorIsPrivate ? 'block' : 'none';
+                privateUsersInput.style.display = currentIsPrivate ? 'block' : 'none';
                 privateUsersInput.style.flex = '1';
                 accessRow.appendChild(privateUsersInput);
             }
@@ -1151,7 +1160,7 @@
                 }
                 if (postType === 'support') {
                     body = `<!-- allowed: ${currentUser} -->\n\n` + body;
-                } else if (currentEditorIsPrivate && privateUsersInput.value.trim()) {
+                } else if (currentIsPrivate && privateUsersInput.value.trim()) {
                     body = `<!-- allowed: ${privateUsersInput.value.trim()} -->\n\n` + body;
                 }
                 textarea.value = body;
@@ -1167,7 +1176,7 @@
                 if (categorySelect) categorySelect.addEventListener('change', syncToBody);
             }
             
-            const savedDraft = Core.loadDraft(draftKey);
+            const savedDraft = UIUtils.loadDraft(draftKey);
             if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl || savedDraft.summary || savedDraft.access || savedDraft.privateUsers)) {
                 if (confirm('Найден несохранённый черновик. Восстановить?')) {
                     titleInput.value = savedDraft.title || '';
@@ -1183,8 +1192,8 @@
                     }
                     if (postType !== 'support' && savedDraft.access) {
                         const isPrivate = savedDraft.access === 'private';
-                        if (isPrivate !== currentEditorIsPrivate) {
-                            currentEditorIsPrivate = isPrivate;
+                        if (isPrivate !== currentIsPrivate) {
+                            currentIsPrivate = isPrivate;
                             const btn = accessDropdown.querySelector('.access-dropdown-btn');
                             if (btn) btn.innerHTML = isPrivate ? '<i class="fas fa-lock"></i> Приватный' : '<i class="fas fa-globe"></i> Публичный';
                             if (privateUsersInput) privateUsersInput.style.display = isPrivate ? 'block' : 'none';
@@ -1193,7 +1202,7 @@
                     if (savedDraft.privateUsers && privateUsersInput) privateUsersInput.value = savedDraft.privateUsers;
                     syncToBody();
                 } else {
-                    Core.clearDraft(draftKey);
+                    UIUtils.clearDraft(draftKey);
                 }
             }
             
@@ -1204,9 +1213,9 @@
                 const currentSummary = summaryInput.value.trim();
                 const currentBody = textarea.value.trim();
                 const currentCategory = settingsCard.querySelector('#modal-category') ? settingsCard.querySelector('#modal-category').value : null;
-                const currentAccess = currentEditorIsPrivate ? 'private' : 'public';
+                const currentAccess = currentIsPrivate ? 'private' : 'public';
                 const currentPrivateUsers = privateUsersInput ? privateUsersInput.value.trim() : '';
-                Core.saveDraft(draftKey, {
+                UIUtils.saveDraft(draftKey, {
                     title: currentTitle,
                     previewUrl: currentPreview,
                     summary: currentSummary,
@@ -1230,11 +1239,11 @@
             const closeWithCheck = () => {
                 if (hasChanges) {
                     if (confirm('У вас есть несохранённые изменения. Вы действительно хотите закрыть?')) {
-                        Core.clearDraft(draftKey);
+                        UIUtils.clearDraft(draftKey);
                         originalCloseModal();
                     }
                 } else {
-                    Core.clearDraft(draftKey);
+                    UIUtils.clearDraft(draftKey);
                     originalCloseModal();
                 }
             };
@@ -1266,7 +1275,7 @@
     async function openSupportModal() {
         const currentUser = GithubAuth.getCurrentUser();
         if (!currentUser) {
-            Core.showToast('Войдите в аккаунт, чтобы использовать поддержку', 'error');
+            UIUtils.showToast('Войдите в аккаунт, чтобы использовать поддержку', 'error');
             window.dispatchEvent(new CustomEvent('github-login-requested'));
             return;
         }
@@ -1288,7 +1297,7 @@
                 </div>
             </div>
         `;
-        const { modal, closeModal } = Core.createModal('Поддержка', modalContent, { size: 'full' });
+        const { modal, closeModal } = UIUtils.createModal('Поддержка', modalContent, { size: 'full' });
         const listContainer = modal.querySelector('#support-list');
         const newBtn = modal.querySelector('#new-support-btn');
 
@@ -1302,7 +1311,7 @@
             const isAdmin = GithubAuth.isAdmin();
             let filtered = issues.filter(issue => {
                 if (isAdmin) return true;
-                const allowed = Core.extractAllowed(issue.body);
+                const allowed = GithubCore.extractAllowed(issue.body);
                 return allowed === currentUser;
             });
             filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -1320,13 +1329,13 @@
                 card.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                         <div>
-                            <div style="font-weight: bold; color: var(--accent);">${Core.escapeHtml(issue.title)}</div>
+                            <div style="font-weight: bold; color: var(--accent);">${GithubCore.escapeHtml(issue.title)}</div>
                             <div style="font-size: 12px; color: var(--text-secondary);">${new Date(issue.created_at).toLocaleString()}</div>
                         </div>
                         <div style="font-size: 12px; background: var(--bg-primary); padding: 4px 8px; border-radius: 20px;">#${issue.number}</div>
                     </div>
                     <div class="text-secondary" style="font-size: 13px; margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-                        ${Core.stripHtml(issue.body).substring(0, 100)}...
+                        ${GithubCore.stripHtml(issue.body).substring(0, 100)}...
                     </div>
                 `;
                 card.addEventListener('click', () => {

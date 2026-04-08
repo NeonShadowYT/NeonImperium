@@ -1,10 +1,13 @@
-// lang.js – словари и переключение языка (полная версия, без сокращений)
+// ==================== СЛОВАРИ ====================
 const translations = {
     ru: {
+        // Navigation
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
         navGc: "ГК Адвенчур",
+        
+        // Home
         siteTitle: "Neon Imperium",
         mainProjectsTitle: "Главные проекты",
         mainProjectsDesc: "Игры с приоритетом разработки",
@@ -22,6 +25,8 @@ const translations = {
         newsTitle: "📰 Последние новости",
         newsDesc: "Свежие видео и обновления",
         newsLoading: "Загрузка новостей...",
+        
+        // Common for game pages
         trailerTitle: "Трейлер",
         developerTitle: "Разработчик",
         nextUpdateProgress: "Следующее обновление:",
@@ -92,8 +97,12 @@ const translations = {
         supportPrivateNote: "⚠️ Ваше сообщение будет приватным: его увидят только вы и администратор. Оно не отображается в публичных разделах сайта, но сохраняется в репозитории GitHub (видят админы).",
         supportTitle: "Поддержка",
         supportNewBtn: "Новое обращение",
+
+        // License accept
         licenseAccept: "Скачивая игру, вы принимаете ",
         licenseLink: "лицензионное соглашение",
+        
+        // Starve Neon
         starveDownloadNote: "Версия 0.14.0 · Обновление от 08.03.2026",
         starveVersion: "Объединение 0.14.0",
         worldTitle: "Игровой мир",
@@ -147,6 +156,8 @@ const translations = {
         balanceContent: "Награды за уровень\nИзменение прогрессии",
         spoilerBugfix: "Багфикс",
         bugfixContent: "Множество мелких исправлений",
+        
+        // Alpha 01
         alphaVersion: "Патч 0.0.5.2",
         alphaDownloadNote: "Версия 0.0.5.2 · Обновление от 21.01.2024",
         alphaStoryTitle: "Сюжет",
@@ -163,6 +174,8 @@ const translations = {
         craftContent: "Метеоритные пули теперь можно скрафтить в лесу",
         spoilerGraphics: "Графика",
         graphicsContent: "Улучшение меню",
+        
+        // GC Adven
         gcVersion: "Обновление 0.1.0",
         gcDownloadNote: "Версия 0.1.0 · Обновление от 01.11.2023",
         gcAboutTitle: "Об игре",
@@ -172,9 +185,13 @@ const translations = {
         gcUpdateTitle: "Обновление 0.1.0",
         gcUpdateSummary: "Игра вышла",
         gcUpdateContent: "Первый релиз игры.",
+        
+        // 404
         notFoundTitle: "404 — Страница не найдена",
         notFoundDesc: "Запрашиваемая страница не существует или была перемещена.",
         backHome: "Вернуться на главную",
+        
+        // License Agreement
         licenseTitle: "Лицензионное соглашение",
         licenseLastUpdate: "Последнее обновление: 9 апреля 2026 г.",
         licenseAllowedTitle: "Разрешено",
@@ -196,6 +213,8 @@ const translations = {
         licenseObligation4: "Указывать ссылки на оригинальные страницы и автора",
         licenseBack: "← Вернуться к игре",
         allRightsReserved: "Все права защищены.",
+        
+        // Detailed license sections
         licenseSection1Title: "Общие положения",
         licenseSection1Text: "Настоящее Соглашение заключено между вами (Пользователь) и правообладателем игр Neon Imperium. Оно регулирует использование игр Starve Neon, Alpha 01, ГК Адвенчур и всех связанных материалов.",
         licenseSection1Text2: "Устанавливая или используя игру, вы полностью соглашаетесь с условиями. Если вы не согласны — удалите игру.",
@@ -238,11 +257,15 @@ const translations = {
         licenseJokeSoul: "«Ты отдаёшь свою душу авторам ;}» — это шутка. Ваша душа остаётся при вас.",
         licenseBrandUsage: "Запрещается использовать название «Neon Imperium», логотипы, иконки игр или товарные знаки в модах, изменённых версиях или любых производных работах таким образом, чтобы это могло ввести в заблуждение относительно официального происхождения или одобрения разработчиком. Вы должны явно указывать, что ваша модификация является неофициальной."
     },
+    
     en: {
+        // Navigation
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
         navGc: "GC Adven",
+        
+        // Home
         siteTitle: "Neon Imperium",
         mainProjectsTitle: "Main Projects",
         mainProjectsDesc: "Priority development games",
@@ -260,6 +283,8 @@ const translations = {
         newsTitle: "📰 Latest News",
         newsDesc: "Fresh videos and updates",
         newsLoading: "Loading news...",
+        
+        // Common for game pages
         trailerTitle: "Trailer",
         developerTitle: "Developer",
         nextUpdateProgress: "Next update:",
@@ -330,8 +355,11 @@ const translations = {
         supportPrivateNote: "⚠️ Your message will be private: only you and the admin can see it. It is not displayed in public sections of the site, but is stored in the GitHub repository (visible to admins).",
         supportTitle: "Support",
         supportNewBtn: "New ticket",
+
         licenseAccept: "By downloading the game, you accept the ",
         licenseLink: "license agreement",
+        
+        // Starve Neon
         starveDownloadNote: "Version 0.14.0 · Update 2026-03-08",
         starveVersion: "Union 0.14.0",
         worldTitle: "Game World",
@@ -385,6 +413,8 @@ const translations = {
         balanceContent: "Level rewards\nProgression changes",
         spoilerBugfix: "Bugfix",
         bugfixContent: "Many minor fixes",
+        
+        // Alpha 01
         alphaVersion: "Patch 0.0.5.2",
         alphaDownloadNote: "Version 0.0.5.2 · Update 2024-01-21",
         alphaStoryTitle: "Story",
@@ -401,6 +431,8 @@ const translations = {
         craftContent: "Meteorite bullets can now be crafted in the forest",
         spoilerGraphics: "Graphics",
         graphicsContent: "Menu improvement",
+        
+        // GC Adven
         gcVersion: "Update 0.1.0",
         gcDownloadNote: "Version 0.1.0 · Update 2023-11-01",
         gcAboutTitle: "About",
@@ -410,9 +442,13 @@ const translations = {
         gcUpdateTitle: "Update 0.1.0",
         gcUpdateSummary: "Game released",
         gcUpdateContent: "First release of the game.",
+        
+        // 404
         notFoundTitle: "404 — Page not found",
         notFoundDesc: "The requested page does not exist or has been moved.",
         backHome: "Back to home",
+        
+        // License Agreement
         licenseTitle: "License Agreement",
         licenseLastUpdate: "Last updated: April 9, 2026",
         licenseAllowedTitle: "Allowed",
@@ -434,6 +470,8 @@ const translations = {
         licenseObligation4: "Provide links to original game pages and authors",
         licenseBack: "← Back to game",
         allRightsReserved: "All rights reserved.",
+        
+        // Detailed license sections
         licenseSection1Title: "General Provisions",
         licenseSection1Text: "This Agreement is concluded between you (User) and the copyright holder of Neon Imperium games. It governs the use of Starve Neon, Alpha 01, GC Adven and all related materials.",
         licenseSection1Text2: "By installing or using the game, you fully agree to the terms. If you do not agree, delete the game.",
@@ -478,6 +516,7 @@ const translations = {
     }
 };
 
+// ==================== FUNCTIONS ====================
 function setLanguage(lang) {
     document.querySelectorAll('[data-lang]').forEach(element => {
         const key = element.getAttribute('data-lang');
@@ -504,28 +543,32 @@ function setLanguage(lang) {
 document.addEventListener('DOMContentLoaded', () => {
     const savedLang = localStorage.getItem('preferredLanguage') || 'ru';
     setLanguage(savedLang);
+    
     document.querySelectorAll('.lang-btn').forEach(btn => {
-        btn.addEventListener('click', () => setLanguage(btn.dataset.langCode));
+        btn.addEventListener('click', () => {
+            setLanguage(btn.dataset.langCode);
+        });
     });
-    const langBtn = document.getElementById('current-lang-btn');
-    const langDropdown = document.getElementById('lang-dropdown');
-    if (langBtn && langDropdown) {
-        langBtn.addEventListener('click', () => {
-            langDropdown.style.display = langDropdown.style.display === 'block' ? 'none' : 'block';
-        });
-        document.querySelectorAll('#lang-dropdown button').forEach(btn => {
-            btn.addEventListener('click', () => {
-                setLanguage(btn.dataset.langCode);
-                langBtn.textContent = btn.dataset.langCode.toUpperCase();
-                langDropdown.style.display = 'none';
-            });
-        });
-        document.addEventListener('click', (e) => {
-            if (!langBtn.contains(e.target) && !langDropdown.contains(e.target)) {
-                langDropdown.style.display = 'none';
-            }
-        });
-    }
 });
 
-window.translations = translations;
+const langBtn = document.getElementById('current-lang-btn');
+const langDropdown = document.getElementById('lang-dropdown');
+if (langBtn && langDropdown) {
+    langBtn.addEventListener('click', () => {
+        langDropdown.style.display = langDropdown.style.display === 'block' ? 'none' : 'block';
+    });
+    document.querySelectorAll('#lang-dropdown button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const lang = btn.dataset.langCode;
+            setLanguage(lang);
+            langBtn.textContent = lang.toUpperCase();
+            langBtn.dataset.langCode = lang;
+            langDropdown.style.display = 'none';
+        });
+    });
+    document.addEventListener('click', (e) => {
+        if (!langBtn.contains(e.target) && !langDropdown.contains(e.target)) {
+            langDropdown.style.display = 'none';
+        }
+    });
+}
