@@ -6,7 +6,7 @@
         { content: 'rocket', emoji: '🚀' }, { content: 'eyes', emoji: '👀' }
     ];
     const reactionLocks = new Map();
-    let commentsCache = new Map(); // in-memory кеш комментариев
+    let commentsCache = new Map();
 
     // ---------- Реакции ----------
     function groupReactions(reactions, currentUser) {
