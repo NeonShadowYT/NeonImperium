@@ -1,4 +1,3 @@
-// loader.js – динамическая загрузка скриптов и стилей
 const loadedScripts = new Set();
 
 function loadScript(src, options = {}) {

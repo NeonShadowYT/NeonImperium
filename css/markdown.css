@@ -1,4 +1,6 @@
-/* markdown.css – стили для рендера Markdown, опросов, превью, редактора */
+/* markdown.css – общие стили для рендера Markdown, опросов, превью и редактора */
+
+/* Markdown body */
 .markdown-body {
     overflow-x: auto;
 }
@@ -94,6 +96,8 @@
     background: var(--bg-primary);
     border-top: 1px solid var(--border);
 }
+
+/* Preview area */
 .preview-area {
     background: var(--bg-primary);
     border-radius: 16px;
@@ -105,6 +109,8 @@
     overflow-y: auto;
     transition: opacity 0.2s;
 }
+
+/* Poll styles */
 .poll {
     margin: 20px 0;
 }
@@ -143,6 +149,8 @@
     margin-top: 10px;
     font-size: 12px;
 }
+
+/* Editor toolbar */
 .editor-toolbar {
     display: flex;
     gap: 5px;
@@ -187,6 +195,8 @@
 .editor-btn.preview-btn:hover {
     background: var(--accent-light);
 }
+
+/* Split editor */
 .split-editor {
     display: flex;
     flex-direction: column;
@@ -225,6 +235,8 @@
     padding: 8px 0;
     border-radius: 12px;
 }
+
+/* Dropdown menus */
 .preview-dropdown {
     position: absolute;
     top: calc(100% + 5px);
@@ -262,6 +274,8 @@
     background: var(--accent);
     color: #fff;
 }
+
+/* Access dropdown */
 .access-dropdown-container {
     position: relative;
     display: inline-block;

@@ -1,4 +1,4 @@
-// lang.js – переводы и переключатель языка
+// ==================== СЛОВАРИ ====================
 const translations = {
     ru: {
         // Navigation
@@ -6,6 +6,7 @@ const translations = {
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
         navGc: "ГК Адвенчур",
+        
         // Home
         siteTitle: "Neon Imperium",
         mainProjectsTitle: "Главные проекты",
@@ -24,30 +25,47 @@ const translations = {
         newsTitle: "📰 Последние новости",
         newsDesc: "Свежие видео и обновления",
         newsLoading: "Загрузка новостей...",
-        // Game pages common
+        
+        // Common for game pages
         trailerTitle: "Трейлер",
         developerTitle: "Разработчик",
+        nextUpdateProgress: "Следующее обновление:",
         downloadTitle: "Скачать",
         descriptionTitle: "Описание",
         videoTitle: "Видео",
         videoDesc: "Подборка контента от сообщества",
         updatesTitle: "Обновления",
+        polls: "Опросы",
         downloadBtn: "Скачать",
         feedbackTitle: "Идеи, баги и отзывы",
         feedbackDesc: "Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.",
         feedbackNewBtn: "Оставить сообщение",
         feedbackLoading: "Загрузка обратной связи...",
-        feedbackLoginPrompt: "Войдите через GitHub, чтобы участвовать",
+        feedbackLoginPrompt: "Войдите через GitHub, чтобы участвовать в обсуждениях",
         feedbackLoginBtn: "Войти",
-        feedbackTokenNote: "Ваш токен останется только у вас в браузере.",
+        feedbackFormTitle: "Оставить сообщение",
+        feedbackTitlePlaceholder: "Заголовок",
+        feedbackBodyPlaceholder: "Подробное описание...",
+        feedbackCategoryLabel: "Категория",
+        feedbackCategoryIdea: "💡 Идея",
+        feedbackCategoryBug: "🐛 Баг",
+        feedbackCategoryReview: "⭐ Отзыв",
+        feedbackCategorySupport: "🛟 Поддержка",
+        feedbackSubmitBtn: "Отправить",
+        feedbackComments: "Комментарии",
+        feedbackAddComment: "Написать комментарий...",
+        feedbackSendBtn: "Отправить",
+        feedbackLoadMore: "Загрузить ещё",
+        feedbackNoItems: "Пока нет сообщений. Будьте первым!",
         feedbackCancel: "Отмена",
         feedbackTabAll: "Все",
         feedbackTabIdea: "💡 Идеи",
         feedbackTabBug: "🐛 Баги",
         feedbackTabReview: "⭐ Отзывы",
+        feedbackTabSupport: "🛟 Поддержка",
         feedbackLoadError: "Ошибка загрузки.",
         feedbackRetry: "Повторить",
-        // GitHub auth
+        feedbackTokenNote: "Ваш токен останется только у вас в браузере.",
         githubLoginTitle: "Вход через GitHub",
         githubSecure: "Безопасно и прозрачно:",
         githubTokenNote: "токен хранится в вашем браузере и передаётся только в GitHub API.",
@@ -66,6 +84,8 @@ const translations = {
         githubLoginVia: "Войти через GitHub",
         githubWhy: "Зачем это нужно?",
         githubClearCache: "Очистить кеш",
+        githubError: "Ошибка",
+        githubRetry: "Попробовать снова",
         githubRevoke: "Управление токенами",
         githubTokenMissing: "Введите токен доступа",
         githubTimeout: "Превышено время ожидания. Проверьте соединение.",
@@ -74,30 +94,33 @@ const translations = {
         githubServerError: "Ошибка сервера GitHub",
         githubNetworkError: "Ошибка сети. Проверьте подключение.",
         supportMenuItem: "Поддержка",
+        supportPrivateNote: "⚠️ Ваше сообщение будет приватным: его увидят только вы и администратор. Оно не отображается в публичных разделах сайта, но сохраняется в репозитории GitHub (видят админы).",
         supportTitle: "Поддержка",
         supportNewBtn: "Новое обращение",
-        donateButton: "Поддержать",
+
+        // License accept
         licenseAccept: "Скачивая игру, вы принимаете ",
         licenseLink: "лицензионное соглашение",
-        // Starve Neon specific
-        starveVersion: "Объединение 0.14.0",
+        
+        // Starve Neon
         starveDownloadNote: "Версия 0.14.0 · Обновление от 08.03.2026",
+        starveVersion: "Объединение 0.14.0",
         worldTitle: "Игровой мир",
-        worldDesc: "БРУТАЛЬНЫЙ ХАРДКОРНЫЙ МИР...",
+        worldDesc: "БРУТАЛЬНЫЙ ХАРДКОРНЫЙ МИР. Я не буду держать тебя за руку, приятель. Я оставлю небольшой туториал по базовой механике, а дальше ты сам по себе ;}",
         statusTitle: "Статус",
-        statusDesc: "Starve Neon находится на ранней стадии разработки...",
+        statusDesc: "Starve Neon находится на ранней стадии разработки, но открыт для кроссплатформенного многопользовательского тестирования.",
         developmentTitle: "Развитие",
-        developmentDesc: "Полная система развития от копий и мечей до ГРЕБАНОГО МИНИГАНА...",
+        developmentDesc: "Полная система развития от копий и мечей до ГРЕБАНОГО МИНИГАНА, ЧУВАК! Броня для разных биомов, модули и система генетики, подобная RimWorld.",
         alliesTitle: "Союзники",
-        alliesDesc: "Создавай союзы с фракциями и другими игроками...",
+        alliesDesc: "Создавай союзы с фракциями и другими игроками, участвуй в битвах на арене и приручай животных. Отправляйся кланом на рейд подобно Rust.",
         featuresTitle: "Особенности",
         feature1: "Интернет необязателен.",
         feature2: "Частые крупные обновления.",
         feature3: "Встроенная поддержка модов.",
         feature4: "Прямое общение с разработчиком.",
-        feature5: "Многоязычная поддержка...",
+        feature5: "Многоязычная поддержка и простое добавление пользовательских языков и шрифтов.",
         requirementsTitle: "Системные требования",
-        requirementsNote: "Примерные значения...",
+        requirementsNote: "Примерные значения основанные на стандартных настройках для этих устройств",
         fps60: "60+ Фпс",
         cpu60: "Процессор: Xeon-E2650 v2 3.00 GHz",
         gpu60: "Видеокарта: GT 730 4GB",
@@ -117,39 +140,132 @@ const translations = {
         storageVal: "256 Мб",
         os: "Система",
         osVal: "Win 10+ 32 Бит / Андроид 7+",
-        // Alpha 01 specific
+        video1Title: "Обзор Starve Neon",
+        video2Title: "Гайд для новичков",
+        video3Title: "Прохождение мультиплеера",
+        video4Title: "Лучшие моменты",
+        video5Title: "Секреты и пасхалки",
+        starveUpdateTitle: "Бета 0.14.0",
+        spoilerTutorial: "Туториал",
+        tutorialContent: "Цели по всей игре",
+        spoilerRewards: "Награды",
+        rewardsContent: "Локализация\nУлучшены возможности перевода",
+        spoilerQuality: "Удобства",
+        qualityContent: "Интерфейс\nУправление",
+        spoilerBalance: "Баланс",
+        balanceContent: "Награды за уровень\nИзменение прогрессии",
+        spoilerBugfix: "Багфикс",
+        bugfixContent: "Множество мелких исправлений",
+        
+        // Alpha 01
         alphaVersion: "Патч 0.0.5.2",
         alphaDownloadNote: "Версия 0.0.5.2 · Обновление от 21.01.2024",
         alphaStoryTitle: "Сюжет",
-        alphaStoryDesc: "Alpha 01 - это topdown шутер...",
+        alphaStoryDesc: "Alpha 01 - это topdown шутер, где вы - робот с кодовым названием Альфа 01. Ваша цель заключается в том, чтобы помочь солдатам и остановить хаос, творящийся в мире. Кто же стоит за началом хаоса?..",
         alphaStatusTitle: "Статус",
         alphaStatusDesc: "Игра находится в активной разработке. Текущая версия: 0.0.5.2",
-        // GC Adven specific
+        alphaVideo1Title: "Обзор Alpha 01",
+        alphaVideo2Title: "Прохождение",
+        alphaVideo3Title: "Стрим с разработчиком",
+        alphaUpdateTitle: "Патч 0.0.5.2",
+        spoilerGameplay: "Геймплей",
+        gameplayContent: "Добавлена 1 точка бандитов на свалке",
+        spoilerCraft: "Крафт",
+        craftContent: "Метеоритные пули теперь можно скрафтить в лесу",
+        spoilerGraphics: "Графика",
+        graphicsContent: "Улучшение меню",
+        
+        // GC Adven
         gcVersion: "Обновление 0.1.0",
         gcDownloadNote: "Версия 0.1.0 · Обновление от 01.11.2023",
         gcAboutTitle: "Об игре",
-        gcDescription: "Welcome to the ebanat zone: Gc adventure!!",
-        // License page
-        licenseTitle: "Лицензионное соглашение",
-        licenseLastUpdate: "Последнее обновление: 9 апреля 2026 г.",
-        licenseAllowedTitle: "Разрешено",
-        licenseAllowed1: "Распространение игры где угодно...",
-        licenseForbiddenTitle: "Запрещено",
-        licenseForbidden1: "Выдавать имена, товарные знаки, логотипы за свои",
-        licenseObligationTitle: "Обязанности",
-        licenseObligation1: "Сохранять первоначальные авторские права",
-        allRightsReserved: "Все права защищены.",
-        licenseBack: "← Вернуться к игре",
+        gcDescription: "Welcome to the ebanat zone: Gc adventure!! Гк адвенчур - это жёсткое экшен приключение где тебе предстоит спасти мир от хаоса! Однажды, кот Мурзик приходит к гк чтобы он помог ему. Но они не успевают и начинается ХАОС! Теперь вам предстоит остановить это. Но вы будете не одни, у вас будут помощники! Вот они, слева направо: Мурзик, Мурочка, Митми, Неон, Оборотень, Стейси! Вы все должны будете остановить это всё, нажав на 2 кнопочки",
+        gcVideo1Title: "Обзор ГК Адвенчур",
+        gcVideo2Title: "Прохождение",
+        gcUpdateTitle: "Обновление 0.1.0",
+        gcUpdateSummary: "Игра вышла",
+        gcUpdateContent: "Первый релиз игры.",
+        
         // 404
         notFoundTitle: "404 — Страница не найдена",
         notFoundDesc: "Запрашиваемая страница не существует или была перемещена.",
-        backHome: "Вернуться на главную"
+        backHome: "Вернуться на главную",
+        
+        // License Agreement
+        licenseTitle: "Лицензионное соглашение",
+        licenseLastUpdate: "Последнее обновление: 9 апреля 2026 г.",
+        licenseAllowedTitle: "Разрешено",
+        licenseAllowed1: "Распространение игры где угодно при условии упоминания оригинального сайта и наличия ссылки на него в игре",
+        licenseAllowed2: "Модификация для локального использования или на собственных серверах",
+        licenseAllowed3: "Создание платных модов и получение дохода (без отчислений)",
+        licenseAllowed4: "Запись и публикация видеороликов с указанием авторства",
+        licenseAllowed5: "Бесплатные обновления",
+        licenseForbiddenTitle: "Запрещено",
+        licenseForbidden1: "Выдавать имена, товарные знаки, логотипы за свои",
+        licenseForbidden2: "Читы/моды, дающие преимущество на официальных серверах",
+        licenseForbidden3: "Вредоносные модификации (вирусы, майнеры)",
+        licenseForbidden4: "Удаление уведомлений об авторских правах",
+        licenseForbidden5: "Использование названия «Neon Imperium», логотипов или товарных знаков в модах или изменённых версиях без явного указания, что это неофициальная версия и не одобрено разработчиком",
+        licenseObligationTitle: "Обязанности",
+        licenseObligation1: "Сохранять первоначальные авторские права",
+        licenseObligation2: "В изменённых версиях указывать неофициальный статус и ссылку на оригинальный сайт",
+        licenseObligation3: "Моды с открытым исходным кодом должны содержать ссылку на исходники",
+        licenseObligation4: "Указывать ссылки на оригинальные страницы и автора",
+        licenseBack: "← Вернуться к игре",
+        allRightsReserved: "Все права защищены.",
+        
+        // Detailed license sections
+        licenseSection1Title: "Общие положения",
+        licenseSection1Text: "Настоящее Соглашение заключено между вами (Пользователь) и правообладателем игр Neon Imperium. Оно регулирует использование игр Starve Neon, Alpha 01, ГК Адвенчур и всех связанных материалов.",
+        licenseSection1Text2: "Устанавливая или используя игру, вы полностью соглашаетесь с условиями. Если вы не согласны — удалите игру.",
+        licenseSection2Title: "Права на игру",
+        licenseSection2Text: "Все права (код, графика, звук, персонажи, названия) принадлежат правообладателю. Вы получаете простую (неисключительную) лицензию на:",
+        licenseSection2Li1: "установку на любые свои устройства;",
+        licenseSection2Li2: "личное некоммерческое воспроизведение;",
+        licenseSection2Li3: "запись видео и стримов с указанием авторства.",
+        licenseSection3Title: "Модификации и читы",
+        licenseSection3Text: "Разрешено: любые моды, альтернативные клиенты, патчи для локальной игры или на своих серверах. Можно продавать моды — все деньги оставляете себе. Запрещено: читы, моды или клиенты, дающие преимущество на официальных серверах (ускорение, бесконечное здоровье, автоприцел и т.п.). За нарушение — блокировка и возможный суд.",
+        licenseSection4Title: "Коммерческое использование",
+        licenseSection5Title: "Возраст и пользовательский контент",
+        licenseSection5Text: "Использование сайта и игр разрешено только с 18 лет. Вы несёте полную ответственность за всё, что публикуете через систему обратной связи (GitHub Issues). Мы не модерируем контент и не отвечаем за него.",
+        licenseSection6Title: "Сбор статистики и конфиденциальность",
+        licenseSection6Text: "Сейчас сбор статистики не ведётся. В будущем может появиться анонимный сбор технической информации (версия ОС, FPS, время игры) только с вашего явного согласия (диалоговое окно при первом запуске).",
+        licenseRefundTitle: "Возврат средств",
+        licenseRefundText1: "Если в будущем появятся платные покупки или платная версия игры, возврат возможен:",
+        licenseRefundText2: "Обратитесь в поддержку (кнопка в профиле) с подтверждением платежа (чек, скриншот).",
+        licenseRefundText3: "Мы проверим, что платёж действительно поступил.",
+        licenseRefundText4: "Вернём сумму, реально поступившую на счёт разработчика после вычета комиссий платежных систем. Точный процент зависит от сервиса и может меняться.",
+        licenseRefundText5: "Срок возврата — 14 дней с момента поступления денег, если иное не предусмотрено законом. По истечении этого срока возврат невозможен.",
+        licenseRefundText6: "Пожертвования (donate) возврату не подлежат.",
+        licenseSection8Title: "Ответственность и отказ от гарантий",
+        licenseSection8Text: "Игра предоставляется «как есть». Мы не гарантируем безошибочную работу, соответствие вашим ожиданиям или сохранность данных (делайте бэкапы). Мы не несём ответственности за любой ущерб от использования игры.",
+        licenseSection9Title: "Разрешение споров (арбитраж)",
+        licenseSection10Title: "Заключительные положения",
+        licenseSection10Text: "Мы можем менять условия, публикуя новую версию на этом сайте. Продолжение использования игры означает согласие с изменениями. Если какой-то пункт признают недействительным, остальные остаются в силе.",
+        licenseSection11Title: "Юмористическое примечание",
+        licenseSupportTitle: "📢 Связь с разработчиком и жалобы",
+        licenseSupportContact: "Все вопросы, предложения, жалобы на контент и запросы о возврате направляйте через систему поддержки (кнопка в профиле).",
+        licenseSupportNote: "Мы стараемся ответить в течение 14 дней, но точных сроков не гарантируем. Ваше обращение будет рассмотрено по возможности.",
+        licenseOriginalSite: "Оригинальный сайт: https://neonshadowyt.github.io/NeonImperium/",
+        licenseAgeWarningTitle: "Вам должно быть 18 лет",
+        licenseAgeWarningText: "Используя сайт или загружая игры Neon Imperium, вы подтверждаете, что вам исполнилось 18 лет. Игры содержат сцены насилия, кровь и нецензурную лексику.",
+        licenseOriginalNote: "Русская версия является оригинальной и имеет юридическую силу. Английский перевод предоставлен для удобства.",
+        licenseCommercialAllowed: "Разрешено продавать копии игры, включать в платные сборники, сдавать в аренду — коммерческое использование без отдельного разрешения. Вы можете зарабатывать на наших наработках, если они качественно изменены.",
+        licenseSellingFreeForbidden: "Продавать бесплатные копии игры или моды (если вы распространяете бесплатную версию — не берите за неё деньги).",
+        licenseStatsSettings: "В играх будут настройки сбора статистики, где вы сможете включить или отключить её в любой момент.",
+        licenseDisputeMars: "Все споры подлежат рассмотрению в суде по месту жительства ответчика. Если истец — пользователь, то суд по месту нахождения разработчика (Российская Федерация). Если разработчик подаёт в суд, то по месту жительства ответчика (нарушителя).",
+        licenseJokeSoul: "«Ты отдаёшь свою душу авторам ;}» — это шутка. Ваша душа остаётся при вас.",
+        licenseBrandUsage: "Запрещается использовать название «Neon Imperium», логотипы, иконки игр или товарные знаки в модах, изменённых версиях или любых производных работах таким образом, чтобы это могло ввести в заблуждение относительно официального происхождения или одобрения разработчиком. Вы должны явно указывать, что ваша модификация является неофициальной."
     },
+    
     en: {
+        // Navigation
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
         navGc: "GC Adven",
+        
+        // Home
         siteTitle: "Neon Imperium",
         mainProjectsTitle: "Main Projects",
         mainProjectsDesc: "Priority development games",
@@ -167,13 +283,17 @@ const translations = {
         newsTitle: "📰 Latest News",
         newsDesc: "Fresh videos and updates",
         newsLoading: "Loading news...",
+        
+        // Common for game pages
         trailerTitle: "Trailer",
         developerTitle: "Developer",
+        nextUpdateProgress: "Next update:",
         downloadTitle: "Download",
         descriptionTitle: "Description",
         videoTitle: "Video",
         videoDesc: "Community content",
         updatesTitle: "Updates",
+        polls: "Polls",
         downloadBtn: "Download",
         feedbackTitle: "Ideas, bugs & feedback",
         feedbackDesc: "Share your thoughts, report bugs, or suggest improvements.",
@@ -181,14 +301,29 @@ const translations = {
         feedbackLoading: "Loading feedback...",
         feedbackLoginPrompt: "Sign in with GitHub to participate",
         feedbackLoginBtn: "Sign in",
-        feedbackTokenNote: "Your token stays only in your browser.",
+        feedbackFormTitle: "Leave a message",
+        feedbackTitlePlaceholder: "Title",
+        feedbackBodyPlaceholder: "Detailed description...",
+        feedbackCategoryLabel: "Category",
+        feedbackCategoryIdea: "💡 Idea",
+        feedbackCategoryBug: "🐛 Bug",
+        feedbackCategoryReview: "⭐ Review",
+        feedbackCategorySupport: "🛟 Support",
+        feedbackSubmitBtn: "Submit",
+        feedbackComments: "Comments",
+        feedbackAddComment: "Write a comment...",
+        feedbackSendBtn: "Send",
+        feedbackLoadMore: "Load more",
+        feedbackNoItems: "No messages yet. Be the first!",
         feedbackCancel: "Cancel",
         feedbackTabAll: "All",
         feedbackTabIdea: "💡 Ideas",
         feedbackTabBug: "🐛 Bugs",
         feedbackTabReview: "⭐ Reviews",
+        feedbackTabSupport: "🛟 Support",
         feedbackLoadError: "Loading error.",
         feedbackRetry: "Retry",
+        feedbackTokenNote: "Your token stays only in your browser.",
         githubLoginTitle: "Sign in with GitHub",
         githubSecure: "Secure and transparent:",
         githubTokenNote: "token is stored in your browser and sent only to GitHub API.",
@@ -207,6 +342,8 @@ const translations = {
         githubLoginVia: "Sign in with GitHub",
         githubWhy: "Why is this needed?",
         githubClearCache: "Clear cache",
+        githubError: "Error",
+        githubRetry: "Try again",
         githubRevoke: "Manage tokens",
         githubTokenMissing: "Enter access token",
         githubTimeout: "Request timeout. Check your connection.",
@@ -215,21 +352,24 @@ const translations = {
         githubServerError: "GitHub server error",
         githubNetworkError: "Network error. Check your connection.",
         supportMenuItem: "Support",
+        supportPrivateNote: "⚠️ Your message will be private: only you and the admin can see it. It is not displayed in public sections of the site, but is stored in the GitHub repository (visible to admins).",
         supportTitle: "Support",
         supportNewBtn: "New ticket",
-        donateButton: "Support",
+
         licenseAccept: "By downloading the game, you accept the ",
         licenseLink: "license agreement",
-        starveVersion: "Union 0.14.0",
+        
+        // Starve Neon
         starveDownloadNote: "Version 0.14.0 · Update 2026-03-08",
+        starveVersion: "Union 0.14.0",
         worldTitle: "Game World",
-        worldDesc: "BRUTAL HARDCORE WORLD...",
+        worldDesc: "BRUTAL HARDCORE WORLD. I won't hold your hand, buddy. I'll leave a short tutorial on the basic mechanics, and then you're on your own ;}",
         statusTitle: "Status",
         statusDesc: "Starve Neon is in early development but open for cross-platform multiplayer tests.",
         developmentTitle: "Development",
-        developmentDesc: "Complete development system from spears and swords to F***ING MINIGUN...",
+        developmentDesc: "Complete development system from spears and swords to F***ING MINIGUN, DUDE! Armor for different biomes, modules and a genetics system similar to RimWorld.",
         alliesTitle: "Allies",
-        alliesDesc: "Create alliances with factions and other players...",
+        alliesDesc: "Create alliances with factions and other players, take part in arena battles and tame animals. Go on a raid with your clan like Rust.",
         featuresTitle: "Features",
         feature1: "Internet not required.",
         feature2: "Frequent major updates.",
@@ -237,7 +377,7 @@ const translations = {
         feature4: "Direct communication with the developer.",
         feature5: "Multilingual support and easy addition of custom languages and fonts.",
         requirementsTitle: "System Requirements",
-        requirementsNote: "Approximate values...",
+        requirementsNote: "Approximate values based on standard settings for these devices",
         fps60: "60+ FPS",
         cpu60: "CPU: Xeon-E2650 v2 3.00 GHz",
         gpu60: "GPU: GT 730 4GB",
@@ -257,32 +397,126 @@ const translations = {
         storageVal: "256 MB",
         os: "OS",
         osVal: "Win 10+ 32 Bit / Android 7+",
+        video1Title: "Starve Neon Review",
+        video2Title: "Beginner's Guide",
+        video3Title: "Multiplayer Walkthrough",
+        video4Title: "Highlights",
+        video5Title: "Secrets & Easter Eggs",
+        starveUpdateTitle: "Beta 0.14.0",
+        spoilerTutorial: "Tutorial",
+        tutorialContent: "Goals throughout the game",
+        spoilerRewards: "Rewards",
+        rewardsContent: "Localization\nImproved translation capabilities",
+        spoilerQuality: "Quality of Life",
+        qualityContent: "Interface\nControls",
+        spoilerBalance: "Balance",
+        balanceContent: "Level rewards\nProgression changes",
+        spoilerBugfix: "Bugfix",
+        bugfixContent: "Many minor fixes",
+        
+        // Alpha 01
         alphaVersion: "Patch 0.0.5.2",
         alphaDownloadNote: "Version 0.0.5.2 · Update 2024-01-21",
         alphaStoryTitle: "Story",
-        alphaStoryDesc: "Alpha 01 is a top-down shooter where you are a robot with the code name Alpha 01...",
+        alphaStoryDesc: "Alpha 01 is a top-down shooter where you are a robot with the code name Alpha 01. Your goal is to help the soldiers and stop the chaos raging in the world. Who is behind the beginning of the chaos?..",
         alphaStatusTitle: "Status",
         alphaStatusDesc: "The game is in active development. Current version: 0.0.5.2",
+        alphaVideo1Title: "Alpha 01 Review",
+        alphaVideo2Title: "Walkthrough",
+        alphaVideo3Title: "Dev Stream",
+        alphaUpdateTitle: "Patch 0.0.5.2",
+        spoilerGameplay: "Gameplay",
+        gameplayContent: "Added 1 bandit point at the dump",
+        spoilerCraft: "Crafting",
+        craftContent: "Meteorite bullets can now be crafted in the forest",
+        spoilerGraphics: "Graphics",
+        graphicsContent: "Menu improvement",
+        
+        // GC Adven
         gcVersion: "Update 0.1.0",
         gcDownloadNote: "Version 0.1.0 · Update 2023-11-01",
         gcAboutTitle: "About",
-        gcDescription: "Welcome to the ebanat zone: Gc adventure!!",
+        gcDescription: "Welcome to the ebanat zone: Gc adventure!! GC Adven is a hardcore action adventure where you have to save the world from chaos! One day, the cat Murzik comes to GC to ask for help. But they don't make it in time and CHAOS begins! Now you have to stop it. But you won't be alone, you'll have helpers! Here they are, from left to right: Murzik, Murochka, Mitmi, Neon, Oboroten, Stasy! You all must stop all this by pressing 2 buttons.",
+        gcVideo1Title: "GC Adven Review",
+        gcVideo2Title: "Walkthrough",
+        gcUpdateTitle: "Update 0.1.0",
+        gcUpdateSummary: "Game released",
+        gcUpdateContent: "First release of the game.",
+        
+        // 404
+        notFoundTitle: "404 — Page not found",
+        notFoundDesc: "The requested page does not exist or has been moved.",
+        backHome: "Back to home",
+        
+        // License Agreement
         licenseTitle: "License Agreement",
         licenseLastUpdate: "Last updated: April 9, 2026",
         licenseAllowedTitle: "Allowed",
-        licenseAllowed1: "Distribution anywhere provided the original website is mentioned...",
+        licenseAllowed1: "Distribution anywhere provided the original website is mentioned and a link is present in the game",
+        licenseAllowed2: "Modification for local use or on own servers",
+        licenseAllowed3: "Creating paid mods and keeping 100% of revenue",
+        licenseAllowed4: "Recording and publishing gameplay videos with credit",
+        licenseAllowed5: "Free updates",
         licenseForbiddenTitle: "Forbidden",
         licenseForbidden1: "Claiming game assets, names, logos as your own",
+        licenseForbidden2: "Cheats/mods that give advantage on official servers",
+        licenseForbidden3: "Malicious modifications (viruses, miners)",
+        licenseForbidden4: "Removing copyright notices",
+        licenseForbidden5: "Using the name 'Neon Imperium', logos, or trademarks in mods or modified versions without explicitly stating that it is unofficial and not endorsed by the developer",
         licenseObligationTitle: "Obligations",
         licenseObligation1: "Retain original copyright notices",
-        allRightsReserved: "All rights reserved.",
+        licenseObligation2: "Mark unofficial versions and include a link to the original site",
+        licenseObligation3: "Open-source mods must provide source link",
+        licenseObligation4: "Provide links to original game pages and authors",
         licenseBack: "← Back to game",
-        notFoundTitle: "404 — Page not found",
-        notFoundDesc: "The requested page does not exist or has been moved.",
-        backHome: "Back to home"
+        allRightsReserved: "All rights reserved.",
+        
+        // Detailed license sections
+        licenseSection1Title: "General Provisions",
+        licenseSection1Text: "This Agreement is concluded between you (User) and the copyright holder of Neon Imperium games. It governs the use of Starve Neon, Alpha 01, GC Adven and all related materials.",
+        licenseSection1Text2: "By installing or using the game, you fully agree to the terms. If you do not agree, delete the game.",
+        licenseSection2Title: "Rights to the Game",
+        licenseSection2Text: "All rights (code, graphics, sound, characters, names) belong to the copyright holder. You receive a simple (non-exclusive) license to:",
+        licenseSection2Li1: "install on any of your devices;",
+        licenseSection2Li2: "personal non-commercial reproduction;",
+        licenseSection2Li3: "record videos and streams with attribution.",
+        licenseSection3Title: "Modifications and Cheats",
+        licenseSection3Text: "Allowed: any mods, alternative clients, patches for local play or on your own servers. You may sell mods — keep all revenue. Prohibited: cheats, mods or clients that give an advantage on official servers (speed, infinite health, aimbot, etc.). Violation may result in ban and legal action.",
+        licenseSection4Title: "Commercial Use",
+        licenseSection5Title: "Age and User Content",
+        licenseSection5Text: "Use of the site and games is only allowed from age 18. You are solely responsible for everything you post via the feedback system (GitHub Issues). We do not moderate content and are not responsible for it.",
+        licenseSection6Title: "Data Collection and Privacy",
+        licenseSection6Text: "Currently no statistics collection. In the future, anonymous technical information (OS version, FPS, playtime) may be collected only with your explicit consent (dialog on first launch).",
+        licenseRefundTitle: "Refunds",
+        licenseRefundText1: "If paid purchases or a paid version of the game appear in the future, refunds are possible:",
+        licenseRefundText2: "Contact support (button in profile) with payment proof (receipt, screenshot).",
+        licenseRefundText3: "We will verify that the payment was actually received.",
+        licenseRefundText4: "We will refund the amount actually received by the developer after deducting payment system fees. The exact percentage depends on the service and may change.",
+        licenseRefundText5: "Refund period — 14 days from the date the money is received, unless otherwise provided by law. After this period, refund is impossible.",
+        licenseRefundText6: "Donations are non-refundable.",
+        licenseSection8Title: "Disclaimer of Warranties",
+        licenseSection8Text: "The game is provided 'as is'. We do not guarantee error-free operation, meeting your expectations, or data safety (back up your saves). We are not liable for any damages from using the game.",
+        licenseSection9Title: "Dispute Resolution (Arbitration)",
+        licenseSection10Title: "Final Provisions",
+        licenseSection10Text: "We may change the terms by posting a new version on this site. Continued use of the game means acceptance of changes. If any provision is held invalid, the remainder remains in force.",
+        licenseSection11Title: "Humorous Note",
+        licenseSupportTitle: "📢 Contact Developer and Complaints",
+        licenseSupportContact: "All questions, suggestions, content complaints, and refund requests should be sent via the support system (button in profile).",
+        licenseSupportNote: "We try to respond within 14 days, but no exact deadlines are guaranteed. Your message will be reviewed if possible.",
+        licenseOriginalSite: "Original website: https://neonshadowyt.github.io/NeonImperium/",
+        licenseAgeWarningTitle: "⚠️ You must be 18 years old",
+        licenseAgeWarningText: "By using the site or downloading Neon Imperium games, you confirm that you are at least 18 years old. Games contain violence, blood, and profanity.",
+        licenseOriginalNote: "The Russian version is the original and legally binding. English translation is provided for convenience.",
+        licenseCommercialAllowed: "Allowed to sell copies of the game, include in paid compilations, rent out — commercial use without separate permission. You can earn money on our work if it is qualitatively modified.",
+        licenseSellingFreeForbidden: "Selling free copies of the game or mods (if you distribute a free version — don't charge for it).",
+        licenseStatsSettings: "Games will have statistics collection settings where you can enable or disable it at any time.",
+        licenseDisputeMars: "All disputes shall be considered in the court at the respondent's place of residence. If the claimant is a user, the court is at the developer's location (Russian Federation). If the developer sues, the court is at the respondent's (violator's) place of residence.",
+        licenseJokeSoul: "«You give your soul to the authors ;}» — this is a joke. Your soul remains with you.",
+        licenseBrandUsage: "It is forbidden to use the name 'Neon Imperium', logos, game icons, or trademarks in mods, modified versions, or any derivative works in a way that could mislead about official origin or endorsement by the developer. You must explicitly state that your modification is unofficial."
     }
 };
 
+// ==================== FUNCTIONS ====================
 function setLanguage(lang) {
     document.querySelectorAll('[data-lang]').forEach(element => {
         const key = element.getAttribute('data-lang');
@@ -306,54 +540,35 @@ function setLanguage(lang) {
     window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: lang } }));
 }
 
-function initLanguageSwitcher() {
+document.addEventListener('DOMContentLoaded', () => {
     const savedLang = localStorage.getItem('preferredLanguage') || 'ru';
     setLanguage(savedLang);
     
     document.querySelectorAll('.lang-btn').forEach(btn => {
-        btn.removeEventListener('click', window._langClickHandler);
-        const handler = () => setLanguage(btn.dataset.langCode);
-        btn.addEventListener('click', handler);
-        btn._langClickHandler = handler;
+        btn.addEventListener('click', () => {
+            setLanguage(btn.dataset.langCode);
+        });
     });
-    
-    const langBtn = document.getElementById('current-lang-btn');
-    const langDropdown = document.getElementById('lang-dropdown');
-    if (langBtn && langDropdown) {
-        langBtn.removeEventListener('click', window._langDropdownToggle);
-        const toggle = () => {
-            langDropdown.style.display = langDropdown.style.display === 'block' ? 'none' : 'block';
-        };
-        langBtn.addEventListener('click', toggle);
-        window._langDropdownToggle = toggle;
-        
-        document.querySelectorAll('#lang-dropdown button').forEach(btn => {
-            btn.removeEventListener('click', window._langItemHandler);
-            const handler = () => {
-                const lang = btn.dataset.langCode;
-                setLanguage(lang);
-                langBtn.textContent = lang.toUpperCase();
-                langBtn.dataset.langCode = lang;
-                langDropdown.style.display = 'none';
-            };
-            btn.addEventListener('click', handler);
-            btn._langItemHandler = handler;
-        });
-        
-        document.addEventListener('click', (e) => {
-            if (!langBtn.contains(e.target) && !langDropdown.contains(e.target)) {
-                langDropdown.style.display = 'none';
-            }
-        });
-    }
-}
+});
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initLanguageSwitcher);
-} else {
-    initLanguageSwitcher();
+const langBtn = document.getElementById('current-lang-btn');
+const langDropdown = document.getElementById('lang-dropdown');
+if (langBtn && langDropdown) {
+    langBtn.addEventListener('click', () => {
+        langDropdown.style.display = langDropdown.style.display === 'block' ? 'none' : 'block';
+    });
+    document.querySelectorAll('#lang-dropdown button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const lang = btn.dataset.langCode;
+            setLanguage(lang);
+            langBtn.textContent = lang.toUpperCase();
+            langBtn.dataset.langCode = lang;
+            langDropdown.style.display = 'none';
+        });
+    });
+    document.addEventListener('click', (e) => {
+        if (!langBtn.contains(e.target) && !langDropdown.contains(e.target)) {
+            langDropdown.style.display = 'none';
+        }
+    });
 }
-
-window.translations = translations;
-window.setLanguage = setLanguage;
-window.initLanguageSwitcher = initLanguageSwitcher;

@@ -46,6 +46,7 @@
         bellButton.setAttribute('tabindex', '0');
         bellButton.setAttribute('aria-label', 'Уведомления');
         bellButton.innerHTML = '<i class="fas fa-bell"></i><span class="notification-badge" style="display: none;">0</span>';
+        // Исправлено: вставляем перед профилем, если профиль есть, иначе добавляем в конец
         if (profile && profile.parentNode === navBar) {
             navBar.insertBefore(bellButton, profile);
         } else {
