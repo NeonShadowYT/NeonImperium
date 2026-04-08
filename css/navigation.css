@@ -1,6 +1,4 @@
-/* navigation.css – стили навигации, профиля, переключателя языка, модалки токена */
-
-/* Основная панель навигации */
+/* Навигация */
 .nav-bar {
     background: var(--bg-card);
     border-radius: 50px;
@@ -17,15 +15,11 @@
     top: 0;
     z-index: 100;
 }
-
-/* Контейнер ссылок */
 .nav-links {
     display: flex;
     flex-wrap: wrap;
     gap: 5px;
 }
-
-/* Отдельная ссылка */
 .nav-link {
     color: var(--text-secondary);
     padding: 10px 20px;
@@ -42,31 +36,22 @@
     background: var(--accent);
     color: white;
 }
-
-/* Фокус для доступности */
+/* Фокус для навигации */
 .nav-link:focus-visible,
 .lang-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    border-radius: 40px;
+    border-radius: 40px; /* для nav-link */
 }
 .lang-btn:focus-visible {
     border-radius: 20px;
-}
-
-/* Правая группа кнопок (уведомления, профиль, язык) – впритык */
-.nav-right {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    margin-left: auto;
 }
 
 /* Переключатель языка */
 .lang-switcher {
     display: flex;
     gap: 5px;
-    flex-wrap: nowrap;
+    flex-wrap: nowrap; /* гарантируем одну строку */
 }
 .lang-btn {
     background: transparent;
@@ -78,7 +63,7 @@
     font-size: 14px;
     transition: all 0.2s;
     white-space: nowrap;
-    font-family: 'Russo One', sans-serif;
+    font-family: 'Russo One', sans-serif; /* добавлено */
 }
 .lang-btn:hover {
     background: var(--accent);
@@ -93,7 +78,7 @@
     border-color: var(--accent);
 }
 
-/* Блок профиля (аватар + логин + выпадашка) */
+/* Profile in navigation */
 .nav-profile {
     display: flex;
     align-items: center;
@@ -137,7 +122,7 @@
     transform: rotate(90deg);
 }
 
-/* Выпадающее меню профиля */
+/* Profile dropdown menu */
 .profile-dropdown {
     position: absolute;
     top: calc(100% + 8px);
@@ -179,7 +164,7 @@
     margin: 8px 0;
 }
 
-/* Модальное окно ввода токена GitHub */
+/* Token modal (если пользователь не вошёл) */
 .modal {
     display: none;
     position: fixed;
@@ -232,16 +217,4 @@
 }
 .modal-buttons .button {
     min-width: 80px;
-}
-
-/* Адаптивные корректировки для мобильных устройств */
-@media (max-width: 700px) {
-    .nav-bar {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .nav-right {
-        justify-content: flex-end;
-        gap: 8px; /* небольшой отступ на мобильных, чтобы не слипались */
-    }
 }

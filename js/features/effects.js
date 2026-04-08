@@ -1,4 +1,5 @@
 // effects.js — 3D tilt и параллакс для шапок (только десктоп)
+
 function throttleAnimation(fn) {
     let running = false;
     return function(e) {
@@ -87,7 +88,9 @@ function initHeaderParallax() {
 // Инициализация после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
     const isTouch = 'ontouchstart' in window;
+    
     if (!isTouch) {
+        // Десктоп: tilt и мышиный параллакс
         initTiltEffect();
         initHeaderParallax();
     }
