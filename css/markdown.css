@@ -292,3 +292,61 @@
     flex: 1;
     min-width: 150px;
 }
+/* Прогресс-бар для опросов */
+.progress-bar {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    height: 24px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+.progress-bar > div {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-light));
+    color: #fff;
+    font-size: 12px;
+    line-height: 24px;
+    text-align: center;
+    white-space: nowrap;
+    border-radius: 20px;
+}
+
+/* Выпадающие списки (preview-dropdown) – исправление отображения */
+.preview-dropdown {
+    position: absolute;
+    top: calc(100% + 5px);
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 5px 0;
+    min-width: 160px;
+    z-index: 100;
+    box-shadow: var(--shadow);
+    display: none;
+}
+.preview-dropdown.show {
+    display: block;
+}
+.preview-dropdown button {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    text-align: left;
+    cursor: pointer;
+    font-family: 'Russo One', sans-serif;
+    font-size: 13px;
+    transition: background 0.2s;
+}
+.preview-dropdown button:hover {
+    background: var(--bg-inner-gradient);
+    color: var(--text-primary);
+}
+.preview-dropdown button.active {
+    background: var(--accent);
+    color: #fff;
+}

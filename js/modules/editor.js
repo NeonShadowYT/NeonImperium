@@ -157,6 +157,9 @@
         const editorContainer = modal.querySelector('#editor-container');
         let syncToBody = null;
         let privateUsersInput = null;
+        // Переменная currentIsPrivate должна быть доступна в handleSave
+        let currentIsPrivate = (postType === 'support') ? true : (data.labels?.includes('private') || false);
+        
         const handleSave = async (finalBody) => {
             if (!GithubAuth.getToken()) { UIUtils.showToast('Вы не авторизованы. Войдите через GitHub.', 'error'); throw new Error('No token'); }
             if (postType === 'comment') {
@@ -207,6 +210,7 @@
             if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
             UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
         };
+        
         if (postType === 'comment') {
             const { container: editorUI, textarea } = createSplitEditor(bodyContent, handleSave, { saveText: mode === 'edit' ? 'Сохранить' : 'Отправить' });
             editorContainer.appendChild(editorUI);
@@ -289,8 +293,6 @@
             privateUsersInput.className = 'feedback-input';
             privateUsersInput.placeholder = 'Ники через запятую';
             privateUsersInput.value = allowedUsers;
-            const isPrivateInit = (postType === 'support') ? true : (data.labels?.includes('private') || false);
-            let currentIsPrivate = isPrivateInit;
             const onAccessToggle = (isPrivate, allowedVal) => { if (postType === 'support') return; currentIsPrivate = isPrivate; privateUsersInput.style.display = isPrivate ? 'block' : 'none'; if (isPrivate && allowedVal) privateUsersInput.value = allowedVal; if (syncToBody) syncToBody(); };
             const accessDropdown = createAccessDropdown(currentIsPrivate, allowedUsers, onAccessToggle);
             if (postType === 'support') {
