@@ -12,20 +12,9 @@
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
-    <!-- Основные скрипты -->
-    <script src="js/core/cache.js"></script>
-    <script src="js/core/loader.js"></script>
-    <script src="js/core/github-core.js"></script>
-    <script src="js/features/ui-utils.js"></script>
-    <script src="js/core/github-api.js"></script>
-    <script src="js/core/github-auth.js"></script>
-    <script src="js/features/load-more.js"></script>
-    <script src="js/features/accessibility.js"></script>
-    <script src="js/features/notifications.js" defer></script>
-    <script src="js/lang.js"></script>
-    <script src="js/init.js"></script>
     <style>
         .license-header { text-align: center; margin-bottom: 30px; }
         .license-header h1 { font-size: 48px; color: var(--text-primary); }
@@ -119,6 +108,9 @@
         }
         @media (max-width: 700px) { .cards-grid { grid-template-columns: 1fr; } }
     </style>
+    <script src="js/features/ui-utils.js" defer></script>
+    <script src="js/core/github-auth.js" defer></script>
+    <script src="js/lang.js" defer></script>
 </head>
 <body>
 <div class="page">
@@ -148,13 +140,13 @@
     </div>
 
     <div class="age-warning">
-        <i class="fas fa-exclamation-triangle"></i>
+        <i class="fas fa-exclamation-triangle"> <strong data-lang="licenseAgeWarningTitle"></strong><br></i>
         <div>
-            <strong data-lang="licenseAgeWarningTitle"></strong><br>
             <span data-lang="licenseAgeWarningText"></span>
         </div>
     </div>
 
+    <!-- Три главные карточки -->
     <div class="cards-grid">
         <div class="license-card allowed">
             <h2><i class="fas fa-check-circle"></i> <span data-lang="licenseAllowedTitle"></span></h2>
@@ -189,6 +181,7 @@
         </div>
     </div>
 
+    <!-- Горизонтальные карточки разделов -->
     <div class="section-card">
         <h2><i class="fas fa-file-alt"></i> <span data-lang="licenseSection1Title"></span></h2>
         <p data-lang="licenseSection1Text"></p>

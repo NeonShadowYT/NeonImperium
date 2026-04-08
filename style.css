@@ -10,7 +10,6 @@
 @import url('css/feedback.css');
 @import url('css/a11y.css');
 @import url('css/layout-fixes.css');
-@import url('css/notifications.css');
 
 /* Исправление положения кнопок в шапке модалки */
 .modal-header {
