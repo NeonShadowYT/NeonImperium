@@ -60,45 +60,49 @@
         return tmp.textContent || tmp.innerText || '';
     }
 
-    // ---------- Загрузка marked с повторной попыткой ----------
-    let markedReady = false;
-    let markedLoading = null;
-
-    function loadMarked() {
-        if (typeof marked !== 'undefined') return Promise.resolve();
-        if (markedLoading) return markedLoading;
-
-        markedLoading = new Promise((resolve, reject) => {
-            function tryLoad(url) {
-                const script = document.createElement('script');
-                script.src = url;
-                script.onload = () => {
-                    markedReady = true;
-                    resolve();
-                };
-                script.onerror = () => {
-                    if (url.includes('jsdelivr')) {
-                        // Пробуем ещё раз тот же CDN с другим путём
-                        tryLoad('https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js');
-                    } else {
-                        console.warn('Не удалось загрузить marked');
-                        reject(new Error('Marked library failed to load'));
-                    }
-                };
-                document.head.appendChild(script);
-            }
-            tryLoad('https://cdn.jsdelivr.net/npm/marked/marked.min.js');
-        });
-        return markedLoading;
-    }
-
+    // ---------- Легковесный Markdown-парсер (базовый синтаксис) ----------
     function renderMarkdown(text) {
         if (!text) return '';
-        if (typeof marked !== 'undefined') {
-            marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-            return marked.parse(text);
-        }
-        return text.replace(/\n/g, '<br>');
+        let html = escapeHtml(text);
+        // Базовые преобразования
+        html = html
+            // Заголовки
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+            // Жирный и курсив
+            .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            // Зачёркнутый
+            .replace(/~~(.*?)~~/g, '<del>$1</del>')
+            // Ссылки [текст](url)
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+            // Изображения ![alt](url)
+            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">')
+            // Код (инлайн)
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            // Горизонтальная линия
+            .replace(/^---$/gim, '<hr>')
+            // Цитата
+            .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
+            // Неупорядоченные списки
+            .replace(/^\* (.*$)/gim, '<li>$1</li>')
+            .replace(/^- (.*$)/gim, '<li>$1</li>')
+            // Упорядоченные списки
+            .replace(/^\d+\. (.*$)/gim, '<li>$1</li>');
+
+        // Оборачиваем списки
+        html = html.replace(/(<li>.*<\/li>)/g, function(match) {
+            return '<ul>' + match + '</ul>';
+        }).replace(/<\/ul>\s*<ul>/g, '');
+
+        // Перенос строк
+        html = html.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+        html = '<p>' + html + '</p>';
+        // Убираем пустые параграфы
+        html = html.replace(/<p><\/p>/g, '');
+        return html;
     }
 
     function extractMeta(body, tag) {
@@ -254,7 +258,7 @@
 
     window.NeonUtils = {
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, clearAllCache,
-        escapeHtml, stripHtml, loadMarked, renderMarkdown,
+        escapeHtml, stripHtml, renderMarkdown,
         extractMeta, extractSummary, extractAllowed, extractProgress,
         createAbortable, fetchWithTimeout,
         debounce, throttle,

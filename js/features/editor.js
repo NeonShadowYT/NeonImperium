@@ -1,6 +1,6 @@
 // js/features/editor.js
 (function() {
-    const { createModal, showToast, saveDraft, loadDraft, clearDraft, escapeHtml, renderMarkdown, loadMarked, extractMeta } = NeonUtils;
+    const { createModal, showToast, saveDraft, loadDraft, clearDraft, escapeHtml, renderMarkdown, extractMeta } = NeonUtils;
     const { createIssue, updateIssue, addComment } = NeonAPI;
     const { getCurrentUser } = GithubAuth;
 
@@ -226,6 +226,7 @@
         const initialGame = data.game || null;
         const isSupport = postType === 'support';
         const isComment = postType === 'comment';
+        const showCategory = postType === 'feedback'; // Только для обратной связи показываем выбор категории
 
         let previewUrl = extractMeta(initialBody, 'preview') || '';
         let summary = extractMeta(initialBody, 'summary') || '';
@@ -233,7 +234,7 @@
         let cleanBody = initialBody.replace(/<!--.*?-->\s*/g, '').trim();
 
         let currentCategory = 'idea';
-        if (postType === 'feedback' && data.labels) {
+        if (showCategory && data.labels) {
             const typeLabel = data.labels.find(l => l.startsWith('type:'));
             if (typeLabel) currentCategory = typeLabel.split(':')[1];
         }
@@ -266,8 +267,7 @@
 
             if (savedDraft?.body) textarea.value = savedDraft.body;
 
-            const updatePreview = async () => {
-                await loadMarked();
+            const updatePreview = () => {
                 previewDiv.innerHTML = renderMarkdown(textarea.value);
                 previewDiv.style.display = textarea.value.trim() ? 'block' : 'none';
             };
@@ -302,15 +302,15 @@
             <div class="settings-card">
                 <input type="text" id="modal-title" class="feedback-input" placeholder="Заголовок" value="${escapeHtml(initialTitle)}">
                 <input type="text" id="modal-summary" class="feedback-input" placeholder="Краткое описание (отображается в ленте)" value="${escapeHtml(summary)}">
-                <div class="preview-url-wrapper">
+                <div class="preview-url-row">
                     <input type="url" id="modal-preview-url" class="feedback-input preview-url-input" placeholder="Ссылка на превью (изображение)" value="${escapeHtml(previewUrl)}">
                     <div id="image-services-placeholder"></div>
                 </div>
-                <div id="preview-thumbnail" style="${previewUrl ? '' : 'display:none;'} margin-top:8px; margin-bottom:12px;">
-                    <img id="preview-img" src="${previewUrl}" style="max-width:200px; border-radius:12px;" onerror="this.style.display='none'">
+                <div id="preview-thumbnail" class="preview-thumbnail" style="${previewUrl ? '' : 'display:none;'}">
+                    <img id="preview-img" src="${previewUrl}" alt="Preview">
                     <button type="button" id="remove-preview" class="remove-preview"><i class="fas fa-times"></i></button>
                 </div>
-                ${postType === 'feedback' ? `
+                ${showCategory ? `
                 <select id="modal-category" class="feedback-select">
                     <option value="idea" ${currentCategory==='idea'?'selected':''}>💡 Идея</option>
                     <option value="bug" ${currentCategory==='bug'?'selected':''}>🐛 Баг</option>
@@ -324,14 +324,14 @@
                 <textarea id="modal-body" class="feedback-textarea" style="flex:1;">${escapeHtml(cleanBody)}</textarea>
                 <div id="modal-preview" class="markdown-body preview-area" style="flex:1;"></div>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;">
-                <div style="display:flex; gap:12px; align-items:center;">
+            <div class="editor-actions">
+                <div class="access-row">
                     ${!isSupport ? `
                     <div id="access-dropdown-placeholder"></div>
-                    <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" value="${escapeHtml(allowedUsers)}" style="display:${allowedUsers ? 'block' : 'none'}; width:200px;">
+                    <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" value="${escapeHtml(allowedUsers)}" style="display:${allowedUsers ? 'block' : 'none'};">
                     ` : ''}
                 </div>
-                <div style="display:flex; gap:10px;">
+                <div class="form-buttons">
                     <button class="button" id="modal-cancel">Отмена</button>
                     <button class="button" id="modal-submit">${isEdit ? 'Сохранить' : 'Опубликовать'}</button>
                 </div>
@@ -405,8 +405,7 @@
             updatePreviewImage();
         });
 
-        const updateMarkdownPreview = async () => {
-            await loadMarked();
+        const updateMarkdownPreview = () => {
             previewDiv.innerHTML = renderMarkdown(bodyTextarea.value);
         };
         bodyTextarea.addEventListener('input', updateMarkdownPreview);
