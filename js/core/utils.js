@@ -60,48 +60,102 @@
         return tmp.textContent || tmp.innerText || '';
     }
 
-    // ---------- Легковесный Markdown-парсер (базовый синтаксис) ----------
+    // ---------- Встроенный парсер Markdown ----------
     function renderMarkdown(text) {
         if (!text) return '';
-        let html = escapeHtml(text);
-        // Базовые преобразования
-        html = html
-            // Заголовки
-            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-            // Жирный и курсив
-            .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            // Зачёркнутый
-            .replace(/~~(.*?)~~/g, '<del>$1</del>')
-            // Ссылки [текст](url)
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-            // Изображения ![alt](url)
-            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">')
-            // Код (инлайн)
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-            // Горизонтальная линия
-            .replace(/^---$/gim, '<hr>')
-            // Цитата
-            .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
-            // Неупорядоченные списки
-            .replace(/^\* (.*$)/gim, '<li>$1</li>')
-            .replace(/^- (.*$)/gim, '<li>$1</li>')
-            // Упорядоченные списки
-            .replace(/^\d+\. (.*$)/gim, '<li>$1</li>');
+        let html = text;
 
-        // Оборачиваем списки
-        html = html.replace(/(<li>.*<\/li>)/g, function(match) {
+        // Экранируем HTML, кроме специальных тегов
+        html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        // Код (блоки)
+        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+            return `<pre><code class="language-${lang}">${escapeHtml(code)}</code></pre>`;
+        });
+
+        // Инлайн-код
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // Заголовки
+        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+        // Жирный и курсив
+        html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        html = html.replace(/___(.*?)___/g, '<strong><em>$1</em></strong>');
+        html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
+        html = html.replace(/_(.*?)_/g, '<em>$1</em>');
+
+        // Зачёркнутый
+        html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
+
+        // Горизонтальная линия
+        html = html.replace(/^\s*[-*_]{3,}\s*$/gim, '<hr>');
+
+        // Ссылки [text](url)
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+        // Изображения ![alt](url)
+        html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
+
+        // Цитаты
+        html = html.replace(/^\s*&gt;\s?(.*)$/gm, '<blockquote>$1</blockquote>');
+        html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
+
+        // Маркированные списки
+        html = html.replace(/^[\s]*[-*+]\s+(.*)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/gs, (match) => {
             return '<ul>' + match + '</ul>';
-        }).replace(/<\/ul>\s*<ul>/g, '');
+        });
+        html = html.replace(/<\/ul>\s*<ul>/g, '');
+
+        // Нумерованные списки
+        html = html.replace(/^\s*\d+\.\s+(.*)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/gs, (match) => {
+            return '<ol>' + match + '</ol>';
+        });
+        html = html.replace(/<\/ol>\s*<ol>/g, '');
+
+        // Таблицы (упрощённо)
+        html = html.replace(/^\|(.+)\|$/gm, (row) => {
+            const cells = row.split('|').filter(c => c.trim() !== '');
+            const isHeader = row.includes('---');
+            if (isHeader) return '';
+            const cellTag = 'td';
+            return '<tr>' + cells.map(cell => `<${cellTag}>${cell.trim()}</${cellTag}>`).join('') + '</tr>';
+        });
+        html = html.replace(/(<tr>.*<\/tr>)/gs, (match) => {
+            return '<table>' + match + '</table>';
+        });
+
+        // Спойлеры (details)
+        html = html.replace(/<details>([\s\S]*?)<\/details>/g, (_, content) => {
+            return `<details>${content}</details>`;
+        });
+
+        // YouTube embed
+        html = html.replace(/<div class="youtube-embed"><iframe src="([^"]+)" frameborder="0" allowfullscreen><\/iframe><\/div>/g,
+            '<div class="youtube-embed"><iframe src="$1" frameborder="0" allowfullscreen></iframe></div>');
+
+        // Прогресс-бар
+        html = html.replace(/<div class="progress-bar"><div style="width:\s*(\d+)%;">(.*?)<\/div><\/div>/g,
+            '<div class="progress-bar"><div style="width:$1%;">$2</div></div>');
+
+        // Карточка
+        html = html.replace(/<div class="custom-card">([\s\S]*?)<\/div>/g, (_, content) => {
+            return `<div class="custom-card">${content}</div>`;
+        });
 
         // Перенос строк
-        html = html.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
-        html = '<p>' + html + '</p>';
-        // Убираем пустые параграфы
-        html = html.replace(/<p><\/p>/g, '');
+        html = html.replace(/\n/g, '<br>');
+
+        // Убираем лишние <br> перед и после блочных элементов
+        html = html.replace(/<br>\s*(<(h[1-6]|ul|ol|table|blockquote|pre|hr|div))/g, '$1');
+        html = html.replace(/(<\/(h[1-6]|ul|ol|table|blockquote|pre|div)>)\s*<br>/g, '$1');
+
         return html;
     }
 
