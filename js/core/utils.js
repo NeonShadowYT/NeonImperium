@@ -60,36 +60,31 @@
         return tmp.textContent || tmp.innerText || '';
     }
 
-    // ---------- Встроенный парсер Markdown ----------
+    // ---------- Встроенный парсер Markdown (HTML остаётся нетронутым) ----------
     function renderMarkdown(text) {
         if (!text) return '';
         let html = text;
 
-        // Экранируем HTML, кроме специальных тегов
-        html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-        // Код (блоки)
+        // Блоки кода — экранируем внутренности
         html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
             return `<pre><code class="language-${lang}">${escapeHtml(code)}</code></pre>`;
         });
 
-        // Инлайн-код
-        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+        // Инлайн-код — экранируем
+        html = html.replace(/`([^`]+)`/g, (_, code) => `<code>${escapeHtml(code)}</code>`);
 
         // Заголовки
         html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
         html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
         html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
 
-        // Жирный и курсив
+        // Жирный, курсив, зачёркнутый
         html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
         html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
         html = html.replace(/___(.*?)___/g, '<strong><em>$1</em></strong>');
         html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
         html = html.replace(/_(.*?)_/g, '<em>$1</em>');
-
-        // Зачёркнутый
         html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
 
         // Горизонтальная линия
@@ -101,22 +96,18 @@
         // Изображения ![alt](url)
         html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
 
-        // Цитаты
+        // Цитаты (символ > остаётся как есть, не экранируется)
         html = html.replace(/^\s*&gt;\s?(.*)$/gm, '<blockquote>$1</blockquote>');
         html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
 
         // Маркированные списки
         html = html.replace(/^[\s]*[-*+]\s+(.*)$/gm, '<li>$1</li>');
-        html = html.replace(/(<li>.*<\/li>)/gs, (match) => {
-            return '<ul>' + match + '</ul>';
-        });
+        html = html.replace(/(<li>.*<\/li>)/gs, (match) => '<ul>' + match + '</ul>');
         html = html.replace(/<\/ul>\s*<ul>/g, '');
 
         // Нумерованные списки
         html = html.replace(/^\s*\d+\.\s+(.*)$/gm, '<li>$1</li>');
-        html = html.replace(/(<li>.*<\/li>)/gs, (match) => {
-            return '<ol>' + match + '</ol>';
-        });
+        html = html.replace(/(<li>.*<\/li>)/gs, (match) => '<ol>' + match + '</ol>');
         html = html.replace(/<\/ol>\s*<ol>/g, '');
 
         // Таблицы (упрощённо)
@@ -127,27 +118,7 @@
             const cellTag = 'td';
             return '<tr>' + cells.map(cell => `<${cellTag}>${cell.trim()}</${cellTag}>`).join('') + '</tr>';
         });
-        html = html.replace(/(<tr>.*<\/tr>)/gs, (match) => {
-            return '<table>' + match + '</table>';
-        });
-
-        // Спойлеры (details)
-        html = html.replace(/<details>([\s\S]*?)<\/details>/g, (_, content) => {
-            return `<details>${content}</details>`;
-        });
-
-        // YouTube embed
-        html = html.replace(/<div class="youtube-embed"><iframe src="([^"]+)" frameborder="0" allowfullscreen><\/iframe><\/div>/g,
-            '<div class="youtube-embed"><iframe src="$1" frameborder="0" allowfullscreen></iframe></div>');
-
-        // Прогресс-бар
-        html = html.replace(/<div class="progress-bar"><div style="width:\s*(\d+)%;">(.*?)<\/div><\/div>/g,
-            '<div class="progress-bar"><div style="width:$1%;">$2</div></div>');
-
-        // Карточка
-        html = html.replace(/<div class="custom-card">([\s\S]*?)<\/div>/g, (_, content) => {
-            return `<div class="custom-card">${content}</div>`;
-        });
+        html = html.replace(/(<tr>.*<\/tr>)/gs, (match) => '<table>' + match + '</table>');
 
         // Перенос строк
         html = html.replace(/\n/g, '<br>');
