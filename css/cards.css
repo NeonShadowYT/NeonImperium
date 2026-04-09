@@ -93,6 +93,7 @@
     display: block;
     color: inherit;
     transition: transform var(--transition-default);
+    height: 100%;
 }
 .project-card-link:hover {
     transform: translateY(-5px);
@@ -116,6 +117,10 @@
     border-radius: var(--border-radius-small);
     margin-bottom: 12px;
     border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
 }
 .project-image {
     width: 100%;
@@ -134,7 +139,8 @@
     margin-bottom: 16px;
 }
 .project-card .button {
-    margin-top: 8px;
+    margin-top: auto;
+    align-self: flex-start;
 }
 
 /* Профили */
@@ -443,4 +449,19 @@
     font-weight: bold;
     min-width: 45px;
     text-align: right;
+}
+
+/* Пустое состояние для сеток */
+.empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+    font-size: 16px;
+}
+.empty-state i {
+    font-size: 48px;
+    color: var(--accent);
+    margin-bottom: 16px;
+    opacity: 0.6;
 }

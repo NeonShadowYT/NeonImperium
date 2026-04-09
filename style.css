@@ -1,4 +1,4 @@
-/* style.css — основной файл, подключаем все части */
+/* style.css — оптимизированный основной файл */
 @import url('css/variables.css');
 @import url('css/base.css');
 @import url('css/typography.css');
@@ -23,7 +23,7 @@
     display: flex;
     gap: 4px;
     align-items: center;
-    margin-right: auto; /* чтобы быть слева от спейсера */
+    margin-right: auto;
 }
 .modal-header-actions .action-btn {
     background: var(--bg-card);
@@ -188,9 +188,9 @@
     background: var(--accent);
     color: white;
     border: none;
-    border-radius: 40px;               /* чуть скруглённее */
-    padding: 10px 20px;                 /* уменьшенный размер */
-    font-size: 15px;                    /* поменьше */
+    border-radius: 40px;
+    padding: 10px 20px;
+    font-size: 15px;
     font-weight: bold;
     cursor: pointer;
     box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
@@ -203,11 +203,11 @@
     font-family: 'Russo One', sans-serif;
 }
 .donate-button-fixed i {
-    font-size: 18px;                    /* иконка поменьше */
+    font-size: 18px;
 }
 .donate-button-fixed:hover {
     background: var(--accent-light);
-    transform: scale(1.03);              /* меньше увеличение */
+    transform: scale(1.03);
     box-shadow: 0 10px 22px rgba(0, 0, 0, 0.6);
 }
 .donate-button-fixed:active {
@@ -221,8 +221,8 @@
 
 @keyframes bounceUp {
     0% { transform: translateY(0); }
-    30% { transform: translateY(-15px); }  /* подпрыгнула вверх */
-    70% { transform: translateY(5px); }    /* слегка перелетела */
+    30% { transform: translateY(-15px); }
+    70% { transform: translateY(5px); }
     100% { transform: translateY(0); }
 }
 

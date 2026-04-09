@@ -203,7 +203,16 @@
         let issuesToRender = displayedIssues;
         if (displayedIssues.length > MAX_DISPLAY_ITEMS) issuesToRender = displayedIssues.slice(-MAX_DISPLAY_ITEMS);
         if (reset) gridContainer.innerHTML = '';
-        renderIssuesList(issuesToRender, reset);
+        
+        if (issuesToRender.length === 0) {
+            // Показываем сообщение о пустом списке
+            const emptyMsg = document.createElement('div');
+            emptyMsg.className = 'empty-state';
+            emptyMsg.innerHTML = `<i class="fas fa-inbox"></i><p data-lang="feedbackNoItems">Пока нет сообщений. Будьте первым!</p>`;
+            gridContainer.appendChild(emptyMsg);
+        } else {
+            renderIssuesList(issuesToRender, reset);
+        }
     }
 
     function renderIssuesList(issues, reset) {
@@ -261,6 +270,8 @@
         footer.style.alignItems = 'center';
         footer.style.fontSize = '12px';
         footer.style.color = 'var(--text-secondary)';
+        footer.style.marginTop = 'auto';
+        footer.style.paddingTop = '10px';
         footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${date}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span>`;
         card.append(imageWrapper, title, previewP, reactionsDiv, footer);
         cardLink.appendChild(card);

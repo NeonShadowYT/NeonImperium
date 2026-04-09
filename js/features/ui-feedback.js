@@ -324,10 +324,20 @@
     }
 
     async function renderPostBody(container, body, issueNumber) {
-        let html = GithubCore.renderMarkdown(body);
-        container.innerHTML = html;
-        if (!container.classList.contains('markdown-body')) container.classList.add('markdown-body');
-        const pollData = extractPollFromBody(body);
+        // Убираем лишние переводы строк в начале и конце
+        let cleanedBody = body ? body.trim() : '';
+        let html = GithubCore.renderMarkdown(cleanedBody);
+        
+        // Очищаем контейнер
+        container.innerHTML = '';
+        
+        // Создаём обёртку для markdown
+        const mdContainer = document.createElement('div');
+        mdContainer.className = 'markdown-body';
+        mdContainer.innerHTML = html;
+        container.appendChild(mdContainer);
+        
+        const pollData = extractPollFromBody(cleanedBody);
         if (pollData) {
             const pollContainer = document.createElement('div');
             pollContainer.className = 'poll-container';

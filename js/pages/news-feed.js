@@ -260,7 +260,7 @@
         const grid = document.createElement('div'); grid.className = 'projects-grid';
         
         if (itemsToShow.length === 0) {
-            grid.innerHTML = '<p class="text-secondary" style="grid-column:1/-1; text-align:center;">Пока нет новостей</p>';
+            grid.innerHTML = `<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">Пока нет новостей</p></div>`;
         } else {
             itemsToShow.forEach(item => {
                 if (item.type === 'video') {

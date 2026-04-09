@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Imperium — Alpha 01</title>
+    <title data-lang="alphaPageTitle">Neon Imperium — Alpha 01</title>
     <meta name="description" content="Alpha 01 — top-down шутер, где вы робот, помогающий солдатам. Скачать, трейлер, обновления.">
     <meta property="og:title" content="Alpha 01 — Neon Imperium">
     <meta property="og:description" content="Alpha 01 — top-down шутер, где вы робот, помогающий солдатам. Скачать, трейлер, обновления.">
@@ -18,9 +18,14 @@
     <link rel="preconnect" href="https://www.youtube.com">
     <link rel="preconnect" href="https://i.ytimg.com">
     <link rel="preconnect" href="https://img.youtube.com">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="dns-prefetch" href="https://static.itch.io">
+    <!-- Предзагрузка шрифтов -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" media="print" onload="this.media='all'">
+    <!-- Стили -->
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" media="print" onload="this.media='all'">
+    <!-- Скрипты -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script type="text/javascript" src="https://static.itch.io/api.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
@@ -155,69 +160,27 @@
                         if (!donateBtn) return;
                         const span = donateBtn.querySelector('span[data-lang="donateButton"]');
                         if (!span) return;
-                        
                         const lang = localStorage.getItem('preferredLanguage') || 'ru';
-                        if (window.translations && translations[lang] && translations[lang].donateButton) {
-                            span.textContent = translations[lang].donateButton;
-                        } else {
-                            span.textContent = (lang === 'en') ? 'Support' : 'Поддержать';
-                        }
+                        span.textContent = (window.translations && translations[lang] && translations[lang].donateButton) 
+                            ? translations[lang].donateButton : (lang === 'en' ? 'Support' : 'Поддержать');
                     }
-
                     function animateError() {
-                        const donateBtn = document.getElementById('donate-button');
-                        if (!donateBtn) return;
-                        donateBtn.classList.add('error-bounce');
-                        setTimeout(() => {
-                            donateBtn.classList.remove('error-bounce');
-                        }, 400);
+                        const btn = document.getElementById('donate-button');
+                        if (btn) { btn.classList.add('error-bounce'); setTimeout(() => btn.classList.remove('error-bounce'), 400); }
                     }
-
-                    function initDonateButton() {
-                        const donateBtn = document.getElementById('donate-button');
-                        if (!donateBtn) return;
-
-                        if (typeof Itch === 'undefined') {
-                            console.warn('Itch API not loaded');
-                            animateError();
-                            return;
-                        }
-
-                        try {
-                            Itch.attachBuyButton(donateBtn, {
-                                user: 'neon-imperium',
-                                game: 'starve-neon',
-                                width: 700,
-                                height: 500
-                            });
-                        } catch (e) {
-                            console.error('Failed to attach Itch button:', e);
-                            animateError();
-                        }
-
+                    function init() {
+                        const btn = document.getElementById('donate-button');
+                        if (!btn) return;
+                        if (typeof Itch === 'undefined') { console.warn('Itch API not loaded'); animateError(); return; }
+                        try { Itch.attachBuyButton(btn, { user: 'neon-imperium', game: 'starve-neon', width: 700, height: 500 }); } 
+                        catch (e) { console.error('Itch attach error', e); animateError(); }
                         updateDonateButtonText();
                     }
-
-                    if (document.readyState === 'loading') {
-                        document.addEventListener('DOMContentLoaded', function() {
-                            setTimeout(initDonateButton, 100);
-                        });
-                    } else {
-                        setTimeout(initDonateButton, 100);
-                    }
-                    
-                    window.addEventListener('languageChanged', function() {
-                        updateDonateButtonText();
-                    });
-
-                    const originalSetLanguage = window.setLanguage;
-                    if (originalSetLanguage) {
-                        window.setLanguage = function(lang) {
-                            originalSetLanguage(lang);
-                            updateDonateButtonText();
-                            window.dispatchEvent(new Event('languageChanged'));
-                        };
-                    }
+                    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(init, 100));
+                    else setTimeout(init, 100);
+                    window.addEventListener('languageChanged', updateDonateButtonText);
+                    const orig = window.setLanguage;
+                    if (orig) window.setLanguage = function(l) { orig(l); updateDonateButtonText(); window.dispatchEvent(new Event('languageChanged')); };
                 })();
             </script>
         </main>

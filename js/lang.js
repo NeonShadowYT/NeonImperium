@@ -27,8 +27,12 @@ const translations = {
         newsTitle: "📰 Последние новости",
         newsDesc: "Свежие видео и обновления",
         newsLoading: "Загрузка новостей...",
+        newsNoItems: "Пока нет новостей",
         
         // Общие для страниц игр
+        starvePageTitle: "Neon Imperium — Starve Neon",
+        alphaPageTitle: "Neon Imperium — Alpha 01",
+        gcPageTitle: "Neon Imperium — ГК Адвенчур",
         trailerTitle: "Трейлер",
         developerTitle: "Разработчик",
         nextUpdateProgress: "Следующее обновление:",
@@ -240,7 +244,9 @@ const translations = {
         licenseSection7Title: "7. Заключительные положения",
         licenseSection7Text: "Настоящее Соглашение регулируется и толкуется в соответствии с законодательством Российской Федерации. Все споры, возникающие из настоящего Соглашения или в связи с ним, подлежат рассмотрению в суде по месту нахождения Правообладателя.",
         licenseSection7Text2: "Если какое-либо положение Соглашения будет признано недействительным или не имеющим юридической силы, это не влияет на действительность остальных положений.",
-        licenseSection7Text3: "Правообладатель оставляет за собой право в одностороннем порядке изменять условия настоящего Соглашения. Новая версия Соглашения вступает в силу с момента её публикации на данном сайте. Продолжение использования игры после изменения условий означает согласие с новой редакцией."
+        licenseSection7Text3: "Правообладатель оставляет за собой право в одностороннем порядке изменять условия настоящего Соглашения. Новая версия Соглашения вступает в силу с момента её публикации на данном сайте. Продолжение использования игры после изменения условий означает согласие с новой редакцией.",
+        
+        donateButton: "Поддержать"
     },
     en: {
         // Navigation
@@ -269,8 +275,12 @@ const translations = {
         newsTitle: "📰 Latest News",
         newsDesc: "Fresh videos and updates",
         newsLoading: "Loading news...",
+        newsNoItems: "No news yet",
         
         // Common for game pages
+        starvePageTitle: "Neon Imperium — Starve Neon",
+        alphaPageTitle: "Neon Imperium — Alpha 01",
+        gcPageTitle: "Neon Imperium — GC Adven",
         trailerTitle: "Trailer",
         developerTitle: "Developer",
         nextUpdateProgress: "Next update:",
@@ -482,7 +492,9 @@ const translations = {
         licenseSection7Title: "7. Final Provisions",
         licenseSection7Text: "This Agreement is governed and interpreted in accordance with the laws of the Russian Federation. All disputes arising out of or in connection with this Agreement shall be subject to consideration in court at the location of the Copyright Holder.",
         licenseSection7Text2: "If any provision of the Agreement is found to be invalid or unenforceable, this does not affect the validity of the remaining provisions.",
-        licenseSection7Text3: "The Copyright Holder reserves the right to unilaterally change the terms of this Agreement. The new version of the Agreement comes into force from the moment it is published on this site. Continued use of the game after the terms have been changed implies acceptance of the new version."
+        licenseSection7Text3: "The Copyright Holder reserves the right to unilaterally change the terms of this Agreement. The new version of the Agreement comes into force from the moment it is published on this site. Continued use of the game after the terms have been changed implies acceptance of the new version.",
+        
+        donateButton: "Support"
     }
 };
 
@@ -502,6 +514,14 @@ function setLanguage(lang) {
         btn.classList.toggle('active', btn.dataset.langCode === lang);
     });
     localStorage.setItem('preferredLanguage', lang);
+    
+    // Обновление title
+    const titleKey = document.title.includes('Starve') ? 'starvePageTitle' : 
+                     (document.title.includes('Alpha') ? 'alphaPageTitle' : 
+                     (document.title.includes('ГК') || document.title.includes('GC') ? 'gcPageTitle' : 'siteTitle'));
+    if (translations[lang] && translations[lang][titleKey]) {
+        document.title = translations[lang][titleKey];
+    }
     
     window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: lang } }));
 }
