@@ -1,6 +1,6 @@
 // js/features/feedback.js
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, deduplicateByNumber, createAbortable, showToast, createModal, escapeHtml, extractAllowed, extractMeta, renderMarkdown } = NeonUtils;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, deduplicateByNumber, createAbortable, showToast, createModal, escapeHtml, extractAllowed, extractMeta, loadMarked } = NeonUtils;
     const { renderReactions, renderComments, createCard, renderPoll } = UIComponents;
     const { getCurrentUser, isAdmin } = GithubAuth;
     const { loadIssues, loadIssue, loadComments, addComment, loadReactions, addReaction, removeReaction, closeIssue } = NeonAPI;
@@ -41,14 +41,17 @@
     }
 
     function renderLoginPrompt() {
-        container.innerHTML = `<div class="login-prompt"><i class="fab fa-github"></i><h3 data-lang="feedbackLoginPrompt">Войдите через GitHub, чтобы участвовать</h3><p data-lang="feedbackTokenNote">Ваш токен останется только у вас в браузере.</p><button class="button" id="feedback-login-btn" data-lang="feedbackLoginBtn">Войти</button></div>`;
+        container.innerHTML = `<div class="login-prompt"><i class="fab fa-github" style="font-size:48px;"></i><h3 data-lang="feedbackLoginPrompt">Войдите через GitHub, чтобы участвовать</h3><p data-lang="feedbackTokenNote">Ваш токен останется только у вас в браузере.</p><button class="button" id="feedback-login-btn" data-lang="feedbackLoginBtn">Войти</button></div>`;
         container.querySelector('#feedback-login-btn').addEventListener('click', () => window.dispatchEvent(new CustomEvent('github-login-requested')));
     }
 
     async function renderInterface() {
         container.innerHTML = `
             <div class="feedback-header">
-                <div><i class="fab fa-github"></i> <h2 data-lang="feedbackTitle">Идеи, баги и отзывы</h2></div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <i class="fab fa-github" style="font-size:32px; color:var(--accent);"></i>
+                    <h2 data-lang="feedbackTitle" style="margin:0;">Идеи, баги и отзывы</h2>
+                </div>
                 <button class="button" id="new-feedback-btn" data-lang="feedbackNewBtn">+ Оставить сообщение</button>
             </div>
             <div class="feedback-tabs">
@@ -142,8 +145,8 @@
     async function openFullModal(post) {
         const user = getCurrentUser();
         const { modal, closeModal } = createModal(post.title, '<div class="loading-spinner"><i class="fas fa-spinner fa-pulse"></i> Загрузка...</div>', { size: 'full' });
-        const modalHeader = modal.querySelector('.modal-header');
         const bodyContainer = modal.querySelector('.modal-body');
+        const modalHeader = modal.querySelector('.modal-header');
         try {
             const issue = await loadIssue(post.number);
             if (issue.state === 'closed') {
@@ -151,30 +154,19 @@
                 return;
             }
 
-            // Добавляем кнопки действий в шапку (слева от заголовка)
-            const headerTitle = modalHeader.querySelector('h2');
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'modal-header-actions';
-            actionsDiv.style.marginRight = 'auto';
-            actionsDiv.style.display = 'flex';
-            actionsDiv.style.gap = '8px';
-
-            const shareBtn = document.createElement('button');
-            shareBtn.className = 'action-btn';
-            shareBtn.innerHTML = '<i class="fas fa-share-alt"></i>';
-            shareBtn.title = 'Поделиться';
-            shareBtn.addEventListener('click', () => {
-                const url = `${location.origin}${location.pathname}?post=${issue.number}`;
-                navigator.clipboard?.writeText(url).then(() => showToast('Ссылка скопирована', 'success')).catch(() => showToast('Не удалось скопировать', 'error'));
-            });
-            actionsDiv.appendChild(shareBtn);
-
+            // Добавляем кнопки действий слева от крестика
             if (isAdmin() || (user && issue.user.login === user)) {
-                const editBtn = document.createElement('button');
-                editBtn.className = 'action-btn';
-                editBtn.innerHTML = '<i class="fas fa-edit"></i>';
-                editBtn.title = 'Редактировать';
-                editBtn.addEventListener('click', () => {
+                const actionsContainer = document.createElement('div');
+                actionsContainer.className = 'modal-header-actions';
+                actionsContainer.innerHTML = `
+                    <button class="action-btn edit-post" title="Редактировать"><i class="fas fa-edit"></i></button>
+                    <button class="action-btn close-post" title="Закрыть"><i class="fas fa-trash-alt"></i></button>
+                    <button class="action-btn share-post" title="Поделиться"><i class="fas fa-share-alt"></i></button>
+                `;
+                const closeBtn = modalHeader.querySelector('.modal-close');
+                modalHeader.insertBefore(actionsContainer, closeBtn);
+
+                actionsContainer.querySelector('.edit-post').addEventListener('click', () => {
                     closeModal();
                     openEditorModal('edit', {
                         number: issue.number,
@@ -182,15 +174,9 @@
                         body: issue.body,
                         game: currentGame,
                         labels: issue.labels.map(l => l.name)
-                    }, 'feedback');
+                    }, post.labels.includes('type:news') ? 'news' : post.labels.includes('type:update') ? 'update' : 'feedback');
                 });
-                actionsDiv.appendChild(editBtn);
-
-                const closeBtn = document.createElement('button');
-                closeBtn.className = 'action-btn';
-                closeBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
-                closeBtn.title = 'Закрыть';
-                closeBtn.addEventListener('click', async () => {
+                actionsContainer.querySelector('.close-post').addEventListener('click', async () => {
                     if (confirm('Закрыть пост?')) {
                         await closeIssue(issue.number);
                         closeModal();
@@ -199,20 +185,23 @@
                         renderInterface();
                     }
                 });
-                actionsDiv.appendChild(closeBtn);
+                actionsContainer.querySelector('.share-post').addEventListener('click', () => {
+                    const url = `${location.origin}${location.pathname}?post=${issue.number}`;
+                    navigator.clipboard?.writeText(url).then(() => showToast('Ссылка скопирована', 'success')).catch(() => showToast('Не удалось скопировать', 'error'));
+                });
             }
-
-            modalHeader.insertBefore(actionsDiv, headerTitle);
 
             bodyContainer.innerHTML = '';
             const header = document.createElement('div');
             header.className = 'modal-post-header';
+            header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:16px;';
             header.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)} · ${new Date(issue.created_at).toLocaleString()}</span>`;
             bodyContainer.appendChild(header);
 
             const content = document.createElement('div');
             content.className = 'markdown-body';
-            content.innerHTML = renderMarkdown(issue.body);
+            await loadMarked();
+            content.innerHTML = NeonUtils.renderMarkdown(issue.body);
             bodyContainer.appendChild(content);
 
             const pollData = extractMeta(issue.body, 'poll');
