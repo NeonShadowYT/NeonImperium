@@ -212,7 +212,7 @@
         return container;
     }
 
-    // ---------- Модалка редактора ----------
+    // ---------- Модалка редактора (пост / комментарий / поддержка) ----------
     function openEditorModal(mode, data, postType = 'feedback') {
         const currentUser = getCurrentUser();
         if (!currentUser) {
@@ -228,11 +228,13 @@
         const isSupport = postType === 'support';
         const isComment = postType === 'comment';
 
+        // Извлечение превью, саммари, разрешённых пользователей
         let previewUrl = extractMeta(initialBody, 'preview') || '';
         let summary = extractMeta(initialBody, 'summary') || '';
         let allowedUsers = extractMeta(initialBody, 'allowed') || '';
         let cleanBody = initialBody.replace(/<!--.*?-->\s*/g, '').trim();
 
+        // Категория (для feedback)
         let currentCategory = 'idea';
         if (postType === 'feedback' && data.labels) {
             const typeLabel = data.labels.find(l => l.startsWith('type:'));
@@ -249,6 +251,7 @@
         modalContent.style.gap = '15px';
 
         if (isComment) {
+            // Простая форма комментария с тулбаром и предпросмотром
             modalContent.innerHTML = `
                 <div id="comment-toolbar"></div>
                 <textarea id="comment-body" class="feedback-textarea" rows="12" placeholder="Ваш комментарий..."></textarea>
@@ -265,6 +268,7 @@
             const toolbarDiv = modal.querySelector('#comment-toolbar');
             toolbarDiv.appendChild(createEditorToolbar(textarea));
 
+            // Восстановление черновика
             if (savedDraft?.body) textarea.value = savedDraft.body;
 
             const updatePreview = async () => {
@@ -294,17 +298,18 @@
                 }
             });
 
+            // Сохранение черновика при вводе
             textarea.addEventListener('input', () => saveDraft(draftKey, { body: textarea.value }));
             return;
         }
 
-        // Основная форма поста
+        // Для постов (feedback, news, update, support)
         modalContent.innerHTML = `
             <div class="settings-card">
                 <input type="text" id="modal-title" class="feedback-input" placeholder="Заголовок" value="${escapeHtml(initialTitle)}">
                 <input type="text" id="modal-summary" class="feedback-input" placeholder="Краткое описание (отображается в ленте)" value="${escapeHtml(summary)}">
                 <div class="preview-url-wrapper">
-                    <input type="url" id="modal-preview-url" class="feedback-input preview-url-input" placeholder="Ссылка на превью (изображение)" value="${escapeHtml(previewUrl)}">
+                    <input type="url" id="modal-preview-url" class="feedback-input" placeholder="Ссылка на превью (изображение)" value="${escapeHtml(previewUrl)}">
                     <div id="image-services-placeholder"></div>
                 </div>
                 <div id="preview-thumbnail" style="${previewUrl ? '' : 'display:none;'} margin-bottom:12px;">
@@ -331,12 +336,9 @@
                 <textarea id="modal-body" class="feedback-textarea" style="flex:1;">${escapeHtml(cleanBody)}</textarea>
                 <div id="modal-preview" class="markdown-body preview-area" style="flex:1;"></div>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;">
-                <div id="access-settings-container" style="display:flex; gap:12px;"></div>
-                <div style="display:flex; gap:10px;">
-                    <button class="button" id="modal-cancel">Отмена</button>
-                    <button class="button" id="modal-submit">${isEdit ? 'Сохранить' : 'Опубликовать'}</button>
-                </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
+                <button class="button" id="modal-cancel">Отмена</button>
+                <button class="button" id="modal-submit">${isEdit ? 'Сохранить' : 'Опубликовать'}</button>
             </div>
         `;
 
@@ -392,6 +394,7 @@
             document.addEventListener('click', (e) => { if (!accessContainer.contains(e.target)) dropdown.style.display = 'none'; });
         }
 
+        // Превью изображения
         const updatePreviewImage = () => {
             const url = previewUrlInput.value.trim();
             if (url) {
@@ -402,11 +405,12 @@
             }
         };
         previewUrlInput.addEventListener('input', updatePreviewImage);
-        modal.querySelector('#remove-preview')?.addEventListener('click', () => {
+        modal.querySelector('#remove-preview').addEventListener('click', () => {
             previewUrlInput.value = '';
             updatePreviewImage();
         });
 
+        // Предпросмотр текста
         const updateMarkdownPreview = async () => {
             await ensureMarked();
             previewDiv.innerHTML = renderMarkdown(bodyTextarea.value);
@@ -414,6 +418,7 @@
         bodyTextarea.addEventListener('input', updateMarkdownPreview);
         updateMarkdownPreview();
 
+        // Восстановление черновика
         if (savedDraft) {
             if (confirm('Восстановить черновик?')) {
                 titleInput.value = savedDraft.title || '';
@@ -435,6 +440,7 @@
             }
         }
 
+        // Сохранение черновика при изменениях
         const saveCurrentDraft = () => {
             const draft = {
                 title: titleInput.value,
@@ -449,6 +455,7 @@
         };
         [titleInput, summaryInput, previewUrlInput, bodyTextarea, categorySelect, privateUsersInput].forEach(el => el?.addEventListener('input', saveCurrentDraft));
 
+        // Закрытие
         const closeHandler = () => {
             if (confirm('Закрыть без сохранения?')) {
                 clearDraft(draftKey);
@@ -458,6 +465,7 @@
         modal.querySelector('#modal-cancel').addEventListener('click', closeHandler);
         modal.addEventListener('click', (e) => { if (e.target === modal) closeHandler(); });
 
+        // Отправка
         modal.querySelector('#modal-submit').addEventListener('click', async () => {
             const title = titleInput.value.trim();
             const summary = summaryInput.value.trim();
@@ -466,6 +474,7 @@
 
             if (!title) { showToast('Введите заголовок', 'error'); return; }
 
+            // Сборка метаданных
             let meta = '';
             if (preview) meta += `<!-- preview: ${preview} -->\n![Preview](${preview})\n\n`;
             if (summary) meta += `<!-- summary: ${summary} -->\n`;
@@ -477,6 +486,7 @@
             }
             body = meta + body;
 
+            // Определение меток
             let labels = [];
             if (postType === 'feedback') {
                 const category = categorySelect.value;
@@ -506,6 +516,7 @@
         });
     }
 
+    // Открытие редактора комментария (публичный API)
     function openCommentEditor(issueNumber) {
         openEditorModal('new', { issueNumber }, 'comment');
     }
