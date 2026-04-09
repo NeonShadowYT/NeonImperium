@@ -99,3 +99,22 @@
 #private-users{min-width:200px}
 .settings-card{background:var(--bg-card-gradient);border-radius:20px;padding:20px;margin-bottom:20px;border:1px solid var(--border)}
 .feedback-header i.fab.fa-github{font-size:28px;color:var(--accent);margin-right:8px}
+.modal-header {
+    display: flex;
+    align-items: center;
+}
+.modal-header h2 {
+    margin: 0;
+    flex: 0 0 auto;
+}
+.modal-header-spacer {
+    flex: 1;
+}
+.modal-header-actions {
+    display: flex;
+    gap: 8px;
+    margin-right: 12px;
+}
+.modal-close {
+    flex-shrink: 0;
+}
