@@ -60,6 +60,19 @@
         return tmp.textContent || tmp.innerText || '';
     }
 
+    let markedReady = false;
+    async function ensureMarked() {
+        if (typeof marked !== 'undefined') return;
+        if (markedReady) return;
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+            script.onload = () => { markedReady = true; resolve(); };
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+
     function renderMarkdown(text) {
         if (!text) return '';
         if (typeof marked !== 'undefined') {
@@ -81,6 +94,11 @@
 
     function extractAllowed(body) {
         return extractMeta(body, 'allowed');
+    }
+
+    function extractProgress(body) {
+        const val = extractMeta(body, 'progress');
+        return val ? parseInt(val, 10) : null;
     }
 
     // ---------- Сеть ----------
@@ -218,8 +236,8 @@
     // ---------- Экспорт ----------
     window.NeonUtils = {
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, clearAllCache,
-        escapeHtml, stripHtml, renderMarkdown,
-        extractMeta, extractSummary, extractAllowed,
+        escapeHtml, stripHtml, renderMarkdown, ensureMarked,
+        extractMeta, extractSummary, extractAllowed, extractProgress,
         createAbortable, fetchWithTimeout,
         debounce, throttle,
         showToast,

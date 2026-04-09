@@ -81,7 +81,13 @@
             case 'profile': user && window.open(`https://github.com/${user}`, '_blank'); break;
             case 'token-info': showToast(`Вы вошли как ${user}. Токен сохранён в браузере.`, 'success'); break;
             case 'revoke-token': window.open('https://github.com/settings/tokens', '_blank'); break;
-            case 'support': if (window.UIFeedback) UIFeedback.openSupportModal(); break;
+            case 'support':
+                if (window.UIFeedback && window.UIFeedback.openSupportModal) {
+                    UIFeedback.openSupportModal();
+                } else {
+                    showToast('Функция поддержки временно недоступна', 'error');
+                }
+                break;
             case 'clear-cache':
                 NeonUtils.clearAllCache();
                 showToast('Кеш очищен', 'info');

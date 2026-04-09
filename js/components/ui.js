@@ -1,6 +1,6 @@
 // js/components/ui.js
 (function() {
-    const { escapeHtml, stripHtml, renderMarkdown, createModal, showToast } = NeonUtils;
+    const { escapeHtml, stripHtml, renderMarkdown, createModal, showToast, ensureMarked } = NeonUtils;
     const { REACTION_TYPES, DEFAULT_IMAGE } = NeonConfig;
     const { getState } = NeonState;
 
@@ -173,6 +173,69 @@
         modal.querySelector('#edit-cancel').addEventListener('click', closeModal);
     }
 
+    // ---------- Опросы ----------
+    async function renderPoll(container, issueNumber, pollData, existingComments) {
+        const currentUser = getState('currentUser');
+        const voteComments = existingComments.filter(c => /^!vote \d+$/.test(c.body.trim()));
+        const voteCounts = pollData.options.map((_, idx) => voteComments.filter(c => c.body.trim() === `!vote ${idx}`).length);
+        const totalVotes = voteCounts.reduce((s,v)=>s+v,0);
+        const userVoted = currentUser ? voteComments.some(c => c.user.login === currentUser) : false;
+
+        const pollDiv = document.createElement('div');
+        pollDiv.className = 'poll card';
+        pollDiv.dataset.issue = issueNumber;
+        let html = `<h3>📊 ${escapeHtml(pollData.question)}</h3><div class="poll-options">`;
+
+        pollData.options.forEach((option, index) => {
+            const count = voteCounts[index];
+            const percent = totalVotes > 0 ? Math.round((count/totalVotes)*100) : 0;
+            html += `<div class="poll-option" data-index="${index}">
+                <div class="poll-option-text">${escapeHtml(option)}</div>`;
+            if (!currentUser) {
+                // ничего
+            } else if (!userVoted) {
+                html += `<button class="button poll-vote-btn" data-option="${index}">Голосовать</button>`;
+            } else {
+                html += `<div class="progress-bar"><div style="width:${percent}%;">${percent}% (${count})</div></div>`;
+            }
+            html += '</div>';
+        });
+        html += '</div>';
+        if (!currentUser) html += '<p class="text-secondary small"><i class="fas fa-info-circle"></i> Чтобы голосовать, <a href="#" id="poll-login-link">войдите</a>.</p>';
+        else if (!userVoted) html += '<p class="text-secondary small">Вы ещё не голосовали.</p>';
+        pollDiv.innerHTML = html;
+
+        container.innerHTML = '';
+        container.appendChild(pollDiv);
+
+        if (currentUser && !userVoted) {
+            pollDiv.querySelectorAll('.poll-vote-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const optionIndex = btn.dataset.option;
+                    btn.disabled = true;
+                    try {
+                        await NeonAPI.addComment(issueNumber, `!vote ${optionIndex}`);
+                        showToast('Голос учтён', 'success');
+                        const updatedComments = await NeonAPI.loadComments(issueNumber);
+                        await renderPoll(container, issueNumber, pollData, updatedComments);
+                    } catch (err) {
+                        showToast('Ошибка при голосовании', 'error');
+                        btn.disabled = false;
+                    }
+                });
+            });
+        }
+
+        const loginLink = pollDiv.querySelector('#poll-login-link');
+        if (loginLink) {
+            loginLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                window.dispatchEvent(new CustomEvent('github-login-requested'));
+            });
+        }
+    }
+
     // ---------- Универсальная карточка ----------
     function createCard(item, onClick) {
         const card = document.createElement('div');
@@ -212,6 +275,7 @@
         showReactionMenu,
         renderComments,
         openEditCommentModal,
+        renderPoll,
         createCard
     };
 })();
