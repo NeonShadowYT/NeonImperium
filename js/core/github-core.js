@@ -47,14 +47,16 @@ function escapeHtml(text) {
 
 function renderMarkdown(text) {
     if (!text) return '';
-    let html = '';
-    if (window.marked) {
-        marked.setOptions({ gfm: true, breaks: true, pedantic: false, headerIds: false, mangle: false });
-        html = marked.parse(text);
-    } else {
-        html = text.replace(/\n/g, '<br>');
+    try {
+        if (typeof marked !== 'undefined' && marked.parse) {
+            marked.setOptions({ gfm: true, breaks: true, pedantic: false, headerIds: false, mangle: false });
+            return marked.parse(text);
+        }
+    } catch (e) {
+        console.warn('Markdown parsing failed, using fallback:', e);
     }
-    return html;
+    // Fallback: простой перевод строк
+    return escapeHtml(text).replace(/\n/g, '<br>');
 }
 
 function deduplicateByNumber(items) {
@@ -92,6 +94,18 @@ function extractSummary(body) {
     return extractMeta(body, 'summary');
 }
 
+async function fetchWithTimeout(url, options = {}, timeout = 15000) {
+    const { controller, timeoutId } = createAbortable(timeout);
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
+    }
+}
+
 window.GithubCore = {
     CONFIG: GITHUB_CONFIG,
     cacheGet,
@@ -105,5 +119,6 @@ window.GithubCore = {
     stripHtml,
     extractMeta,
     extractAllowed,
-    extractSummary
+    extractSummary,
+    fetchWithTimeout
 };

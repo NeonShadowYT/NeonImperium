@@ -255,7 +255,9 @@ const translations = {
         licenseStatsSettings: "В играх будут настройки сбора статистики, где вы сможете включить или отключить её в любой момент.",
         licenseDisputeMars: "Все споры подлежат рассмотрению в суде по месту жительства ответчика. Если истец — пользователь, то суд по месту нахождения разработчика (Российская Федерация). Если разработчик подаёт в суд, то по месту жительства ответчика (нарушителя).",
         licenseJokeSoul: "«Ты отдаёшь свою душу авторам ;}» — это шутка. Ваша душа остаётся при вас.",
-        licenseBrandUsage: "Запрещается использовать название «Neon Imperium», логотипы, иконки игр или товарные знаки в модах, изменённых версиях или любых производных работах таким образом, чтобы это могло ввести в заблуждение относительно официального происхождения или одобрения разработчиком. Вы должны явно указывать, что ваша модификация является неофициальной."
+        licenseBrandUsage: "Запрещается использовать название «Neon Imperium», логотипы, иконки игр или товарные знаки в модах, изменённых версиях или любых производных работах таким образом, чтобы это могло ввести в заблуждение относительно официального происхождения или одобрения разработчиком. Вы должны явно указывать, что ваша модификация является неофициальной.",
+        
+        renderError: "Ошибка отображения содержимого. Попробуйте позже."
     },
     
     en: {
@@ -512,7 +514,9 @@ const translations = {
         licenseStatsSettings: "Games will have statistics collection settings where you can enable or disable it at any time.",
         licenseDisputeMars: "All disputes shall be considered in the court at the respondent's place of residence. If the claimant is a user, the court is at the developer's location (Russian Federation). If the developer sues, the court is at the respondent's (violator's) place of residence.",
         licenseJokeSoul: "«You give your soul to the authors ;}» — this is a joke. Your soul remains with you.",
-        licenseBrandUsage: "It is forbidden to use the name 'Neon Imperium', logos, game icons, or trademarks in mods, modified versions, or any derivative works in a way that could mislead about official origin or endorsement by the developer. You must explicitly state that your modification is unofficial."
+        licenseBrandUsage: "It is forbidden to use the name 'Neon Imperium', logos, game icons, or trademarks in mods, modified versions, or any derivative works in a way that could mislead about official origin or endorsement by the developer. You must explicitly state that your modification is unofficial.",
+
+        renderError: "Content rendering error. Please try again later."
     }
 };
 

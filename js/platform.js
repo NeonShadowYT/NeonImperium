@@ -1,11 +1,24 @@
 // platform.js – автоматическое скрытие кнопок под платформу + интеграция с GitHub Releases + версия Starve Neon
 
+let cachedOS = null;
+
+function getOS() {
+    if (cachedOS) return cachedOS;
+    const ua = navigator.userAgent;
+    if (/android/i.test(ua)) cachedOS = 'Android';
+    else if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) cachedOS = 'iOS';
+    else if (/Mac/.test(ua)) cachedOS = 'Mac';
+    else if (/Linux/.test(ua)) cachedOS = 'Linux';
+    else if (/Windows/.test(ua)) cachedOS = 'Windows';
+    else cachedOS = 'Unknown';
+    return cachedOS;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const os = getOS();
     const platformButtons = document.querySelectorAll('.download-button[data-platform]');
     const githubButtons = document.querySelectorAll('.download-button.github');
 
-    // Скрываем обычные кнопки, не соответствующие текущей ОС
     platformButtons.forEach(btn => {
         const btnPlatform = btn.dataset.platform;
         const currentOs = os.toLowerCase();
@@ -17,26 +30,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Если есть GitHub-кнопки, подставляем ссылки из последнего релиза и обновляем версию Starve Neon
     if (githubButtons.length > 0 || document.querySelector('.game-title')?.textContent === 'Starve Neon') {
         initGitHubDownloads(os, githubButtons);
     }
 });
 
-function getOS() {
-    const ua = navigator.userAgent;
-    if (/android/i.test(ua)) return 'Android';
-    if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) return 'iOS';
-    if (/Mac/.test(ua)) return 'Mac';
-    if (/Linux/.test(ua)) return 'Linux';
-    if (/Windows/.test(ua)) return 'Windows';
-    return 'Unknown';
-}
-
 async function getLatestRelease(owner, repo) {
     const url = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
     try {
-        const response = await fetch(url);
+        const response = await GithubCore.fetchWithTimeout(url, {}, 10000);
         if (!response.ok) throw new Error('Failed to fetch release');
         return await response.json();
     } catch (err) {
@@ -62,9 +64,7 @@ function findAssetByPlatform(assets, platform) {
 }
 
 async function initGitHubDownloads(os, buttons) {
-    // Проверяем наличие GithubCore
     if (!window.GithubCore || !window.GithubCore.CONFIG) {
-        console.warn('GithubCore not available yet, retrying in 500ms');
         setTimeout(() => initGitHubDownloads(os, buttons), 500);
         return;
     }
@@ -80,7 +80,6 @@ async function initGitHubDownloads(os, buttons) {
         return;
     }
 
-    // Обновляем версию и дату для Starve Neon
     updateStarveNeonVersion(release);
 
     buttons.forEach(btn => {
@@ -116,7 +115,6 @@ function updateStarveNeonVersion(release) {
     }
     if (downloadNote) {
         downloadNote.textContent = `Версия ${tag} · Обновление от ${formattedDate}`;
-        // Также обновляем английскую версию, если переключится язык
         const enNote = document.querySelector('.small-note[data-lang="starveDownloadNote"][lang="en"]');
         if (enNote) {
             enNote.textContent = `Version ${tag} · Update ${published.toISOString().slice(0,10)}`;
