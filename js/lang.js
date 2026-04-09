@@ -19,6 +19,7 @@
             smallProjectsTitle: "Небольшие проекты",
             smallProjectsDesc: "Игры созданные по рофлу",
             comingSoon: "Скоро",
+            downloadBtn: "Скачать",
             developersTitle: "Разработчики",
             developersDesc: "Работаем в свободное время",
             youtubersTitle: "Ютуберы",
@@ -26,6 +27,7 @@
             newsTitle: "📰 Последние новости",
             newsDesc: "Свежие видео и обновления",
             newsLoading: "Загрузка новостей...",
+            noNews: "Пока нет новостей",
 
             // Common for game pages
             trailerTitle: "Трейлер",
@@ -37,7 +39,6 @@
             videoDesc: "Подборка контента от сообщества",
             updatesTitle: "Обновления",
             polls: "Опросы",
-            downloadBtn: "Скачать",
             feedbackTitle: "Идеи, баги и отзывы",
             feedbackDesc: "Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.",
             feedbackNewBtn: "Оставить сообщение",
@@ -67,6 +68,9 @@
             feedbackLoadError: "Ошибка загрузки.",
             feedbackRetry: "Повторить",
             feedbackTokenNote: "Ваш токен останется только у вас в браузере.",
+            noUpdates: "Нет обновлений",
+
+            // GitHub Auth
             githubLoginTitle: "Вход через GitHub",
             githubSecure: "Безопасно и прозрачно:",
             githubTokenNote: "токен хранится в вашем браузере и передаётся только в GitHub API.",
@@ -98,6 +102,9 @@
             supportPrivateNote: "⚠️ Ваше сообщение будет приватным: его увидят только вы и администратор. Оно не отображается в публичных разделах сайта, но сохраняется в репозитории GitHub (видят админы).",
             supportTitle: "Поддержка",
             supportNewBtn: "Новое обращение",
+            supportMyTickets: "Мои обращения",
+            supportNoTickets: "У вас нет обращений.",
+            supportCreateFirst: "Нажмите «Новое обращение».",
 
             licenseAccept: "Скачивая игру, вы принимаете ",
             licenseLink: "лицензионное соглашение",
@@ -213,7 +220,6 @@
             licenseObligation4: "Указывать ссылки на оригинальные страницы и автора",
             licenseBack: "← Вернуться к игре",
             allRightsReserved: "Все права защищены.",
-
             licenseSection1Title: "Общие положения",
             licenseSection1Text: "Настоящее Соглашение заключено между вами (Пользователь) и правообладателем игр Neon Imperium. Оно регулирует использование игр Starve Neon, Alpha 01, ГК Адвенчур и всех связанных материалов.",
             licenseSection1Text2: "Устанавливая или используя игру, вы полностью соглашаетесь с условиями. Если вы не согласны — удалите игру.",
@@ -254,7 +260,8 @@
             licenseStatsSettings: "В играх будут настройки сбора статистики, где вы сможете включить или отключить её в любой момент.",
             licenseDisputeMars: "Все споры подлежат рассмотрению в суде по месту жительства ответчика. Если истец — пользователь, то суд по месту нахождения разработчика (Российская Федерация). Если разработчик подаёт в суд, то по месту жительства ответчика (нарушителя).",
             licenseJokeSoul: "«Ты отдаёшь свою душу авторам ;}» — это шутка. Ваша душа остаётся при вас.",
-            licenseBrandUsage: "Запрещается использовать название «Neon Imperium», логотипы, иконки игр или товарные знаки в модах, изменённых версиях или любых производных работах таким образом, чтобы это могло ввести в заблуждение относительно официального происхождения или одобрения разработчиком. Вы должны явно указывать, что ваша модификация является неофициальной."
+            licenseBrandUsage: "Запрещается использовать название «Neon Imperium», логотипы, иконки игр или товарные знаки в модах, изменённых версиях или любых производных работах таким образом, чтобы это могло ввести в заблуждение относительно официального происхождения или одобрения разработчиком. Вы должны явно указывать, что ваша модификация является неофициальной.",
+            donateButton: "Поддержать"
         },
 
         en: {
@@ -275,6 +282,7 @@
             smallProjectsTitle: "Small Projects",
             smallProjectsDesc: "Games made for fun",
             comingSoon: "Coming soon",
+            downloadBtn: "Download",
             developersTitle: "Developers",
             developersDesc: "Working in free time",
             youtubersTitle: "YouTubers",
@@ -282,6 +290,7 @@
             newsTitle: "📰 Latest News",
             newsDesc: "Fresh videos and updates",
             newsLoading: "Loading news...",
+            noNews: "No news yet",
 
             // Common for game pages
             trailerTitle: "Trailer",
@@ -293,7 +302,6 @@
             videoDesc: "Community content",
             updatesTitle: "Updates",
             polls: "Polls",
-            downloadBtn: "Download",
             feedbackTitle: "Ideas, bugs & feedback",
             feedbackDesc: "Share your thoughts, report bugs, or suggest improvements.",
             feedbackNewBtn: "Leave a message",
@@ -323,6 +331,9 @@
             feedbackLoadError: "Loading error.",
             feedbackRetry: "Retry",
             feedbackTokenNote: "Your token stays only in your browser.",
+            noUpdates: "No updates",
+
+            // GitHub Auth
             githubLoginTitle: "Sign in with GitHub",
             githubSecure: "Secure and transparent:",
             githubTokenNote: "token is stored in your browser and sent only to GitHub API.",
@@ -354,6 +365,9 @@
             supportPrivateNote: "⚠️ Your message will be private: only you and the admin can see it. It is not displayed in public sections of the site, but is stored in the GitHub repository (visible to admins).",
             supportTitle: "Support",
             supportNewBtn: "New ticket",
+            supportMyTickets: "My tickets",
+            supportNoTickets: "You have no tickets.",
+            supportCreateFirst: "Click «New ticket».",
 
             licenseAccept: "By downloading the game, you accept the ",
             licenseLink: "license agreement",
@@ -469,7 +483,6 @@
             licenseObligation4: "Provide links to original game pages and authors",
             licenseBack: "← Back to game",
             allRightsReserved: "All rights reserved.",
-
             licenseSection1Title: "General Provisions",
             licenseSection1Text: "This Agreement is concluded between you (User) and the copyright holder of Neon Imperium games. It governs the use of Starve Neon, Alpha 01, GC Adven and all related materials.",
             licenseSection1Text2: "By installing or using the game, you fully agree to the terms. If you do not agree, delete the game.",
@@ -510,7 +523,8 @@
             licenseStatsSettings: "Games will have statistics collection settings where you can enable or disable it at any time.",
             licenseDisputeMars: "All disputes shall be considered in the court at the respondent's place of residence. If the claimant is a user, the court is at the developer's location (Russian Federation). If the developer sues, the court is at the respondent's (violator's) place of residence.",
             licenseJokeSoul: "«You give your soul to the authors ;}» — this is a joke. Your soul remains with you.",
-            licenseBrandUsage: "It is forbidden to use the name 'Neon Imperium', logos, game icons, or trademarks in mods, modified versions, or any derivative works in a way that could mislead about official origin or endorsement by the developer. You must explicitly state that your modification is unofficial."
+            licenseBrandUsage: "It is forbidden to use the name 'Neon Imperium', logos, game icons, or trademarks in mods, modified versions, or any derivative works in a way that could mislead about official origin or endorsement by the developer. You must explicitly state that your modification is unofficial.",
+            donateButton: "Support"
         }
     };
 
