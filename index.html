@@ -18,7 +18,7 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <script type="text/javascript" src="https://static.itch.io/api.js" defer></script>
-    <!-- Основные модули -->
+    <!-- Основные скрипты -->
     <script src="js/core/config.js" defer></script>
     <script src="js/core/utils.js" defer></script>
     <script src="js/core/api.js" defer></script>
@@ -26,15 +26,16 @@
     <script src="js/components/ui.js" defer></script>
     <script src="js/features/auth.js" defer></script>
     <script src="js/features/editor.js" defer></script>
-    <script src="js/features/feedback.js" defer></script>
-    <script src="js/features/updates.js" defer></script>
-    <script src="js/features/news.js" defer></script>
-    <script src="js/features/admin.js" defer></script>
     <script src="js/features/donate.js" defer></script>
     <script src="js/features/platform.js" defer></script>
     <script src="js/features/effects.js" defer></script>
     <script src="js/lang.js" defer></script>
     <script src="js/app.js" defer></script>
+    <style>
+        /* временные стили для спиннера */
+        .loading-spinner { grid-column: 1/-1; text-align: center; padding: 40px; }
+        .loading-spinner i { font-size: 32px; color: var(--accent); }
+    </style>
 </head>
 <body>
     <div class="page">
