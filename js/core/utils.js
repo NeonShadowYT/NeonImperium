@@ -60,91 +60,74 @@
         return tmp.textContent || tmp.innerText || '';
     }
 
-    // ---------- Безопасный рендеринг HTML (разрешённые теги и атрибуты) ----------
-    const ALLOWED_TAGS = [
-        'div', 'span', 'p', 'br', 'hr',
-        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-        'ul', 'ol', 'li',
-        'table', 'thead', 'tbody', 'tr', 'th', 'td',
-        'blockquote', 'pre', 'code',
-        'a', 'img', 'iframe',
-        'details', 'summary',
-        'strong', 'em', 'del', 'u',
-        'i', 'b', 'font', 'small', 'sub', 'sup',
-        'button', 'input', 'select', 'option', 'textarea', 'label',
-        'form', 'fieldset', 'legend',
-        'video', 'audio', 'source',
-        'style', 'script' // скрипты удалим позже
-    ];
-    const ALLOWED_ATTRS = [
-        'class', 'id', 'style', 'href', 'src', 'alt', 'title', 'target', 'rel',
-        'width', 'height', 'frameborder', 'allowfullscreen', 'loading',
-        'data-*', 'aria-*', 'role', 'tabindex',
-        'type', 'value', 'placeholder', 'checked', 'disabled', 'selected',
-        'for', 'name', 'rows', 'cols', 'maxlength', 'min', 'max', 'step',
-        'onclick' // разрешим только для кнопок с data-action
-    ];
-
-    function sanitizeHtml(dirty) {
-        if (!dirty) return '';
-        const doc = new DOMParser().parseFromString(dirty, 'text/html');
-        const cleanNode = (node) => {
-            if (node.nodeType === Node.TEXT_NODE) {
-                return document.createTextNode(node.textContent);
-            }
-            if (node.nodeType !== Node.ELEMENT_NODE) return null;
-
-            const tagName = node.tagName.toLowerCase();
-            // Удаляем запрещённые теги
-            if (!ALLOWED_TAGS.includes(tagName)) {
-                const fragment = document.createDocumentFragment();
-                node.childNodes.forEach(child => {
-                    const cleaned = cleanNode(child);
-                    if (cleaned) fragment.appendChild(cleaned);
-                });
-                return fragment;
-            }
-
-            const el = document.createElement(tagName);
-            // Копируем разрешённые атрибуты
-            Array.from(node.attributes).forEach(attr => {
-                const name = attr.name.toLowerCase();
-                if (ALLOWED_ATTRS.some(pattern => {
-                    if (pattern.endsWith('*')) return name.startsWith(pattern.slice(0, -1));
-                    return name === pattern;
-                })) {
-                    // Запрещаем javascript: ссылки
-                    if ((name === 'href' || name === 'src') && attr.value.trim().toLowerCase().startsWith('javascript:')) {
-                        return;
-                    }
-                    el.setAttribute(name, attr.value);
-                }
-            });
-
-            // Рекурсивно обрабатываем потомков
-            node.childNodes.forEach(child => {
-                const cleaned = cleanNode(child);
-                if (cleaned) el.appendChild(cleaned);
-            });
-
-            return el;
-        };
-
-        const body = doc.body;
-        const fragment = document.createDocumentFragment();
-        body.childNodes.forEach(child => {
-            const cleaned = cleanNode(child);
-            if (cleaned) fragment.appendChild(cleaned);
-        });
-        const tmp = document.createElement('div');
-        tmp.appendChild(fragment);
-        return tmp.innerHTML;
-    }
-
+    // ---------- Встроенный парсер Markdown (HTML остаётся нетронутым) ----------
     function renderMarkdown(text) {
-        // В нашей системе посты хранятся уже в HTML, Markdown не используется.
-        // Просто санитизируем.
-        return sanitizeHtml(text);
+        if (!text) return '';
+        let html = text;
+
+        // Блоки кода — экранируем внутренности
+        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+            return `<pre><code class="language-${lang}">${escapeHtml(code)}</code></pre>`;
+        });
+
+        // Инлайн-код — экранируем
+        html = html.replace(/`([^`]+)`/g, (_, code) => `<code>${escapeHtml(code)}</code>`);
+
+        // Заголовки
+        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+        // Жирный, курсив, зачёркнутый
+        html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        html = html.replace(/___(.*?)___/g, '<strong><em>$1</em></strong>');
+        html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
+        html = html.replace(/_(.*?)_/g, '<em>$1</em>');
+        html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
+
+        // Горизонтальная линия
+        html = html.replace(/^\s*[-*_]{3,}\s*$/gim, '<hr>');
+
+        // Ссылки [text](url)
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+        // Изображения ![alt](url)
+        html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
+
+        // Цитаты (символ > остаётся как есть, не экранируется)
+        html = html.replace(/^\s*&gt;\s?(.*)$/gm, '<blockquote>$1</blockquote>');
+        html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
+
+        // Маркированные списки
+        html = html.replace(/^[\s]*[-*+]\s+(.*)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/gs, (match) => '<ul>' + match + '</ul>');
+        html = html.replace(/<\/ul>\s*<ul>/g, '');
+
+        // Нумерованные списки
+        html = html.replace(/^\s*\d+\.\s+(.*)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/gs, (match) => '<ol>' + match + '</ol>');
+        html = html.replace(/<\/ol>\s*<ol>/g, '');
+
+        // Таблицы (упрощённо)
+        html = html.replace(/^\|(.+)\|$/gm, (row) => {
+            const cells = row.split('|').filter(c => c.trim() !== '');
+            const isHeader = row.includes('---');
+            if (isHeader) return '';
+            const cellTag = 'td';
+            return '<tr>' + cells.map(cell => `<${cellTag}>${cell.trim()}</${cellTag}>`).join('') + '</tr>';
+        });
+        html = html.replace(/(<tr>.*<\/tr>)/gs, (match) => '<table>' + match + '</table>');
+
+        // Перенос строк
+        html = html.replace(/\n/g, '<br>');
+
+        // Убираем лишние <br> перед и после блочных элементов
+        html = html.replace(/<br>\s*(<(h[1-6]|ul|ol|table|blockquote|pre|hr|div))/g, '$1');
+        html = html.replace(/(<\/(h[1-6]|ul|ol|table|blockquote|pre|div)>)\s*<br>/g, '$1');
+
+        return html;
     }
 
     function extractMeta(body, tag) {
@@ -300,7 +283,7 @@
 
     window.NeonUtils = {
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, clearAllCache,
-        escapeHtml, stripHtml, renderMarkdown, sanitizeHtml,
+        escapeHtml, stripHtml, renderMarkdown,
         extractMeta, extractSummary, extractAllowed, extractProgress,
         createAbortable, fetchWithTimeout,
         debounce, throttle,
