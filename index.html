@@ -3,36 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Imperium - официальный сайт игр</title>
-    <meta name="description" content="Neon Imperium - официальный сайт игр Starve Neon, Alpha 01, ГК Адвенчур. Скачать, трейлеры, обновления.">
-    <!-- Open Graph -->
+    <title data-lang="siteTitle">Neon Imperium</title>
+    <meta name="description" content="Neon Imperium - официальный сайт игр Starve Neon, Alpha 01, ГК Адвенчур.">
     <meta property="og:title" content="Neon Imperium">
-    <meta property="og:description" content="Neon Imperium - официальный сайт игр Starve Neon, Alpha 01, ГК Адвенчур. Скачать, трейлеры, обновления.">
+    <meta property="og:description" content="Neon Imperium - официальный сайт игр.">
     <meta property="og:image" content="images/logo-neon-imperium.webp">
-    <meta property="og:url" content="https://neonshadowyt.github.io/NeonImperium/index.html">
+    <meta property="og:url" content="https://neonshadowyt.github.io/NeonImperium/">
     <meta property="og:type" content="website">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
-    <!-- Preconnect для внешних ресурсов -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preconnect" href="https://www.youtube.com">
-    <link rel="preconnect" href="https://i.ytimg.com">
-    <link rel="preconnect" href="https://img.youtube.com">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <script type="text/javascript" src="https://static.itch.io/api.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer onerror="this.onerror=null;this.src='https://unpkg.com/marked/marked.min.js';"></script>
-    <script src="js/core/github-core.js" defer></script>
-    <script src="js/features/ui-utils.js" defer></script>
-    <script src="js/core/github-api.js" defer></script>
-    <script src="js/core/github-auth.js" defer></script>
-    <script src="js/features/ui-feedback.js" defer></script>
+    <!-- Основные скрипты -->
+    <script src="js/core/config.js" defer></script>
+    <script src="js/core/utils.js" defer></script>
+    <script src="js/core/api.js" defer></script>
+    <script src="js/core/state.js" defer></script>
+    <script src="js/components/ui.js" defer></script>
+    <script src="js/features/auth.js" defer></script>
     <script src="js/features/editor.js" defer></script>
-    <script src="js/pages/news-feed.js" defer></script>
+    <script src="js/features/donate.js" defer></script>
+    <script src="js/features/platform.js" defer></script>
+    <script src="js/features/effects.js" defer></script>
     <script src="js/lang.js" defer></script>
-    <script src="js/effects.js" defer></script>
+    <script src="js/app.js" defer></script>
+    <style>
+        /* временные стили для спиннера */
+        .loading-spinner { grid-column: 1/-1; text-align: center; padding: 40px; }
+        .loading-spinner i { font-size: 32px; color: var(--accent); }
+    </style>
 </head>
 <body>
     <div class="page">
@@ -62,12 +65,8 @@
                     </div>
                     <h1 class="game-title" data-lang="siteTitle">Neon Imperium</h1>
                     <div class="social-icons">
-                        <a href="https://discord.com/invite/9gv5sRhk9R" target="_blank" class="social-icon" aria-label="Discord">
-                            <i class="fab fa-discord"></i>
-                        </a>
-                        <a href="https://t.me/voididea" target="_blank" class="social-icon" aria-label="Telegram">
-                            <i class="fab fa-telegram"></i>
-                        </a>
+                        <a href="https://discord.com/invite/9gv5sRhk9R" target="_blank" class="social-icon" aria-label="Discord"><i class="fab fa-discord"></i></a>
+                        <a href="https://t.me/voididea" target="_blank" class="social-icon" aria-label="Telegram"><i class="fab fa-telegram"></i></a>
                     </div>
                 </div>
             </div>
@@ -80,9 +79,7 @@
                 <div class="projects-grid">
                     <a href="starve-neon.html" class="project-card-link">
                         <div class="project-card tilt-card">
-                            <div class="image-wrapper">
-                                <img src="images/starve-neon-header.webp" alt="Starve Neon" class="project-image" width="300" height="180" loading="lazy">
-                            </div>
+                            <div class="image-wrapper"><img src="images/starve-neon-header.webp" alt="Starve Neon" class="project-image" width="300" height="180" loading="lazy"></div>
                             <h3>Starve Neon</h3>
                             <p data-lang="starveDesc">Выживание в брутальном мире с прокачкой и генетикой.</p>
                             <span class="button" data-lang="detailsBtn">Подробнее</span>
@@ -90,9 +87,7 @@
                     </a>
                     <a href="alpha-01.html" class="project-card-link">
                         <div class="project-card tilt-card">
-                            <div class="image-wrapper">
-                                <img src="images/alpha-01-header.webp" alt="Alpha 01" class="project-image" width="300" height="180" loading="lazy">
-                            </div>
+                            <div class="image-wrapper"><img src="images/alpha-01-header.webp" alt="Alpha 01" class="project-image" width="300" height="180" loading="lazy"></div>
                             <h3>Alpha 01</h3>
                             <p data-lang="alphaDesc">Top-down шутер, где вы робот, помогающий солдатам.</p>
                             <span class="button" data-lang="detailsBtn">Подробнее</span>
@@ -100,9 +95,7 @@
                     </a>
                     <a href="gc-adven.html" class="project-card-link">
                         <div class="project-card tilt-card">
-                            <div class="image-wrapper">
-                                <img src="images/gc-adven-header.webp" alt="ГК Адвенчур" class="project-image" width="300" height="180" loading="lazy">
-                            </div>
+                            <div class="image-wrapper"><img src="images/gc-adven-header.webp" alt="ГК Адвенчур" class="project-image" width="300" height="180" loading="lazy"></div>
                             <h3>ГК Адвенчур</h3>
                             <p data-lang="gcDesc">Просто приключение ГКТМО.</p>
                             <span class="button" data-lang="detailsBtn">Подробнее</span>
@@ -120,27 +113,21 @@
                     </div>
                     <a href="https://disk.yandex.ru/d/kV-dcNQvZg1Y_g" target="_blank" class="project-card-link">
                         <div class="project-card tilt-card">
-                            <div class="image-wrapper">
-                                <img src="images/project-pnsd1.webp" alt="ПНСД 1" class="project-image" width="300" height="180" loading="lazy">
-                            </div>
+                            <div class="image-wrapper"><img src="images/project-pnsd1.webp" alt="ПНСД 1" class="project-image" width="300" height="180" loading="lazy"></div>
                             <h3>ПНСД 1</h3>
                             <span class="button" data-lang="downloadBtn">Скачать</span>
                         </div>
                     </a>
                     <a href="https://disk.yandex.ru/d/J3f2JxRbzAIwxQ" target="_blank" class="project-card-link">
                         <div class="project-card tilt-card">
-                            <div class="image-wrapper">
-                                <img src="images/project-pnsd2.webp" alt="ПНСД 2" class="project-image" width="300" height="180" loading="lazy">
-                            </div>
+                            <div class="image-wrapper"><img src="images/project-pnsd2.webp" alt="ПНСД 2" class="project-image" width="300" height="180" loading="lazy"></div>
                             <h3>ПНСД 2</h3>
                             <span class="button" data-lang="downloadBtn">Скачать</span>
                         </div>
                     </a>
                     <a href="javascript:void(0)" class="project-card-link disabled">
                         <div class="project-card tilt-card">
-                            <div class="image-wrapper">
-                                <img src="images/project-pnsd3.webp" alt="ПНСД 3" class="project-image" width="300" height="180" loading="lazy">
-                            </div>
+                            <div class="image-wrapper"><img src="images/project-pnsd3.webp" alt="ПНСД 3" class="project-image" width="300" height="180" loading="lazy"></div>
                             <h3>ПНСД 3</h3>
                             <span class="button disabled" data-lang="comingSoon">Скоро</span>
                         </div>
@@ -149,11 +136,14 @@
             </section>
 
             <section class="card" id="news-section">
-                <div id="news-feed" class="video-grid">
-                    <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
-                        <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);"></i>
-                        <p style="margin-top: 10px;" data-lang="newsLoading">Загрузка новостей...</p>
+                <div class="news-header" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:15px;">
+                    <div>
+                        <h2 data-lang="newsTitle" style="margin:0;">📰 Последние новости</h2>
+                        <p class="text-secondary" data-lang="newsDesc" style="margin:4px 0 0;">Свежие видео и обновления</p>
                     </div>
+                </div>
+                <div id="news-feed" class="video-grid">
+                    <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">Загрузка новостей...</p></div>
                 </div>
             </section>
 
@@ -164,72 +154,55 @@
                     <div class="profile-cards">
                         <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
-                                <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.webp" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
-                                </div>
+                                <div class="avatar-wrapper"><img src="images/avatar-neon-shadow.webp" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'"></div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
                         </a>
                         <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
-                                <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
-                                </div>
+                                <div class="avatar-wrapper"><img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'"></div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
                         </a>
                     </div>
                 </section>
-
                 <section class="card half">
                     <h2 data-lang="youtubersTitle">Ютуберы</h2>
                     <p class="text-secondary" data-lang="youtubersDesc">Собираем комьюнити</p>
                     <div class="profile-cards">
                         <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
-                                <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.webp" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
-                                </div>
+                                <div class="avatar-wrapper"><img src="images/avatar-neon-shadow.webp" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'"></div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
                         </a>
                         <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
-                                <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
-                                </div>
+                                <div class="avatar-wrapper"><img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'"></div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
                         </a>
                         <a href="https://www.youtube.com/@werewolf-play" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
-                                <div class="avatar-wrapper">
-                                    <img src="images/avatar-werewolf.webp" alt="Оборотень" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
-                                </div>
+                                <div class="avatar-wrapper"><img src="images/avatar-werewolf.webp" alt="Оборотень" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'"></div>
                                 <span class="profile-name">Оборотень</span>
                             </div>
                         </a>
                         <a href="https://www.youtube.com/@mitmiplayyt" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
-                                <div class="avatar-wrapper">
-                                    <img src="images/avatar-mitmi.webp" alt="Mitmi" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
-                                </div>
+                                <div class="avatar-wrapper"><img src="images/avatar-mitmi.webp" alt="Mitmi" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'"></div>
                                 <span class="profile-name">Mitmi</span>
                             </div>
                         </a>
                         <a href="https://www.youtube.com/@stasyimpro6287" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
-                                <div class="avatar-wrapper">
-                                    <img src="images/avatar-stasy.webp" alt="Stasy" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
-                                </div>
+                                <div class="avatar-wrapper"><img src="images/avatar-stasy.webp" alt="Stasy" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'"></div>
                                 <span class="profile-name">Stasy</span>
                             </div>
                         </a>
                         <a href="https://www.youtube.com/@ggelita5951" target="_blank" class="profile-card-link">
                             <div class="profile-card tilt-card">
-                                <div class="avatar-wrapper">
-                                    <img src="images/avatar-ggelita.webp" alt="GGelita" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
-                                </div>
+                                <div class="avatar-wrapper"><img src="images/avatar-ggelita.webp" alt="GGelita" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'"></div>
                                 <span class="profile-name">GGelita</span>
                             </div>
                         </a>
@@ -241,78 +214,6 @@
                 <i class="fas fa-heart"></i>
                 <span data-lang="donateButton">Поддержать</span>
             </button>
-            <script>
-                (function() {
-                    function updateDonateButtonText() {
-                        const donateBtn = document.getElementById('donate-button');
-                        if (!donateBtn) return;
-                        const span = donateBtn.querySelector('span[data-lang="donateButton"]');
-                        if (!span) return;
-                        
-                        const lang = localStorage.getItem('preferredLanguage') || 'ru';
-                        if (window.translations && translations[lang] && translations[lang].donateButton) {
-                            span.textContent = translations[lang].donateButton;
-                        } else {
-                            span.textContent = (lang === 'en') ? 'Support' : 'Поддержать';
-                        }
-                    }
-
-                    function animateError() {
-                        const donateBtn = document.getElementById('donate-button');
-                        if (!donateBtn) return;
-                        donateBtn.classList.add('error-bounce');
-                        setTimeout(() => {
-                            donateBtn.classList.remove('error-bounce');
-                        }, 400);
-                    }
-
-                    function initDonateButton() {
-                        const donateBtn = document.getElementById('donate-button');
-                        if (!donateBtn) return;
-
-                        if (typeof Itch === 'undefined') {
-                            console.warn('Itch API not loaded');
-                            animateError();
-                            return;
-                        }
-
-                        try {
-                            Itch.attachBuyButton(donateBtn, {
-                                user: 'neon-imperium',
-                                game: 'starve-neon',
-                                width: 700,
-                                height: 500
-                            });
-                        } catch (e) {
-                            console.error('Failed to attach Itch button:', e);
-                            animateError();
-                        }
-
-                        updateDonateButtonText();
-                    }
-
-                    if (document.readyState === 'loading') {
-                        document.addEventListener('DOMContentLoaded', function() {
-                            setTimeout(initDonateButton, 100);
-                        });
-                    } else {
-                        setTimeout(initDonateButton, 100);
-                    }
-                    
-                    window.addEventListener('languageChanged', function() {
-                        updateDonateButtonText();
-                    });
-
-                    const originalSetLanguage = window.setLanguage;
-                    if (originalSetLanguage) {
-                        window.setLanguage = function(lang) {
-                            originalSetLanguage(lang);
-                            updateDonateButtonText();
-                            window.dispatchEvent(new Event('languageChanged'));
-                        };
-                    }
-                })();
-            </script>
         </main>
     </div>
 </body>

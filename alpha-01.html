@@ -3,36 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Imperium - Alpha 01</title>
-    <meta name="description" content="Alpha 01 - top-down шутер, где вы робот, помогающий солдатам. Скачать, трейлер, обновления.">
+    <title data-lang="navAlpha">Alpha 01 - Neon Imperium</title>
+    <meta name="description" content="Alpha 01 - top-down шутер, где вы робот, помогающий солдатам.">
     <meta property="og:title" content="Alpha 01 - Neon Imperium">
-    <meta property="og:description" content="Alpha 01 - top-down шутер, где вы робот, помогающий солдатам. Скачать, трейлер, обновления.">
+    <meta property="og:description" content="Alpha 01 - top-down шутер, где вы робот, помогающий солдатам.">
     <meta property="og:image" content="images/alpha-01-header.webp">
     <meta property="og:url" content="https://neonshadowyt.github.io/NeonImperium/alpha-01.html">
     <meta property="og:type" content="website">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
-    <!-- Preconnect -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preconnect" href="https://www.youtube.com">
-    <link rel="preconnect" href="https://i.ytimg.com">
-    <link rel="preconnect" href="https://img.youtube.com">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer onerror="this.onerror=null;this.src='https://unpkg.com/marked/marked.min.js';"></script>
     <script type="text/javascript" src="https://static.itch.io/api.js" defer></script>
-    <script src="js/core/github-core.js" defer></script>
-    <script src="js/features/ui-utils.js" defer></script>
-    <script src="js/core/github-api.js" defer></script>
-    <script src="js/core/github-auth.js" defer></script>
-    <script src="js/features/ui-feedback.js" defer></script>
+    <script src="js/core/config.js" defer></script>
+    <script src="js/core/utils.js" defer></script>
+    <script src="js/core/api.js" defer></script>
+    <script src="js/core/state.js" defer></script>
+    <script src="js/components/ui.js" defer></script>
+    <script src="js/features/auth.js" defer></script>
     <script src="js/features/editor.js" defer></script>
-    <script src="js/pages/feedback.js" defer></script>
-    <script src="js/pages/game-updates.js" defer></script>
+    <script src="js/features/donate.js" defer></script>
+    <script src="js/features/platform.js" defer></script>
+    <script src="js/features/effects.js" defer></script>
     <script src="js/lang.js" defer></script>
-    <script src="js/effects.js" defer></script>
+    <script src="js/app.js" defer></script>
 </head>
 <body>
     <div class="page">
@@ -76,7 +73,6 @@
                         <iframe src="https://www.youtube.com/embed/videoseries?list=PLjbbtkkybwieyQQZPizxutdLUOHErKLcu" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
                     </div>
                 </section>
-
                 <section class="card developer-card">
                     <h2 data-lang="developerTitle">Разработчик</h2>
                     <div class="developer-info">
@@ -94,9 +90,7 @@
             </div>
 
             <section class="card download-card">
-                <div class="download-header">
-                    <h2 data-lang="downloadTitle">Скачать</h2>
-                </div>
+                <h2 data-lang="downloadTitle">Скачать</h2>
                 <div class="download-buttons">
                     <a href="https://gamejolt.com/games/alpha_01/797509" target="_blank" class="download-button gamejolt">GameJolt</a>
                 </div>
@@ -113,7 +107,7 @@
                     <div class="feature-item tilt-card">
                         <span class="feature-icon">🤖</span>
                         <h3 data-lang="alphaStoryTitle">Сюжет</h3>
-                        <p data-lang="alphaStoryDesc">Alpha 01 это top-down шутер в котором вы: робот который должен помочь солдатам, но потом всё становится сложнее чем просто помощь...</p>
+                        <p data-lang="alphaStoryDesc">Alpha 01 - это topdown шутер, где вы - робот с кодовым названием Альфа 01...</p>
                     </div>
                     <div class="feature-item tilt-card">
                         <span class="feature-icon">⚙️</span>
@@ -127,12 +121,12 @@
                 <h2 data-lang="videoTitle">Видео</h2>
                 <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
                 <div class="video-grid">
-                    <iframe src="https://www.youtube.com/embed/videoseries?list=PLjbbtkkybwieyQQZPizxutdLUOHErKLcu" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
-                    <iframe src="https://www.youtube.com/embed/videoseries?list=PLVUhLOOZt89xqlkJxSOFrD7trOMC0x4Ma" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
-                    <iframe src="https://www.youtube.com/embed/7jsqU_VfGZ0" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
+                    <iframe src="https://www.youtube.com/embed/videoseries?list=PLjbbtkkybwieyQQZPizxutdLUOHErKLcu" frameborder="0" allowfullscreen loading="lazy"></iframe>
+                    <iframe src="https://www.youtube.com/embed/videoseries?list=PLVUhLOOZt89xqlkJxSOFrD7trOMC0x4Ma" frameborder="0" allowfullscreen loading="lazy"></iframe>
+                    <iframe src="https://www.youtube.com/embed/7jsqU_VfGZ0" frameborder="0" allowfullscreen loading="lazy"></iframe>
                 </div>
             </section>
-                
+
             <section class="card" id="feedback-section" data-game="alpha-01">
                 <div class="feedback-container">
                     <div class="loading-spinner">
@@ -153,78 +147,6 @@
                 <i class="fas fa-heart"></i>
                 <span data-lang="donateButton">Поддержать</span>
             </button>
-            <script>
-                (function() {
-                    function updateDonateButtonText() {
-                        const donateBtn = document.getElementById('donate-button');
-                        if (!donateBtn) return;
-                        const span = donateBtn.querySelector('span[data-lang="donateButton"]');
-                        if (!span) return;
-                        
-                        const lang = localStorage.getItem('preferredLanguage') || 'ru';
-                        if (window.translations && translations[lang] && translations[lang].donateButton) {
-                            span.textContent = translations[lang].donateButton;
-                        } else {
-                            span.textContent = (lang === 'en') ? 'Support' : 'Поддержать';
-                        }
-                    }
-
-                    function animateError() {
-                        const donateBtn = document.getElementById('donate-button');
-                        if (!donateBtn) return;
-                        donateBtn.classList.add('error-bounce');
-                        setTimeout(() => {
-                            donateBtn.classList.remove('error-bounce');
-                        }, 400);
-                    }
-
-                    function initDonateButton() {
-                        const donateBtn = document.getElementById('donate-button');
-                        if (!donateBtn) return;
-
-                        if (typeof Itch === 'undefined') {
-                            console.warn('Itch API not loaded');
-                            animateError();
-                            return;
-                        }
-
-                        try {
-                            Itch.attachBuyButton(donateBtn, {
-                                user: 'neon-imperium',
-                                game: 'starve-neon',
-                                width: 700,
-                                height: 500
-                            });
-                        } catch (e) {
-                            console.error('Failed to attach Itch button:', e);
-                            animateError();
-                        }
-
-                        updateDonateButtonText();
-                    }
-
-                    if (document.readyState === 'loading') {
-                        document.addEventListener('DOMContentLoaded', function() {
-                            setTimeout(initDonateButton, 100);
-                        });
-                    } else {
-                        setTimeout(initDonateButton, 100);
-                    }
-                    
-                    window.addEventListener('languageChanged', function() {
-                        updateDonateButtonText();
-                    });
-
-                    const originalSetLanguage = window.setLanguage;
-                    if (originalSetLanguage) {
-                        window.setLanguage = function(lang) {
-                            originalSetLanguage(lang);
-                            updateDonateButtonText();
-                            window.dispatchEvent(new Event('languageChanged'));
-                        };
-                    }
-                })();
-            </script>
         </main>
     </div>
 </body>
