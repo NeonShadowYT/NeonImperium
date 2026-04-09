@@ -1,15 +1,14 @@
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Imperium - ГК Адвенчур</title>
-    <meta name="description" content="ГК Адвенчур - приключение ГКТМО. Скачать игру, трейлер, обновления.">
+    <title>Neon Imperium — ГК Адвенчур</title>
+    <meta name="description" content="ГК Адвенчур — приключение ГКТМО. Скачать игру, трейлер, обновления.">
     <meta property="og:title" content="ГК Адвенчур — Neon Imperium">
     <meta property="og:description" content="ГК Адвенчур — приключение ГКТМО. Скачать игру, трейлер, обновления.">
     <meta property="og:image" content="images/gc-adven-header.webp">
-    <meta property="og:url" content="https://neonshadowyt.github.io/NeonImperium/gc-adven.html">
+    <meta property="og:url" content="https://example.com/gc-adven.html">
     <meta property="og:type" content="website">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
     <!-- Preconnect -->
@@ -22,7 +21,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer onerror="this.onerror=null;this.src='https://unpkg.com/marked/marked.min.js';"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script type="text/javascript" src="https://static.itch.io/api.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/features/ui-utils.js" defer></script>
@@ -35,7 +34,6 @@
     <script src="js/lang.js" defer></script>
     <script src="js/effects.js" defer></script>
 </head>
-
 <body>
     <div class="page">
         <nav class="nav-bar">
@@ -46,14 +44,8 @@
                 <a href="gc-adven.html" class="nav-link active" data-lang="navGc">ГК Адвенчур</a>
             </div>
             <div class="lang-switcher">
-                <div class="access-dropdown-container" style="position: relative;">
-                    <button class="lang-btn active" id="current-lang-btn" data-lang-code="ru">RU</button>
-                    <div class="preview-dropdown" id="lang-dropdown"
-                        style="display: none; position: absolute; top: 100%; right: 0; min-width: 80px;">
-                        <button data-lang-code="ru">RU</button>
-                        <button data-lang-code="en">EN</button>
-                    </div>
-                </div>
+                <button class="lang-btn active" data-lang-code="ru">RU</button>
+                <button class="lang-btn" data-lang-code="en">EN</button>
             </div>
         </nav>
 
@@ -61,8 +53,7 @@
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
-                        <img src="images/avatar-golden-creeper.webp" alt="ГК Адвенчур Icon" class="game-icon" width="80"
-                            height="80">
+                        <img src="images/avatar-golden-creeper.webp" alt="ГК Адвенчур Icon" class="game-icon" width="80" height="80">
                     </div>
                     <div class="header-text">
                         <h1 class="game-title">ГК Адвенчур</h1>
@@ -77,8 +68,7 @@
                 <section class="card trailer-card">
                     <h2 data-lang="trailerTitle">Трейлер</h2>
                     <div class="video-embed">
-                        <iframe src="https://www.youtube.com/embed/scqYneefAds" frameborder="0" allowfullscreen
-                            loading="lazy" title="YouTube video"></iframe>
+                        <iframe src="https://www.youtube.com/embed/scqYneefAds" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
                     </div>
                 </section>
 
@@ -86,14 +76,12 @@
                     <h2 data-lang="developerTitle">Разработчик</h2>
                     <div class="developer-info">
                         <div class="avatar-wrapper large">
-                            <img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="100"
-                                height="100" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                            <img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="100" height="100" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                         </div>
                         <div class="developer-details">
                             <h3>Golden Creeper</h3>
                             <div class="developer-actions">
-                                <a href="https://www.youtube.com/@Gc567" target="_blank" class="button small"><i
-                                        class="fab fa-youtube"></i> YouTube</a>
+                                <a href="https://www.youtube.com/@Gc567" target="_blank" class="button small"><i class="fab fa-youtube"></i> YouTube</a>
                             </div>
                         </div>
                     </div>
@@ -105,16 +93,12 @@
                     <h2 data-lang="downloadTitle">Скачать</h2>
                 </div>
                 <div class="download-buttons">
-                    <a href="https://gamejolt.com/games/Gc_advenchur/804610" target="_blank"
-                        class="download-button gamejolt">GameJolt</a>
+                    <a href="https://gamejolt.com/games/Gc_advenchur/804610" target="_blank" class="download-button gamejolt">GameJolt</a>
                 </div>
-                <p class="text-secondary small-note" data-lang="gcDownloadNote">Версия 0.1.0 · Обновление от 01.11.2023
-                </p>
+                <p class="text-secondary small-note" data-lang="gcDownloadNote">Версия 0.1.0 · Обновление от 01.11.2023</p>
                 <p style="font-size: 13px; color: var(--text-secondary); margin-top: 15px;">
                     <span data-lang="licenseAccept">Скачивая игру, вы принимаете</span>
-                    <a href="license.html"
-                        style="color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent);"
-                        data-lang="licenseLink">лицензионное соглашение</a>.
+                    <a href="license.html" style="color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent);" data-lang="licenseLink">лицензионное соглашение</a>.
                 </p>
             </section>
 
@@ -133,13 +117,11 @@
                 <h2 data-lang="videoTitle">Видео</h2>
                 <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
                 <div class="video-grid">
-                    <iframe src="https://www.youtube.com/embed/scqYneefAds" frameborder="0" allowfullscreen
-                        loading="lazy" title="YouTube video"></iframe>
-                    <iframe src="https://www.youtube.com/embed/koe3h-kXr3k" frameborder="0" allowfullscreen
-                        loading="lazy" title="YouTube video"></iframe>
+                    <iframe src="https://www.youtube.com/embed/scqYneefAds" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
+                    <iframe src="https://www.youtube.com/embed/koe3h-kXr3k" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
                 </div>
             </section>
-
+                
             <section class="card" id="feedback-section" data-game="gc-adven">
                 <div class="feedback-container">
                     <div class="loading-spinner">
@@ -150,8 +132,7 @@
             </section>
 
             <section class="card">
-                <div class="updates-header"
-                    style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <div class="updates-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                     <h2 data-lang="updatesTitle">Обновления</h2>
                 </div>
                 <div id="game-updates" data-game="gc-adven"></div>
@@ -162,13 +143,13 @@
                 <span data-lang="donateButton">Поддержать</span>
             </button>
             <script>
-                (function () {
+                (function() {
                     function updateDonateButtonText() {
                         const donateBtn = document.getElementById('donate-button');
                         if (!donateBtn) return;
                         const span = donateBtn.querySelector('span[data-lang="donateButton"]');
                         if (!span) return;
-
+                        
                         const lang = localStorage.getItem('preferredLanguage') || 'ru';
                         if (window.translations && translations[lang] && translations[lang].donateButton) {
                             span.textContent = translations[lang].donateButton;
@@ -212,20 +193,20 @@
                     }
 
                     if (document.readyState === 'loading') {
-                        document.addEventListener('DOMContentLoaded', function () {
+                        document.addEventListener('DOMContentLoaded', function() {
                             setTimeout(initDonateButton, 100);
                         });
                     } else {
                         setTimeout(initDonateButton, 100);
                     }
-
-                    window.addEventListener('languageChanged', function () {
+                    
+                    window.addEventListener('languageChanged', function() {
                         updateDonateButtonText();
                     });
 
                     const originalSetLanguage = window.setLanguage;
                     if (originalSetLanguage) {
-                        window.setLanguage = function (lang) {
+                        window.setLanguage = function(lang) {
                             originalSetLanguage(lang);
                             updateDonateButtonText();
                             window.dispatchEvent(new Event('languageChanged'));
@@ -236,5 +217,4 @@
         </main>
     </div>
 </body>
-
 </html>

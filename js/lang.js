@@ -1,13 +1,13 @@
 // ==================== СЛОВАРИ ====================
 const translations = {
     ru: {
-        // Navigation
+        // Навигация
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
         navGc: "ГК Адвенчур",
         
-        // Home
+        // Главная
         siteTitle: "Neon Imperium",
         mainProjectsTitle: "Главные проекты",
         mainProjectsDesc: "Игры с приоритетом разработки",
@@ -17,6 +17,8 @@ const translations = {
         detailsBtn: "Подробнее",
         smallProjectsTitle: "Небольшие проекты",
         smallProjectsDesc: "Игры созданные по рофлу",
+        pnsd1Desc: "Первая часть безумной серии.",
+        pnsd2Desc: "Продолжение, ещё безумнее.",
         comingSoon: "Скоро",
         developersTitle: "Разработчики",
         developersDesc: "Работаем в свободное время",
@@ -26,7 +28,7 @@ const translations = {
         newsDesc: "Свежие видео и обновления",
         newsLoading: "Загрузка новостей...",
         
-        // Common for game pages
+        // Общие для страниц игр
         trailerTitle: "Трейлер",
         developerTitle: "Разработчик",
         nextUpdateProgress: "Следующее обновление:",
@@ -50,7 +52,6 @@ const translations = {
         feedbackCategoryIdea: "💡 Идея",
         feedbackCategoryBug: "🐛 Баг",
         feedbackCategoryReview: "⭐ Отзыв",
-        feedbackCategorySupport: "🛟 Поддержка",
         feedbackSubmitBtn: "Отправить",
         feedbackComments: "Комментарии",
         feedbackAddComment: "Написать комментарий...",
@@ -62,7 +63,6 @@ const translations = {
         feedbackTabIdea: "💡 Идеи",
         feedbackTabBug: "🐛 Баги",
         feedbackTabReview: "⭐ Отзывы",
-        feedbackTabSupport: "🛟 Поддержка",
         feedbackLoadError: "Ошибка загрузки.",
         feedbackRetry: "Повторить",
         feedbackTokenNote: "Ваш токен останется только у вас в браузере.",
@@ -93,12 +93,8 @@ const translations = {
         githubNotFound: "Репозиторий не найден (404).",
         githubServerError: "Ошибка сервера GitHub",
         githubNetworkError: "Ошибка сети. Проверьте подключение.",
-        supportMenuItem: "Поддержка",
-        supportPrivateNote: "⚠️ Ваше сообщение будет приватным: его увидят только вы и администратор. Оно не отображается в публичных разделах сайта, но сохраняется в репозитории GitHub (видят админы).",
-        supportTitle: "Поддержка",
-        supportNewBtn: "Новое обращение",
 
-        // License accept
+        // Фраза про лицензию
         licenseAccept: "Скачивая игру, вы принимаете ",
         licenseLink: "лицензионное соглашение",
         
@@ -175,7 +171,7 @@ const translations = {
         spoilerGraphics: "Графика",
         graphicsContent: "Улучшение меню",
         
-        // GC Adven
+        // ГК Адвенчур
         gcVersion: "Обновление 0.1.0",
         gcDownloadNote: "Версия 0.1.0 · Обновление от 01.11.2023",
         gcAboutTitle: "Об игре",
@@ -191,73 +187,61 @@ const translations = {
         notFoundDesc: "Запрашиваемая страница не существует или была перемещена.",
         backHome: "Вернуться на главную",
         
-        // License Agreement
+        // Лицензионное соглашение
         licenseTitle: "Лицензионное соглашение",
-        licenseLastUpdate: "Последнее обновление: 9 апреля 2026 г.",
+        licenseLastUpdate: "Последнее обновление: 21 февраля 2026 г.",
         licenseAllowedTitle: "Разрешено",
-        licenseAllowed1: "Распространение игры где угодно при условии упоминания оригинального сайта и наличия ссылки на него в игре",
-        licenseAllowed2: "Модификация для локального использования или на собственных серверах",
-        licenseAllowed3: "Создание платных модов и получение дохода (без отчислений)",
-        licenseAllowed4: "Запись и публикация видеороликов с указанием авторства",
-        licenseAllowed5: "Бесплатные обновления",
+        licenseAllowed1: "Коммерческое использование с отчислением % авторам",
+        licenseAllowed2: "Распространение оригинальных версий",
+        licenseAllowed3: "Конфиденциальность: без сбора статистики без согласия",
+        licenseAllowed4: "Модификация в рамках правил игр",
+        licenseAllowed5: "Бесплатный доступ к любому платному контенту через активность",
+        licenseAllowed6: "Бесплатные обновления",
         licenseForbiddenTitle: "Запрещено",
         licenseForbidden1: "Выдавать имена, товарные знаки, логотипы за свои",
-        licenseForbidden2: "Читы/моды, дающие преимущество на официальных серверах",
-        licenseForbidden3: "Вредоносные модификации (вирусы, майнеры)",
-        licenseForbidden4: "Удаление уведомлений об авторских правах",
-        licenseForbidden5: "Использование названия «Neon Imperium», логотипов или товарных знаков в модах или изменённых версиях без явного указания, что это неофициальная версия и не одобрено разработчиком",
-        licenseObligationTitle: "Обязанности",
+        licenseForbidden2: "Создание/использование/распространение вредоносных/читерских модификаций",
+        licenseObligationTitle: "Обязанность",
         licenseObligation1: "Сохранять первоначальные авторские права",
-        licenseObligation2: "В изменённых версиях указывать неофициальный статус и ссылку на оригинальный сайт",
-        licenseObligation3: "Моды с открытым исходным кодом должны содержать ссылку на исходники",
-        licenseObligation4: "Указывать ссылки на оригинальные страницы и автора",
+        licenseObligation2: "Выплачивать авторам от 4.2% доходов и более",
+        licenseObligation3: "Моды должны иметь открытый исходный код и ссылку на него",
+        licenseObligation4: "Моды должны содержать доступ к лицензии оригинальных приложений",
+        licenseObligation5: "Указывать ссылки на оригинальные страницы и автора",
+        licenseObligation6: "Ты отдаёшь свою душу авторам приложений ;}",
         licenseBack: "← Вернуться к игре",
         allRightsReserved: "Все права защищены.",
         
-        // Detailed license sections
-        licenseSection1Title: "Общие положения",
-        licenseSection1Text: "Настоящее Соглашение заключено между вами (Пользователь) и правообладателем игр Neon Imperium. Оно регулирует использование игр Starve Neon, Alpha 01, ГК Адвенчур и всех связанных материалов.",
-        licenseSection1Text2: "Устанавливая или используя игру, вы полностью соглашаетесь с условиями. Если вы не согласны — удалите игру.",
-        licenseSection2Title: "Права на игру",
-        licenseSection2Text: "Все права (код, графика, звук, персонажи, названия) принадлежат правообладателю. Вы получаете простую (неисключительную) лицензию на:",
-        licenseSection2Li1: "установку на любые свои устройства;",
-        licenseSection2Li2: "личное некоммерческое воспроизведение;",
-        licenseSection2Li3: "запись видео и стримов с указанием авторства.",
-        licenseSection3Title: "Модификации и читы",
-        licenseSection3Text: "Разрешено: любые моды, альтернативные клиенты, патчи для локальной игры или на своих серверах. Можно продавать моды — все деньги оставляете себе. Запрещено: читы, моды или клиенты, дающие преимущество на официальных серверах (ускорение, бесконечное здоровье, автоприцел и т.п.). За нарушение — блокировка и возможный суд.",
-        licenseSection4Title: "Коммерческое использование",
-        licenseSection5Title: "Возраст и пользовательский контент",
-        licenseSection5Text: "Использование сайта и игр разрешено только с 18 лет. Вы несёте полную ответственность за всё, что публикуете через систему обратной связи (GitHub Issues). Мы не модерируем контент и не отвечаем за него.",
-        licenseSection6Title: "Сбор статистики и конфиденциальность",
-        licenseSection6Text: "Сейчас сбор статистики не ведётся. В будущем может появиться анонимный сбор технической информации (версия ОС, FPS, время игры) только с вашего явного согласия (диалоговое окно при первом запуске).",
-        licenseRefundTitle: "Возврат средств",
-        licenseRefundText1: "Если в будущем появятся платные покупки или платная версия игры, возврат возможен:",
-        licenseRefundText2: "Обратитесь в поддержку (кнопка в профиле) с подтверждением платежа (чек, скриншот).",
-        licenseRefundText3: "Мы проверим, что платёж действительно поступил.",
-        licenseRefundText4: "Вернём сумму, реально поступившую на счёт разработчика после вычета комиссий платежных систем. Точный процент зависит от сервиса и может меняться.",
-        licenseRefundText5: "Срок возврата — 14 дней с момента поступления денег, если иное не предусмотрено законом. По истечении этого срока возврат невозможен.",
-        licenseRefundText6: "Пожертвования (donate) возврату не подлежат.",
-        licenseSection8Title: "Ответственность и отказ от гарантий",
-        licenseSection8Text: "Игра предоставляется «как есть». Мы не гарантируем безошибочную работу, соответствие вашим ожиданиям или сохранность данных (делайте бэкапы). Мы не несём ответственности за любой ущерб от использования игры.",
-        licenseSection9Title: "Разрешение споров (арбитраж)",
-        licenseSection10Title: "Заключительные положения",
-        licenseSection10Text: "Мы можем менять условия, публикуя новую версию на этом сайте. Продолжение использования игры означает согласие с изменениями. Если какой-то пункт признают недействительным, остальные остаются в силе.",
-        licenseSection11Title: "Юмористическое примечание",
-        licenseSupportTitle: "📢 Связь с разработчиком и жалобы",
-        licenseSupportContact: "Все вопросы, предложения, жалобы на контент и запросы о возврате направляйте через систему поддержки (кнопка в профиле).",
-        licenseSupportNote: "Мы стараемся ответить в течение 14 дней, но точных сроков не гарантируем. Ваше обращение будет рассмотрено по возможности.",
-        licenseOriginalSite: "Оригинальный сайт: https://neonshadowyt.github.io/NeonImperium/",
-        licenseAgeWarningTitle: "Вам должно быть 18 лет",
-        licenseAgeWarningText: "Используя сайт или загружая игры Neon Imperium, вы подтверждаете, что вам исполнилось 18 лет. Игры содержат сцены насилия, кровь и нецензурную лексику.",
-        licenseOriginalNote: "Русская версия является оригинальной и имеет юридическую силу. Английский перевод предоставлен для удобства.",
-        licenseCommercialAllowed: "Разрешено продавать копии игры, включать в платные сборники, сдавать в аренду — коммерческое использование без отдельного разрешения. Вы можете зарабатывать на наших наработках, если они качественно изменены.",
-        licenseSellingFreeForbidden: "Продавать бесплатные копии игры или моды (если вы распространяете бесплатную версию — не берите за неё деньги).",
-        licenseStatsSettings: "В играх будут настройки сбора статистики, где вы сможете включить или отключить её в любой момент.",
-        licenseDisputeMars: "Все споры подлежат рассмотрению в суде по месту жительства ответчика. Если истец — пользователь, то суд по месту нахождения разработчика (Российская Федерация). Если разработчик подаёт в суд, то по месту жительства ответчика (нарушителя).",
-        licenseJokeSoul: "«Ты отдаёшь свою душу авторам ;}» — это шутка. Ваша душа остаётся при вас.",
-        licenseBrandUsage: "Запрещается использовать название «Neon Imperium», логотипы, иконки игр или товарные знаки в модах, изменённых версиях или любых производных работах таким образом, чтобы это могло ввести в заблуждение относительно официального происхождения или одобрения разработчиком. Вы должны явно указывать, что ваша модификация является неофициальной."
+        licenseSection1Title: "1. Общие положения",
+        licenseSection1Text: "Настоящее Лицензионное соглашение (далее — «Соглашение») заключается между вами (далее — «Пользователь») и разработчиками игр Neon Imperium (далее — «Правообладатель») и регулирует порядок использования игр: Starve Neon, Alpha 01, ГК Адвенчур, а также всех связанных с ними материалов, обновлений и дополнений.",
+        licenseSection1Text2: "Устанавливая, копируя или иным образом используя игру, Пользователь выражает своё полное согласие с условиями настоящего Соглашения. Если Пользователь не принимает условия Соглашения, он обязан незамедлительно удалить все копии игры и не использовать её.",
+        licenseSection2Title: "2. Права на игру",
+        licenseSection2Text: "Все исключительные права на игру, включая, но не ограничиваясь: исходный код, графические и звуковые материалы, сценарии, персонажей, названия, товарные знаки принадлежат Правообладателю. Игра предоставляется Пользователю на условиях простой (неисключительной) лицензии, то есть Пользователю разрешается:",
+        licenseSection2Li1: "устанавливать игру на неограниченное количество принадлежащих ему устройств;",
+        licenseSection2Li2: "воспроизводить игру в целях личного некоммерческого использования;",
+        licenseSection2Li3: "записывать и публиковать видеоролики и стримы с игровым процессом на любых платформах (YouTube, Twitch, VK Видео и др.) при условии указания авторства (ссылка на страницу игры).",
+        licenseSection3Title: "3. Ограничения",
+        licenseSection3Text: "Пользователю запрещается:",
+        licenseSection3Li1: "распространять игру (в том числе бесплатно) на сторонних сайтах, торрент-трекерах, в социальных сетях и иных ресурсах без письменного разрешения Правообладателя;",
+        licenseSection3Li2: "изменять, декомпилировать, дизассемблировать, обфусцировать или создавать производные произведения на основе игры;",
+        licenseSection3Li3: "использовать игру для любых коммерческих целей (в том числе продажа, сдача в аренду, прокат) без отдельного соглашения;",
+        licenseSection3Li4: "удалять или изменять любые уведомления об авторских правах или товарных знаках;",
+        licenseSection3Li5: "использовать игру способами, нарушающими законодательство Российской Федерации или международное право.",
+        licenseSection4Title: "4. Обновления и модификации",
+        licenseSection4Text: "Правообладатель имеет право выпускать обновления, патчи и дополнительные материалы для игры. Все такие обновления являются неотъемлемой частью игры и регулируются настоящим Соглашением. Правообладатель не гарантирует постоянную обратную совместимость старых версий игры.",
+        licenseSection4Text2: "Игра может поддерживать пользовательские модификации (моды), созданные сообществом. Правообладатель не несёт ответственности за моды, созданные третьими лицами, и оставляет за собой право ограничивать использование модов в многопользовательских режимах.",
+        licenseSection5Title: "5. Ответственность и гарантии",
+        licenseSection5Text: "Игра предоставляется «как есть» (as is). Правообладатель не предоставляет никаких гарантий относительно:",
+        licenseSection5Li1: "безошибочной и бесперебойной работы игры;",
+        licenseSection5Li2: "соответствия игры ожиданиям Пользователя;",
+        licenseSection5Li3: "отсутствия ошибок, багов или сбоев;",
+        licenseSection5Li4: "сохранности пользовательских данных (рекомендуется создавать резервные копии сохранений).",
+        licenseSection5Text2: "Правообладатель не несёт ответственности за любой прямой или косвенный ущерб, возникший в результате использования или невозможности использования игры, включая потерю данных, финансовые убытки или моральный вред.",
+        licenseSection6Title: "6. Сбор данных и конфиденциальность",
+        licenseSection6Text: "Игра может собирать анонимную статистику использования (например, версию игры, время в игре, настройки графики) для улучшения качества продукта. Эти данные не позволяют идентифицировать конкретного Пользователя. Игра не собирает персональные данные без вашего согласия. Файлы сохранений хранятся локально на устройстве Пользователя.",
+        licenseSection7Title: "7. Заключительные положения",
+        licenseSection7Text: "Настоящее Соглашение регулируется и толкуется в соответствии с законодательством Российской Федерации. Все споры, возникающие из настоящего Соглашения или в связи с ним, подлежат рассмотрению в суде по месту нахождения Правообладателя.",
+        licenseSection7Text2: "Если какое-либо положение Соглашения будет признано недействительным или не имеющим юридической силы, это не влияет на действительность остальных положений.",
+        licenseSection7Text3: "Правообладатель оставляет за собой право в одностороннем порядке изменять условия настоящего Соглашения. Новая версия Соглашения вступает в силу с момента её публикации на данном сайте. Продолжение использования игры после изменения условий означает согласие с новой редакцией."
     },
-    
     en: {
         // Navigation
         navHome: "Neon Imperium",
@@ -275,6 +259,8 @@ const translations = {
         detailsBtn: "Details",
         smallProjectsTitle: "Small Projects",
         smallProjectsDesc: "Games made for fun",
+        pnsd1Desc: "First part of the crazy series.",
+        pnsd2Desc: "Sequel, even crazier.",
         comingSoon: "Coming soon",
         developersTitle: "Developers",
         developersDesc: "Working in free time",
@@ -308,7 +294,6 @@ const translations = {
         feedbackCategoryIdea: "💡 Idea",
         feedbackCategoryBug: "🐛 Bug",
         feedbackCategoryReview: "⭐ Review",
-        feedbackCategorySupport: "🛟 Support",
         feedbackSubmitBtn: "Submit",
         feedbackComments: "Comments",
         feedbackAddComment: "Write a comment...",
@@ -320,7 +305,6 @@ const translations = {
         feedbackTabIdea: "💡 Ideas",
         feedbackTabBug: "🐛 Bugs",
         feedbackTabReview: "⭐ Reviews",
-        feedbackTabSupport: "🛟 Support",
         feedbackLoadError: "Loading error.",
         feedbackRetry: "Retry",
         feedbackTokenNote: "Your token stays only in your browser.",
@@ -341,7 +325,7 @@ const translations = {
         githubLogout: "Logout",
         githubLoginVia: "Sign in with GitHub",
         githubWhy: "Why is this needed?",
-        githubClearCache: "Clear cache",
+        githubClearCache: "Clear cache", 
         githubError: "Error",
         githubRetry: "Try again",
         githubRevoke: "Manage tokens",
@@ -351,10 +335,6 @@ const translations = {
         githubNotFound: "Repository not found (404).",
         githubServerError: "GitHub server error",
         githubNetworkError: "Network error. Check your connection.",
-        supportMenuItem: "Support",
-        supportPrivateNote: "⚠️ Your message will be private: only you and the admin can see it. It is not displayed in public sections of the site, but is stored in the GitHub repository (visible to admins).",
-        supportTitle: "Support",
-        supportNewBtn: "New ticket",
 
         licenseAccept: "By downloading the game, you accept the ",
         licenseLink: "license agreement",
@@ -450,73 +430,63 @@ const translations = {
         
         // License Agreement
         licenseTitle: "License Agreement",
-        licenseLastUpdate: "Last updated: April 9, 2026",
+        licenseLastUpdate: "Last updated: February 21, 2026",
         licenseAllowedTitle: "Allowed",
-        licenseAllowed1: "Distribution anywhere provided the original website is mentioned and a link is present in the game",
-        licenseAllowed2: "Modification for local use or on own servers",
-        licenseAllowed3: "Creating paid mods and keeping 100% of revenue",
-        licenseAllowed4: "Recording and publishing gameplay videos with credit",
-        licenseAllowed5: "Free updates",
+        licenseAllowed1: "Commercial use with % share to authors",
+        licenseAllowed2: "Distribution of original versions",
+        licenseAllowed3: "Privacy: no data collection without consent",
+        licenseAllowed4: "Modification within game rules",
+        licenseAllowed5: "Free access to any paid content through activity",
+        licenseAllowed6: "Free updates",
         licenseForbiddenTitle: "Forbidden",
-        licenseForbidden1: "Claiming game assets, names, logos as your own",
-        licenseForbidden2: "Cheats/mods that give advantage on official servers",
-        licenseForbidden3: "Malicious modifications (viruses, miners)",
-        licenseForbidden4: "Removing copyright notices",
-        licenseForbidden5: "Using the name 'Neon Imperium', logos, or trademarks in mods or modified versions without explicitly stating that it is unofficial and not endorsed by the developer",
+        licenseForbidden1: "Claim names, trademarks, logos as your own",
+        licenseForbidden2: "Creation/use/distribution of malicious/cheating modifications",
         licenseObligationTitle: "Obligations",
         licenseObligation1: "Retain original copyright notices",
-        licenseObligation2: "Mark unofficial versions and include a link to the original site",
-        licenseObligation3: "Open-source mods must provide source link",
-        licenseObligation4: "Provide links to original game pages and authors",
+        licenseObligation2: "Pay authors from 4.2% of revenue or more",
+        licenseObligation3: "Mods must have open source code and a link to it",
+        licenseObligation4: "Mods must provide access to the original license",
+        licenseObligation5: "Provide links to original game pages and authors",
+        licenseObligation6: "You give your soul to the game authors ;}",
         licenseBack: "← Back to game",
         allRightsReserved: "All rights reserved.",
         
         // Detailed license sections
-        licenseSection1Title: "General Provisions",
-        licenseSection1Text: "This Agreement is concluded between you (User) and the copyright holder of Neon Imperium games. It governs the use of Starve Neon, Alpha 01, GC Adven and all related materials.",
-        licenseSection1Text2: "By installing or using the game, you fully agree to the terms. If you do not agree, delete the game.",
-        licenseSection2Title: "Rights to the Game",
-        licenseSection2Text: "All rights (code, graphics, sound, characters, names) belong to the copyright holder. You receive a simple (non-exclusive) license to:",
-        licenseSection2Li1: "install on any of your devices;",
-        licenseSection2Li2: "personal non-commercial reproduction;",
-        licenseSection2Li3: "record videos and streams with attribution.",
-        licenseSection3Title: "Modifications and Cheats",
-        licenseSection3Text: "Allowed: any mods, alternative clients, patches for local play or on your own servers. You may sell mods — keep all revenue. Prohibited: cheats, mods or clients that give an advantage on official servers (speed, infinite health, aimbot, etc.). Violation may result in ban and legal action.",
-        licenseSection4Title: "Commercial Use",
-        licenseSection5Title: "Age and User Content",
-        licenseSection5Text: "Use of the site and games is only allowed from age 18. You are solely responsible for everything you post via the feedback system (GitHub Issues). We do not moderate content and are not responsible for it.",
-        licenseSection6Title: "Data Collection and Privacy",
-        licenseSection6Text: "Currently no statistics collection. In the future, anonymous technical information (OS version, FPS, playtime) may be collected only with your explicit consent (dialog on first launch).",
-        licenseRefundTitle: "Refunds",
-        licenseRefundText1: "If paid purchases or a paid version of the game appear in the future, refunds are possible:",
-        licenseRefundText2: "Contact support (button in profile) with payment proof (receipt, screenshot).",
-        licenseRefundText3: "We will verify that the payment was actually received.",
-        licenseRefundText4: "We will refund the amount actually received by the developer after deducting payment system fees. The exact percentage depends on the service and may change.",
-        licenseRefundText5: "Refund period — 14 days from the date the money is received, unless otherwise provided by law. After this period, refund is impossible.",
-        licenseRefundText6: "Donations are non-refundable.",
-        licenseSection8Title: "Disclaimer of Warranties",
-        licenseSection8Text: "The game is provided 'as is'. We do not guarantee error-free operation, meeting your expectations, or data safety (back up your saves). We are not liable for any damages from using the game.",
-        licenseSection9Title: "Dispute Resolution (Arbitration)",
-        licenseSection10Title: "Final Provisions",
-        licenseSection10Text: "We may change the terms by posting a new version on this site. Continued use of the game means acceptance of changes. If any provision is held invalid, the remainder remains in force.",
-        licenseSection11Title: "Humorous Note",
-        licenseSupportTitle: "📢 Contact Developer and Complaints",
-        licenseSupportContact: "All questions, suggestions, content complaints, and refund requests should be sent via the support system (button in profile).",
-        licenseSupportNote: "We try to respond within 14 days, but no exact deadlines are guaranteed. Your message will be reviewed if possible.",
-        licenseOriginalSite: "Original website: https://neonshadowyt.github.io/NeonImperium/",
-        licenseAgeWarningTitle: "⚠️ You must be 18 years old",
-        licenseAgeWarningText: "By using the site or downloading Neon Imperium games, you confirm that you are at least 18 years old. Games contain violence, blood, and profanity.",
-        licenseOriginalNote: "The Russian version is the original and legally binding. English translation is provided for convenience.",
-        licenseCommercialAllowed: "Allowed to sell copies of the game, include in paid compilations, rent out — commercial use without separate permission. You can earn money on our work if it is qualitatively modified.",
-        licenseSellingFreeForbidden: "Selling free copies of the game or mods (if you distribute a free version — don't charge for it).",
-        licenseStatsSettings: "Games will have statistics collection settings where you can enable or disable it at any time.",
-        licenseDisputeMars: "All disputes shall be considered in the court at the respondent's place of residence. If the claimant is a user, the court is at the developer's location (Russian Federation). If the developer sues, the court is at the respondent's (violator's) place of residence.",
-        licenseJokeSoul: "«You give your soul to the authors ;}» — this is a joke. Your soul remains with you.",
-        licenseBrandUsage: "It is forbidden to use the name 'Neon Imperium', logos, game icons, or trademarks in mods, modified versions, or any derivative works in a way that could mislead about official origin or endorsement by the developer. You must explicitly state that your modification is unofficial."
+        licenseSection1Title: "1. General Provisions",
+        licenseSection1Text: "This License Agreement (hereinafter — the \"Agreement\") is concluded between you (hereinafter — the \"User\") and the developers of Neon Imperium games (hereinafter — the \"Copyright Holder\") and governs the use of the games: Starve Neon, Alpha 01, GC Adven, as well as all related materials, updates and add-ons.",
+        licenseSection1Text2: "By installing, copying or otherwise using the game, the User expresses their full consent to the terms of this Agreement. If the User does not accept the terms of the Agreement, they must immediately delete all copies of the game and not use it.",
+        licenseSection2Title: "2. Rights to the Game",
+        licenseSection2Text: "All exclusive rights to the game, including but not limited to: source code, graphic and sound materials, scripts, characters, names, trademarks belong to the Copyright Holder. The game is granted to the User under a simple (non-exclusive) license, i.e. the User is permitted to:",
+        licenseSection2Li1: "install the game on an unlimited number of devices owned by them;",
+        licenseSection2Li2: "reproduce the game for personal non-commercial use;",
+        licenseSection2Li3: "record and publish videos and streams of gameplay on any platforms (YouTube, Twitch, VK Video, etc.) provided that authorship is indicated (link to the game page).",
+        licenseSection3Title: "3. Restrictions",
+        licenseSection3Text: "The User is prohibited from:",
+        licenseSection3Li1: "distributing the game (including for free) on third-party sites, torrent trackers, social networks and other resources without the written permission of the Copyright Holder;",
+        licenseSection3Li2: "modifying, decompiling, disassembling, obfuscating or creating derivative works based on the game;",
+        licenseSection3Li3: "using the game for any commercial purposes (including sale, rental, lease) without a separate agreement;",
+        licenseSection3Li4: "removing or altering any copyright notices or trademarks;",
+        licenseSection3Li5: "using the game in ways that violate the laws of the Russian Federation or international law.",
+        licenseSection4Title: "4. Updates and Modifications",
+        licenseSection4Text: "The Copyright Holder has the right to release updates, patches and additional materials for the game. All such updates are an integral part of the game and are governed by this Agreement. The Copyright Holder does not guarantee continuous backward compatibility of old versions of the game.",
+        licenseSection4Text2: "The game may support user modifications (mods) created by the community. The Copyright Holder is not responsible for mods created by third parties and reserves the right to restrict the use of mods in multiplayer modes.",
+        licenseSection5Title: "5. Liability and Warranties",
+        licenseSection5Text: "The game is provided \"as is\". The Copyright Holder makes no warranties regarding:",
+        licenseSection5Li1: "error-free and uninterrupted operation of the game;",
+        licenseSection5Li2: "the game meeting the User's expectations;",
+        licenseSection5Li3: "absence of errors, bugs or failures;",
+        licenseSection5Li4: "safety of user data (it is recommended to back up saves).",
+        licenseSection5Text2: "The Copyright Holder shall not be liable for any direct or indirect damages arising from the use or inability to use the game, including loss of data, financial losses or moral harm.",
+        licenseSection6Title: "6. Data Collection and Privacy",
+        licenseSection6Text: "The game may collect anonymous usage statistics (e.g., game version, time played, graphics settings) to improve the product. This data does not allow identification of a specific User. The game does not collect personal data without your consent. Save files are stored locally on the User's device.",
+        licenseSection7Title: "7. Final Provisions",
+        licenseSection7Text: "This Agreement is governed and interpreted in accordance with the laws of the Russian Federation. All disputes arising out of or in connection with this Agreement shall be subject to consideration in court at the location of the Copyright Holder.",
+        licenseSection7Text2: "If any provision of the Agreement is found to be invalid or unenforceable, this does not affect the validity of the remaining provisions.",
+        licenseSection7Text3: "The Copyright Holder reserves the right to unilaterally change the terms of this Agreement. The new version of the Agreement comes into force from the moment it is published on this site. Continued use of the game after the terms have been changed implies acceptance of the new version."
     }
 };
 
-// ==================== FUNCTIONS ====================
+// ==================== ФУНКЦИИ ПЕРЕКЛЮЧЕНИЯ ЯЗЫКА ====================
 function setLanguage(lang) {
     document.querySelectorAll('[data-lang]').forEach(element => {
         const key = element.getAttribute('data-lang');
@@ -531,12 +501,8 @@ function setLanguage(lang) {
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.langCode === lang);
     });
-    const mainLangBtn = document.getElementById('current-lang-btn');
-    if (mainLangBtn) {
-        mainLangBtn.textContent = lang.toUpperCase();
-        mainLangBtn.dataset.langCode = lang;
-    }
     localStorage.setItem('preferredLanguage', lang);
+    
     window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: lang } }));
 }
 
@@ -550,25 +516,3 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
-
-const langBtn = document.getElementById('current-lang-btn');
-const langDropdown = document.getElementById('lang-dropdown');
-if (langBtn && langDropdown) {
-    langBtn.addEventListener('click', () => {
-        langDropdown.style.display = langDropdown.style.display === 'block' ? 'none' : 'block';
-    });
-    document.querySelectorAll('#lang-dropdown button').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const lang = btn.dataset.langCode;
-            setLanguage(lang);
-            langBtn.textContent = lang.toUpperCase();
-            langBtn.dataset.langCode = lang;
-            langDropdown.style.display = 'none';
-        });
-    });
-    document.addEventListener('click', (e) => {
-        if (!langBtn.contains(e.target) && !langDropdown.contains(e.target)) {
-            langDropdown.style.display = 'none';
-        }
-    });
-}

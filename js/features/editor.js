@@ -144,6 +144,14 @@
         insertAtCursor(textarea, selected ? `<span style="${styleProp}: ${color};">${selected}</span>` : `<span style="${styleProp}: ${color};">текст</span>`);
     }
 
+    function debounce(fn, delay) {
+        let timer;
+        return function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
     function createImageServicesMenu() {
         const services = [
             { name: 'Catbox', url: 'https://catbox.moe/', description: 'До 200 МБ, анонимно, лучший выбор' },
@@ -242,6 +250,64 @@
                 group.appendChild(btn);
             });
             toolbar.appendChild(group);
+        }
+        if (options.preview !== false) {
+            const previewWrapper = document.createElement('div');
+            previewWrapper.className = 'preview-split';
+            previewWrapper.style.marginLeft = 'auto';
+            const previewBtn = document.createElement('button');
+            previewBtn.type = 'button';
+            previewBtn.className = 'editor-btn preview-btn';
+            previewBtn.textContent = 'Предпросмотр';
+            const dropdownBtn = document.createElement('button');
+            dropdownBtn.type = 'button';
+            dropdownBtn.className = 'editor-btn dropdown-toggle';
+            dropdownBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+            const dropdownMenu = document.createElement('div');
+            dropdownMenu.className = 'preview-dropdown';
+            dropdownMenu.innerHTML = '<button data-mode="preview" class="active">Предпросмотр</button><button data-mode="live">Живой предпросмотр</button>';
+            previewWrapper.appendChild(previewBtn);
+            previewWrapper.appendChild(dropdownBtn);
+            previewWrapper.appendChild(dropdownMenu);
+            let liveMode = false, inputHandler = null;
+            const showPreview = () => { if (options.onPreview) options.onPreview(); };
+            previewBtn.addEventListener('click', showPreview);
+            dropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdownMenu.classList.toggle('show');
+            });
+            dropdownMenu.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const mode = btn.dataset.mode;
+                    dropdownMenu.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    if (mode === 'live') {
+                        previewBtn.textContent = 'Живой предпросмотр';
+                        if (!liveMode) {
+                            liveMode = true;
+                            if (inputHandler) textarea.removeEventListener('input', inputHandler);
+                            inputHandler = debounce(showPreview, 300);
+                            textarea.addEventListener('input', inputHandler);
+                            if (textarea.value.trim()) showPreview();
+                        }
+                    } else {
+                        previewBtn.textContent = 'Предпросмотр';
+                        if (liveMode) {
+                            liveMode = false;
+                            if (inputHandler) {
+                                textarea.removeEventListener('input', inputHandler);
+                                inputHandler = null;
+                            }
+                        }
+                    }
+                    dropdownMenu.classList.remove('show');
+                });
+            });
+            document.addEventListener('click', (e) => {
+                if (!previewWrapper.contains(e.target)) dropdownMenu.classList.remove('show');
+            });
+            toolbar.appendChild(previewWrapper);
         }
         return toolbar;
     }

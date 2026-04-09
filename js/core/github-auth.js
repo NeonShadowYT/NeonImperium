@@ -252,7 +252,7 @@
 
             setTimeout(() => {
                 modal.classList.add('active');
-                if (tokenInput) tokenInput.focus();
+                tokenInput.focus();
             }, 100);
         }
     }
@@ -274,10 +274,6 @@
                 </div>
                 <div class="profile-dropdown-item" data-action="revoke-token">
                     <i class="fas fa-external-link-alt"></i> <span data-lang="githubRevoke">Управление токенами</span>
-                </div>
-                <div class="profile-dropdown-divider"></div>
-                <div class="profile-dropdown-item" data-action="support">
-                    <i class="fas fa-headset"></i> <span data-lang="supportMenuItem">Поддержка</span>
                 </div>
                 <div class="profile-dropdown-divider"></div>
                 <div class="profile-dropdown-item" data-action="clear-cache">
@@ -339,27 +335,20 @@
         switch(action) {
             case 'login':
                 modal.classList.add('active');
-                if (tokenInput) tokenInput.focus();
+                tokenInput.focus();
                 break;
             case 'about':
-                if (UIUtils) UIUtils.showToast('Вход через GitHub позволяет оставлять идеи, голосовать и участвовать.', 'info');
+                UIUtils.showToast('Вход через GitHub позволяет оставлять идеи, голосовать и участвовать.', 'info');
                 break;
             case 'profile':
                 if (userLogin) window.open(`https://github.com/${userLogin}`, '_blank');
                 break;
             case 'token-info':
-                if (token && UIUtils) UIUtils.showToast(`Вы вошли как ${userLogin}. Токен сохранён в браузере.`, 'success');
+                if (token) UIUtils.showToast(`Вы вошли как ${userLogin}. Токен сохранён в браузере.`, 'success');
                 break;
             case 'revoke-token':
                 window.open('https://github.com/settings/tokens', '_blank');
-                if (UIUtils) UIUtils.showToast('Перейдите в раздел токенов, чтобы удалить ненужные', 'info');
-                break;
-            case 'support':
-                if (window.UIFeedback && window.UIFeedback.openSupportModal) {
-                    window.UIFeedback.openSupportModal();
-                } else if (UIUtils) {
-                    UIUtils.showToast('Система поддержки временно недоступна', 'error');
-                }
+                UIUtils.showToast('Перейдите в раздел токенов, чтобы удалить ненужные', 'info');
                 break;
             case 'clear-cache':
                 handleClearCache();
@@ -371,7 +360,7 @@
                 delete profileContainer.dataset.githubToken;
                 delete profileContainer.dataset.githubLogin;
                 showNotLoggedIn();
-                if (UIUtils) UIUtils.showToast('Вы вышли из аккаунта.', 'info');
+                UIUtils.showToast('Вы вышли из аккаунта.', 'info');
                 location.reload();
                 break;
         }
@@ -381,12 +370,12 @@
         const lastClear = localStorage.getItem(LAST_CLEAR_KEY);
         if (lastClear && Date.now() - parseInt(lastClear) < CLEAR_COOLDOWN) {
             const remaining = Math.ceil((CLEAR_COOLDOWN - (Date.now() - parseInt(lastClear))) / 1000);
-            if (UIUtils) UIUtils.showToast(`Очистка кеша доступна раз в 10 секунд. Подождите ${remaining} секунд.`, 'warning');
+            UIUtils.showToast(`Очистка кеша доступна раз в 10 секунд. Подождите ${remaining} секунд.`, 'warning');
             return;
         }
         sessionStorage.clear();
         localStorage.setItem(LAST_CLEAR_KEY, Date.now().toString());
-        if (UIUtils) UIUtils.showToast('Кеш очищен, страница будет перезагружена.', 'info');
+        UIUtils.showToast('Кеш очищен, страница будет перезагружена.', 'info');
         setTimeout(() => location.reload(), 1000);
     }
 

@@ -1,4 +1,4 @@
-// platform.js – автоматическое скрытие кнопок под платформу + интеграция с GitHub Releases + версия Starve Neon
+// platform.js – автоматическое скрытие кнопок под платформу + интеграция с GitHub Releases
 
 document.addEventListener('DOMContentLoaded', function() {
     const os = getOS();
@@ -8,21 +8,26 @@ document.addEventListener('DOMContentLoaded', function() {
     // Скрываем обычные кнопки, не соответствующие текущей ОС
     platformButtons.forEach(btn => {
         const btnPlatform = btn.dataset.platform;
+        // Приводим к нижнему регистру для сравнения
         const currentOs = os.toLowerCase();
         const btnOs = btnPlatform ? btnPlatform.toLowerCase() : '';
         if (currentOs === btnOs) {
-            btn.style.display = '';
+            btn.style.display = ''; // показать
         } else {
-            btn.style.display = 'none';
+            btn.style.display = 'none'; // скрыть
         }
     });
 
-    // Если есть GitHub-кнопки, подставляем ссылки из последнего релиза и обновляем версию Starve Neon
-    if (githubButtons.length > 0 || document.querySelector('.game-title')?.textContent === 'Starve Neon') {
+    // Если есть GitHub-кнопки, подставляем ссылки из последнего релиза
+    if (githubButtons.length > 0) {
         initGitHubDownloads(os, githubButtons);
     }
 });
 
+/**
+ * Определяет операционную систему по user-agent.
+ * @returns {string} 'Windows', 'Android', 'Mac', 'Linux', 'iOS' или 'Unknown'
+ */
 function getOS() {
     const ua = navigator.userAgent;
     if (/android/i.test(ua)) return 'Android';
@@ -33,6 +38,9 @@ function getOS() {
     return 'Unknown';
 }
 
+/**
+ * Получает последний релиз из репозитория NeonImperium.
+ */
 async function getLatestRelease(owner, repo) {
     const url = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
     try {
@@ -45,33 +53,47 @@ async function getLatestRelease(owner, repo) {
     }
 }
 
+/**
+ * Ищет asset, подходящий для указанной платформы.
+ * Приоритет: для Windows и Android ищем по расширениям файлов.
+ * Для остальных платформ (Mac, Linux, iOS) используем поиск по подстроке в имени.
+ */
 function findAssetByPlatform(assets, platform) {
     const platformLower = platform.toLowerCase();
+    
+    // Словарь допустимых расширений для каждой платформы
     const extensions = {
-        windows: ['.exe', '.zip', '.7z'],
-        android: ['.apk'],
-        mac: ['.dmg', '.app', '.zip'],
-        linux: ['.appimage', '.x86_64', '.tar.gz', '.zip']
+        windows: ['.exe', '.zip', '.7z'],        // исполняемые файлы и архивы
+        android: ['.apk'],                        // только APK
+        mac: ['.dmg', '.app', '.zip'],            // образы DMG, папки .app (в архиве), ZIP
+        linux: ['.appimage', '.x86_64', '.tar.gz', '.zip'] //常見 форматы для Linux
     };
+
     const allowedExts = extensions[platformLower];
+    
     if (allowedExts && allowedExts.length > 0) {
-        return assets.find(asset => allowedExts.some(ext => asset.name.toLowerCase().endsWith(ext)));
+        // Ищем файл, имя которого заканчивается на одно из допустимых расширений
+        return assets.find(asset => {
+            const name = asset.name.toLowerCase();
+            return allowedExts.some(ext => name.endsWith(ext));
+        });
     } else {
+        // Для платформ без явных расширений (например, iOS) ищем по подстроке
         return assets.find(asset => asset.name.toLowerCase().includes(platformLower));
     }
 }
 
+/**
+ * Инициализация кнопок GitHub: подстановка ссылок на скачивание.
+ */
 async function initGitHubDownloads(os, buttons) {
-    // Проверяем наличие GithubCore
-    if (!window.GithubCore || !window.GithubCore.CONFIG) {
-        console.warn('GithubCore not available yet, retrying in 500ms');
-        setTimeout(() => initGitHubDownloads(os, buttons), 500);
-        return;
-    }
-    const REPO_OWNER = window.GithubCore.CONFIG.REPO_OWNER || 'NeonShadowYT';
-    const REPO_NAME = window.GithubCore.CONFIG.REPO_NAME || 'NeonImperium';
+    // Используем глобальный объект GithubCore, если он доступен
+    const REPO_OWNER = window.GithubCore?.CONFIG?.REPO_OWNER || 'NeonShadowYT';
+    const REPO_NAME = window.GithubCore?.CONFIG?.REPO_NAME || 'NeonImperium';
+
     const release = await getLatestRelease(REPO_OWNER, REPO_NAME);
     if (!release) {
+        // Если релиз не найден, деактивируем все кнопки
         buttons.forEach(btn => {
             btn.removeAttribute('href');
             btn.classList.add('disabled');
@@ -80,17 +102,16 @@ async function initGitHubDownloads(os, buttons) {
         return;
     }
 
-    // Обновляем версию и дату для Starve Neon
-    updateStarveNeonVersion(release);
-
     buttons.forEach(btn => {
         const platform = btn.dataset.platform;
         if (!platform) return;
+
+        // Показываем только кнопки для текущей ОС
         if (platform.toLowerCase() === os.toLowerCase()) {
             const asset = findAssetByPlatform(release.assets, platform);
             if (asset) {
                 btn.href = asset.browser_download_url;
-                btn.target = '_blank';
+                btn.target = '_blank'; // можно убрать, если хотим сразу скачивать
                 btn.classList.remove('disabled');
             } else {
                 btn.classList.add('disabled');
@@ -100,26 +121,4 @@ async function initGitHubDownloads(os, buttons) {
             btn.style.display = 'none';
         }
     });
-}
-
-function updateStarveNeonVersion(release) {
-    const versionBadge = document.querySelector('.version-badge[data-lang="starveVersion"]');
-    const downloadNote = document.querySelector('.small-note[data-lang="starveDownloadNote"]');
-    if (!versionBadge && !downloadNote) return;
-
-    const tag = release.tag_name;
-    const published = new Date(release.published_at);
-    const formattedDate = published.toLocaleDateString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\./g, '.');
-
-    if (versionBadge) {
-        versionBadge.textContent = tag;
-    }
-    if (downloadNote) {
-        downloadNote.textContent = `Версия ${tag} · Обновление от ${formattedDate}`;
-        // Также обновляем английскую версию, если переключится язык
-        const enNote = document.querySelector('.small-note[data-lang="starveDownloadNote"][lang="en"]');
-        if (enNote) {
-            enNote.textContent = `Version ${tag} · Update ${published.toISOString().slice(0,10)}`;
-        }
-    }
 }
