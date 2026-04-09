@@ -31,7 +31,6 @@
                 filterAndDisplay(true);
             }
         });
-        window.addEventListener('comment-updated', () => {});
 
         checkAuthAndRender();
     }
@@ -147,25 +146,27 @@
         const user = getCurrentUser();
         const { modal, closeModal } = createModal(post.title, '<div class="loading-spinner"><i class="fas fa-spinner fa-pulse"></i> Загрузка...</div>', { size: 'full' });
         const bodyContainer = modal.querySelector('.modal-body');
+        const modalHeader = modal.querySelector('.modal-header');
         try {
             const issue = await loadIssue(post.number);
             if (issue.state === 'closed') {
                 bodyContainer.innerHTML = '<p class="error-message">Пост закрыт.</p>';
                 return;
             }
-            bodyContainer.innerHTML = '';
-            const header = document.createElement('div');
-            header.className = 'modal-post-header';
-            header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:16px;';
-            header.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)} · ${new Date(issue.created_at).toLocaleString()}</span>`;
+
+            // Добавляем кнопки действий слева от крестика
             if (isAdmin() || (user && issue.user.login === user)) {
-                const actions = document.createElement('div');
-                actions.innerHTML = `
+                const actionsContainer = document.createElement('div');
+                actionsContainer.className = 'modal-header-actions';
+                actionsContainer.innerHTML = `
                     <button class="action-btn edit-post" title="Редактировать"><i class="fas fa-edit"></i></button>
                     <button class="action-btn close-post" title="Закрыть"><i class="fas fa-trash-alt"></i></button>
                     <button class="action-btn share-post" title="Поделиться"><i class="fas fa-share-alt"></i></button>
                 `;
-                actions.querySelector('.edit-post').addEventListener('click', () => {
+                const closeBtn = modalHeader.querySelector('.modal-close');
+                modalHeader.insertBefore(actionsContainer, closeBtn);
+
+                actionsContainer.querySelector('.edit-post').addEventListener('click', () => {
                     closeModal();
                     openEditorModal('edit', {
                         number: issue.number,
@@ -173,9 +174,9 @@
                         body: issue.body,
                         game: currentGame,
                         labels: issue.labels.map(l => l.name)
-                    }, 'feedback');
+                    }, post.labels.includes('type:news') ? 'news' : post.labels.includes('type:update') ? 'update' : 'feedback');
                 });
-                actions.querySelector('.close-post').addEventListener('click', async () => {
+                actionsContainer.querySelector('.close-post').addEventListener('click', async () => {
                     if (confirm('Закрыть пост?')) {
                         await closeIssue(issue.number);
                         closeModal();
@@ -184,12 +185,17 @@
                         renderInterface();
                     }
                 });
-                actions.querySelector('.share-post').addEventListener('click', () => {
+                actionsContainer.querySelector('.share-post').addEventListener('click', () => {
                     const url = `${location.origin}${location.pathname}?post=${issue.number}`;
                     navigator.clipboard?.writeText(url).then(() => showToast('Ссылка скопирована', 'success')).catch(() => showToast('Не удалось скопировать', 'error'));
                 });
-                header.appendChild(actions);
             }
+
+            bodyContainer.innerHTML = '';
+            const header = document.createElement('div');
+            header.className = 'modal-post-header';
+            header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:16px;';
+            header.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)} · ${new Date(issue.created_at).toLocaleString()}</span>`;
             bodyContainer.appendChild(header);
 
             const content = document.createElement('div');
