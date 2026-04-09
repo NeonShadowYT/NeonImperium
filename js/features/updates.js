@@ -1,6 +1,6 @@
 // js/features/updates.js
 (function() {
-    const { cacheGet, cacheSet, showToast, deduplicateByNumber, extractProgress } = NeonUtils;
+    const { cacheGet, cacheSet, showToast, deduplicateByNumber } = NeonUtils;
     const { createCard } = UIComponents;
     const { getCurrentUser, isAdmin } = GithubAuth;
     const { loadIssues } = NeonAPI;
@@ -17,9 +17,6 @@
                 cacheSet(`updates_${game}`, null);
                 loadUpdates(container, game);
             }
-        });
-        window.addEventListener('post-created', () => {
-            if (container.dataset.game === game) loadUpdates(container, game);
         });
         on('login-success', () => loadUpdates(container, game));
         on('logout', () => loadUpdates(container, game));
@@ -48,34 +45,11 @@
                 const allowed = NeonUtils.extractAllowed(p.body);
                 return allowed && allowed.split(',').map(s => s.trim()).includes(user);
             });
-
-            // Поиск последнего обновления с прогрессом
-            let latestProgress = null;
-            if (posts.length > 0) {
-                const latest = posts.sort((a,b) => new Date(b.date) - new Date(a.date))[0];
-                const progress = extractProgress(latest.body);
-                if (progress !== null) latestProgress = progress;
-            }
-
             container.innerHTML = '';
             if (posts.length === 0) {
-                container.innerHTML = '<p class="text-secondary" data-lang="noUpdates">Нет обновлений</p>';
+                container.innerHTML = '<p class="text-secondary">Нет обновлений</p>';
                 return;
             }
-
-            // Отображение прогресс-бара (если есть)
-            if (latestProgress !== null) {
-                const progressRow = document.createElement('div');
-                progressRow.className = 'progress-row';
-                progressRow.style.marginBottom = '20px';
-                progressRow.innerHTML = `
-                    <span class="progress-label" data-lang="nextUpdateProgress">Следующее обновление:</span>
-                    <div class="progress-bar"><div class="progress-fill" style="width:${latestProgress}%;"></div></div>
-                    <span class="progress-percent">${latestProgress}%</span>
-                `;
-                container.appendChild(progressRow);
-            }
-
             const grid = document.createElement('div');
             grid.className = 'projects-grid';
             posts.forEach(p => grid.appendChild(createCard(p, (post) => UIFeedback.openFullModal(post))));
