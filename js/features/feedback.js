@@ -1,6 +1,6 @@
 // js/features/feedback.js
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, deduplicateByNumber, createAbortable, showToast, createModal, escapeHtml, extractAllowed, extractMeta } = NeonUtils;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, deduplicateByNumber, createAbortable, showToast, createModal, escapeHtml, extractAllowed, extractMeta, loadMarked } = NeonUtils;
     const { renderReactions, renderComments, createCard, renderPoll } = UIComponents;
     const { getCurrentUser, isAdmin } = GithubAuth;
     const { loadIssues, loadIssue, loadComments, addComment, loadReactions, addReaction, removeReaction, closeIssue } = NeonAPI;
@@ -31,9 +31,7 @@
                 filterAndDisplay(true);
             }
         });
-        window.addEventListener('comment-updated', () => {
-            // Обновление текущего открытого поста при необходимости
-        });
+        window.addEventListener('comment-updated', () => {});
 
         checkAuthAndRender();
     }
@@ -44,14 +42,17 @@
     }
 
     function renderLoginPrompt() {
-        container.innerHTML = `<div class="login-prompt"><i class="fab fa-github"></i><h3 data-lang="feedbackLoginPrompt">Войдите через GitHub, чтобы участвовать</h3><p data-lang="feedbackTokenNote">Ваш токен останется только у вас в браузере.</p><button class="button" id="feedback-login-btn" data-lang="feedbackLoginBtn">Войти</button></div>`;
+        container.innerHTML = `<div class="login-prompt"><i class="fab fa-github" style="font-size:48px;"></i><h3 data-lang="feedbackLoginPrompt">Войдите через GitHub, чтобы участвовать</h3><p data-lang="feedbackTokenNote">Ваш токен останется только у вас в браузере.</p><button class="button" id="feedback-login-btn" data-lang="feedbackLoginBtn">Войти</button></div>`;
         container.querySelector('#feedback-login-btn').addEventListener('click', () => window.dispatchEvent(new CustomEvent('github-login-requested')));
     }
 
     async function renderInterface() {
         container.innerHTML = `
             <div class="feedback-header">
-                <div><i class="fab fa-github"></i> <h2 style="display:inline" data-lang="feedbackTitle">Идеи, баги и отзывы</h2></div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <i class="fab fa-github" style="font-size:32px; color:var(--accent);"></i>
+                    <h2 data-lang="feedbackTitle" style="margin:0;">Идеи, баги и отзывы</h2>
+                </div>
                 <button class="button" id="new-feedback-btn" data-lang="feedbackNewBtn">+ Оставить сообщение</button>
             </div>
             <div class="feedback-tabs">
@@ -63,7 +64,6 @@
             <div class="projects-grid" id="feedback-grid"></div>
             <div id="sentinel" style="height:10px;"></div>
         `;
-        // Локализация (будет вызвана позже через lang.js)
 
         document.getElementById('new-feedback-btn').addEventListener('click', () => openEditorModal('new', { game: currentGame }, 'feedback'));
 
@@ -163,6 +163,7 @@
                 actions.innerHTML = `
                     <button class="action-btn edit-post" title="Редактировать"><i class="fas fa-edit"></i></button>
                     <button class="action-btn close-post" title="Закрыть"><i class="fas fa-trash-alt"></i></button>
+                    <button class="action-btn share-post" title="Поделиться"><i class="fas fa-share-alt"></i></button>
                 `;
                 actions.querySelector('.edit-post').addEventListener('click', () => {
                     closeModal();
@@ -179,10 +180,13 @@
                         await closeIssue(issue.number);
                         closeModal();
                         showToast('Пост закрыт', 'success');
-                        // Обновить ленту
                         cacheRemoveByPrefix(`issues_${currentGame}_`);
                         renderInterface();
                     }
+                });
+                actions.querySelector('.share-post').addEventListener('click', () => {
+                    const url = `${location.origin}${location.pathname}?post=${issue.number}`;
+                    navigator.clipboard?.writeText(url).then(() => showToast('Ссылка скопирована', 'success')).catch(() => showToast('Не удалось скопировать', 'error'));
                 });
                 header.appendChild(actions);
             }
@@ -190,11 +194,10 @@
 
             const content = document.createElement('div');
             content.className = 'markdown-body';
-            await NeonUtils.ensureMarked();
+            await loadMarked();
             content.innerHTML = NeonUtils.renderMarkdown(issue.body);
             bodyContainer.appendChild(content);
 
-            // Опрос
             const pollData = extractMeta(issue.body, 'poll');
             if (pollData) {
                 try {
@@ -252,7 +255,6 @@
         }
     }
 
-    // Поддержка
     async function openSupportModal() {
         const currentUser = getCurrentUser();
         if (!currentUser) {

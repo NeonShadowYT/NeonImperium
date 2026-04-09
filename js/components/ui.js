@@ -1,6 +1,6 @@
 // js/components/ui.js
 (function() {
-    const { escapeHtml, stripHtml, renderMarkdown, createModal, showToast, ensureMarked } = NeonUtils;
+    const { escapeHtml, stripHtml, renderMarkdown, createModal, showToast, loadMarked } = NeonUtils;
     const { REACTION_TYPES, DEFAULT_IMAGE } = NeonConfig;
     const { getState } = NeonState;
 

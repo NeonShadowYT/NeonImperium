@@ -60,17 +60,38 @@
         return tmp.textContent || tmp.innerText || '';
     }
 
+    // ---------- Загрузка marked с резервным CDN ----------
     let markedReady = false;
-    async function ensureMarked() {
-        if (typeof marked !== 'undefined') return;
-        if (markedReady) return;
-        return new Promise((resolve, reject) => {
+    let markedLoading = null;
+
+    function loadMarked() {
+        if (typeof marked !== 'undefined') return Promise.resolve();
+        if (markedLoading) return markedLoading;
+
+        markedLoading = new Promise((resolve, reject) => {
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
-            script.onload = () => { markedReady = true; resolve(); };
-            script.onerror = reject;
+            script.onload = () => {
+                markedReady = true;
+                resolve();
+            };
+            script.onerror = () => {
+                // Пробуем резервный CDN
+                const fallback = document.createElement('script');
+                fallback.src = 'https://unpkg.com/marked/marked.min.js';
+                fallback.onload = () => {
+                    markedReady = true;
+                    resolve();
+                };
+                fallback.onerror = () => {
+                    console.warn('Не удалось загрузить marked');
+                    reject(new Error('Marked library failed to load'));
+                };
+                document.head.appendChild(fallback);
+            };
             document.head.appendChild(script);
         });
+        return markedLoading;
     }
 
     function renderMarkdown(text) {
@@ -233,10 +254,9 @@
         });
     }
 
-    // ---------- Экспорт ----------
     window.NeonUtils = {
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, clearAllCache,
-        escapeHtml, stripHtml, renderMarkdown, ensureMarked,
+        escapeHtml, stripHtml, loadMarked, renderMarkdown,
         extractMeta, extractSummary, extractAllowed, extractProgress,
         createAbortable, fetchWithTimeout,
         debounce, throttle,

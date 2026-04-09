@@ -1,9 +1,8 @@
 // js/features/editor.js
 (function() {
-    const { createModal, showToast, saveDraft, loadDraft, clearDraft, escapeHtml, renderMarkdown, ensureMarked, extractMeta } = NeonUtils;
+    const { createModal, showToast, saveDraft, loadDraft, clearDraft, escapeHtml, renderMarkdown, loadMarked, extractMeta } = NeonUtils;
     const { createIssue, updateIssue, addComment } = NeonAPI;
     const { getCurrentUser } = GithubAuth;
-    const { getState } = NeonState;
 
     const TEMPLATES = {
         bold: { name: 'Жирный', icon: 'fas fa-bold', action: (ta) => insertMarkdown(ta, '**', 'текст', true) },
@@ -268,7 +267,7 @@
             if (savedDraft?.body) textarea.value = savedDraft.body;
 
             const updatePreview = async () => {
-                await ensureMarked();
+                await loadMarked();
                 previewDiv.innerHTML = renderMarkdown(textarea.value);
                 previewDiv.style.display = textarea.value.trim() ? 'block' : 'none';
             };
@@ -311,12 +310,6 @@
                     <img id="preview-img" src="${previewUrl}" style="max-width:200px; border-radius:12px;" onerror="this.style.display='none'">
                     <button type="button" id="remove-preview" class="remove-preview"><i class="fas fa-times"></i></button>
                 </div>
-                ${!isSupport ? `
-                <div style="display:flex; align-items:center; gap:12px; margin:12px 0;">
-                    <div id="access-dropdown-placeholder"></div>
-                    <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" value="${escapeHtml(allowedUsers)}" style="flex:1; display:${allowedUsers ? 'block' : 'none'};">
-                </div>
-                ` : ''}
                 ${postType === 'feedback' ? `
                 <select id="modal-category" class="feedback-select">
                     <option value="idea" ${currentCategory==='idea'?'selected':''}>💡 Идея</option>
@@ -332,7 +325,12 @@
                 <div id="modal-preview" class="markdown-body preview-area" style="flex:1;"></div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;">
-                <div id="access-settings-container" style="display:flex; gap:12px;"></div>
+                <div style="display:flex; gap:12px; align-items:center;">
+                    ${!isSupport ? `
+                    <div id="access-dropdown-placeholder"></div>
+                    <input type="text" id="private-users" class="feedback-input" placeholder="Ники через запятую" value="${escapeHtml(allowedUsers)}" style="display:${allowedUsers ? 'block' : 'none'}; width:200px;">
+                    ` : ''}
+                </div>
                 <div style="display:flex; gap:10px;">
                     <button class="button" id="modal-cancel">Отмена</button>
                     <button class="button" id="modal-submit">${isEdit ? 'Сохранить' : 'Опубликовать'}</button>
@@ -408,7 +406,7 @@
         });
 
         const updateMarkdownPreview = async () => {
-            await ensureMarked();
+            await loadMarked();
             previewDiv.innerHTML = renderMarkdown(bodyTextarea.value);
         };
         bodyTextarea.addEventListener('input', updateMarkdownPreview);
