@@ -1,5 +1,5 @@
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, fetchWithTimeout, stripHtml, extractSummary, extractAllowed } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
     const { openFullModal, canViewPost } = UIFeedback;
     const { getCurrentUser, isAdmin } = GithubAuth;
@@ -67,7 +67,10 @@
         if (postId) {
             setTimeout(async () => {
                 try {
-                    if (!GithubAPI || !UIFeedback) return;
+                    if (!GithubAPI || !UIFeedback) {
+                        console.warn('GithubAPI или UIFeedback не доступны');
+                        return;
+                    }
                     const issue = await loadIssue(postId);
                     if (issue.state === 'closed') {
                         UIUtils.showToast('Этот пост был закрыт и больше не доступен', 'error');
@@ -83,7 +86,7 @@
                         game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
                         labels: issue.labels.map(l => l.name)
                     };
-                    if (!canViewPost(issue.body, issue.labels.map(l => l.name), currentUser)) {
+                    if (!UIFeedback.canViewPost(issue.body, issue.labels.map(l => l.name), currentUser)) {
                         UIUtils.showToast('У вас нет доступа к этому посту', 'error');
                         return;
                     }
@@ -122,9 +125,10 @@
         videoLoading = true;
         videoError = false;
         try {
-            videos = await loadVideosParallel();
+            videos = await loadVideosFromRSS2JSON();
             videosLoaded = true;
         } catch (err) {
+            if (err.name === 'AbortError') return;
             videos = []; videosLoaded = true;
             videoError = true;
         } finally {
@@ -133,55 +137,63 @@
         }
     }
 
-    async function loadVideosParallel() {
-        const cacheKey = 'youtube_videos_parallel_v1';
+    async function loadVideosFromRSS2JSON() {
+        const cacheKey = 'youtube_videos_rss2json_v3';
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
 
-        const promises = YT_CHANNELS.map(channel => {
-            const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`;
-            const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
-            return fetchWithTimeout(apiUrl, {}, 12000)
-                .then(res => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
-                .then(data => {
-                    if (data.status !== 'ok') return [];
-                    return (data.items || []).slice(0, 9).map(item => {
-                        const link = item.link;
-                        let videoId = null;
-                        try {
-                            const url = new URL(link);
-                            if (url.hostname === 'youtu.be') {
-                                videoId = url.pathname.slice(1);
-                            } else {
-                                videoId = url.searchParams.get('v');
-                            }
-                        } catch (e) {
-                            return null;
-                        }
-                        if (!videoId) return null;
-                        return {
-                            type: 'video',
-                            id: videoId,
-                            title: item.title,
-                            author: channel.name,
-                            date: new Date(item.pubDate),
-                            thumbnail: item.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-                            channel: channel.name
-                        };
-                    }).filter(v => v !== null);
-                })
-                .catch(err => {
-                    console.warn(`Failed to fetch videos for channel ${channel.name}:`, err);
-                    return [];
-                });
-        });
+        const { controller, timeoutId } = createAbortable(15000);
+        currentAbort = { controller };
+        try {
+            const allVideos = [];
+            for (const channel of YT_CHANNELS) {
+                const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`;
+                const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+                const response = await fetch(apiUrl, { signal: controller.signal });
+                if (!response.ok) continue;
+                const data = await response.json();
+                if (data.status !== 'ok') continue;
 
-        const results = await Promise.allSettled(promises);
-        const allVideos = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
-        const sorted = allVideos.sort((a, b) => b.date - a.date).slice(0, 20);
-        const serialized = sorted.map(v => ({ ...v, date: v.date.toISOString() }));
-        cacheSet(cacheKey, serialized);
-        return sorted;
+                const videosFromChannel = (data.items || []).slice(0, 9).map(item => {
+                    const link = item.link;
+                    let videoId = null;
+                    try {
+                        const url = new URL(link);
+                        if (url.hostname === 'youtu.be') {
+                            videoId = url.pathname.slice(1);
+                        } else {
+                            videoId = url.searchParams.get('v');
+                        }
+                    } catch (e) {
+                        return null;
+                    }
+                    if (!videoId) return null;
+                    return {
+                        type: 'video',
+                        id: videoId,
+                        title: item.title,
+                        author: channel.name,
+                        date: new Date(item.pubDate),
+                        thumbnail: item.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                        channel: channel.name
+                    };
+                }).filter(v => v !== null);
+                allVideos.push(...videosFromChannel);
+            }
+
+            const sorted = allVideos.sort((a, b) => b.date - a.date).slice(0, 20);
+            const serialized = sorted.map(v => ({ ...v, date: v.date.toISOString() }));
+            cacheSet(cacheKey, serialized);
+            return sorted;
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                UIUtils.showToast('Таймаут при загрузке видео', 'warning');
+            }
+            throw err;
+        } finally {
+            clearTimeout(timeoutId);
+            if (currentAbort?.controller === controller) currentAbort = null;
+        }
     }
 
     async function loadPosts() {

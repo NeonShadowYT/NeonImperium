@@ -413,7 +413,6 @@
     }
 
     async function renderPostBody(container, body, issueNumber) {
-    try {
         let html = GithubCore.renderMarkdown(body);
         container.innerHTML = html;
         if (!container.classList.contains('markdown-body')) container.classList.add('markdown-body');
@@ -429,10 +428,7 @@
         for (const link of links) {
             await renderMiniPostCard(container, link);
         }
-    } catch (e) {
-        console.error('Ошибка рендеринга тела поста:', e);
-        container.innerHTML = `<p class="error-message">Ошибка отображения содержимого. Попробуйте позже.</p>`;
-    }}
+    }
 
     function renderStaticPoll(container, pollData) {
         const pollDiv = document.createElement('div');
