@@ -315,7 +315,7 @@
     min-width: 200px;
 }
 
-/* Выравнивание поля превью и кнопки хостинга */
+/* Поле превью и кнопка хостинга */
 .preview-url-wrapper {
     display: flex;
     gap: 8px;
@@ -326,77 +326,4 @@
 }
 .preview-url-wrapper .image-services-menu {
     flex-shrink: 0;
-}
-.image-services-btn {
-    height: 100%;
-    white-space: nowrap;
-}
-
-/* Кнопки действий в шапке модалки поста */
-.modal-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.modal-header-actions {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    margin-right: 12px;
-}
-.modal-header-actions .action-btn {
-    background: var(--bg-inner-gradient);
-    border: 1px solid var(--border);
-    color: var(--text-secondary);
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-.modal-header-actions .action-btn:hover {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-}
-
-/* Выравнивание поля комментария и кнопок */
-.comment-form {
-    display: flex;
-    gap: 8px;
-    align-items: stretch;
-    margin-top: 16px;
-}
-.comment-form .comment-input {
-    flex: 1;
-    height: 40px;
-}
-.comment-form .button {
-    height: 40px;
-    flex-shrink: 0;
-}
-.comment-form .comment-editor-btn {
-    padding: 0 12px;
-}
-
-/* Кнопка доступа и поле ввода */
-.access-dropdown-container {
-    flex-shrink: 0;
-}
-#private-users {
-    min-width: 150px;
-}
-
-/* Иконка GitHub в заголовке фидбека */
-.feedback-header i.fab.fa-github {
-    font-size: 32px;
-    color: var(--accent);
-}
-
-/* Превью картинка под полем */
-#preview-thumbnail {
-    margin-top: 8px;
 }

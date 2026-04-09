@@ -306,7 +306,7 @@
                     <input type="url" id="modal-preview-url" class="feedback-input preview-url-input" placeholder="Ссылка на превью (изображение)" value="${escapeHtml(previewUrl)}">
                     <div id="image-services-placeholder"></div>
                 </div>
-                <div id="preview-thumbnail" style="${previewUrl ? '' : 'display:none;'} margin-top:8px; margin-bottom:12px;">
+                <div id="preview-thumbnail" style="${previewUrl ? '' : 'display:none;'} margin-bottom:12px;">
                     <img id="preview-img" src="${previewUrl}" style="max-width:200px; border-radius:12px;" onerror="this.style.display='none'">
                     <button type="button" id="remove-preview" class="remove-preview"><i class="fas fa-times"></i></button>
                 </div>

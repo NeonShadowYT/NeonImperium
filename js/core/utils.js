@@ -60,7 +60,7 @@
         return tmp.textContent || tmp.innerText || '';
     }
 
-    // ---------- Загрузка marked с повторной попыткой ----------
+    // ---------- Загрузка marked с резервным CDN ----------
     let markedReady = false;
     let markedLoading = null;
 
@@ -69,25 +69,27 @@
         if (markedLoading) return markedLoading;
 
         markedLoading = new Promise((resolve, reject) => {
-            function tryLoad(url) {
-                const script = document.createElement('script');
-                script.src = url;
-                script.onload = () => {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+            script.onload = () => {
+                markedReady = true;
+                resolve();
+            };
+            script.onerror = () => {
+                // Пробуем резервный CDN
+                const fallback = document.createElement('script');
+                fallback.src = 'https://unpkg.com/marked/marked.min.js';
+                fallback.onload = () => {
                     markedReady = true;
                     resolve();
                 };
-                script.onerror = () => {
-                    if (url.includes('jsdelivr')) {
-                        // Пробуем ещё раз тот же CDN с другим путём
-                        tryLoad('https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js');
-                    } else {
-                        console.warn('Не удалось загрузить marked');
-                        reject(new Error('Marked library failed to load'));
-                    }
+                fallback.onerror = () => {
+                    console.warn('Не удалось загрузить marked');
+                    reject(new Error('Marked library failed to load'));
                 };
-                document.head.appendChild(script);
-            }
-            tryLoad('https://cdn.jsdelivr.net/npm/marked/marked.min.js');
+                document.head.appendChild(fallback);
+            };
+            document.head.appendChild(script);
         });
         return markedLoading;
     }
