@@ -14,7 +14,7 @@
 
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
     let currentUser = null, currentAbort = null;
-    let videoLoading = false, videoError = false;
+    let videoLoading = false, videoError = false, retryVideoLoad = null;
 
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('news-section');
@@ -109,7 +109,7 @@
     };
 
     async function loadNewsFeed() {
-        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>`;
+        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>${translations[localStorage.getItem('preferredLanguage')||'ru'].newsLoading || 'Загрузка новостей...'}</p></div>`;
         try {
             posts = await loadPosts();
             postsLoaded = true;
@@ -237,7 +237,7 @@
 
     function renderMixed() {
         if (!postsLoaded) {
-            container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>`;
+            container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>${translations[localStorage.getItem('preferredLanguage')||'ru'].newsLoading || 'Загрузка новостей...'}</p></div>`;
             return;
         }
 
@@ -269,6 +269,20 @@
                     grid.appendChild(createPostCard(item));
                 }
             });
+        }
+
+        if (videoError) {
+            const retryBtn = document.createElement('button');
+            retryBtn.className = 'button small';
+            retryBtn.style.marginTop = '20px';
+            retryBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Повторить загрузку видео';
+            retryBtn.addEventListener('click', () => {
+                videoError = false;
+                videosLoaded = false;
+                loadVideosAsync();
+                retryBtn.remove();
+            });
+            grid.appendChild(retryBtn);
         }
 
         container.innerHTML = '';

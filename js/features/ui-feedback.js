@@ -1,4 +1,4 @@
-// ui-feedback.js — исправленная версия с split-редактором и переключателем доступа
+// ui-feedback.js — исправленная версия с split-редактором, переключателем доступа и горизонтальной формой комментария
 (function() {
     const REACTION_TYPES = [
         { content: '+1', emoji: '👍' }, { content: '-1', emoji: '👎' }, { content: 'laugh', emoji: '😄' },
@@ -664,7 +664,6 @@
                 toolbarContainer.appendChild(toolbar);
             }
         } else {
-            // Инициализация превью
             const previewArea = modal.querySelector('#modal-preview-area');
             const textarea = modal.querySelector('#modal-body');
             const updatePreview = () => {
@@ -677,24 +676,20 @@
                     previewArea.innerHTML = '<p class="text-secondary" style="text-align:center;">Предпросмотр</p>';
                 }
             };
-            // Живой предпросмотр при вводе
             textarea.addEventListener('input', updatePreview);
             updatePreview();
 
-            // Тулбар
             const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
             if (window.Editor) {
                 const toolbar = Editor.createEditorToolbar(textarea);
                 toolbarContainer.appendChild(toolbar);
             }
 
-            // Сервисы хостинга
             const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
             if (servicesPlaceholder && window.Editor) {
                 servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
             }
 
-            // Превью URL
             const previewUrlInput = modal.querySelector('#modal-preview-url');
             const thumbnailContainer = modal.querySelector('#preview-thumbnail-container');
             const thumbnailImg = modal.querySelector('#preview-thumbnail-img');
@@ -706,7 +701,6 @@
             previewUrlInput.addEventListener('input', (e) => updateThumbnail(e.target.value.trim()));
             removePreviewBtn.addEventListener('click', () => { previewUrlInput.value = ''; updateThumbnail(''); });
 
-            // Переключатель доступа
             const accessPublicBtn = modal.querySelector('[data-access="public"]');
             const accessPrivateBtn = modal.querySelector('[data-access="private"]');
             const privateUsersInput = modal.querySelector('#private-users');
@@ -718,7 +712,6 @@
             accessPublicBtn.addEventListener('click', () => setAccessMode(true));
             accessPrivateBtn.addEventListener('click', () => setAccessMode(false));
 
-            // Черновики
             const titleInput = modal.querySelector('#modal-input-title');
             const categorySelect = modal.querySelector('#modal-category');
             const saveDraftFn = () => {
@@ -753,7 +746,6 @@
                 } else { UIUtils.clearDraft(draftKey); }
             }
 
-            // Проверка закрытия с изменениями
             let hasChanges = false;
             const markChanged = () => { hasChanges = true; };
             titleInput.addEventListener('input', markChanged);
@@ -785,7 +777,6 @@
             }
         }
 
-        // Обработчик отправки
         const submitBtn = modal.querySelector('#modal-submit');
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
@@ -829,7 +820,6 @@
                 }
             }
 
-            // Проверка опросов
             const pollMatches = finalBody.match(/<!-- poll: .*? -->/g);
             if (pollMatches && pollMatches.length > 1) {
                 if (!confirm('Несколько опросов, сохранён будет первый. Продолжить?')) return;

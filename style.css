@@ -1,17 +1,16 @@
 /* style.css — оптимизированный основной файл */
-@import url('css/variables.css');
-@import url('css/base.css');
-@import url('css/typography.css');
-@import url('css/buttons.css');
-@import url('css/navigation.css');
-@import url('css/cards.css');
-@import url('css/layout.css');
-@import url('css/responsive.css');
-@import url('css/feedback.css');
+@import url('variables.css');
+@import url('base.css');
+@import url('typography.css');
+@import url('buttons.css');
+@import url('navigation.css');
+@import url('cards.css');
+@import url('layout.css');
+@import url('responsive.css');
+@import url('feedback.css');
 
 /* === ДОПОЛНИТЕЛЬНЫЕ СТИЛИ И ИСПРАВЛЕНИЯ === */
 
-/* Модальные окна */
 .modal-header {
     display: flex;
     align-items: center;
@@ -45,7 +44,6 @@
     flex-shrink: 0;
 }
 
-/* Поле превью и кнопка хостинги в одной строке */
 .preview-url-wrapper {
     display: flex;
     align-items: center;
@@ -59,7 +57,6 @@
     flex-shrink: 0;
 }
 
-/* Форма комментария */
 .comment-form {
     display: flex;
     gap: 8px;
@@ -82,7 +79,6 @@
     flex-shrink: 0;
 }
 
-/* Комментарии */
 .comment-header {
     display: flex;
     align-items: center;
@@ -123,7 +119,6 @@
     margin-left: 0;
 }
 
-/* Редактор (двухколоночный) */
 .editor-split {
     display: flex;
     gap: 20px;
@@ -148,7 +143,6 @@
     }
 }
 
-/* Тулбар редактора */
 .editor-toolbar {
     display: flex;
     gap: 5px;
@@ -185,7 +179,6 @@
     font-size: 14px;
 }
 
-/* Переключатель доступа (как хостинги) */
 .access-switch {
     display: inline-flex;
     align-items: center;
@@ -225,7 +218,6 @@
     min-width: 200px;
 }
 
-/* Превью изображения */
 .preview-thumbnail {
     margin-top: 10px;
     position: relative;
@@ -259,7 +251,6 @@
     border-color: #f44336;
 }
 
-/* Кнопка поддержки */
 .donate-button-fixed {
     position: fixed;
     bottom: 24px;

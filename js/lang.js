@@ -28,6 +28,7 @@ const translations = {
         newsDesc: "Свежие видео и обновления",
         newsLoading: "Загрузка новостей...",
         newsNoItems: "Пока нет новостей",
+        newsRetryVideo: "Повторить загрузку видео",
         
         // Общие для страниц игр
         starvePageTitle: "Neon Imperium — Starve Neon",
@@ -276,6 +277,7 @@ const translations = {
         newsDesc: "Fresh videos and updates",
         newsLoading: "Loading news...",
         newsNoItems: "No news yet",
+        newsRetryVideo: "Retry video loading",
         
         // Common for game pages
         starvePageTitle: "Neon Imperium — Starve Neon",
