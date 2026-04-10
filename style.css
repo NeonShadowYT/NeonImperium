@@ -9,7 +9,9 @@
 @import url('css/responsive.css');
 @import url('css/feedback.css');
 
-/* Исправление положения кнопок в шапке модалки */
+/* === ДОПОЛНИТЕЛЬНЫЕ СТИЛИ И ИСПРАВЛЕНИЯ === */
+
+/* Модальные окна */
 .modal-header {
     display: flex;
     align-items: center;
@@ -71,47 +73,16 @@
     border-radius: 30px;
     color: var(--text-primary);
 }
+.comment-form .button-group {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
 .comment-form .button {
     flex-shrink: 0;
 }
 
-/* Дополнительные стили для приватности */
-.privacy-row {
-    margin: 8px 0;
-}
-.allowed-users-row {
-    margin-bottom: 12px;
-}
-
-.compact-row {
-    margin-bottom: 8px;
-}
-.preview-url-wrapper.compact-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-.preview-url-wrapper.compact-row .preview-url-input {
-    flex: 1;
-}
-.privacy-allowed-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
-}
-.privacy-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    white-space: nowrap;
-}
-.allowed-users-wrapper {
-    flex: 1;
-    min-width: 200px;
-}
+/* Комментарии */
 .comment-header {
     display: flex;
     align-items: center;
@@ -151,36 +122,144 @@
     color: var(--text-primary);
     margin-left: 0;
 }
-.comment-form {
+
+/* Редактор (двухколоночный) */
+.editor-split {
     display: flex;
-    gap: 8px;
-    margin-top: 16px;
-    align-items: center;
+    gap: 20px;
+    margin-top: 10px;
 }
-.comment-form .comment-input {
+.editor-split-left,
+.editor-split-right {
     flex: 1;
-    padding: 10px 12px;
+    min-width: 0;
+}
+.editor-split-right {
+    background: var(--bg-primary);
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    overflow-y: auto;
+    max-height: 500px;
+}
+@media (max-width: 700px) {
+    .editor-split {
+        flex-direction: column;
+    }
+}
+
+/* Тулбар редактора */
+.editor-toolbar {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    padding: 8px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+.editor-btn-group {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+    padding: 0 5px;
+    border-right: 1px solid var(--border);
+}
+.editor-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    font-family: 'Russo One', sans-serif;
+}
+.editor-btn:hover {
+    background: var(--bg-primary);
+    color: var(--accent);
+}
+.editor-btn i {
+    font-size: 14px;
+}
+
+/* Переключатель доступа (как хостинги) */
+.access-switch {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    padding: 2px;
+    gap: 2px;
+}
+.access-switch-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    border-radius: 30px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: 'Russo One', sans-serif;
+    transition: all 0.2s;
+}
+.access-switch-btn.active {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.access-switch-btn:hover:not(.active) {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+.private-users-input {
+    margin-left: 10px;
+    padding: 8px 12px;
     background: var(--bg-primary);
     border: 1px solid var(--border);
     border-radius: 30px;
     color: var(--text-primary);
-}
-.comment-form .button {
-    flex-shrink: 0;
-}
-.comment-editor-btn {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 30px;
-    padding: 10px 14px;
-    cursor: pointer;
-    color: var(--text-secondary);
-}
-.comment-editor-btn:hover {
-    background: var(--bg-primary);
-    color: var(--accent);
+    min-width: 200px;
 }
 
+/* Превью изображения */
+.preview-thumbnail {
+    margin-top: 10px;
+    position: relative;
+    display: inline-block;
+}
+.preview-thumbnail img {
+    max-width: 150px;
+    max-height: 100px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+.remove-preview {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+.remove-preview:hover {
+    background: #f44336;
+    color: white;
+    border-color: #f44336;
+}
+
+/* Кнопка поддержки */
 .donate-button-fixed {
     position: fixed;
     bottom: 24px;
@@ -213,20 +292,15 @@
 .donate-button-fixed:active {
     transform: scale(0.98);
 }
-
-/* Анимация "подъёма" при ошибке */
 .donate-button-fixed.error-bounce {
     animation: bounceUp 0.4s ease;
 }
-
 @keyframes bounceUp {
     0% { transform: translateY(0); }
     30% { transform: translateY(-15px); }
     70% { transform: translateY(5px); }
     100% { transform: translateY(0); }
 }
-
-/* На мобильных */
 @media (max-width: 600px) {
     .donate-button-fixed {
         padding: 8px 16px;

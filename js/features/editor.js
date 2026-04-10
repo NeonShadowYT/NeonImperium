@@ -1,3 +1,4 @@
+// editor.js — облегчённый тулбар (без предпросмотра)
 (function() {
     const TEMPLATES = {
         bold: { name: 'Жирный', icon: 'fas fa-bold', action: (textarea) => insertMarkdown(textarea, '**', 'текст', true) },
@@ -144,14 +145,6 @@
         insertAtCursor(textarea, selected ? `<span style="${styleProp}: ${color};">${selected}</span>` : `<span style="${styleProp}: ${color};">текст</span>`);
     }
 
-    function debounce(fn, delay) {
-        let timer;
-        return function(...args) {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn.apply(this, args), delay);
-        };
-    }
-
     function createImageServicesMenu() {
         const services = [
             { name: 'Catbox', url: 'https://catbox.moe/', description: 'До 200 МБ, анонимно, лучший выбор' },
@@ -222,7 +215,6 @@
     function createEditorToolbar(textarea, options = {}) {
         const toolbar = document.createElement('div');
         toolbar.className = 'editor-toolbar';
-        toolbar.style.cssText = 'display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;padding:8px;background:var(--bg-card);border-radius:12px;border:1px solid var(--border);';
         const groups = {
             Форматирование: ['bold', 'italic', 'strikethrough'],
             Заголовки: ['h1', 'h2', 'h3'],
@@ -237,7 +229,6 @@
         for (const [groupName, templateKeys] of Object.entries(groups)) {
             const group = document.createElement('div');
             group.className = 'editor-btn-group';
-            group.style.cssText = 'display:flex;gap:3px;flex-wrap:wrap;padding:0 5px;border-right:1px solid var(--border);';
             templateKeys.forEach(key => {
                 const template = TEMPLATES[key];
                 if (!template) return;
@@ -250,64 +241,6 @@
                 group.appendChild(btn);
             });
             toolbar.appendChild(group);
-        }
-        if (options.preview !== false) {
-            const previewWrapper = document.createElement('div');
-            previewWrapper.className = 'preview-split';
-            previewWrapper.style.marginLeft = 'auto';
-            const previewBtn = document.createElement('button');
-            previewBtn.type = 'button';
-            previewBtn.className = 'editor-btn preview-btn';
-            previewBtn.textContent = 'Предпросмотр';
-            const dropdownBtn = document.createElement('button');
-            dropdownBtn.type = 'button';
-            dropdownBtn.className = 'editor-btn dropdown-toggle';
-            dropdownBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
-            const dropdownMenu = document.createElement('div');
-            dropdownMenu.className = 'preview-dropdown';
-            dropdownMenu.innerHTML = '<button data-mode="preview" class="active">Предпросмотр</button><button data-mode="live">Живой предпросмотр</button>';
-            previewWrapper.appendChild(previewBtn);
-            previewWrapper.appendChild(dropdownBtn);
-            previewWrapper.appendChild(dropdownMenu);
-            let liveMode = false, inputHandler = null;
-            const showPreview = () => { if (options.onPreview) options.onPreview(); };
-            previewBtn.addEventListener('click', showPreview);
-            dropdownBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                dropdownMenu.classList.toggle('show');
-            });
-            dropdownMenu.querySelectorAll('button').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const mode = btn.dataset.mode;
-                    dropdownMenu.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    if (mode === 'live') {
-                        previewBtn.textContent = 'Живой предпросмотр';
-                        if (!liveMode) {
-                            liveMode = true;
-                            if (inputHandler) textarea.removeEventListener('input', inputHandler);
-                            inputHandler = debounce(showPreview, 300);
-                            textarea.addEventListener('input', inputHandler);
-                            if (textarea.value.trim()) showPreview();
-                        }
-                    } else {
-                        previewBtn.textContent = 'Предпросмотр';
-                        if (liveMode) {
-                            liveMode = false;
-                            if (inputHandler) {
-                                textarea.removeEventListener('input', inputHandler);
-                                inputHandler = null;
-                            }
-                        }
-                    }
-                    dropdownMenu.classList.remove('show');
-                });
-            });
-            document.addEventListener('click', (e) => {
-                if (!previewWrapper.contains(e.target)) dropdownMenu.classList.remove('show');
-            });
-            toolbar.appendChild(previewWrapper);
         }
         return toolbar;
     }
