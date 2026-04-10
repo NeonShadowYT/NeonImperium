@@ -1,13 +1,13 @@
 /* style.css — оптимизированный основной файл */
-@import url('variables.css');
-@import url('base.css');
-@import url('typography.css');
-@import url('buttons.css');
-@import url('navigation.css');
-@import url('cards.css');
-@import url('layout.css');
-@import url('responsive.css');
-@import url('feedback.css');
+@import url('css/variables.css');
+@import url('css/base.css');
+@import url('css/typography.css');
+@import url('css/buttons.css');
+@import url('css/navigation.css');
+@import url('css/cards.css');
+@import url('css/layout.css');
+@import url('css/responsive.css');
+@import url('css/feedback.css');
 
 /* === ДОПОЛНИТЕЛЬНЫЕ СТИЛИ И ИСПРАВЛЕНИЯ === */
 
