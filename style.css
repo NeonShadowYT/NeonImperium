@@ -59,10 +59,11 @@
     flex-shrink: 0;
 }
 
-/* Форма комментария */
+/* Форма комментария — в одну строку */
 .comment-form {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
     margin-top: 16px;
 }
 .comment-form .comment-input {
@@ -79,7 +80,7 @@
     flex-shrink: 0;
 }
 .comment-form .button {
-    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 /* Комментарии */
@@ -222,41 +223,91 @@
     border: 1px solid var(--border);
     border-radius: 30px;
     color: var(--text-primary);
-    min-width: 200px;
+    width: 200px;
 }
 
-/* Превью изображения */
-.preview-thumbnail {
-    margin-top: 10px;
-    position: relative;
-    display: inline-block;
+/* Нижняя панель редактора (доступ + кнопка) */
+.editor-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 15px;
+    gap: 15px;
+    flex-wrap: wrap;
 }
-.preview-thumbnail img {
-    max-width: 150px;
-    max-height: 100px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-}
-.remove-preview {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
+.editor-footer-left {
     display: flex;
     align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: var(--text-secondary);
-    transition: all 0.2s;
+    gap: 10px;
+    flex-wrap: wrap;
 }
-.remove-preview:hover {
-    background: #f44336;
-    color: white;
-    border-color: #f44336;
+.editor-footer-right {
+    flex-shrink: 0;
+}
+
+/* Карточки проектов и постов — одинаковый tilt */
+.projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+    margin-top: 20px;
+}
+.project-card-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+.project-card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+.project-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+.tilt-card {
+    transition: transform 0.2s ease, box-shadow 0.3s ease;
+}
+.image-wrapper {
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    aspect-ratio: 16 / 9;
+}
+.project-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+.project-card h3 {
+    font-size: 20px;
+    margin: 0 0 10px 0;
+    color: var(--text-primary);
+}
+.project-card p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0 0 15px 0;
+    flex: 1;
+}
+.project-card .button {
+    margin-top: auto;
+    align-self: flex-start;
+}
+
+/* Для пустого состояния в сетке */
+.empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary);
 }
 
 /* Кнопка поддержки */
