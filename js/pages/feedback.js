@@ -1,4 +1,3 @@
-// feedback.js — с tilt-эффектом для карточек идей/багов/отзывов
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable, extractSummary } = GithubCore;
     const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
@@ -206,6 +205,7 @@
         if (reset) gridContainer.innerHTML = '';
         
         if (issuesToRender.length === 0) {
+            // Показываем сообщение о пустом списке
             const emptyMsg = document.createElement('div');
             emptyMsg.className = 'empty-state';
             emptyMsg.innerHTML = `<i class="fas fa-inbox"></i><p data-lang="feedbackNoItems">Пока нет сообщений. Будьте первым!</p>`;
@@ -227,10 +227,6 @@
             const toRemove = cards.length - MAX_DISPLAY_ITEMS;
             for (let i = 0; i < toRemove; i++) cards[i].remove();
         }
-        // Инициализируем tilt для новых карточек
-        if (typeof window.initTiltEffect === 'function') {
-            window.initTiltEffect();
-        }
     }
 
     function createIssueCard(issue) {
@@ -240,7 +236,7 @@
         const preview = summary;
         const date = new Date(issue.created_at).toLocaleDateString();
         const cardLink = document.createElement('div');
-        cardLink.className = 'project-card-link tilt-card';
+        cardLink.className = 'project-card-link';
         cardLink.dataset.issueNumber = issue.number;
         cardLink.dataset.issueId = issue.id;
         cardLink.style.cursor = 'pointer';
