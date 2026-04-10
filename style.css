@@ -299,7 +299,11 @@
 }
 .project-card .button {
     margin-top: auto;
-    align-self: flex-start;
+    align-self: stretch;          /* растягиваем на всю ширину */
+    text-align: center;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* Для пустого состояния в сетке */

@@ -1,3 +1,4 @@
+// game-updates.js — с tilt-эффектом
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, extractSummary, extractAllowed } = GithubCore;
     const { loadIssues } = GithubAPI;
@@ -46,6 +47,9 @@
             }
             const card = createUpdateCard(newPost);
             grid.insertBefore(card, grid.firstChild);
+            if (typeof window.initTiltEffect === 'function') {
+                window.initTiltEffect();
+            }
         });
     });
 
@@ -82,6 +86,9 @@
             container.innerHTML = '';
             const grid = document.createElement('div'); grid.className = 'projects-grid'; container.appendChild(grid);
             posts.forEach(post => grid.appendChild(createUpdateCard(post)));
+            if (typeof window.initTiltEffect === 'function') {
+                window.initTiltEffect();
+            }
         } catch (err) {
             if (err.name === 'AbortError') return;
             container.innerHTML = '<p class="error-message">Ошибка загрузки</p>';
@@ -92,19 +99,43 @@
     }
 
     function createUpdateCard(post) {
-        const card = document.createElement('div'); card.className = 'project-card-link no-tilt'; card.style.cursor = 'pointer';
-        const inner = document.createElement('div'); inner.className = 'project-card';
+        const card = document.createElement('div'); 
+        card.className = 'project-card-link tilt-card'; 
+        card.style.cursor = 'pointer';
+        const inner = document.createElement('div'); 
+        inner.className = 'project-card';
         const imgMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
         const thumbnail = imgMatch ? imgMatch[1] : DEFAULT_IMAGE;
-        const imgWrapper = document.createElement('div'); imgWrapper.className = 'image-wrapper';
-        const img = document.createElement('img'); img.src = thumbnail; img.alt = post.title; img.loading = 'lazy'; img.className = 'project-image'; img.onerror = () => img.src = DEFAULT_IMAGE;
+        const imgWrapper = document.createElement('div'); 
+        imgWrapper.className = 'image-wrapper';
+        const img = document.createElement('img'); 
+        img.src = thumbnail; 
+        img.alt = post.title; 
+        img.loading = 'lazy'; 
+        img.className = 'project-image'; 
+        img.onerror = () => img.src = DEFAULT_IMAGE;
         imgWrapper.appendChild(img);
-        const title = document.createElement('h3'); title.textContent = post.title.length > 70 ? post.title.substring(0,70)+'…' : post.title;
-        const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
+        const title = document.createElement('h3'); 
+        title.textContent = post.title.length > 70 ? post.title.substring(0,70)+'…' : post.title;
+        const meta = document.createElement('p'); 
+        meta.className = 'text-secondary'; 
+        meta.style.fontSize='12px'; 
+        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
         const summary = extractSummary(post.body) || GithubCore.stripHtml(post.body).substring(0,120)+'…';
-        const preview = document.createElement('p'); preview.className = 'text-secondary'; preview.style.fontSize='13px'; preview.style.overflow='hidden'; preview.style.display='-webkit-box'; preview.style.webkitLineClamp='2'; preview.style.webkitBoxOrient='vertical'; preview.textContent = summary;
-        inner.append(imgWrapper, title, meta, preview); card.appendChild(inner);
-        card.addEventListener('click', (e) => { e.preventDefault(); openFullModal({ type: 'update', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); });
+        const preview = document.createElement('p'); 
+        preview.className = 'text-secondary'; 
+        preview.style.fontSize='13px'; 
+        preview.style.overflow='hidden'; 
+        preview.style.display='-webkit-box'; 
+        preview.style.webkitLineClamp='2'; 
+        preview.style.webkitBoxOrient='vertical'; 
+        preview.textContent = summary;
+        inner.append(imgWrapper, title, meta, preview); 
+        card.appendChild(inner);
+        card.addEventListener('click', (e) => { 
+            e.preventDefault(); 
+            openFullModal({ type: 'update', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); 
+        });
         return card;
     }
 })();

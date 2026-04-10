@@ -1,3 +1,4 @@
+// news-feed.js — с tilt для карточек и обработкой загрузки видео
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
@@ -15,6 +16,7 @@
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
     let currentUser = null, currentAbort = null;
     let videoLoading = false, videoError = false;
+    let videoRetryCallback = null;
 
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('news-section');
@@ -273,38 +275,126 @@
 
         container.innerHTML = '';
         container.appendChild(grid);
+        initTiltForGrid(grid);
+    }
+
+    function initTiltForGrid(grid) {
+        if (typeof window.initTiltEffect === 'function') {
+            // Повторно инициализируем tilt для новых карточек
+            window.initTiltEffect();
+        }
     }
 
     function createVideoCard(video) {
-        const card = document.createElement('div'); card.className = 'project-card-link'; card.style.cursor = 'pointer';
+        const card = document.createElement('div'); 
+        card.className = 'project-card-link tilt-card';
+        card.style.cursor = 'pointer';
         card.setAttribute('aria-label', `Смотреть видео: ${video.title}`);
-        const inner = document.createElement('div'); inner.className = 'project-card';
-        const imgWrapper = document.createElement('div'); imgWrapper.className = 'image-wrapper';
-        const img = document.createElement('img'); img.src = video.thumbnail; img.alt = video.title; img.loading = 'lazy'; img.className = 'project-image';
+        
+        const inner = document.createElement('div'); 
+        inner.className = 'project-card';
+        
+        const imgWrapper = document.createElement('div'); 
+        imgWrapper.className = 'image-wrapper';
+        imgWrapper.style.position = 'relative';
+        
+        // Показываем загрузку
+        const loader = document.createElement('div');
+        loader.className = 'video-loader';
+        loader.style.cssText = 'position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; color:white;';
+        loader.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+        
+        const img = document.createElement('img'); 
+        img.src = video.thumbnail; 
+        img.alt = video.title; 
+        img.loading = 'lazy'; 
+        img.className = 'project-image';
+        img.style.opacity = '0';
+        img.onload = () => {
+            img.style.opacity = '1';
+            loader.style.display = 'none';
+        };
+        img.onerror = () => {
+            img.src = 'images/default-news.webp';
+            img.style.opacity = '1';
+            loader.style.display = 'none';
+        };
+        
         imgWrapper.appendChild(img);
-        const title = document.createElement('h3'); title.textContent = video.title.length > 70 ? video.title.substring(0,70)+'…' : video.title;
-        const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
-        const button = document.createElement('span'); button.className = 'button'; button.innerHTML = '<i class="fas fa-play"></i> Смотреть';
-        inner.append(imgWrapper, title, meta, button); card.appendChild(inner);
-        card.addEventListener('click', (e) => { e.preventDefault(); window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank'); });
+        imgWrapper.appendChild(loader);
+        
+        const title = document.createElement('h3'); 
+        title.textContent = video.title.length > 70 ? video.title.substring(0,70)+'…' : video.title;
+        
+        const meta = document.createElement('p'); 
+        meta.className = 'text-secondary'; 
+        meta.style.fontSize='12px'; 
+        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
+        
+        const button = document.createElement('span'); 
+        button.className = 'button'; 
+        button.innerHTML = '<i class="fas fa-play"></i> Смотреть';
+        
+        inner.append(imgWrapper, title, meta, button); 
+        card.appendChild(inner);
+        
+        card.addEventListener('click', (e) => { 
+            e.preventDefault(); 
+            window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank'); 
+        });
+        
         return card;
     }
 
     function createPostCard(post) {
-        const card = document.createElement('div'); card.className = 'project-card-link no-tilt'; card.style.cursor = 'pointer';
+        const card = document.createElement('div'); 
+        card.className = 'project-card-link tilt-card';
+        card.style.cursor = 'pointer';
         card.setAttribute('aria-label', `Читать пост: ${post.title}`);
-        const inner = document.createElement('div'); inner.className = 'project-card';
+        
+        const inner = document.createElement('div'); 
+        inner.className = 'project-card';
+        
         const imgMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
         const thumbnail = imgMatch ? imgMatch[1] : DEFAULT_IMAGE;
-        const imgWrapper = document.createElement('div'); imgWrapper.className = 'image-wrapper';
-        const img = document.createElement('img'); img.src = thumbnail; img.alt = post.title; img.loading = 'lazy'; img.className = 'project-image'; img.onerror = () => img.src = DEFAULT_IMAGE;
+        const imgWrapper = document.createElement('div'); 
+        imgWrapper.className = 'image-wrapper';
+        
+        const img = document.createElement('img'); 
+        img.src = thumbnail; 
+        img.alt = post.title; 
+        img.loading = 'lazy'; 
+        img.className = 'project-image'; 
+        img.onerror = () => img.src = DEFAULT_IMAGE;
+        
         imgWrapper.appendChild(img);
-        const title = document.createElement('h3'); title.textContent = post.title.length > 70 ? post.title.substring(0,70)+'…' : post.title;
-        const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
+        
+        const title = document.createElement('h3'); 
+        title.textContent = post.title.length > 70 ? post.title.substring(0,70)+'…' : post.title;
+        
+        const meta = document.createElement('p'); 
+        meta.className = 'text-secondary'; 
+        meta.style.fontSize='12px'; 
+        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
+        
         const summary = extractSummary(post.body) || stripHtml(post.body).substring(0,120)+'…';
-        const preview = document.createElement('p'); preview.className = 'text-secondary'; preview.style.fontSize='13px'; preview.style.overflow='hidden'; preview.style.display='-webkit-box'; preview.style.webkitLineClamp='2'; preview.style.webkitBoxOrient='vertical'; preview.textContent = summary;
-        inner.append(imgWrapper, title, meta, preview); card.appendChild(inner);
-        card.addEventListener('click', (e) => { e.preventDefault(); openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); });
+        const preview = document.createElement('p'); 
+        preview.className = 'text-secondary'; 
+        preview.style.fontSize='13px'; 
+        preview.style.overflow='hidden'; 
+        preview.style.display='-webkit-box'; 
+        preview.style.webkitLineClamp='2'; 
+        preview.style.webkitBoxOrient='vertical'; 
+        preview.textContent = summary;
+        
+        inner.append(imgWrapper, title, meta, preview); 
+        card.appendChild(inner);
+        
+        card.addEventListener('click', (e) => { 
+            e.preventDefault(); 
+            openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); 
+        });
+        
         return card;
     }
 })();
