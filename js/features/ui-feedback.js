@@ -235,7 +235,8 @@
             <div class="feedback-form">
                 <div id="modal-editor-toolbar"></div>
                 <textarea id="edit-comment-body" class="feedback-textarea" rows="10">${GithubCore.escapeHtml(currentBody)}</textarea>
-                <div class="button-group" style="margin-top:15px; display: flex; justify-content: flex-end;">
+                <div class="preview-area" id="modal-preview-area" style="display:none;"></div>
+                <div class="button-group" style="margin-top:15px;">
                     <button class="button" id="edit-comment-save">Сохранить</button>
                     <button class="button" id="edit-comment-cancel">Отмена</button>
                 </div>
@@ -243,13 +244,28 @@
         `;
         const { modal, closeModal } = UIUtils.createModal('Редактировать комментарий', modalHtml, { size: 'full' });
         const textarea = modal.querySelector('#edit-comment-body');
+        const previewArea = modal.querySelector('#modal-preview-area');
         const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
+
         if (window.Editor) {
+            const updatePreview = () => {
+                const text = textarea.value;
+                if (text.trim()) {
+                    previewArea.innerHTML = '';
+                    if (!previewArea.classList.contains('markdown-body')) previewArea.classList.add('markdown-body');
+                    renderPostBody(previewArea, text, null);
+                    previewArea.style.display = 'block';
+                } else {
+                    previewArea.style.display = 'none';
+                }
+            };
             const toolbar = Editor.createEditorToolbar(textarea);
             toolbarContainer.appendChild(toolbar);
         }
+
         const saveBtn = modal.querySelector('#edit-comment-save');
         const cancelBtn = modal.querySelector('#edit-comment-cancel');
+
         saveBtn.addEventListener('click', async () => {
             const newBody = textarea.value.trim();
             if (!newBody) { UIUtils.showToast('Комментарий не может быть пустым', 'error'); return; }
@@ -472,7 +488,7 @@
             let postType = 'feedback';
             if (item.labels?.includes('type:news')) postType = 'news';
             else if (item.labels?.includes('type:update')) postType = 'update';
-            openEditorModal('edit', { number: item.id, title: issue.title, body: issue.body, game: item.game, labels: issue.labels.map(l => l.name) }, postType);
+            openEditorModal('edit', { number: item.id, title: issue.title, body: issue.body, game: item.game }, postType);
         });
 
         actionsContainer.querySelector('.close-issue')?.addEventListener('click', async (e) => {
@@ -610,6 +626,10 @@
                         <input type="url" id="modal-preview-url" class="feedback-input preview-url-input" placeholder="Ссылка на превью (необязательно)" value="${GithubCore.escapeHtml(previewUrl)}" style="margin-bottom:0;">
                         <div id="preview-services-placeholder"></div>
                     </div>
+                    <div id="preview-thumbnail-container" class="preview-thumbnail" style="${previewUrl ? '' : 'display:none;'} margin-top:4px;">
+                        <img id="preview-thumbnail-img" src="${previewUrl ? GithubCore.escapeHtml(previewUrl) : ''}" alt="Preview">
+                        <button type="button" class="remove-preview" id="remove-preview-btn" title="Удалить превью"><i class="fas fa-times"></i></button>
+                    </div>
                     ${categoryHtml}
                     <div id="modal-editor-toolbar"></div>
                     <div class="editor-split">
@@ -617,20 +637,18 @@
                             <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="12">${GithubCore.escapeHtml(bodyContent)}</textarea>
                         </div>
                         <div class="editor-split-right" id="modal-preview-area">
-                            <!-- живой предпросмотр -->
+                            <!-- живой предпросмотр появится здесь -->
                         </div>
                     </div>
-                    <div class="editor-footer">
-                        <div class="editor-footer-left">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top:10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
                             <div class="access-switch">
                                 <button type="button" class="access-switch-btn ${!isPrivate ? 'active' : ''}" data-access="public">Публичный</button>
                                 <button type="button" class="access-switch-btn ${isPrivate ? 'active' : ''}" data-access="private">Приватный</button>
                             </div>
                             <input type="text" id="private-users" class="private-users-input" placeholder="Ники через запятую" value="${GithubCore.escapeHtml(allowedUsers)}" style="${isPrivate ? '' : 'display: none;'}">
                         </div>
-                        <div class="editor-footer-right">
-                            <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
-                        </div>
+                        <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                     </div>
                 </div>
             `;
@@ -646,6 +664,7 @@
                 toolbarContainer.appendChild(toolbar);
             }
         } else {
+            // Инициализация превью
             const previewArea = modal.querySelector('#modal-preview-area');
             const textarea = modal.querySelector('#modal-body');
             const updatePreview = () => {
@@ -658,23 +677,36 @@
                     previewArea.innerHTML = '<p class="text-secondary" style="text-align:center;">Предпросмотр</p>';
                 }
             };
+            // Живой предпросмотр при вводе
             textarea.addEventListener('input', updatePreview);
             updatePreview();
 
+            // Тулбар
             const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
             if (window.Editor) {
                 const toolbar = Editor.createEditorToolbar(textarea);
                 toolbarContainer.appendChild(toolbar);
             }
 
+            // Сервисы хостинга
             const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
             if (servicesPlaceholder && window.Editor) {
                 servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
             }
 
+            // Превью URL
             const previewUrlInput = modal.querySelector('#modal-preview-url');
-            // Убираем preview thumbnail — оно будет в правой панели предпросмотра
+            const thumbnailContainer = modal.querySelector('#preview-thumbnail-container');
+            const thumbnailImg = modal.querySelector('#preview-thumbnail-img');
+            const removePreviewBtn = modal.querySelector('#remove-preview-btn');
+            function updateThumbnail(url) {
+                if (url && url.trim()) { thumbnailImg.src = url; thumbnailContainer.style.display = 'block'; }
+                else { thumbnailContainer.style.display = 'none'; thumbnailImg.src = ''; }
+            }
+            previewUrlInput.addEventListener('input', (e) => updateThumbnail(e.target.value.trim()));
+            removePreviewBtn.addEventListener('click', () => { previewUrlInput.value = ''; updateThumbnail(''); });
 
+            // Переключатель доступа
             const accessPublicBtn = modal.querySelector('[data-access="public"]');
             const accessPrivateBtn = modal.querySelector('[data-access="private"]');
             const privateUsersInput = modal.querySelector('#private-users');
@@ -712,7 +744,7 @@
             if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl)) {
                 if (confirm('Найден несохранённый черновик. Восстановить?')) {
                     titleInput.value = savedDraft.title || '';
-                    if (savedDraft.previewUrl) previewUrlInput.value = savedDraft.previewUrl;
+                    if (savedDraft.previewUrl) { previewUrlInput.value = savedDraft.previewUrl; updateThumbnail(savedDraft.previewUrl); }
                     textarea.value = savedDraft.body || '';
                     if (categorySelect && savedDraft.category) categorySelect.value = savedDraft.category;
                     if (savedDraft.access === 'private') accessPrivateBtn.click(); else accessPublicBtn.click();
@@ -721,6 +753,7 @@
                 } else { UIUtils.clearDraft(draftKey); }
             }
 
+            // Проверка закрытия с изменениями
             let hasChanges = false;
             const markChanged = () => { hasChanges = true; };
             titleInput.addEventListener('input', markChanged);
@@ -752,6 +785,7 @@
             }
         }
 
+        // Обработчик отправки
         const submitBtn = modal.querySelector('#modal-submit');
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
@@ -795,6 +829,7 @@
                 }
             }
 
+            // Проверка опросов
             const pollMatches = finalBody.match(/<!-- poll: .*? -->/g);
             if (pollMatches && pollMatches.length > 1) {
                 if (!confirm('Несколько опросов, сохранён будет первый. Продолжить?')) return;
