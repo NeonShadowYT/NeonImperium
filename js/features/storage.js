@@ -68,11 +68,11 @@
         }
     }
 
-    // --- Надёжный fetch с цепочкой прокси (только для не-видео сайтов) ---
+    // --- Цепочка бесплатных, анонимных CORS-прокси (из https://gist.github.com/reynaldichernando/eab9c4e31e30677f176dc9eb732963ef) ---
     const PROXY_SERVICES = [
-        { url: 'https://api.allorigins.win/raw?url=' },
-        { url: 'https://corsproxy.io/?' },
-        { url: 'https://api.codetabs.com/v1/proxy?quest=' }
+        'https://api.allorigins.win/raw?url=', // Классический, надежный, без регистрации
+        'https://everyorigin.xyz/raw?url=',    // Современный, без лимитов, из нашего списка
+        'https://corsproxy.io/?'              // Еще один хороший вариант из списка
     ];
 
     async function fetchWithRetry(url, options = {}, retries = 1) {
@@ -97,9 +97,9 @@
         if (proxyIndex >= PROXY_SERVICES.length) {
             return fetchWithRetry(url, options);
         }
-        const proxy = PROXY_SERVICES[proxyIndex];
+        const proxyBase = PROXY_SERVICES[proxyIndex];
         try {
-            const proxyUrl = proxy.url + encodeURIComponent(url);
+            const proxyUrl = proxyBase + encodeURIComponent(url);
             const resp = await fetchWithRetry(proxyUrl, options);
             const text = await resp.text();
             return { text, url: proxyUrl };
@@ -110,8 +110,7 @@
 
     // --- Домены, которые мы встраиваем напрямую (iframe) без парсинга ---
     const DIRECT_EMBED_DOMAINS = [
-        /pornhub\.org/,
-        /rt\.pornhub\.org/
+        /pornhub\.org/, /rt\.pornhub\.org/
     ];
 
     function shouldEmbedDirectly(url) {
@@ -123,50 +122,39 @@
         }
     }
 
-    // --- Универсальный парсер метаданных (oEmbed, OpenGraph, JSON‑LD, HTML‑теги) ---
-    const OEMBED_PROVIDERS = [
-        { pattern: /youtube\.com|youtu\.be/, endpoint: 'https://www.youtube.com/oembed?url=' },
-        { pattern: /vimeo\.com/, endpoint: 'https://vimeo.com/api/oembed.json?url=' },
-        { pattern: /dailymotion\.com/, endpoint: 'https://www.dailymotion.com/services/oembed?url=' },
-        { pattern: /rutube\.ru/, endpoint: 'https://rutube.ru/api/oembed/?url=' },
-        { pattern: /vk\.com/, endpoint: 'https://vk.com/dev/oembed?url=' },
-        { pattern: /ok\.ru/, endpoint: 'https://ok.ru/dk?cmd=videoOEmbed&url=' },
-        { pattern: /twitch\.tv/, endpoint: 'https://api.twitch.tv/v5/oembed?url=' },
-        { pattern: /tiktok\.com/, endpoint: 'https://www.tiktok.com/oembed?url=' }
-    ];
-
+    // --- Универсальный парсер метаданных (oEmbed через Noembed, Open Graph, JSON‑LD, HTML‑теги) ---
     async function extractMetadata(url) {
         // Если сайт должен встраиваться напрямую, возвращаем embedUrl = url
         if (shouldEmbedDirectly(url)) {
             return {
                 title: url,
                 type: 'video',
-                embedUrl: url, // будем открывать iframe с самой страницей
+                embedUrl: url,
                 thumbnail: null
             };
         }
 
-        // 1. oEmbed
-        for (const provider of OEMBED_PROVIDERS) {
-            if (provider.pattern.test(url)) {
-                try {
-                    const resp = await fetchWithRetry(provider.endpoint + encodeURIComponent(url));
-                    const data = await resp.json();
-                    if (data) {
-                        return {
-                            title: data.title || '',
-                            thumbnail: data.thumbnail_url || '',
-                            embedUrl: data.html ? extractEmbedUrlFromHtml(data.html) : null,
-                            type: data.type === 'video' ? 'video' : 'link',
-                            provider: data.provider_name || ''
-                        };
-                    }
-                } catch (e) {}
-                break;
+        // 1. Пробуем Noembed (бесплатный, без API-ключа) для oEmbed
+        try {
+            const noembedUrl = `https://noembed.com/embed?url=${encodeURIComponent(url)}`;
+            const resp = await fetchWithRetry(noembedUrl);
+            const data = await resp.json();
+            
+            if (data && !data.error) {
+                console.log('✅ Успешно получены данные через Noembed');
+                return {
+                    title: data.title || url,
+                    thumbnail: data.thumbnail_url || '',
+                    embedUrl: data.html ? extractEmbedUrlFromHtml(data.html) : (data.url || null),
+                    type: data.type === 'video' ? 'video' : 'link',
+                    provider: data.provider_name || new URL(url).hostname
+                };
             }
+        } catch (e) {
+            console.warn('⚠️ Noembed не сработал, пробуем парсинг через прокси...', e);
         }
 
-        // 2. HTML через прокси (если не прямой embed)
+        // 2. Загружаем HTML через цепочку бесплатных прокси и извлекаем метаданные
         try {
             const { text } = await fetchWithProxies(url);
             const parser = new DOMParser();
@@ -184,7 +172,7 @@
                               doc.querySelector('meta[name="twitter:image"]')?.content ||
                               doc.querySelector('link[rel="image_src"]')?.href || '';
 
-            // JSON‑LD
+            // JSON‑LD (schema.org)
             const jsonLdScripts = doc.querySelectorAll('script[type="application/ld+json"]');
             for (const script of jsonLdScripts) {
                 try {
@@ -205,6 +193,7 @@
                 provider: new URL(url).hostname
             };
         } catch (e) {
+            console.error('❌ Все способы получения метаданных не сработали:', e);
             return { title: url, type: 'link' };
         }
     }
@@ -526,46 +515,7 @@
         return card;
     }
 
-    function openExternalLink(url, title) {
-        // Модальное окно с предупреждением о блокировке iframe
-        const contentHtml = `
-            <div style="text-align: center; padding: 20px;">
-                <i class="fas fa-external-link-alt" style="font-size: 48px; color: var(--accent); margin-bottom: 20px;"></i>
-                <h3>Сайт не разрешает встраивание</h3>
-                <p>Некоторые сайты (например, ${new URL(url).hostname}) блокируют отображение внутри iframe по соображениям безопасности.</p>
-                <p>Вы можете открыть страницу в новой вкладке или попробовать встроить её всё равно (может не работать).</p>
-                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">
-                    <button class="button" id="open-new-tab">Открыть в новой вкладке</button>
-                    <button class="button" id="try-embed">Попробовать встроить</button>
-                    <button class="button" id="cancel-external">Отмена</button>
-                </div>
-            </div>
-        `;
-        const { modal, closeModal } = UIUtils.createModal('Внешняя ссылка', contentHtml, { size: 'full' });
-        modal.querySelector('#open-new-tab').addEventListener('click', () => {
-            window.open(url, '_blank');
-            closeModal();
-        });
-        modal.querySelector('#try-embed').addEventListener('click', () => {
-            closeModal();
-            // Открываем модалку с iframe (может быть заблокировано)
-            const embedContent = `
-                <div style="width:100%; height:80vh;">
-                    <iframe src="${url}" frameborder="0" allowfullscreen style="width:100%; height:100%; border:none;"></iframe>
-                </div>
-            `;
-            UIUtils.createModal(title || 'Видео', embedContent, { size: 'full' });
-        });
-        modal.querySelector('#cancel-external').addEventListener('click', closeModal);
-    }
-
     function openVideoModal(embedUrl, title) {
-        // Для сайтов с прямым embed (например, hub.org) показываем предупреждение,
-        // так как они часто блокируют iframe
-        if (shouldEmbedDirectly(embedUrl)) {
-            openExternalLink(embedUrl, title);
-            return;
-        }
         const content = `
             <div style="width:100%; height:80vh;">
                 <iframe src="${embedUrl}" frameborder="0" allowfullscreen style="width:100%; height:100%; border:none;"></iframe>
