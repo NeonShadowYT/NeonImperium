@@ -49,17 +49,19 @@
         }
     }
 
-    // --- Надёжный fetch с fallback‑прокси и повторными попытками ---
+    // --- Надёжный fetch с цепочкой прокси ---
     const PROXY_SERVICES = [
         { url: 'https://api.allorigins.win/raw?url=', parse: (text) => text },
         { url: 'https://corsproxy.io/?', parse: (text) => text },
         { url: 'https://cors-anywhere-9bln.onrender.com/', parse: (text) => text },
-        { url: 'https://thingproxy.freeboard.io/fetch/', parse: (text) => text }
+        { url: 'https://thingproxy.freeboard.io/fetch/', parse: (text) => text },
+        { url: 'https://cors.bridged.cc/', parse: (text) => text },
+        { url: 'https://api.codetabs.com/v1/proxy?quest=', parse: (text) => text }
     ];
 
     async function fetchWithRetry(url, options = {}, retries = 2) {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
+        const timeout = setTimeout(() => controller.abort(), 10000);
         try {
             const resp = await fetch(url, { ...options, signal: controller.signal });
             clearTimeout(timeout);
@@ -68,7 +70,7 @@
         } catch (e) {
             clearTimeout(timeout);
             if (retries > 0) {
-                await new Promise(r => setTimeout(r, 500));
+                await new Promise(r => setTimeout(r, 800));
                 return fetchWithRetry(url, options, retries - 1);
             }
             throw e;
@@ -77,7 +79,6 @@
 
     async function fetchWithProxies(url, options = {}, proxyIndex = 0) {
         if (proxyIndex >= PROXY_SERVICES.length) {
-            // последняя попытка — прямой запрос
             return fetchWithRetry(url, options);
         }
         const proxy = PROXY_SERVICES[proxyIndex];
@@ -92,28 +93,47 @@
     }
 
     // --- Универсальный парсер метаданных (oEmbed, OpenGraph, JSON‑LD, HTML‑теги) ---
-    async function extractMetadata(url) {
-        // 1. Пытаемся получить oEmbed (для видео‑платформ)
-        try {
-            const oembed = await discoverOEmbed(url);
-            if (oembed) {
-                return {
-                    title: oembed.title || '',
-                    thumbnail: oembed.thumbnail_url || '',
-                    embedUrl: oembed.html ? extractEmbedUrlFromHtml(oembed.html) : null,
-                    type: oembed.type === 'video' ? 'video' : 'link',
-                    provider: oembed.provider_name || ''
-                };
-            }
-        } catch (e) { /* fallthrough */ }
+    const OEMBED_PROVIDERS = [
+        { pattern: /youtube\.com|youtu\.be/, endpoint: 'https://www.youtube.com/oembed?url=' },
+        { pattern: /vimeo\.com/, endpoint: 'https://vimeo.com/api/oembed.json?url=' },
+        { pattern: /dailymotion\.com/, endpoint: 'https://www.dailymotion.com/services/oembed?url=' },
+        { pattern: /rutube\.ru/, endpoint: 'https://rutube.ru/api/oembed/?url=' },
+        { pattern: /vk\.com/, endpoint: 'https://vk.com/dev/oembed?url=' },
+        { pattern: /ok\.ru/, endpoint: 'https://ok.ru/dk?cmd=videoOEmbed&url=' },
+        { pattern: /twitch\.tv/, endpoint: 'https://api.twitch.tv/v5/oembed?url=' },
+        { pattern: /tiktok\.com/, endpoint: 'https://www.tiktok.com/oembed?url=' },
+        { pattern: /coub\.com/, endpoint: 'https://coub.com/api/oembed.json?url=' },
+        { pattern: /instagram\.com/, endpoint: 'https://graph.facebook.com/v17.0/instagram_oembed?url=' },
+        { pattern: /facebook\.com/, endpoint: 'https://graph.facebook.com/v17.0/oembed_video?url=' }
+    ];
 
-        // 2. Загружаем HTML через прокси
+    async function extractMetadata(url) {
+        // 1. Попробовать oEmbed от известных провайдеров
+        for (const provider of OEMBED_PROVIDERS) {
+            if (provider.pattern.test(url)) {
+                try {
+                    const resp = await fetchWithRetry(provider.endpoint + encodeURIComponent(url));
+                    const data = await resp.json();
+                    if (data) {
+                        return {
+                            title: data.title || '',
+                            thumbnail: data.thumbnail_url || '',
+                            embedUrl: data.html ? extractEmbedUrlFromHtml(data.html) : null,
+                            type: data.type === 'video' ? 'video' : 'link',
+                            provider: data.provider_name || ''
+                        };
+                    }
+                } catch (e) { /* fallthrough */ }
+                break; // не пытаемся другие провайдеры для этого домена
+            }
+        }
+
+        // 2. Загрузить HTML и извлечь метаданные
         try {
             const { text } = await fetchWithProxies(url);
             const parser = new DOMParser();
             const doc = parser.parseFromString(text, 'text/html');
 
-            // Извлекаем по приоритету: OpenGraph → Twitter → JSON‑LD → HTML meta
             let title = doc.querySelector('meta[property="og:title"]')?.content ||
                        doc.querySelector('meta[name="twitter:title"]')?.content ||
                        doc.querySelector('title')?.textContent || '';
@@ -122,8 +142,6 @@
             let thumbnail = doc.querySelector('meta[property="og:image"]')?.content ||
                             doc.querySelector('meta[name="twitter:image"]')?.content ||
                             doc.querySelector('link[rel="image_src"]')?.href || '';
-
-            // Ищем видео: og:video, twitter:player, iframe с video
             let embedUrl = doc.querySelector('meta[property="og:video"]')?.content ||
                            doc.querySelector('meta[property="og:video:url"]')?.content ||
                            doc.querySelector('meta[name="twitter:player"]')?.content ||
@@ -134,8 +152,8 @@
             for (const script of jsonLdScripts) {
                 try {
                     const data = JSON.parse(script.textContent);
-                    if (data['@type'] === 'VideoObject' || (data['@graph'] && data['@graph'].some(i => i['@type'] === 'VideoObject'))) {
-                        const video = data['@type'] === 'VideoObject' ? data : data['@graph'].find(i => i['@type'] === 'VideoObject');
+                    const video = findVideoObject(data);
+                    if (video) {
                         title = title || video.name || '';
                         thumbnail = thumbnail || video.thumbnailUrl || (video.thumbnail && video.thumbnail[0]) || '';
                         embedUrl = embedUrl || video.embedUrl || video.contentUrl || '';
@@ -144,6 +162,7 @@
                 } catch (e) {}
             }
 
+            // Если embedUrl не найден, но есть og:video, используем его
             return {
                 title: title || url,
                 description,
@@ -153,39 +172,16 @@
                 provider: new URL(url).hostname
             };
         } catch (e) {
-            // Fallback: просто URL как заголовок
             return { title: url, type: 'link' };
         }
     }
 
-    async function discoverOEmbed(url) {
-        const host = new URL(url).hostname;
-        // Известные oEmbed провайдеры
-        const providers = {
-            'youtube.com': 'https://www.youtube.com/oembed?url=',
-            'youtu.be': 'https://www.youtube.com/oembed?url=',
-            'vimeo.com': 'https://vimeo.com/api/oembed.json?url=',
-            'dailymotion.com': 'https://www.dailymotion.com/services/oembed?url=',
-            'rutube.ru': 'https://rutube.ru/api/oembed/?url=',
-            'vk.com': 'https://vk.com/dev/oembed?url='
-        };
-        const base = providers[host];
-        if (base) {
-            try {
-                const resp = await fetchWithRetry(base + encodeURIComponent(url));
-                return await resp.json();
-            } catch (e) {}
+    function findVideoObject(data) {
+        if (!data) return null;
+        if (data['@type'] === 'VideoObject') return data;
+        if (Array.isArray(data['@graph'])) {
+            return data['@graph'].find(item => item['@type'] === 'VideoObject');
         }
-        // Пытаемся найти <link rel="alternate" type="application/json+oembed">
-        try {
-            const { text } = await fetchWithProxies(url);
-            const doc = new DOMParser().parseFromString(text, 'text/html');
-            const oembedLink = doc.querySelector('link[type="application/json+oembed"]')?.href;
-            if (oembedLink) {
-                const resp = await fetchWithRetry(oembedLink);
-                return await resp.json();
-            }
-        } catch (e) {}
         return null;
     }
 
@@ -339,7 +335,6 @@
         return gist.id;
     }
 
-    // Локальное хранилище (fallback)
     function loadBookmarksLocal() {
         try {
             const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -404,7 +399,30 @@
         }
     }
 
-    // --- Оптимистичные обновления ---
+    // --- Основные операции с закладками (экспортируются) ---
+    async function addBookmark(bookmark) {
+        if (!currentUser) {
+            UIUtils.showToast('Войдите в аккаунт', 'error');
+            return;
+        }
+        const bookmarks = await loadBookmarks();
+        if (bookmarks.some(b => b.url === bookmark.url)) {
+            UIUtils.showToast('Уже в избранном', 'info');
+            return;
+        }
+        bookmark.id = Date.now() + '-' + Math.random().toString(36);
+        bookmark.added = new Date().toISOString();
+        bookmarks.push(bookmark);
+        await saveBookmarks(bookmarks);
+    }
+
+    async function removeBookmark(bookmarkId) {
+        const bookmarks = await loadBookmarks();
+        const filtered = bookmarks.filter(b => b.id !== bookmarkId);
+        await saveBookmarks(filtered);
+    }
+
+    // --- Рендеринг карточки ---
     function renderBookmarkCard(bookmark, onDelete, onEdit) {
         const card = document.createElement('div');
         card.className = 'project-card-link';
@@ -438,7 +456,6 @@
         meta.innerHTML = `${bookmark.author ? `<i class="fas fa-user"></i> ${GithubCore.escapeHtml(bookmark.author)} · ` : ''}<i class="fas fa-calendar-alt"></i> ${new Date(bookmark.added).toLocaleDateString()}`;
         inner.appendChild(meta);
 
-        // Кнопки: удалить, редактировать
         const actionsDiv = document.createElement('div');
         actionsDiv.style.position = 'absolute';
         actionsDiv.style.top = '8px';
@@ -558,7 +575,6 @@
             bookmarks.sort((a,b) => new Date(b.added) - new Date(a.added));
             bookmarks.forEach(b => {
                 const card = renderBookmarkCard(b,
-                    // optimistic delete
                     (id) => {
                         const original = [...currentBookmarks];
                         const index = currentBookmarks.findIndex(bk => bk.id === id);
@@ -578,7 +594,6 @@
                             }
                         })();
                     },
-                    // edit
                     (bookmark) => {
                         openEditBookmarkModal(bookmark, (updated) => {
                             const index = currentBookmarks.findIndex(b => b.id === updated.id);
@@ -656,6 +671,7 @@
                 };
                 const index = currentBookmarks.findIndex(b => b.id === tempId);
                 if (index !== -1) currentBookmarks[index] = finalBookmark;
+                // Используем локальную addBookmark
                 await addBookmark(finalBookmark);
                 renderBookmarks(currentBookmarks);
                 UIUtils.showToast('Добавлено', 'success');
@@ -692,6 +708,7 @@
         }
     }
 
+    // Экспорт
     window.BookmarkStorage = {
         openStorageModal,
         addBookmark,
@@ -699,18 +716,25 @@
         removeBookmark
     };
 
+    // Инициализация
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', updateAuthState);
     } else {
         updateAuthState();
     }
 
-    // Запасной CDN для marked
+    // Запасные CDN для marked (дублируем в HTML, но здесь на всякий случай)
     if (typeof marked === 'undefined') {
-        const fallbackScript = document.createElement('script');
-        fallbackScript.src = 'https://unpkg.com/marked@4.0.0/marked.min.js';
-        fallbackScript.defer = true;
-        document.head.appendChild(fallbackScript);
-        console.warn('Основной CDN marked не загрузился, подключаем запасной (unpkg)');
+        const scripts = [
+            'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
+            'https://unpkg.com/marked@4.0.0/marked.min.js',
+            'https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.0/marked.min.js'
+        ];
+        for (const src of scripts) {
+            const script = document.createElement('script');
+            script.src = src;
+            script.defer = true;
+            document.head.appendChild(script);
+        }
     }
 })();
