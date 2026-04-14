@@ -49,19 +49,20 @@
         }
     }
 
-    // --- Надёжный fetch с цепочкой прокси ---
+    // --- Надёжный fetch с цепочкой прокси (увеличен таймаут, больше сервисов) ---
     const PROXY_SERVICES = [
         { url: 'https://api.allorigins.win/raw?url=', parse: (text) => text },
         { url: 'https://corsproxy.io/?', parse: (text) => text },
         { url: 'https://cors-anywhere-9bln.onrender.com/', parse: (text) => text },
         { url: 'https://thingproxy.freeboard.io/fetch/', parse: (text) => text },
         { url: 'https://cors.bridged.cc/', parse: (text) => text },
-        { url: 'https://api.codetabs.com/v1/proxy?quest=', parse: (text) => text }
+        { url: 'https://api.codetabs.com/v1/proxy?quest=', parse: (text) => text },
+        { url: 'https://proxy.cors.sh/', parse: (text) => text }
     ];
 
     async function fetchWithRetry(url, options = {}, retries = 2) {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
+        const timeout = setTimeout(() => controller.abort(), 15000); // 15 секунд
         try {
             const resp = await fetch(url, { ...options, signal: controller.signal });
             clearTimeout(timeout);
@@ -70,7 +71,7 @@
         } catch (e) {
             clearTimeout(timeout);
             if (retries > 0) {
-                await new Promise(r => setTimeout(r, 800));
+                await new Promise(r => setTimeout(r, 1000));
                 return fetchWithRetry(url, options, retries - 1);
             }
             throw e;
@@ -104,13 +105,30 @@
         { pattern: /tiktok\.com/, endpoint: 'https://www.tiktok.com/oembed?url=' },
         { pattern: /coub\.com/, endpoint: 'https://coub.com/api/oembed.json?url=' },
         { pattern: /instagram\.com/, endpoint: 'https://graph.facebook.com/v17.0/instagram_oembed?url=' },
-        { pattern: /facebook\.com/, endpoint: 'https://graph.facebook.com/v17.0/oembed_video?url=' }
+        { pattern: /facebook\.com/, endpoint: 'https://graph.facebook.com/v17.0/oembed_video?url=' },
+        { pattern: /pornhub\.org|rt\.pornhub\.org/, endpoint: null } // будем обрабатывать вручную
+    ];
+
+    // Домен-специфичные правила для извлечения embed и превью
+    const DOMAIN_RULES = [
+        {
+            pattern: /pornhub\.org/,
+            extract: (doc, url) => {
+                // Ищем iframe с src, содержащим /embed/
+                const iframe = doc.querySelector('iframe[src*="/embed/"]');
+                const embedUrl = iframe ? iframe.src : null;
+                // Ищем изображение с классом или внутри video-wrapper
+                const img = doc.querySelector('img[class*="thumb"], img[alt*="видео"], .video-thumb img, .player-preview img');
+                const thumbnail = img ? img.src : null;
+                return { embedUrl, thumbnail };
+            }
+        }
     ];
 
     async function extractMetadata(url) {
         // 1. Попробовать oEmbed от известных провайдеров
         for (const provider of OEMBED_PROVIDERS) {
-            if (provider.pattern.test(url)) {
+            if (provider.pattern.test(url) && provider.endpoint) {
                 try {
                     const resp = await fetchWithRetry(provider.endpoint + encodeURIComponent(url));
                     const data = await resp.json();
@@ -134,18 +152,36 @@
             const parser = new DOMParser();
             const doc = parser.parseFromString(text, 'text/html');
 
-            let title = doc.querySelector('meta[property="og:title"]')?.content ||
-                       doc.querySelector('meta[name="twitter:title"]')?.content ||
-                       doc.querySelector('title')?.textContent || '';
-            let description = doc.querySelector('meta[property="og:description"]')?.content ||
-                              doc.querySelector('meta[name="description"]')?.content || '';
-            let thumbnail = doc.querySelector('meta[property="og:image"]')?.content ||
-                            doc.querySelector('meta[name="twitter:image"]')?.content ||
-                            doc.querySelector('link[rel="image_src"]')?.href || '';
-            let embedUrl = doc.querySelector('meta[property="og:video"]')?.content ||
+            // Применяем доменные правила
+            let embedUrl = null;
+            let thumbnail = null;
+            for (const rule of DOMAIN_RULES) {
+                if (rule.pattern.test(url)) {
+                    const extracted = rule.extract(doc, url);
+                    embedUrl = extracted.embedUrl;
+                    thumbnail = extracted.thumbnail;
+                    break;
+                }
+            }
+
+            // Стандартное извлечение, если не нашли по правилам
+            if (!embedUrl) {
+                embedUrl = doc.querySelector('meta[property="og:video"]')?.content ||
                            doc.querySelector('meta[property="og:video:url"]')?.content ||
                            doc.querySelector('meta[name="twitter:player"]')?.content ||
-                           doc.querySelector('iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="dailymotion"], iframe[src*="rutube"], iframe[src*="vk.com"]')?.src || null;
+                           doc.querySelector('iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="dailymotion"], iframe[src*="rutube"], iframe[src*="vk.com"], iframe[src*="/embed/"]')?.src || null;
+            }
+
+            const title = doc.querySelector('meta[property="og:title"]')?.content ||
+                         doc.querySelector('meta[name="twitter:title"]')?.content ||
+                         doc.querySelector('title')?.textContent || url;
+            const description = doc.querySelector('meta[property="og:description"]')?.content ||
+                                doc.querySelector('meta[name="description"]')?.content || '';
+            if (!thumbnail) {
+                thumbnail = doc.querySelector('meta[property="og:image"]')?.content ||
+                            doc.querySelector('meta[name="twitter:image"]')?.content ||
+                            doc.querySelector('link[rel="image_src"]')?.href || '';
+            }
 
             // JSON‑LD (schema.org)
             const jsonLdScripts = doc.querySelectorAll('script[type="application/ld+json"]');
@@ -154,15 +190,13 @@
                     const data = JSON.parse(script.textContent);
                     const video = findVideoObject(data);
                     if (video) {
-                        title = title || video.name || '';
-                        thumbnail = thumbnail || video.thumbnailUrl || (video.thumbnail && video.thumbnail[0]) || '';
                         embedUrl = embedUrl || video.embedUrl || video.contentUrl || '';
+                        thumbnail = thumbnail || video.thumbnailUrl || (video.thumbnail && video.thumbnail[0]) || '';
                         break;
                     }
                 } catch (e) {}
             }
 
-            // Если embedUrl не найден, но есть og:video, используем его
             return {
                 title: title || url,
                 description,
@@ -432,8 +466,6 @@
         inner.className = 'project-card';
         inner.style.position = 'relative';
 
-        const isVideo = bookmark.type === 'video' || (bookmark.embedUrl && bookmark.embedUrl.includes('youtube'));
-
         const imgWrapper = document.createElement('div');
         imgWrapper.className = 'image-wrapper';
         let thumbnail = bookmark.thumbnail || 'images/default-news.webp';
@@ -671,7 +703,6 @@
                 };
                 const index = currentBookmarks.findIndex(b => b.id === tempId);
                 if (index !== -1) currentBookmarks[index] = finalBookmark;
-                // Используем локальную addBookmark
                 await addBookmark(finalBookmark);
                 renderBookmarks(currentBookmarks);
                 UIUtils.showToast('Добавлено', 'success');
@@ -708,7 +739,6 @@
         }
     }
 
-    // Экспорт
     window.BookmarkStorage = {
         openStorageModal,
         addBookmark,
@@ -716,14 +746,13 @@
         removeBookmark
     };
 
-    // Инициализация
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', updateAuthState);
     } else {
         updateAuthState();
     }
 
-    // Запасные CDN для marked (дублируем в HTML, но здесь на всякий случай)
+    // Запасные CDN для marked (на всякий случай)
     if (typeof marked === 'undefined') {
         const scripts = [
             'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
