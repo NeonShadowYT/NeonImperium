@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist (с шифрованием)
+// js/features/storage.js — Хранилище закладок через GitHub Gist (исправленное шифрование + компактный интерфейс)
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -10,10 +10,10 @@
     let gistId = null;
     let tokenScopes = new Set();
 
-    // --- Шифрование (простое XOR с ключом на основе токена) ---
+    // --- Надёжное XOR-шифрование с base64 (без ошибок) ---
     function getEncryptionKey() {
         if (!currentToken) return 'default-key';
-        // Используем хеш от токена для стабильности
+        // Хеш токена для стабильности
         let hash = 0;
         for (let i = 0; i < currentToken.length; i++) {
             hash = ((hash << 5) - hash) + currentToken.charCodeAt(i);
@@ -22,28 +22,44 @@
         return hash.toString(16);
     }
 
+    function xorBytes(data, key) {
+        const encoder = new TextEncoder();
+        const dataBytes = encoder.encode(data);
+        const keyBytes = encoder.encode(key);
+        const result = new Uint8Array(dataBytes.length);
+        for (let i = 0; i < dataBytes.length; i++) {
+            result[i] = dataBytes[i] ^ keyBytes[i % keyBytes.length];
+        }
+        return result;
+    }
+
     function encryptData(data) {
         const key = getEncryptionKey();
         const json = JSON.stringify(data);
-        let result = '';
-        for (let i = 0; i < json.length; i++) {
-            const charCode = json.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-            result += String.fromCharCode(charCode);
+        const xored = xorBytes(json, key);
+        // Преобразуем Uint8Array в бинарную строку для btoa
+        let binary = '';
+        for (let i = 0; i < xored.length; i++) {
+            binary += String.fromCharCode(xored[i]);
         }
-        // Кодируем в base64 для безопасного хранения в JSON
-        return btoa(result);
+        return btoa(binary);
     }
 
     function decryptData(encrypted) {
         try {
             const key = getEncryptionKey();
-            const decoded = atob(encrypted);
-            let result = '';
-            for (let i = 0; i < decoded.length; i++) {
-                const charCode = decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-                result += String.fromCharCode(charCode);
+            const binary = atob(encrypted);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
             }
-            return JSON.parse(result);
+            const keyBytes = new TextEncoder().encode(key);
+            const resultBytes = new Uint8Array(bytes.length);
+            for (let i = 0; i < bytes.length; i++) {
+                resultBytes[i] = bytes[i] ^ keyBytes[i % keyBytes.length];
+            }
+            const json = new TextDecoder().decode(resultBytes);
+            return JSON.parse(json);
         } catch (e) {
             console.warn('Decryption failed, maybe token changed?', e);
             return { bookmarks: [] };
@@ -289,7 +305,9 @@
     function extractVideoId(url) {
         const patterns = [
             /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
-            /youtube\.com\/embed\/([^&\n?#]+)/
+            /youtube\.com\/embed\/([^&\n?#]+)/,
+            /(?:vimeo\.com\/)(\d+)/,
+            /(?:dailymotion\.com\/video\/)([a-zA-Z0-9]+)/
         ];
         for (const pattern of patterns) {
             const match = url.match(pattern);
@@ -299,7 +317,20 @@
     }
 
     function isVideoUrl(url) {
-        return extractVideoId(url) !== null || /\.(mp4|webm|ogg)(\?|$)/i.test(url);
+        return extractVideoId(url) !== null || /\.(mp4|webm|ogg|mov)(\?|$)/i.test(url);
+    }
+
+    function getEmbedUrl(url) {
+        const videoId = extractVideoId(url);
+        if (!videoId) return null;
+        if (url.includes('youtube') || url.includes('youtu.be')) {
+            return `https://www.youtube.com/embed/${videoId}`;
+        } else if (url.includes('vimeo')) {
+            return `https://player.vimeo.com/video/${videoId}`;
+        } else if (url.includes('dailymotion')) {
+            return `https://www.dailymotion.com/embed/video/${videoId}`;
+        }
+        return null;
     }
 
     function renderBookmarkCard(bookmark, onDelete) {
@@ -313,12 +344,20 @@
 
         const videoId = extractVideoId(bookmark.url);
         const isVideo = videoId !== null;
+        const embedUrl = isVideo ? getEmbedUrl(bookmark.url) : null;
 
         const imgWrapper = document.createElement('div');
         imgWrapper.className = 'image-wrapper';
         let thumbnail = bookmark.thumbnail || 'images/default-news.webp';
         if (isVideo && !bookmark.thumbnail) {
-            thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+            if (bookmark.url.includes('youtube')) {
+                thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+            } else if (bookmark.url.includes('vimeo')) {
+                // Для Vimeo можно попытаться загрузить превью через API, но пока заглушка
+                thumbnail = 'images/default-news.webp';
+            } else {
+                thumbnail = 'images/default-news.webp';
+            }
         }
         const img = document.createElement('img');
         img.src = thumbnail;
@@ -364,8 +403,8 @@
         card.appendChild(inner);
 
         card.addEventListener('click', () => {
-            if (isVideo) {
-                openVideoModal(videoId, bookmark.title);
+            if (embedUrl) {
+                openVideoModal(embedUrl, bookmark.title);
             } else {
                 window.open(bookmark.url, '_blank');
             }
@@ -374,23 +413,22 @@
         return card;
     }
 
-    function openVideoModal(videoId, title) {
+    function openVideoModal(embedUrl, title) {
         const content = `
             <div class="video-embed" style="width:100%;">
-                <iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen style="width:100%; aspect-ratio:16/9;"></iframe>
+                <iframe src="${embedUrl}" frameborder="0" allowfullscreen style="width:100%; aspect-ratio:16/9;"></iframe>
             </div>
         `;
         UIUtils.createModal(title || 'Видео', content, { size: 'full' });
     }
 
     async function openStorageModalContent(forceLocal = false) {
-        // Компактная форма в одной строке
         const contentHtml = `
             <div id="bookmarks-container" style="display:flex; flex-direction:column; gap:16px;">
-                <div style="display:flex; gap:8px; align-items:stretch;">
-                    <input type="url" id="new-bookmark-url" placeholder="Ссылка..." style="flex:2; min-width:180px; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
-                    <input type="text" id="new-bookmark-title" placeholder="Название" style="flex:2; min-width:150px; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
-                    <button class="button" id="add-bookmark-btn" style="padding:10px 20px; white-space:nowrap;"><i class="fas fa-plus"></i> Добавить</button>
+                <div style="display:flex; gap:8px; align-items:stretch; flex-wrap:wrap;">
+                    <input type="url" id="new-bookmark-url" placeholder="Ссылка..." style="flex:2; min-width:180px; padding:8px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
+                    <input type="text" id="new-bookmark-title" placeholder="Название" style="flex:2; min-width:150px; padding:8px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
+                    <button class="button" id="add-bookmark-btn" style="padding:8px 18px; white-space:nowrap;"><i class="fas fa-plus"></i> Добавить</button>
                 </div>
                 <div class="projects-grid" id="bookmarks-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
@@ -410,11 +448,18 @@
         const titleInput = modal.querySelector('#new-bookmark-title');
         const addBtn = modal.querySelector('#add-bookmark-btn');
 
-        // Убедимся, что сетка 3 колонки, но на мобильных адаптируется через медиа-запросы в CSS
-        // Добавим inline стиль для гарантии
-        grid.style.display = 'grid';
-        grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
-        grid.style.gap = '16px';
+        // Адаптивность сетки на мобильных будет через CSS, но мы оставим inline стили
+        function applyGridResponsive() {
+            if (window.innerWidth <= 700) {
+                grid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+            } else if (window.innerWidth <= 500) {
+                grid.style.gridTemplateColumns = '1fr';
+            } else {
+                grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            }
+        }
+        applyGridResponsive();
+        window.addEventListener('resize', applyGridResponsive);
 
         async function refreshGrid() {
             grid.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>';
