@@ -110,10 +110,8 @@
 
     // --- Домены, которые мы встраиваем напрямую (iframe) без парсинга ---
     const DIRECT_EMBED_DOMAINS = [
-        /hub\.org/,
-        /pohub\.org/,
-        /rt\.hub\.org/,
-        /rt\.pohub\.org/
+        /pornhub\.org/,
+        /rt\.pornhub\.org/
     ];
 
     function shouldEmbedDirectly(url) {
@@ -528,7 +526,46 @@
         return card;
     }
 
+    function openExternalLink(url, title) {
+        // Модальное окно с предупреждением о блокировке iframe
+        const contentHtml = `
+            <div style="text-align: center; padding: 20px;">
+                <i class="fas fa-external-link-alt" style="font-size: 48px; color: var(--accent); margin-bottom: 20px;"></i>
+                <h3>Сайт не разрешает встраивание</h3>
+                <p>Некоторые сайты (например, ${new URL(url).hostname}) блокируют отображение внутри iframe по соображениям безопасности.</p>
+                <p>Вы можете открыть страницу в новой вкладке или попробовать встроить её всё равно (может не работать).</p>
+                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">
+                    <button class="button" id="open-new-tab">Открыть в новой вкладке</button>
+                    <button class="button" id="try-embed">Попробовать встроить</button>
+                    <button class="button" id="cancel-external">Отмена</button>
+                </div>
+            </div>
+        `;
+        const { modal, closeModal } = UIUtils.createModal('Внешняя ссылка', contentHtml, { size: 'full' });
+        modal.querySelector('#open-new-tab').addEventListener('click', () => {
+            window.open(url, '_blank');
+            closeModal();
+        });
+        modal.querySelector('#try-embed').addEventListener('click', () => {
+            closeModal();
+            // Открываем модалку с iframe (может быть заблокировано)
+            const embedContent = `
+                <div style="width:100%; height:80vh;">
+                    <iframe src="${url}" frameborder="0" allowfullscreen style="width:100%; height:100%; border:none;"></iframe>
+                </div>
+            `;
+            UIUtils.createModal(title || 'Видео', embedContent, { size: 'full' });
+        });
+        modal.querySelector('#cancel-external').addEventListener('click', closeModal);
+    }
+
     function openVideoModal(embedUrl, title) {
+        // Для сайтов с прямым embed (например, hub.org) показываем предупреждение,
+        // так как они часто блокируют iframe
+        if (shouldEmbedDirectly(embedUrl)) {
+            openExternalLink(embedUrl, title);
+            return;
+        }
         const content = `
             <div style="width:100%; height:80vh;">
                 <iframe src="${embedUrl}" frameborder="0" allowfullscreen style="width:100%; height:100%; border:none;"></iframe>
