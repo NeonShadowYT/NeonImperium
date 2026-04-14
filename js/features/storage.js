@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist (исправленное шифрование + компактный интерфейс)
+// js/features/storage.js — Хранилище закладок через GitHub Gist (с шифрованием и мульти-видео)
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -10,10 +10,9 @@
     let gistId = null;
     let tokenScopes = new Set();
 
-    // --- Надёжное XOR-шифрование с base64 (без ошибок) ---
+    // --- Шифрование (XOR с ключом на основе токена) ---
     function getEncryptionKey() {
         if (!currentToken) return 'default-key';
-        // Хеш токена для стабильности
         let hash = 0;
         for (let i = 0; i < currentToken.length; i++) {
             hash = ((hash << 5) - hash) + currentToken.charCodeAt(i);
@@ -22,48 +21,106 @@
         return hash.toString(16);
     }
 
-    function xorBytes(data, key) {
-        const encoder = new TextEncoder();
-        const dataBytes = encoder.encode(data);
-        const keyBytes = encoder.encode(key);
-        const result = new Uint8Array(dataBytes.length);
-        for (let i = 0; i < dataBytes.length; i++) {
-            result[i] = dataBytes[i] ^ keyBytes[i % keyBytes.length];
-        }
-        return result;
-    }
-
     function encryptData(data) {
         const key = getEncryptionKey();
         const json = JSON.stringify(data);
-        const xored = xorBytes(json, key);
-        // Преобразуем Uint8Array в бинарную строку для btoa
-        let binary = '';
-        for (let i = 0; i < xored.length; i++) {
-            binary += String.fromCharCode(xored[i]);
+        let result = '';
+        for (let i = 0; i < json.length; i++) {
+            const charCode = json.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+            result += String.fromCharCode(charCode);
         }
-        return btoa(binary);
+        return btoa(result);
     }
 
     function decryptData(encrypted) {
         try {
             const key = getEncryptionKey();
-            const binary = atob(encrypted);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) {
-                bytes[i] = binary.charCodeAt(i);
+            const decoded = atob(encrypted);
+            let result = '';
+            for (let i = 0; i < decoded.length; i++) {
+                const charCode = decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+                result += String.fromCharCode(charCode);
             }
-            const keyBytes = new TextEncoder().encode(key);
-            const resultBytes = new Uint8Array(bytes.length);
-            for (let i = 0; i < bytes.length; i++) {
-                resultBytes[i] = bytes[i] ^ keyBytes[i % keyBytes.length];
-            }
-            const json = new TextDecoder().decode(resultBytes);
-            return JSON.parse(json);
+            return JSON.parse(result);
         } catch (e) {
             console.warn('Decryption failed, maybe token changed?', e);
             return { bookmarks: [] };
         }
+    }
+
+    // --- Поддержка видео с разных платформ ---
+    const VIDEO_PLATFORMS = {
+        youtube: {
+            pattern: /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+            embedUrl: (id) => `https://www.youtube.com/embed/${id}`,
+            thumbnail: (id) => `https://img.youtube.com/vi/${id}/mqdefault.jpg`
+        },
+        rutube: {
+            pattern: /rutube\.ru\/video\/(?:embed\/)?([a-zA-Z0-9]+)/,
+            embedUrl: (id) => `https://rutube.ru/play/embed/${id}`,
+            thumbnail: (id) => `https://rutube.ru/api/video/${id}/thumbnail/`
+        },
+        vimeo: {
+            pattern: /vimeo\.com\/(?:video\/)?(\d+)/,
+            embedUrl: (id) => `https://player.vimeo.com/video/${id}`,
+            thumbnail: (id) => null // Vimeo требует API, оставим null
+        },
+        dailymotion: {
+            pattern: /dailymotion\.com\/(?:video|embed)\/([a-zA-Z0-9]+)/,
+            embedUrl: (id) => `https://www.dailymotion.com/embed/video/${id}`,
+            thumbnail: (id) => `https://www.dailymotion.com/thumbnail/video/${id}`
+        },
+        vk: {
+            pattern: /vk\.com\/video.*(?:oid=-?\d+&id=\d+|video-?\d+_\d+)/,
+            // VK требует сложный oEmbed, оставим placeholder
+            embedUrl: (url) => {
+                const match = url.match(/video(-?\d+_\d+)/);
+                return match ? `https://vk.com/video_ext.php?${match[1]}` : null;
+            },
+            thumbnail: () => null
+        },
+        ok: {
+            pattern: /ok\.ru\/video(?:embed)?\/(\d+)/,
+            embedUrl: (id) => `https://ok.ru/videoembed/${id}`,
+            thumbnail: (id) => `https://i.mycdn.me/videoPreview?id=${id}&type=32`
+        }
+    };
+
+    function detectVideoPlatform(url) {
+        for (const [name, platform] of Object.entries(VIDEO_PLATFORMS)) {
+            const match = url.match(platform.pattern);
+            if (match) {
+                return { name, id: match[1] || match[0], platform };
+            }
+        }
+        return null;
+    }
+
+    function extractVideoId(url) {
+        const detected = detectVideoPlatform(url);
+        return detected ? detected.id : null;
+    }
+
+    function isVideoUrl(url) {
+        return detectVideoPlatform(url) !== null || /\.(mp4|webm|ogg)(\?|$)/i.test(url);
+    }
+
+    function getEmbedUrl(url) {
+        const detected = detectVideoPlatform(url);
+        if (detected) {
+            const { platform, id } = detected;
+            return typeof platform.embedUrl === 'function' ? platform.embedUrl(id, url) : platform.embedUrl(id);
+        }
+        return null;
+    }
+
+    function getVideoThumbnail(url) {
+        const detected = detectVideoPlatform(url);
+        if (detected) {
+            const { platform, id } = detected;
+            return typeof platform.thumbnail === 'function' ? platform.thumbnail(id) : null;
+        }
+        return null;
     }
 
     // --- Состояние авторизации ---
@@ -302,37 +359,6 @@
         await saveBookmarks(filtered);
     }
 
-    function extractVideoId(url) {
-        const patterns = [
-            /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
-            /youtube\.com\/embed\/([^&\n?#]+)/,
-            /(?:vimeo\.com\/)(\d+)/,
-            /(?:dailymotion\.com\/video\/)([a-zA-Z0-9]+)/
-        ];
-        for (const pattern of patterns) {
-            const match = url.match(pattern);
-            if (match) return match[1];
-        }
-        return null;
-    }
-
-    function isVideoUrl(url) {
-        return extractVideoId(url) !== null || /\.(mp4|webm|ogg|mov)(\?|$)/i.test(url);
-    }
-
-    function getEmbedUrl(url) {
-        const videoId = extractVideoId(url);
-        if (!videoId) return null;
-        if (url.includes('youtube') || url.includes('youtu.be')) {
-            return `https://www.youtube.com/embed/${videoId}`;
-        } else if (url.includes('vimeo')) {
-            return `https://player.vimeo.com/video/${videoId}`;
-        } else if (url.includes('dailymotion')) {
-            return `https://www.dailymotion.com/embed/video/${videoId}`;
-        }
-        return null;
-    }
-
     function renderBookmarkCard(bookmark, onDelete) {
         const card = document.createElement('div');
         card.className = 'project-card-link';
@@ -342,22 +368,17 @@
         inner.className = 'project-card';
         inner.style.position = 'relative';
 
-        const videoId = extractVideoId(bookmark.url);
-        const isVideo = videoId !== null;
-        const embedUrl = isVideo ? getEmbedUrl(bookmark.url) : null;
+        const detected = detectVideoPlatform(bookmark.url);
+        const isVideo = detected !== null;
+        const videoId = detected ? detected.id : null;
+        const platform = detected ? detected.platform : null;
 
         const imgWrapper = document.createElement('div');
         imgWrapper.className = 'image-wrapper';
         let thumbnail = bookmark.thumbnail || 'images/default-news.webp';
-        if (isVideo && !bookmark.thumbnail) {
-            if (bookmark.url.includes('youtube')) {
-                thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-            } else if (bookmark.url.includes('vimeo')) {
-                // Для Vimeo можно попытаться загрузить превью через API, но пока заглушка
-                thumbnail = 'images/default-news.webp';
-            } else {
-                thumbnail = 'images/default-news.webp';
-            }
+        if (isVideo && !bookmark.thumbnail && platform) {
+            const generatedThumb = typeof platform.thumbnail === 'function' ? platform.thumbnail(videoId) : null;
+            thumbnail = generatedThumb || thumbnail;
         }
         const img = document.createElement('img');
         img.src = thumbnail;
@@ -403,8 +424,13 @@
         card.appendChild(inner);
 
         card.addEventListener('click', () => {
-            if (embedUrl) {
-                openVideoModal(embedUrl, bookmark.title);
+            if (isVideo) {
+                const embedUrl = getEmbedUrl(bookmark.url);
+                if (embedUrl) {
+                    openVideoModal(embedUrl, bookmark.title);
+                } else {
+                    window.open(bookmark.url, '_blank');
+                }
             } else {
                 window.open(bookmark.url, '_blank');
             }
@@ -423,12 +449,13 @@
     }
 
     async function openStorageModalContent(forceLocal = false) {
+        // Компактная форма в одной строке (кнопка по высоте полей)
         const contentHtml = `
             <div id="bookmarks-container" style="display:flex; flex-direction:column; gap:16px;">
-                <div style="display:flex; gap:8px; align-items:stretch; flex-wrap:wrap;">
-                    <input type="url" id="new-bookmark-url" placeholder="Ссылка..." style="flex:2; min-width:180px; padding:8px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
-                    <input type="text" id="new-bookmark-title" placeholder="Название" style="flex:2; min-width:150px; padding:8px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
-                    <button class="button" id="add-bookmark-btn" style="padding:8px 18px; white-space:nowrap;"><i class="fas fa-plus"></i> Добавить</button>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="url" id="new-bookmark-url" placeholder="Ссылка..." style="flex:2; min-width:180px; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary); height:44px; box-sizing:border-box;">
+                    <input type="text" id="new-bookmark-title" placeholder="Название" style="flex:2; min-width:150px; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary); height:44px; box-sizing:border-box;">
+                    <button class="button" id="add-bookmark-btn" style="padding:10px 20px; height:44px; box-sizing:border-box; white-space:nowrap;"><i class="fas fa-plus"></i> Добавить</button>
                 </div>
                 <div class="projects-grid" id="bookmarks-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
@@ -448,18 +475,10 @@
         const titleInput = modal.querySelector('#new-bookmark-title');
         const addBtn = modal.querySelector('#add-bookmark-btn');
 
-        // Адаптивность сетки на мобильных будет через CSS, но мы оставим inline стили
-        function applyGridResponsive() {
-            if (window.innerWidth <= 700) {
-                grid.style.gridTemplateColumns = 'repeat(2, 1fr)';
-            } else if (window.innerWidth <= 500) {
-                grid.style.gridTemplateColumns = '1fr';
-            } else {
-                grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
-            }
-        }
-        applyGridResponsive();
-        window.addEventListener('resize', applyGridResponsive);
+        // Гарантируем 3 колонки
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+        grid.style.gap = '16px';
 
         async function refreshGrid() {
             grid.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>';
@@ -505,11 +524,12 @@
                         title = url;
                     }
                 }
+                const thumbnail = getVideoThumbnail(url) || null;
                 await addBookmark({
                     url,
                     title,
                     type: isVideoUrl(url) ? 'video' : 'link',
-                    thumbnail: extractVideoId(url) ? `https://img.youtube.com/vi/${extractVideoId(url)}/mqdefault.jpg` : null
+                    thumbnail
                 });
                 UIUtils.showToast('Добавлено', 'success');
                 urlInput.value = '';
@@ -561,5 +581,14 @@
         document.addEventListener('DOMContentLoaded', updateAuthState);
     } else {
         updateAuthState();
+    }
+
+    // Добавляем запасной CDN для marked (в случае ошибки загрузки основного)
+    if (typeof marked === 'undefined') {
+        const fallbackScript = document.createElement('script');
+        fallbackScript.src = 'https://unpkg.com/marked@4.0.0/marked.min.js';
+        fallbackScript.defer = true;
+        document.head.appendChild(fallbackScript);
+        console.warn('Основной CDN marked не загрузился, подключаем запасной (unpkg)');
     }
 })();
