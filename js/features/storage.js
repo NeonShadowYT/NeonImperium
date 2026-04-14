@@ -1,4 +1,4 @@
-// storage.js — хранилище закладок через GitHub Gist
+// js/features/storage.js — хранилище закладок через GitHub Gist (исправленная версия)
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -8,21 +8,19 @@
     let currentToken = null;
     let gistId = null;
 
-    // Инициализация при входе
-    function init() {
+    // Обновление состояния авторизации из GithubAuth
+    function updateAuthState() {
         currentUser = GithubAuth.getCurrentUser();
         currentToken = GithubAuth.getToken();
         if (currentUser && currentToken) {
             loadGistId();
+        } else {
+            gistId = null;
         }
     }
 
-    window.addEventListener('github-login-success', () => {
-        currentUser = GithubAuth.getCurrentUser();
-        currentToken = GithubAuth.getToken();
-        loadGistId();
-    });
-
+    // Слушаем события входа/выхода
+    window.addEventListener('github-login-success', updateAuthState);
     window.addEventListener('github-logout', () => {
         currentUser = null;
         currentToken = null;
@@ -45,15 +43,18 @@
 
     function saveGistId(id) {
         gistId = id;
-        localStorage.setItem(getStorageKey(), JSON.stringify({ gistId: id }));
+        if (currentUser) {
+            localStorage.setItem(getStorageKey(), JSON.stringify({ gistId: id }));
+        }
     }
 
+    // Получить или создать приватный Gist
     async function getOrCreateGist() {
         const token = currentToken;
         if (!token) throw new Error('No token');
 
+        // Если уже есть ID, проверяем, существует ли Gist
         if (gistId) {
-            // Проверяем существование
             try {
                 const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -62,20 +63,23 @@
             } catch (e) {}
         }
 
-        // Ищем существующий gist по описанию
+        // Ищем существующий Gist по описанию
         try {
             const resp = await fetch('https://api.github.com/gists', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const gists = await resp.json();
-            const existing = gists.find(g => g.description === GIST_DESCRIPTION && g.files[GIST_FILENAME]);
+            const existing = gists.find(g => g.description === GIST_DESCRIPTION && g.files && g.files[GIST_FILENAME]);
             if (existing) {
                 saveGistId(existing.id);
                 return existing.id;
             }
-        } catch (e) {}
+        } catch (e) {
+            console.warn('Failed to list gists', e);
+        }
 
-        // Создаём новый
+        // Создаём новый приватный Gist
         const createResp = await fetch('https://api.github.com/gists', {
             method: 'POST',
             headers: {
@@ -92,12 +96,16 @@
                 }
             })
         });
+        if (!createResp.ok) {
+            const err = await createResp.json();
+            throw new Error(`Failed to create gist: ${err.message}`);
+        }
         const gist = await createResp.json();
-        if (!gist.id) throw new Error('Failed to create gist');
         saveGistId(gist.id);
         return gist.id;
     }
 
+    // Загрузить закладки из Gist
     async function loadBookmarks() {
         const token = currentToken;
         if (!token) return [];
@@ -107,6 +115,7 @@
             const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const gist = await resp.json();
             const file = gist.files[GIST_FILENAME];
             if (!file) return [];
@@ -114,10 +123,12 @@
             return content.bookmarks || [];
         } catch (e) {
             console.warn('Failed to load bookmarks', e);
+            UIUtils.showToast('Ошибка загрузки закладок: ' + e.message, 'error');
             return [];
         }
     }
 
+    // Сохранить закладки в Gist
     async function saveBookmarks(bookmarks) {
         const token = currentToken;
         if (!token) throw new Error('No token');
@@ -137,16 +148,19 @@
                 }
             })
         });
-        if (!resp.ok) throw new Error('Failed to save bookmarks');
+        if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.message);
+        }
     }
 
+    // Добавить новую закладку
     async function addBookmark(bookmark) {
         if (!currentUser) {
             UIUtils.showToast('Войдите в аккаунт', 'error');
             return;
         }
         const bookmarks = await loadBookmarks();
-        // Проверяем дубликат по URL
         if (bookmarks.some(b => b.url === bookmark.url)) {
             UIUtils.showToast('Уже в избранном', 'info');
             return;
@@ -157,12 +171,14 @@
         await saveBookmarks(bookmarks);
     }
 
+    // Удалить закладку по ID
     async function removeBookmark(bookmarkId) {
         const bookmarks = await loadBookmarks();
         const filtered = bookmarks.filter(b => b.id !== bookmarkId);
         await saveBookmarks(filtered);
     }
 
+    // Извлечь YouTube ID из URL
     function extractVideoId(url) {
         const patterns = [
             /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
@@ -179,6 +195,7 @@
         return extractVideoId(url) !== null || /\.(mp4|webm|ogg)(\?|$)/i.test(url);
     }
 
+    // Карточка закладки (как в новостях)
     function renderBookmarkCard(bookmark, onDelete) {
         const card = document.createElement('div');
         card.className = 'project-card-link';
@@ -217,6 +234,7 @@
         meta.innerHTML = `${bookmark.author ? `<i class="fas fa-user"></i> ${GithubCore.escapeHtml(bookmark.author)} · ` : ''}<i class="fas fa-calendar-alt"></i> ${new Date(bookmark.added).toLocaleDateString()}`;
         inner.appendChild(meta);
 
+        // Кнопка удаления
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'bookmark-delete';
         deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
@@ -243,7 +261,6 @@
 
         card.addEventListener('click', () => {
             if (isVideo) {
-                // Открываем плеер в модалке
                 openVideoModal(videoId, bookmark.title);
             } else {
                 window.open(bookmark.url, '_blank');
@@ -262,25 +279,35 @@
         UIUtils.createModal(title || 'Видео', content, { size: 'full' });
     }
 
+    // Главная модалка хранилища
     async function openStorageModal() {
+        // Принудительно обновляем состояние перед открытием
+        updateAuthState();
+        
         if (!currentUser) {
-            UIUtils.showToast('Войдите в аккаунт', 'error');
+            UIUtils.showToast('Войдите в аккаунт GitHub через кнопку в правом верхнем углу', 'error');
+            return;
+        }
+        if (!currentToken) {
+            UIUtils.showToast('Токен не найден. Попробуйте выйти и войти заново.', 'error');
             return;
         }
 
         const contentHtml = `
             <div id="bookmarks-container" style="display:flex; flex-direction:column; gap:16px;">
-                <div style="display:flex; gap:10px; margin-bottom:20px;">
-                    <input type="url" id="new-bookmark-url" placeholder="Вставьте ссылку..." style="flex:1; padding:10px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
-                    <input type="text" id="new-bookmark-title" placeholder="Название (необязательно)" style="flex:1; padding:10px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
+                <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+                    <input type="url" id="new-bookmark-url" placeholder="Вставьте ссылку..." style="flex:2; min-width:200px; padding:10px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
+                    <input type="text" id="new-bookmark-title" placeholder="Название (необязательно)" style="flex:2; min-width:200px; padding:10px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
                     <button class="button" id="add-bookmark-btn"><i class="fas fa-plus"></i> Добавить</button>
                 </div>
                 <div class="projects-grid" id="bookmarks-grid">
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
                 </div>
-                <p class="text-secondary small" style="margin-top:20px;">
-                    <i class="fas fa-info-circle"></i> Закладки хранятся в вашем приватном GitHub Gist. Вы можете добавлять любые ссылки, включая видео с YouTube.
-                </p>
+                <div style="margin-top:20px; padding:16px; background:var(--bg-inner-gradient); border-radius:16px;">
+                    <p style="margin:0 0 8px;"><i class="fas fa-info-circle"></i> <strong>Как это работает:</strong></p>
+                    <p class="text-secondary small">Закладки хранятся в вашем приватном GitHub Gist. Токен должен иметь права <code>repo</code> (для создания Gist). Вы можете добавлять любые ссылки, включая видео с YouTube — они будут воспроизводиться прямо на сайте.</p>
+                    <p class="text-secondary small" style="margin-top:8px;"><i class="fas fa-shield-alt"></i> Данные синхронизируются между устройствами, если вы вошли с тем же токеном.</p>
+                </div>
             </div>
         `;
 
@@ -309,7 +336,8 @@
                     grid.appendChild(card);
                 });
             } catch (e) {
-                grid.innerHTML = '<p class="error-message">Ошибка загрузки</p>';
+                console.error(e);
+                grid.innerHTML = `<p class="error-message">Ошибка загрузки: ${e.message}</p>`;
             }
         }
 
@@ -322,19 +350,19 @@
                 return;
             }
             let title = titleInput.value.trim();
-            if (!title) {
-                // Пытаемся получить заголовок страницы
-                try {
-                    const resp = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-                    const data = await resp.json();
-                    const doc = new DOMParser().parseFromString(data.contents, 'text/html');
-                    title = doc.querySelector('title')?.textContent || url;
-                } catch (e) {
-                    title = url;
-                }
-            }
             addBtn.disabled = true;
             try {
+                if (!title) {
+                    // Попытка получить заголовок страницы через allorigins
+                    try {
+                        const resp = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+                        const data = await resp.json();
+                        const doc = new DOMParser().parseFromString(data.contents, 'text/html');
+                        title = doc.querySelector('title')?.textContent || url;
+                    } catch (e) {
+                        title = url;
+                    }
+                }
                 await addBookmark({
                     url,
                     title,
@@ -346,14 +374,14 @@
                 titleInput.value = '';
                 refreshGrid();
             } catch (e) {
-                UIUtils.showToast('Ошибка добавления', 'error');
+                UIUtils.showToast('Ошибка добавления: ' + e.message, 'error');
             } finally {
                 addBtn.disabled = false;
             }
         });
     }
 
-    // Экспорт
+    // Экспорт в глобальную область
     window.BookmarkStorage = {
         openStorageModal,
         addBookmark,
@@ -361,10 +389,10 @@
         removeBookmark
     };
 
-    // Инициализация после загрузки
+    // Инициализация при загрузке страницы
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', updateAuthState);
     } else {
-        init();
+        updateAuthState();
     }
 })();
