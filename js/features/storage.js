@@ -68,11 +68,11 @@
         }
     }
 
-    // --- Цепочка бесплатных, анонимных CORS-прокси (из https://gist.github.com/reynaldichernando/eab9c4e31e30677f176dc9eb732963ef) ---
+    // --- Цепочка бесплатных, анонимных CORS-прокси ---
     const PROXY_SERVICES = [
-        'https://api.allorigins.win/raw?url=', // Классический, надежный, без регистрации
-        'https://everyorigin.xyz/raw?url=',    // Современный, без лимитов, из нашего списка
-        'https://corsproxy.io/?'              // Еще один хороший вариант из списка
+        'https://api.allorigins.win/raw?url=',
+        'https://everyorigin.xyz/raw?url=',
+        'https://corsproxy.io/?'
     ];
 
     async function fetchWithRetry(url, options = {}, retries = 1) {
@@ -108,15 +108,15 @@
         }
     }
 
-    // --- Домены, которые мы встраиваем напрямую (iframe) без парсинга ---
-    const DIRECT_EMBED_DOMAINS = [
+    // --- Список доменов, которые запрещают встраивание (X-Frame-Options) ---
+    const NO_EMBED_DOMAINS = [
         /pornhub\.org/, /rt\.pornhub\.org/
     ];
 
-    function shouldEmbedDirectly(url) {
+    function shouldOpenInNewTab(url) {
         try {
             const host = new URL(url).hostname;
-            return DIRECT_EMBED_DOMAINS.some(pattern => pattern.test(host));
+            return NO_EMBED_DOMAINS.some(pattern => pattern.test(host));
         } catch (e) {
             return false;
         }
@@ -124,17 +124,7 @@
 
     // --- Универсальный парсер метаданных (oEmbed через Noembed, Open Graph, JSON‑LD, HTML‑теги) ---
     async function extractMetadata(url) {
-        // Если сайт должен встраиваться напрямую, возвращаем embedUrl = url
-        if (shouldEmbedDirectly(url)) {
-            return {
-                title: url,
-                type: 'video',
-                embedUrl: url,
-                thumbnail: null
-            };
-        }
-
-        // 1. Пробуем Noembed (бесплатный, без API-ключа) для oEmbed
+        // 1. Пробуем Noembed (бесплатный, без API-ключа)
         try {
             const noembedUrl = `https://noembed.com/embed?url=${encodeURIComponent(url)}`;
             const resp = await fetchWithRetry(noembedUrl);
@@ -154,7 +144,7 @@
             console.warn('⚠️ Noembed не сработал, пробуем парсинг через прокси...', e);
         }
 
-        // 2. Загружаем HTML через цепочку бесплатных прокси и извлекаем метаданные
+        // 2. Загружаем HTML через прокси и извлекаем метаданные
         try {
             const { text } = await fetchWithProxies(url);
             const parser = new DOMParser();
@@ -506,7 +496,12 @@
 
         card.addEventListener('click', () => {
             if (bookmark.embedUrl) {
-                openVideoModal(bookmark.embedUrl, bookmark.title);
+                // Для сайтов, запрещающих встраивание, открываем в новой вкладке
+                if (shouldOpenInNewTab(bookmark.url)) {
+                    window.open(bookmark.url, '_blank');
+                } else {
+                    openVideoModal(bookmark.embedUrl, bookmark.title);
+                }
             } else {
                 window.open(bookmark.url, '_blank');
             }
