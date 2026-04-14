@@ -1,17 +1,20 @@
-// js/features/storage.js — хранилище закладок через GitHub Gist (исправленная версия)
+// js/features/storage.js — Хранилище закладок через GitHub Gist (с проверкой scope)
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
     const STORAGE_KEY_PREFIX = 'bookmarks_';
+    const LOCAL_STORAGE_KEY = 'neon_imperium_bookmarks_local';
 
     let currentUser = null;
     let currentToken = null;
     let gistId = null;
+    let tokenScopes = new Set();
 
-    // Обновление состояния авторизации из GithubAuth
+    // Обновление состояния авторизации
     function updateAuthState() {
         currentUser = GithubAuth.getCurrentUser();
         currentToken = GithubAuth.getToken();
+        tokenScopes.clear();
         if (currentUser && currentToken) {
             loadGistId();
         } else {
@@ -25,6 +28,7 @@
         currentUser = null;
         currentToken = null;
         gistId = null;
+        tokenScopes.clear();
     });
 
     function getStorageKey() {
@@ -48,16 +52,69 @@
         }
     }
 
+    // Проверяет scopes токена, запрашивая заголовки
+    async function checkTokenScopes() {
+        if (!currentToken) return false;
+        try {
+            const resp = await fetch('https://api.github.com/user', {
+                headers: { 'Authorization': `Bearer ${currentToken}` },
+                method: 'HEAD'
+            });
+            const scopesHeader = resp.headers.get('X-OAuth-Scopes');
+            if (scopesHeader) {
+                tokenScopes = new Set(scopesHeader.split(',').map(s => s.trim()));
+            }
+            return tokenScopes.has('gist');
+        } catch (e) {
+            console.warn('Failed to check token scopes', e);
+            return false;
+        }
+    }
+
+    // Показывает понятную инструкцию, если нет прав
+    function showGistScopeError() {
+        const contentHtml = `
+            <div style="padding: 20px;">
+                <div style="background: rgba(244,67,54,0.1); border: 1px solid #f44336; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="color: #f44336; margin-top: 0;"><i class="fas fa-exclamation-triangle"></i> Требуется право gist</h3>
+                    <p>Ваш токен не имеет права <code>gist</code>, необходимого для синхронизации закладок между устройствами.</p>
+                    <p><strong>Как исправить:</strong></p>
+                    <ol style="text-align: left; margin: 10px 0 20px 20px;">
+                        <li>Перейдите в <a href="https://github.com/settings/tokens" target="_blank" style="color: var(--accent);">Personal access tokens (classic)</a>.</li>
+                        <li>Создайте новый токен или отредактируйте текущий.</li>
+                        <li>В разделе "Select scopes" отметьте <strong>gist</strong>.</li>
+                        <li>Скопируйте новый токен и войдите с ним заново на сайте.</li>
+                    </ol>
+                    <p>Пока это не исправлено, закладки будут сохраняться только в этом браузере (не синхронизируются).</p>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button class="button" id="use-local-storage-btn">Использовать локальное хранилище</button>
+                    <button class="button" id="close-scope-error-btn">Закрыть</button>
+                </div>
+            </div>
+        `;
+        const { modal, closeModal } = UIUtils.createModal('Ошибка доступа', contentHtml, { size: 'full' });
+        modal.querySelector('#use-local-storage-btn').addEventListener('click', () => {
+            closeModal();
+            openStorageModalContent(true);
+        });
+        modal.querySelector('#close-scope-error-btn').addEventListener('click', closeModal);
+    }
+
     // Получить или создать приватный Gist
     async function getOrCreateGist() {
-        const token = currentToken;
-        if (!token) throw new Error('No token');
+        if (!currentToken) throw new Error('No token');
+        
+        const hasGistScope = await checkTokenScopes();
+        if (!hasGistScope) {
+            throw new Error('missing_gist_scope');
+        }
 
         // Если уже есть ID, проверяем, существует ли Gist
         if (gistId) {
             try {
                 const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
                 });
                 if (resp.ok) return gistId;
             } catch (e) {}
@@ -66,7 +123,7 @@
         // Ищем существующий Gist по описанию
         try {
             const resp = await fetch('https://api.github.com/gists', {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${currentToken}` }
             });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const gists = await resp.json();
@@ -83,7 +140,7 @@
         const createResp = await fetch('https://api.github.com/gists', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${currentToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -105,15 +162,27 @@
         return gist.id;
     }
 
-    // Загрузить закладки из Gist
-    async function loadBookmarks() {
-        const token = currentToken;
-        if (!token) return [];
+    // --- Работа с локальным хранилищем (fallback) ---
+    function loadBookmarksLocal() {
+        try {
+            const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+            return stored ? JSON.parse(stored) : [];
+        } catch (e) {
+            return [];
+        }
+    }
 
+    function saveBookmarksLocal(bookmarks) {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
+    }
+
+    // --- Основные функции ---
+    async function loadBookmarks() {
+        if (!currentToken) return loadBookmarksLocal();
         try {
             const gistId = await getOrCreateGist();
             const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${currentToken}` }
             });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const gist = await resp.json();
@@ -122,39 +191,48 @@
             const content = JSON.parse(file.content);
             return content.bookmarks || [];
         } catch (e) {
-            console.warn('Failed to load bookmarks', e);
-            UIUtils.showToast('Ошибка загрузки закладок: ' + e.message, 'error');
-            return [];
+            if (e.message === 'missing_gist_scope') {
+                throw e;
+            }
+            console.warn('Failed to load bookmarks from Gist, falling back to local', e);
+            return loadBookmarksLocal();
         }
     }
 
-    // Сохранить закладки в Gist
     async function saveBookmarks(bookmarks) {
-        const token = currentToken;
-        if (!token) throw new Error('No token');
-
-        const gistId = await getOrCreateGist();
-        const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                files: {
-                    [GIST_FILENAME]: {
-                        content: JSON.stringify({ bookmarks })
+        if (!currentToken) {
+            saveBookmarksLocal(bookmarks);
+            return;
+        }
+        try {
+            const gistId = await getOrCreateGist();
+            const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${currentToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    files: {
+                        [GIST_FILENAME]: {
+                            content: JSON.stringify({ bookmarks })
+                        }
                     }
-                }
-            })
-        });
-        if (!resp.ok) {
-            const err = await resp.json();
-            throw new Error(err.message);
+                })
+            });
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.message);
+            }
+        } catch (e) {
+            if (e.message === 'missing_gist_scope') {
+                throw e;
+            }
+            console.warn('Failed to save to Gist, using local storage', e);
+            saveBookmarksLocal(bookmarks);
         }
     }
 
-    // Добавить новую закладку
     async function addBookmark(bookmark) {
         if (!currentUser) {
             UIUtils.showToast('Войдите в аккаунт', 'error');
@@ -171,14 +249,12 @@
         await saveBookmarks(bookmarks);
     }
 
-    // Удалить закладку по ID
     async function removeBookmark(bookmarkId) {
         const bookmarks = await loadBookmarks();
         const filtered = bookmarks.filter(b => b.id !== bookmarkId);
         await saveBookmarks(filtered);
     }
 
-    // Извлечь YouTube ID из URL
     function extractVideoId(url) {
         const patterns = [
             /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
@@ -195,7 +271,6 @@
         return extractVideoId(url) !== null || /\.(mp4|webm|ogg)(\?|$)/i.test(url);
     }
 
-    // Карточка закладки (как в новостях)
     function renderBookmarkCard(bookmark, onDelete) {
         const card = document.createElement('div');
         card.className = 'project-card-link';
@@ -234,7 +309,6 @@
         meta.innerHTML = `${bookmark.author ? `<i class="fas fa-user"></i> ${GithubCore.escapeHtml(bookmark.author)} · ` : ''}<i class="fas fa-calendar-alt"></i> ${new Date(bookmark.added).toLocaleDateString()}`;
         inner.appendChild(meta);
 
-        // Кнопка удаления
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'bookmark-delete';
         deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
@@ -279,20 +353,8 @@
         UIUtils.createModal(title || 'Видео', content, { size: 'full' });
     }
 
-    // Главная модалка хранилища
-    async function openStorageModal() {
-        // Принудительно обновляем состояние перед открытием
-        updateAuthState();
-        
-        if (!currentUser) {
-            UIUtils.showToast('Войдите в аккаунт GitHub через кнопку в правом верхнем углу', 'error');
-            return;
-        }
-        if (!currentToken) {
-            UIUtils.showToast('Токен не найден. Попробуйте выйти и войти заново.', 'error');
-            return;
-        }
-
+    // Основная модалка хранилища
+    async function openStorageModalContent(forceLocal = false) {
         const contentHtml = `
             <div id="bookmarks-container" style="display:flex; flex-direction:column; gap:16px;">
                 <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
@@ -305,8 +367,8 @@
                 </div>
                 <div style="margin-top:20px; padding:16px; background:var(--bg-inner-gradient); border-radius:16px;">
                     <p style="margin:0 0 8px;"><i class="fas fa-info-circle"></i> <strong>Как это работает:</strong></p>
-                    <p class="text-secondary small">Закладки хранятся в вашем приватном GitHub Gist. Токен должен иметь права <code>repo</code> (для создания Gist). Вы можете добавлять любые ссылки, включая видео с YouTube — они будут воспроизводиться прямо на сайте.</p>
-                    <p class="text-secondary small" style="margin-top:8px;"><i class="fas fa-shield-alt"></i> Данные синхронизируются между устройствами, если вы вошли с тем же токеном.</p>
+                    <p class="text-secondary small">Закладки хранятся в вашем приватном GitHub Gist и синхронизируются между устройствами. Если у токена нет права <code>gist</code>, данные сохраняются только в этом браузере.</p>
+                    ${forceLocal ? '<p class="text-secondary small" style="color: #f44336;"><i class="fas fa-exclamation-triangle"></i> Включено локальное хранилище. Закладки не синхронизируются.</p>' : ''}
                 </div>
             </div>
         `;
@@ -353,7 +415,6 @@
             addBtn.disabled = true;
             try {
                 if (!title) {
-                    // Попытка получить заголовок страницы через allorigins
                     try {
                         const resp = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
                         const data = await resp.json();
@@ -374,11 +435,38 @@
                 titleInput.value = '';
                 refreshGrid();
             } catch (e) {
-                UIUtils.showToast('Ошибка добавления: ' + e.message, 'error');
+                if (e.message === 'missing_gist_scope') {
+                    showGistScopeError();
+                } else {
+                    UIUtils.showToast('Ошибка добавления: ' + e.message, 'error');
+                }
             } finally {
                 addBtn.disabled = false;
             }
         });
+    }
+
+    async function openStorageModal() {
+        updateAuthState();
+        
+        if (!currentUser) {
+            UIUtils.showToast('Войдите в аккаунт GitHub через кнопку в правом верхнем углу', 'error');
+            return;
+        }
+        if (!currentToken) {
+            UIUtils.showToast('Токен не найден. Попробуйте выйти и войти заново.', 'error');
+            return;
+        }
+
+        try {
+            await openStorageModalContent(false);
+        } catch (e) {
+            if (e.message === 'missing_gist_scope') {
+                showGistScopeError();
+            } else {
+                UIUtils.showToast('Не удалось открыть хранилище: ' + e.message, 'error');
+            }
+        }
     }
 
     // Экспорт в глобальную область
@@ -389,7 +477,6 @@
         removeBookmark
     };
 
-    // Инициализация при загрузке страницы
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', updateAuthState);
     } else {
