@@ -11,6 +11,25 @@
     let gistId = null;
     let tokenScopes = new Set();
 
+    // --- Безопасное Base64 кодирование (UTF-8) ---
+    function toBase64(str) {
+        const bytes = new TextEncoder().encode(str);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+    }
+
+    function fromBase64(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return new TextDecoder().decode(bytes);
+    }
+
     // --- Шифрование (XOR с ключом на основе токена) ---
     function getEncryptionKey() {
         if (!currentToken) return 'default-key';
@@ -30,13 +49,13 @@
             const charCode = json.charCodeAt(i) ^ key.charCodeAt(i % key.length);
             result += String.fromCharCode(charCode);
         }
-        return btoa(result);
+        return toBase64(result);
     }
 
     function decryptData(encrypted) {
         try {
             const key = getEncryptionKey();
-            const decoded = atob(encrypted);
+            const decoded = fromBase64(encrypted);
             let result = '';
             for (let i = 0; i < decoded.length; i++) {
                 const charCode = decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length);
@@ -49,20 +68,16 @@
         }
     }
 
-    // --- Надёжный fetch с цепочкой прокси (увеличен таймаут, больше сервисов) ---
+    // --- Надёжный fetch с цепочкой прокси (только для не-видео сайтов) ---
     const PROXY_SERVICES = [
-        { url: 'https://api.allorigins.win/raw?url=', parse: (text) => text },
-        { url: 'https://corsproxy.io/?', parse: (text) => text },
-        { url: 'https://cors-anywhere-9bln.onrender.com/', parse: (text) => text },
-        { url: 'https://thingproxy.freeboard.io/fetch/', parse: (text) => text },
-        { url: 'https://cors.bridged.cc/', parse: (text) => text },
-        { url: 'https://api.codetabs.com/v1/proxy?quest=', parse: (text) => text },
-        { url: 'https://proxy.cors.sh/', parse: (text) => text }
+        { url: 'https://api.allorigins.win/raw?url=' },
+        { url: 'https://corsproxy.io/?' },
+        { url: 'https://api.codetabs.com/v1/proxy?quest=' }
     ];
 
-    async function fetchWithRetry(url, options = {}, retries = 2) {
+    async function fetchWithRetry(url, options = {}, retries = 1) {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000); // 15 секунд
+        const timeout = setTimeout(() => controller.abort(), 12000);
         try {
             const resp = await fetch(url, { ...options, signal: controller.signal });
             clearTimeout(timeout);
@@ -93,6 +108,23 @@
         }
     }
 
+    // --- Домены, которые мы встраиваем напрямую (iframe) без парсинга ---
+    const DIRECT_EMBED_DOMAINS = [
+        /hub\.org/,
+        /pohub\.org/,
+        /rt\.hub\.org/,
+        /rt\.pohub\.org/
+    ];
+
+    function shouldEmbedDirectly(url) {
+        try {
+            const host = new URL(url).hostname;
+            return DIRECT_EMBED_DOMAINS.some(pattern => pattern.test(host));
+        } catch (e) {
+            return false;
+        }
+    }
+
     // --- Универсальный парсер метаданных (oEmbed, OpenGraph, JSON‑LD, HTML‑теги) ---
     const OEMBED_PROVIDERS = [
         { pattern: /youtube\.com|youtu\.be/, endpoint: 'https://www.youtube.com/oembed?url=' },
@@ -102,33 +134,23 @@
         { pattern: /vk\.com/, endpoint: 'https://vk.com/dev/oembed?url=' },
         { pattern: /ok\.ru/, endpoint: 'https://ok.ru/dk?cmd=videoOEmbed&url=' },
         { pattern: /twitch\.tv/, endpoint: 'https://api.twitch.tv/v5/oembed?url=' },
-        { pattern: /tiktok\.com/, endpoint: 'https://www.tiktok.com/oembed?url=' },
-        { pattern: /coub\.com/, endpoint: 'https://coub.com/api/oembed.json?url=' },
-        { pattern: /instagram\.com/, endpoint: 'https://graph.facebook.com/v17.0/instagram_oembed?url=' },
-        { pattern: /facebook\.com/, endpoint: 'https://graph.facebook.com/v17.0/oembed_video?url=' },
-        { pattern: /pornhub\.org|rt\.pornhub\.org/, endpoint: null } // будем обрабатывать вручную
-    ];
-
-    // Домен-специфичные правила для извлечения embed и превью
-    const DOMAIN_RULES = [
-        {
-            pattern: /pornhub\.org/,
-            extract: (doc, url) => {
-                // Ищем iframe с src, содержащим /embed/
-                const iframe = doc.querySelector('iframe[src*="/embed/"]');
-                const embedUrl = iframe ? iframe.src : null;
-                // Ищем изображение с классом или внутри video-wrapper
-                const img = doc.querySelector('img[class*="thumb"], img[alt*="видео"], .video-thumb img, .player-preview img');
-                const thumbnail = img ? img.src : null;
-                return { embedUrl, thumbnail };
-            }
-        }
+        { pattern: /tiktok\.com/, endpoint: 'https://www.tiktok.com/oembed?url=' }
     ];
 
     async function extractMetadata(url) {
-        // 1. Попробовать oEmbed от известных провайдеров
+        // Если сайт должен встраиваться напрямую, возвращаем embedUrl = url
+        if (shouldEmbedDirectly(url)) {
+            return {
+                title: url,
+                type: 'video',
+                embedUrl: url, // будем открывать iframe с самой страницей
+                thumbnail: null
+            };
+        }
+
+        // 1. oEmbed
         for (const provider of OEMBED_PROVIDERS) {
-            if (provider.pattern.test(url) && provider.endpoint) {
+            if (provider.pattern.test(url)) {
                 try {
                     const resp = await fetchWithRetry(provider.endpoint + encodeURIComponent(url));
                     const data = await resp.json();
@@ -141,49 +163,30 @@
                             provider: data.provider_name || ''
                         };
                     }
-                } catch (e) { /* fallthrough */ }
-                break; // не пытаемся другие провайдеры для этого домена
+                } catch (e) {}
+                break;
             }
         }
 
-        // 2. Загрузить HTML и извлечь метаданные
+        // 2. HTML через прокси (если не прямой embed)
         try {
             const { text } = await fetchWithProxies(url);
             const parser = new DOMParser();
             const doc = parser.parseFromString(text, 'text/html');
 
-            // Применяем доменные правила
-            let embedUrl = null;
-            let thumbnail = null;
-            for (const rule of DOMAIN_RULES) {
-                if (rule.pattern.test(url)) {
-                    const extracted = rule.extract(doc, url);
-                    embedUrl = extracted.embedUrl;
-                    thumbnail = extracted.thumbnail;
-                    break;
-                }
-            }
-
-            // Стандартное извлечение, если не нашли по правилам
-            if (!embedUrl) {
-                embedUrl = doc.querySelector('meta[property="og:video"]')?.content ||
+            let embedUrl = doc.querySelector('meta[property="og:video"]')?.content ||
                            doc.querySelector('meta[property="og:video:url"]')?.content ||
                            doc.querySelector('meta[name="twitter:player"]')?.content ||
-                           doc.querySelector('iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="dailymotion"], iframe[src*="rutube"], iframe[src*="vk.com"], iframe[src*="/embed/"]')?.src || null;
-            }
+                           doc.querySelector('iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="dailymotion"], iframe[src*="rutube"], iframe[src*="/embed/"]')?.src || null;
 
             const title = doc.querySelector('meta[property="og:title"]')?.content ||
                          doc.querySelector('meta[name="twitter:title"]')?.content ||
                          doc.querySelector('title')?.textContent || url;
-            const description = doc.querySelector('meta[property="og:description"]')?.content ||
-                                doc.querySelector('meta[name="description"]')?.content || '';
-            if (!thumbnail) {
-                thumbnail = doc.querySelector('meta[property="og:image"]')?.content ||
-                            doc.querySelector('meta[name="twitter:image"]')?.content ||
-                            doc.querySelector('link[rel="image_src"]')?.href || '';
-            }
+            const thumbnail = doc.querySelector('meta[property="og:image"]')?.content ||
+                              doc.querySelector('meta[name="twitter:image"]')?.content ||
+                              doc.querySelector('link[rel="image_src"]')?.href || '';
 
-            // JSON‑LD (schema.org)
+            // JSON‑LD
             const jsonLdScripts = doc.querySelectorAll('script[type="application/ld+json"]');
             for (const script of jsonLdScripts) {
                 try {
@@ -191,7 +194,6 @@
                     const video = findVideoObject(data);
                     if (video) {
                         embedUrl = embedUrl || video.embedUrl || video.contentUrl || '';
-                        thumbnail = thumbnail || video.thumbnailUrl || (video.thumbnail && video.thumbnail[0]) || '';
                         break;
                     }
                 } catch (e) {}
@@ -199,7 +201,6 @@
 
             return {
                 title: title || url,
-                description,
                 thumbnail,
                 embedUrl,
                 type: embedUrl ? 'video' : 'link',
@@ -278,7 +279,6 @@
             }
             return tokenScopes.has('gist');
         } catch (e) {
-            console.warn('Failed to check token scopes', e);
             return false;
         }
     }
@@ -296,7 +296,7 @@
                         <li>В разделе "Select scopes" отметьте <strong>gist</strong>.</li>
                         <li>Скопируйте новый токен и войдите с ним заново на сайте.</li>
                     </ol>
-                    <p>Пока это не исправлено, закладки будут сохраняться только в этом браузере (не синхронизируются).</p>
+                    <p>Пока это не исправлено, закладки будут сохраняться только в этом браузере.</p>
                 </div>
                 <div style="display: flex; gap: 10px; justify-content: flex-end;">
                     <button class="button" id="use-local-storage-btn">Использовать локальное хранилище</button>
@@ -316,9 +316,7 @@
         if (!currentToken) throw new Error('No token');
         
         const hasGistScope = await checkTokenScopes();
-        if (!hasGistScope) {
-            throw new Error('missing_gist_scope');
-        }
+        if (!hasGistScope) throw new Error('missing_gist_scope');
 
         if (gistId) {
             try {
@@ -340,9 +338,7 @@
                 saveGistId(existing.id);
                 return existing.id;
             }
-        } catch (e) {
-            console.warn('Failed to list gists', e);
-        }
+        } catch (e) {}
 
         const createResp = await fetch('https://api.github.com/gists', {
             method: 'POST',
@@ -397,7 +393,7 @@
             return decrypted.bookmarks || [];
         } catch (e) {
             if (e.message === 'missing_gist_scope') throw e;
-            console.warn('Failed to load bookmarks from Gist, falling back to local', e);
+            console.warn('Failed to load from Gist, using local', e);
             return loadBookmarksLocal();
         }
     }
@@ -422,18 +418,14 @@
                     }
                 })
             });
-            if (!resp.ok) {
-                const err = await resp.json();
-                throw new Error(err.message);
-            }
+            if (!resp.ok) throw new Error((await resp.json()).message);
         } catch (e) {
             if (e.message === 'missing_gist_scope') throw e;
-            console.warn('Failed to save to Gist, using local storage', e);
+            console.warn('Failed to save to Gist, using local', e);
             saveBookmarksLocal(bookmarks);
         }
     }
 
-    // --- Основные операции с закладками (экспортируются) ---
     async function addBookmark(bookmark) {
         if (!currentUser) {
             UIUtils.showToast('Войдите в аккаунт', 'error');
@@ -456,7 +448,6 @@
         await saveBookmarks(filtered);
     }
 
-    // --- Рендеринг карточки ---
     function renderBookmarkCard(bookmark, onDelete, onEdit) {
         const card = document.createElement('div');
         card.className = 'project-card-link';
@@ -497,7 +488,6 @@
         actionsDiv.style.zIndex = '2';
 
         const editBtn = document.createElement('button');
-        editBtn.className = 'bookmark-edit';
         editBtn.innerHTML = '<i class="fas fa-pen"></i>';
         editBtn.style.background = 'rgba(0,0,0,0.6)';
         editBtn.style.color = 'white';
@@ -506,13 +496,9 @@
         editBtn.style.width = '30px';
         editBtn.style.height = '30px';
         editBtn.style.cursor = 'pointer';
-        editBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onEdit(bookmark);
-        });
+        editBtn.addEventListener('click', (e) => { e.stopPropagation(); onEdit(bookmark); });
 
         const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'bookmark-delete';
         deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
         deleteBtn.style.background = 'rgba(0,0,0,0.6)';
         deleteBtn.style.color = 'white';
@@ -523,22 +509,17 @@
         deleteBtn.style.cursor = 'pointer';
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (confirm('Удалить из избранного?')) {
-                onDelete(bookmark.id);
-            }
+            if (confirm('Удалить из избранного?')) onDelete(bookmark.id);
         });
 
         actionsDiv.appendChild(editBtn);
         actionsDiv.appendChild(deleteBtn);
         inner.appendChild(actionsDiv);
-
         card.appendChild(inner);
 
         card.addEventListener('click', () => {
             if (bookmark.embedUrl) {
                 openVideoModal(bookmark.embedUrl, bookmark.title);
-            } else if (bookmark.type === 'video') {
-                window.open(bookmark.url, '_blank');
             } else {
                 window.open(bookmark.url, '_blank');
             }
@@ -549,8 +530,8 @@
 
     function openVideoModal(embedUrl, title) {
         const content = `
-            <div class="video-embed" style="width:100%;">
-                <iframe src="${embedUrl}" frameborder="0" allowfullscreen style="width:100%; aspect-ratio:16/9;"></iframe>
+            <div style="width:100%; height:80vh;">
+                <iframe src="${embedUrl}" frameborder="0" allowfullscreen style="width:100%; height:100%; border:none;"></iframe>
             </div>
         `;
         UIUtils.createModal(title || 'Видео', content, { size: 'full' });
@@ -569,8 +550,8 @@
                 </div>
                 <div style="margin-top:20px; padding:16px; background:var(--bg-inner-gradient); border-radius:16px;">
                     <p style="margin:0 0 8px;"><i class="fas fa-info-circle"></i> <strong>Как это работает:</strong></p>
-                    <p class="text-secondary small">Закладки хранятся в вашем приватном GitHub Gist и синхронизируются между устройствами. Данные шифруются вашим токеном. Если у токена нет права <code>gist</code>, данные сохраняются только в этом браузере.</p>
-                    ${forceLocal ? '<p class="text-secondary small" style="color: #f44336;"><i class="fas fa-exclamation-triangle"></i> Включено локальное хранилище. Закладки не синхронизируются.</p>' : ''}
+                    <p class="text-secondary small">Закладки хранятся в вашем приватном GitHub Gist и синхронизируются между устройствами. Данные шифруются вашим токеном.</p>
+                    ${forceLocal ? '<p class="text-secondary small" style="color: #f44336;"><i class="fas fa-exclamation-triangle"></i> Включено локальное хранилище.</p>' : ''}
                 </div>
             </div>
         `;
@@ -580,10 +561,6 @@
         const urlInput = modal.querySelector('#new-bookmark-url');
         const titleInput = modal.querySelector('#new-bookmark-title');
         const addBtn = modal.querySelector('#add-bookmark-btn');
-
-        grid.style.display = 'grid';
-        grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
-        grid.style.gap = '16px';
 
         let currentBookmarks = [];
 
@@ -597,7 +574,6 @@
                 }
                 renderBookmarks(currentBookmarks);
             } catch (e) {
-                console.error(e);
                 grid.innerHTML = `<p class="error-message">Ошибка загрузки: ${e.message}</p>`;
             }
         }
@@ -611,7 +587,7 @@
                         const original = [...currentBookmarks];
                         const index = currentBookmarks.findIndex(bk => bk.id === id);
                         if (index === -1) return;
-                        const removed = currentBookmarks.splice(index, 1)[0];
+                        currentBookmarks.splice(index, 1);
                         renderBookmarks(currentBookmarks);
                         localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(original));
                         (async () => {
@@ -622,7 +598,6 @@
                                 UIUtils.showToast('Ошибка удаления: ' + e.message, 'error');
                                 currentBookmarks = original;
                                 renderBookmarks(currentBookmarks);
-                                localStorage.removeItem(LOCAL_BACKUP_KEY);
                             }
                         })();
                     },
@@ -651,7 +626,7 @@
                     </div>
                 </div>
             `;
-            const { modal: editModal, closeModal: closeEditModal } = UIUtils.createModal('Редактировать закладку', editHtml, { size: 'full' });
+            const { modal: editModal, closeModal: closeEditModal } = UIUtils.createModal('Редактировать', editHtml, { size: 'full' });
             const urlField = editModal.querySelector('#edit-bookmark-url');
             const titleField = editModal.querySelector('#edit-bookmark-title');
             editModal.querySelector('#save-edit-btn').addEventListener('click', async () => {
@@ -721,7 +696,7 @@
     async function openStorageModal() {
         updateAuthState();
         if (!currentUser) {
-            UIUtils.showToast('Войдите в аккаунт GitHub через кнопку в правом верхнем углу', 'error');
+            UIUtils.showToast('Войдите в аккаунт GitHub', 'error');
             return;
         }
         if (!currentToken) {
@@ -750,20 +725,5 @@
         document.addEventListener('DOMContentLoaded', updateAuthState);
     } else {
         updateAuthState();
-    }
-
-    // Запасные CDN для marked (на всякий случай)
-    if (typeof marked === 'undefined') {
-        const scripts = [
-            'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
-            'https://unpkg.com/marked@4.0.0/marked.min.js',
-            'https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.0/marked.min.js'
-        ];
-        for (const src of scripts) {
-            const script = document.createElement('script');
-            script.src = src;
-            script.defer = true;
-            document.head.appendChild(script);
-        }
     }
 })();
