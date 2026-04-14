@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist (с проверкой scope)
+// js/features/storage.js — Хранилище закладок через GitHub Gist (с шифрованием)
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -9,6 +9,49 @@
     let currentToken = null;
     let gistId = null;
     let tokenScopes = new Set();
+
+    // Простое шифрование: base64 + XOR с ключом из логина
+    function getEncryptionKey() {
+        if (!currentUser) return 'default';
+        return currentUser.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0).toString();
+    }
+
+    function encrypt(data) {
+        try {
+            const key = getEncryptionKey();
+            const json = JSON.stringify(data);
+            // XOR каждый символ с кодом из ключа
+            let encrypted = '';
+            for (let i = 0; i < json.length; i++) {
+                const charCode = json.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+                encrypted += String.fromCharCode(charCode);
+            }
+            return btoa(encrypted); // base64
+        } catch (e) {
+            console.warn('Encryption failed, storing plain', e);
+            return JSON.stringify(data);
+        }
+    }
+
+    function decrypt(encrypted) {
+        try {
+            const key = getEncryptionKey();
+            const decoded = atob(encrypted);
+            let decrypted = '';
+            for (let i = 0; i < decoded.length; i++) {
+                const charCode = decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+                decrypted += String.fromCharCode(charCode);
+            }
+            return JSON.parse(decrypted);
+        } catch (e) {
+            // Возможно, старый формат без шифрования
+            try {
+                return JSON.parse(encrypted);
+            } catch {
+                return { bookmarks: [] };
+            }
+        }
+    }
 
     // Обновление состояния авторизации
     function updateAuthState() {
@@ -52,7 +95,7 @@
         }
     }
 
-    // Проверяет scopes токена, запрашивая заголовки
+    // Проверяет scopes токена
     async function checkTokenScopes() {
         if (!currentToken) return false;
         try {
@@ -71,7 +114,6 @@
         }
     }
 
-    // Показывает понятную инструкцию, если нет прав
     function showGistScopeError() {
         const contentHtml = `
             <div style="padding: 20px;">
@@ -110,7 +152,6 @@
             throw new Error('missing_gist_scope');
         }
 
-        // Если уже есть ID, проверяем, существует ли Gist
         if (gistId) {
             try {
                 const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
@@ -120,7 +161,6 @@
             } catch (e) {}
         }
 
-        // Ищем существующий Gist по описанию
         try {
             const resp = await fetch('https://api.github.com/gists', {
                 headers: { 'Authorization': `Bearer ${currentToken}` }
@@ -136,7 +176,6 @@
             console.warn('Failed to list gists', e);
         }
 
-        // Создаём новый приватный Gist
         const createResp = await fetch('https://api.github.com/gists', {
             method: 'POST',
             headers: {
@@ -148,7 +187,7 @@
                 public: false,
                 files: {
                     [GIST_FILENAME]: {
-                        content: JSON.stringify({ bookmarks: [] })
+                        content: encrypt({ bookmarks: [] })
                     }
                 }
             })
@@ -162,7 +201,7 @@
         return gist.id;
     }
 
-    // --- Работа с локальным хранилищем (fallback) ---
+    // Локальное хранилище
     function loadBookmarksLocal() {
         try {
             const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -176,7 +215,7 @@
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
     }
 
-    // --- Основные функции ---
+    // Основные функции
     async function loadBookmarks() {
         if (!currentToken) return loadBookmarksLocal();
         try {
@@ -188,8 +227,8 @@
             const gist = await resp.json();
             const file = gist.files[GIST_FILENAME];
             if (!file) return [];
-            const content = JSON.parse(file.content);
-            return content.bookmarks || [];
+            const decrypted = decrypt(file.content);
+            return decrypted.bookmarks || [];
         } catch (e) {
             if (e.message === 'missing_gist_scope') {
                 throw e;
@@ -215,7 +254,7 @@
                 body: JSON.stringify({
                     files: {
                         [GIST_FILENAME]: {
-                            content: JSON.stringify({ bookmarks })
+                            content: encrypt({ bookmarks })
                         }
                     }
                 })
@@ -353,21 +392,20 @@
         UIUtils.createModal(title || 'Видео', content, { size: 'full' });
     }
 
-    // Основная модалка хранилища
     async function openStorageModalContent(forceLocal = false) {
         const contentHtml = `
             <div id="bookmarks-container" style="display:flex; flex-direction:column; gap:16px;">
-                <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
-                    <input type="url" id="new-bookmark-url" placeholder="Вставьте ссылку..." style="flex:2; min-width:200px; padding:10px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
-                    <input type="text" id="new-bookmark-title" placeholder="Название (необязательно)" style="flex:2; min-width:200px; padding:10px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
-                    <button class="button" id="add-bookmark-btn"><i class="fas fa-plus"></i> Добавить</button>
+                <div style="display:flex; gap:10px; margin-bottom:20px; align-items:stretch;">
+                    <input type="url" id="new-bookmark-url" placeholder="Вставьте ссылку..." style="flex:1; padding:12px 18px; border-radius:40px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
+                    <input type="text" id="new-bookmark-title" placeholder="Название (необязательно)" style="flex:1; padding:12px 18px; border-radius:40px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
+                    <button class="button" id="add-bookmark-btn" style="padding:12px 24px; border-radius:40px;"><i class="fas fa-plus"></i> Добавить</button>
                 </div>
                 <div class="projects-grid" id="bookmarks-grid">
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
                 </div>
                 <div style="margin-top:20px; padding:16px; background:var(--bg-inner-gradient); border-radius:16px;">
                     <p style="margin:0 0 8px;"><i class="fas fa-info-circle"></i> <strong>Как это работает:</strong></p>
-                    <p class="text-secondary small">Закладки хранятся в вашем приватном GitHub Gist и синхронизируются между устройствами. Если у токена нет права <code>gist</code>, данные сохраняются только в этом браузере.</p>
+                    <p class="text-secondary small">Закладки хранятся в вашем приватном GitHub Gist и синхронизируются между устройствами. Содержимое шифруется. Если у токена нет права <code>gist</code>, данные сохраняются только в этом браузере.</p>
                     ${forceLocal ? '<p class="text-secondary small" style="color: #f44336;"><i class="fas fa-exclamation-triangle"></i> Включено локальное хранилище. Закладки не синхронизируются.</p>' : ''}
                 </div>
             </div>
@@ -469,7 +507,6 @@
         }
     }
 
-    // Экспорт в глобальную область
     window.BookmarkStorage = {
         openStorageModal,
         addBookmark,
