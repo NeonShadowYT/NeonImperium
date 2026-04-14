@@ -92,6 +92,45 @@ function extractSummary(body) {
     return extractMeta(body, 'summary');
 }
 
+// --- Лёгкое шифрование для приватных постов ---
+function deriveKeyFromAllowedList(allowedStr) {
+    if (!allowedStr) return 'default-key';
+    let hash = 0;
+    for (let i = 0; i < allowedStr.length; i++) {
+        hash = ((hash << 5) - hash) + allowedStr.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash).toString(16);
+}
+
+function encryptPrivateBody(body, allowedStr) {
+    if (!allowedStr) return body;
+    const key = deriveKeyFromAllowedList(allowedStr);
+    let result = '';
+    for (let i = 0; i < body.length; i++) {
+        const charCode = body.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+        result += String.fromCharCode(charCode);
+    }
+    return btoa(unescape(encodeURIComponent(result)));
+}
+
+function decryptPrivateBody(encryptedBase64, allowedStr) {
+    if (!allowedStr) return encryptedBase64;
+    try {
+        const encrypted = decodeURIComponent(escape(atob(encryptedBase64)));
+        const key = deriveKeyFromAllowedList(allowedStr);
+        let result = '';
+        for (let i = 0; i < encrypted.length; i++) {
+            const charCode = encrypted.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+            result += String.fromCharCode(charCode);
+        }
+        return result;
+    } catch (e) {
+        console.warn('Decryption failed', e);
+        return encryptedBase64;
+    }
+}
+
 window.GithubCore = {
     CONFIG: GITHUB_CONFIG,
     cacheGet,
@@ -105,5 +144,7 @@ window.GithubCore = {
     stripHtml,
     extractMeta,
     extractAllowed,
-    extractSummary
+    extractSummary,
+    encryptPrivateBody,
+    decryptPrivateBody
 };

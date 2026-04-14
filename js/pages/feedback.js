@@ -1,5 +1,5 @@
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable, extractSummary } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
     const { loadIssues, loadIssue, createIssue, updateIssue, closeIssue, loadComments, addComment, loadReactions, addReaction, removeReaction } = GithubAPI;
     const { renderReactions, renderComments, openFullModal, openEditorModal, canViewPost } = UIFeedback;
     const { isAdmin, getCurrentUser } = GithubAuth;
@@ -193,7 +193,7 @@
             const labels = issue.labels.map(l => l.name);
             if (!labels.includes('private')) return true;
             if (isAdmin()) return true;
-            const allowed = GithubCore.extractAllowed(issue.body);
+            const allowed = extractAllowed(issue.body);
             if (!allowed) return false;
             const allowedList = allowed.split(',').map(s => s.trim()).filter(Boolean);
             return allowedList.includes(currentUser);
@@ -205,7 +205,6 @@
         if (reset) gridContainer.innerHTML = '';
         
         if (issuesToRender.length === 0) {
-            // Показываем сообщение о пустом списке
             const emptyMsg = document.createElement('div');
             emptyMsg.className = 'empty-state';
             emptyMsg.innerHTML = `<i class="fas fa-inbox"></i><p data-lang="feedbackNoItems">Пока нет сообщений. Будьте первым!</p>`;
@@ -232,11 +231,22 @@
     function createIssueCard(issue) {
         const typeLabel = issue.labels.find(l => l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
         const typeIcon = typeLabel === 'idea' ? '💡' : typeLabel === 'bug' ? '🐛' : '⭐';
-        const summary = GithubCore.extractSummary(issue.body) || (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
+        
+        let summary = extractSummary(issue.body) || (issue.body || '').substring(0, 120) + (issue.body?.length > 120 ? '…' : '');
+        // Если пост приватный и пользователь разрешён, расшифровываем для предпросмотра
+        const isPrivate = issue.labels.some(l => l.name === 'private');
+        const allowedStr = extractAllowed(issue.body);
+        if (isPrivate && allowedStr && currentUser && allowedStr.split(',').map(s=>s.trim()).includes(currentUser)) {
+            try {
+                const decrypted = decryptPrivateBody(issue.body, allowedStr);
+                summary = extractSummary(decrypted) || decrypted.substring(0, 120) + (decrypted.length > 120 ? '…' : '');
+            } catch(e) {}
+        }
+        
         const preview = summary;
         const date = new Date(issue.created_at).toLocaleDateString();
         const cardLink = document.createElement('div');
-        cardLink.className = 'project-card-link';
+        cardLink.className = 'project-card-link tilt-card';
         cardLink.dataset.issueNumber = issue.number;
         cardLink.dataset.issueId = issue.id;
         cardLink.style.cursor = 'pointer';

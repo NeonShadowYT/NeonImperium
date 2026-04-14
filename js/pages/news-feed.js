@@ -1,5 +1,5 @@
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
     const { openFullModal, canViewPost } = UIFeedback;
     const { getCurrentUser, isAdmin } = GithubAuth;
@@ -290,7 +290,7 @@
     }
 
     function createVideoCard(video) {
-        const card = document.createElement('div'); card.className = 'project-card-link'; card.style.cursor = 'pointer';
+        const card = document.createElement('div'); card.className = 'project-card-link tilt-card'; card.style.cursor = 'pointer';
         card.setAttribute('aria-label', `Смотреть видео: ${video.title}`);
         const inner = document.createElement('div'); inner.className = 'project-card';
         const imgWrapper = document.createElement('div'); imgWrapper.className = 'image-wrapper';
@@ -305,17 +305,25 @@
     }
 
     function createPostCard(post) {
-        const card = document.createElement('div'); card.className = 'project-card-link no-tilt'; card.style.cursor = 'pointer';
+        let bodyForPreview = post.body;
+        const isPrivate = post.labels.includes('private');
+        const allowedStr = extractAllowed(post.body);
+        if (isPrivate && allowedStr && currentUser && allowedStr.split(',').map(s=>s.trim()).includes(currentUser)) {
+            try {
+                bodyForPreview = decryptPrivateBody(post.body, allowedStr);
+            } catch(e) {}
+        }
+        const card = document.createElement('div'); card.className = 'project-card-link no-tilt tilt-card'; card.style.cursor = 'pointer';
         card.setAttribute('aria-label', `Читать пост: ${post.title}`);
         const inner = document.createElement('div'); inner.className = 'project-card';
-        const imgMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
+        const imgMatch = bodyForPreview.match(/!\[.*?\]\((.*?)\)/);
         const thumbnail = imgMatch ? imgMatch[1] : DEFAULT_IMAGE;
         const imgWrapper = document.createElement('div'); imgWrapper.className = 'image-wrapper';
         const img = document.createElement('img'); img.src = thumbnail; img.alt = post.title; img.loading = 'lazy'; img.className = 'project-image'; img.onerror = () => img.src = DEFAULT_IMAGE;
         imgWrapper.appendChild(img);
         const title = document.createElement('h3'); title.textContent = post.title.length > 70 ? post.title.substring(0,70)+'…' : post.title;
         const meta = document.createElement('p'); meta.className = 'text-secondary'; meta.style.fontSize='12px'; meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
-        const summary = extractSummary(post.body) || stripHtml(post.body).substring(0,120)+'…';
+        const summary = extractSummary(bodyForPreview) || stripHtml(bodyForPreview).substring(0,120)+'…';
         const preview = document.createElement('p'); preview.className = 'text-secondary'; preview.style.fontSize='13px'; preview.style.overflow='hidden'; preview.style.display='-webkit-box'; preview.style.webkitLineClamp='2'; preview.style.webkitBoxOrient='vertical'; preview.textContent = summary;
         inner.append(imgWrapper, title, meta, preview); card.appendChild(inner);
         card.addEventListener('click', (e) => { e.preventDefault(); openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); });

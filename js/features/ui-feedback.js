@@ -1,4 +1,4 @@
-// ui-feedback.js — добавлена кнопка «Избранное» рядом с «Поделиться»
+// ui-feedback.js — добавлена поддержка шифрования приватных постов и 3D-эффект
 (function() {
     const REACTION_TYPES = [
         { content: '+1', emoji: '👍' }, { content: '-1', emoji: '👎' }, { content: 'laugh', emoji: '😄' },
@@ -573,7 +573,17 @@
             if (modalHeader) {
                 addHeaderActions(modalHeader, item, issue, currentUser, closeModal, escHandler);
             }
-            await renderPostBody(container, issue.body, item.id);
+            
+            // Расшифровка тела, если пост приватный и пользователь разрешён
+            let finalBody = issue.body;
+            const allowedStr = GithubCore.extractAllowed(issue.body);
+            if (item.labels?.includes('private') && allowedStr && currentUser && allowedStr.split(',').map(s=>s.trim()).includes(currentUser)) {
+                try {
+                    finalBody = GithubCore.decryptPrivateBody(finalBody, allowedStr);
+                } catch(e) { console.warn('Decryption failed', e); }
+            }
+            
+            await renderPostBody(container, finalBody, item.id);
             await loadReactionsAndComments(container, item, currentUser, issue);
             if (currentUser) setupCommentForm(container, item, currentUser);
         } catch (err) {
@@ -807,7 +817,7 @@
             e.preventDefault();
             if (!GithubAuth.getToken()) { UIUtils.showToast('Вы не авторизованы', 'error'); return; }
 
-            const body = modal.querySelector('#modal-body').value.trim();
+            let body = modal.querySelector('#modal-body').value.trim();
             if (!body) { UIUtils.showToast('Заполните описание', 'error'); modal.querySelector('#modal-body').focus(); return; }
 
             if (postType === 'comment') {
@@ -842,6 +852,9 @@
                 const allowedUsers = modal.querySelector('#private-users').value.trim();
                 if (allowedUsers) {
                     finalBody = `<!-- allowed: ${allowedUsers} -->\n\n` + finalBody;
+                    // Шифруем тело, если пост приватный
+                    finalBody = GithubCore.encryptPrivateBody(finalBody, allowedUsers);
+                    finalBody = `<!-- encrypted -->\n\n` + finalBody;
                 }
             }
 

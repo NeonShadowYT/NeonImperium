@@ -22,3 +22,15 @@
         font-size: 18px;
     }
 }
+
+/* Адаптация сетки закладок */
+@media (max-width: 900px) {
+    #bookmarks-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+@media (max-width: 600px) {
+    #bookmarks-grid {
+        grid-template-columns: 1fr !important;
+    }
+}

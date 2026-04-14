@@ -182,10 +182,10 @@
         await saveBookmarks(filtered);
     }
 
-    // --- Рендеринг карточки (упрощённый) ---
+    // --- Рендеринг карточки с tilt-card ---
     function renderBookmarkCard(bookmark, onDelete, onEdit) {
         const card = document.createElement('div');
-        card.className = 'project-card-link';
+        card.className = 'project-card-link tilt-card';
         card.style.cursor = 'pointer';
 
         const inner = document.createElement('div');
@@ -245,14 +245,14 @@
         return card;
     }
 
-    // --- Модальное окно хранилища ---
+    // --- Модальное окно хранилища (исправлен размер кнопки)---
     async function openStorageModalContent() {
         const contentHtml = `
             <div style="display:flex; flex-direction:column; gap:16px;">
-                <div style="display:flex; gap:8px; align-items:center;">
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                     <input type="url" id="new-bookmark-url" placeholder="Ссылка..." style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary); height:44px;">
                     <input type="text" id="new-bookmark-title" placeholder="Название" style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary); height:44px;">
-                    <button class="button" id="add-bookmark-btn" style="padding:10px 20px; height:44px; white-space:nowrap;"><i class="fas fa-plus"></i> Добавить</button>
+                    <button class="button" id="add-bookmark-btn" style="padding:10px 20px; height:44px; white-space:nowrap; width:auto; min-width:120px;"><i class="fas fa-plus"></i> Добавить</button>
                 </div>
                 <div class="projects-grid" id="bookmarks-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
