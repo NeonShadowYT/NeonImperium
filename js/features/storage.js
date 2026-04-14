@@ -10,50 +10,47 @@
     let gistId = null;
     let tokenScopes = new Set();
 
-    // Простое шифрование: base64 + XOR с ключом из логина
+    // --- Шифрование (простое XOR с ключом на основе токена) ---
     function getEncryptionKey() {
-        if (!currentUser) return 'default';
-        return currentUser.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0).toString();
-    }
-
-    function encrypt(data) {
-        try {
-            const key = getEncryptionKey();
-            const json = JSON.stringify(data);
-            // XOR каждый символ с кодом из ключа
-            let encrypted = '';
-            for (let i = 0; i < json.length; i++) {
-                const charCode = json.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-                encrypted += String.fromCharCode(charCode);
-            }
-            return btoa(encrypted); // base64
-        } catch (e) {
-            console.warn('Encryption failed, storing plain', e);
-            return JSON.stringify(data);
+        if (!currentToken) return 'default-key';
+        // Используем хеш от токена для стабильности
+        let hash = 0;
+        for (let i = 0; i < currentToken.length; i++) {
+            hash = ((hash << 5) - hash) + currentToken.charCodeAt(i);
+            hash |= 0;
         }
+        return hash.toString(16);
     }
 
-    function decrypt(encrypted) {
+    function encryptData(data) {
+        const key = getEncryptionKey();
+        const json = JSON.stringify(data);
+        let result = '';
+        for (let i = 0; i < json.length; i++) {
+            const charCode = json.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+            result += String.fromCharCode(charCode);
+        }
+        // Кодируем в base64 для безопасного хранения в JSON
+        return btoa(result);
+    }
+
+    function decryptData(encrypted) {
         try {
             const key = getEncryptionKey();
             const decoded = atob(encrypted);
-            let decrypted = '';
+            let result = '';
             for (let i = 0; i < decoded.length; i++) {
                 const charCode = decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-                decrypted += String.fromCharCode(charCode);
+                result += String.fromCharCode(charCode);
             }
-            return JSON.parse(decrypted);
+            return JSON.parse(result);
         } catch (e) {
-            // Возможно, старый формат без шифрования
-            try {
-                return JSON.parse(encrypted);
-            } catch {
-                return { bookmarks: [] };
-            }
+            console.warn('Decryption failed, maybe token changed?', e);
+            return { bookmarks: [] };
         }
     }
 
-    // Обновление состояния авторизации
+    // --- Состояние авторизации ---
     function updateAuthState() {
         currentUser = GithubAuth.getCurrentUser();
         currentToken = GithubAuth.getToken();
@@ -65,7 +62,6 @@
         }
     }
 
-    // Слушаем события входа/выхода
     window.addEventListener('github-login-success', updateAuthState);
     window.addEventListener('github-logout', () => {
         currentUser = null;
@@ -95,7 +91,6 @@
         }
     }
 
-    // Проверяет scopes токена
     async function checkTokenScopes() {
         if (!currentToken) return false;
         try {
@@ -143,7 +138,6 @@
         modal.querySelector('#close-scope-error-btn').addEventListener('click', closeModal);
     }
 
-    // Получить или создать приватный Gist
     async function getOrCreateGist() {
         if (!currentToken) throw new Error('No token');
         
@@ -187,7 +181,7 @@
                 public: false,
                 files: {
                     [GIST_FILENAME]: {
-                        content: encrypt({ bookmarks: [] })
+                        content: encryptData({ bookmarks: [] })
                     }
                 }
             })
@@ -201,7 +195,7 @@
         return gist.id;
     }
 
-    // Локальное хранилище
+    // Локальное хранилище (fallback)
     function loadBookmarksLocal() {
         try {
             const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -215,7 +209,6 @@
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
     }
 
-    // Основные функции
     async function loadBookmarks() {
         if (!currentToken) return loadBookmarksLocal();
         try {
@@ -227,7 +220,7 @@
             const gist = await resp.json();
             const file = gist.files[GIST_FILENAME];
             if (!file) return [];
-            const decrypted = decrypt(file.content);
+            const decrypted = decryptData(file.content);
             return decrypted.bookmarks || [];
         } catch (e) {
             if (e.message === 'missing_gist_scope') {
@@ -245,6 +238,7 @@
         }
         try {
             const gistId = await getOrCreateGist();
+            const encrypted = encryptData({ bookmarks });
             const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
                 method: 'PATCH',
                 headers: {
@@ -253,9 +247,7 @@
                 },
                 body: JSON.stringify({
                     files: {
-                        [GIST_FILENAME]: {
-                            content: encrypt({ bookmarks })
-                        }
+                        [GIST_FILENAME]: { content: encrypted }
                     }
                 })
             });
@@ -314,7 +306,6 @@
         const card = document.createElement('div');
         card.className = 'project-card-link';
         card.style.cursor = 'pointer';
-        card.style.marginBottom = '16px';
 
         const inner = document.createElement('div');
         inner.className = 'project-card';
@@ -393,19 +384,20 @@
     }
 
     async function openStorageModalContent(forceLocal = false) {
+        // Компактная форма в одной строке
         const contentHtml = `
             <div id="bookmarks-container" style="display:flex; flex-direction:column; gap:16px;">
-                <div style="display:flex; gap:10px; margin-bottom:20px; align-items:stretch;">
-                    <input type="url" id="new-bookmark-url" placeholder="Вставьте ссылку..." style="flex:1; padding:12px 18px; border-radius:40px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
-                    <input type="text" id="new-bookmark-title" placeholder="Название (необязательно)" style="flex:1; padding:12px 18px; border-radius:40px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
-                    <button class="button" id="add-bookmark-btn" style="padding:12px 24px; border-radius:40px;"><i class="fas fa-plus"></i> Добавить</button>
+                <div style="display:flex; gap:8px; align-items:stretch;">
+                    <input type="url" id="new-bookmark-url" placeholder="Ссылка..." style="flex:2; min-width:180px; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
+                    <input type="text" id="new-bookmark-title" placeholder="Название" style="flex:2; min-width:150px; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
+                    <button class="button" id="add-bookmark-btn" style="padding:10px 20px; white-space:nowrap;"><i class="fas fa-plus"></i> Добавить</button>
                 </div>
-                <div class="projects-grid" id="bookmarks-grid">
+                <div class="projects-grid" id="bookmarks-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
                 </div>
                 <div style="margin-top:20px; padding:16px; background:var(--bg-inner-gradient); border-radius:16px;">
                     <p style="margin:0 0 8px;"><i class="fas fa-info-circle"></i> <strong>Как это работает:</strong></p>
-                    <p class="text-secondary small">Закладки хранятся в вашем приватном GitHub Gist и синхронизируются между устройствами. Содержимое шифруется. Если у токена нет права <code>gist</code>, данные сохраняются только в этом браузере.</p>
+                    <p class="text-secondary small">Закладки хранятся в вашем приватном GitHub Gist и синхронизируются между устройствами. Данные шифруются вашим токеном. Если у токена нет права <code>gist</code>, данные сохраняются только в этом браузере.</p>
                     ${forceLocal ? '<p class="text-secondary small" style="color: #f44336;"><i class="fas fa-exclamation-triangle"></i> Включено локальное хранилище. Закладки не синхронизируются.</p>' : ''}
                 </div>
             </div>
@@ -417,6 +409,12 @@
         const urlInput = modal.querySelector('#new-bookmark-url');
         const titleInput = modal.querySelector('#new-bookmark-title');
         const addBtn = modal.querySelector('#add-bookmark-btn');
+
+        // Убедимся, что сетка 3 колонки, но на мобильных адаптируется через медиа-запросы в CSS
+        // Добавим inline стиль для гарантии
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+        grid.style.gap = '16px';
 
         async function refreshGrid() {
             grid.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>';
