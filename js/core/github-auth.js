@@ -1,3 +1,4 @@
+// github-auth.js
 (function() {
     const CONFIG = GithubCore.CONFIG;
     const TOKEN_KEY = 'github_token';
@@ -272,6 +273,9 @@
                 <div class="profile-dropdown-item" data-action="token-info">
                     <i class="fas fa-key"></i> <span data-lang="githubTokenActive">Токен активен</span>
                 </div>
+                <div class="profile-dropdown-item" data-action="storage">
+                    <i class="fas fa-box-archive"></i> <span>Хранилище</span>
+                </div>
                 <div class="profile-dropdown-item" data-action="revoke-token">
                     <i class="fas fa-external-link-alt"></i> <span data-lang="githubRevoke">Управление токенами</span>
                 </div>
@@ -345,6 +349,13 @@
                 break;
             case 'token-info':
                 if (token) UIUtils.showToast(`Вы вошли как ${userLogin}. Токен сохранён в браузере.`, 'success');
+                break;
+            case 'storage':
+                if (window.BookmarkStorage) {
+                    window.BookmarkStorage.openStorageModal();
+                } else {
+                    UIUtils.showToast('Модуль хранилища не загружен', 'error');
+                }
                 break;
             case 'revoke-token':
                 window.open('https://github.com/settings/tokens', '_blank');

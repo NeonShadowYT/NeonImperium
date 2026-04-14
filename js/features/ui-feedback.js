@@ -1,4 +1,4 @@
-// ui-feedback.js — исправленная версия с split-редактором, переключателем доступа и горизонтальной формой комментария
+// ui-feedback.js — добавлена кнопка «Избранное» рядом с «Поделиться»
 (function() {
     const REACTION_TYPES = [
         { content: '+1', emoji: '👍' }, { content: '-1', emoji: '👎' }, { content: 'laugh', emoji: '😄' },
@@ -472,7 +472,10 @@
                 <button class="action-btn close-issue" title="Закрыть" aria-label="Закрыть"><i class="fas fa-trash-alt"></i></button>
             `;
         }
-        buttonsHtml += `<button class="action-btn share-post" title="Поделиться" aria-label="Поделиться"><i class="fas fa-share-alt"></i></button>`;
+        buttonsHtml += `
+            <button class="action-btn share-post" title="Поделиться" aria-label="Поделиться"><i class="fas fa-share-alt"></i></button>
+            <button class="action-btn bookmark-post" title="В избранное" aria-label="В избранное"><i class="fas fa-bookmark"></i></button>
+        `;
 
         actionsContainer.innerHTML = buttonsHtml;
 
@@ -506,6 +509,28 @@
             e.stopPropagation();
             navigator.clipboard.writeText(postUrl).then(() => UIUtils.showToast('Ссылка скопирована', 'success')).catch(() => UIUtils.showToast('Ошибка копирования', 'error'));
         });
+
+        actionsContainer.querySelector('.bookmark-post')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (window.BookmarkStorage) {
+                window.BookmarkStorage.addBookmark({
+                    url: postUrl,
+                    title: item.title,
+                    type: 'post',
+                    thumbnail: extractFirstImage(issue.body) || 'images/default-news.webp',
+                    author: item.author,
+                    date: item.date
+                });
+                UIUtils.showToast('Добавлено в избранное', 'success');
+            } else {
+                UIUtils.showToast('Модуль хранилища не загружен', 'error');
+            }
+        });
+    }
+
+    function extractFirstImage(body) {
+        const match = body.match(/!\[.*?\]\((.*?)\)/);
+        return match ? match[1] : null;
     }
 
     async function openFullModal(item) {

@@ -20,6 +20,15 @@
     padding: 12px 16px;
     margin: 0;
 }
+.modal-header-actions .action-btn i.fa-bookmark {
+    color: var(--accent);
+}
+.bookmark-delete {
+    transition: opacity 0.2s;
+}
+.project-card:hover .bookmark-delete {
+    opacity: 1;
+}
 
 @media (max-width: 500px) {
     .modal-header {
