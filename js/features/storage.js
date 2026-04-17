@@ -286,6 +286,7 @@
             const origin = urlObj.origin;
             const path = urlObj.pathname;
             const search = urlObj.search;
+            // YouTube
             if (url.includes('youtube.com/shorts/') || url.includes('youtu.be/shorts/')) {
                 const match = url.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([a-zA-Z0-9_-]+)/);
                 if (match) return `https://www.youtube.com/embed/${match[1]}`;
@@ -295,14 +296,17 @@
                 const videoId = params.get('v');
                 if (videoId) return `https://www.youtube.com/embed/${videoId}`;
             }
-            if (path.includes('/embed/')) return url;
-            if (path.includes('/v/')) {
-                const videoId = path.split('/v/')[1]?.split('?')[0];
-                if (videoId) return `${origin}/embed/${videoId}`;
-            }
+            // Обработка нашего сайта: view_video.php?viewkey=...
             if (path.includes('view_video.php') && search.includes('viewkey=')) {
                 const params = new URLSearchParams(search);
                 const videoId = params.get('viewkey');
+                if (videoId) return `${origin}/embed/${videoId}`;
+            }
+            // Уже embed
+            if (path.includes('/embed/')) return url;
+            // Другие шаблоны
+            if (path.includes('/v/')) {
+                const videoId = path.split('/v/')[1]?.split('?')[0];
                 if (videoId) return `${origin}/embed/${videoId}`;
             }
             const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
@@ -321,16 +325,41 @@
         return lowerUrl.includes('/embed/') || lowerUrl.includes('/player/') || lowerUrl.includes('?embed') || lowerUrl.includes('/v/');
     }
 
+    // Проверка, является ли URL постом на нашем сайте
+    function isSitePostUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            // Проверяем, что хост наш и есть параметр post
+            if (urlObj.hostname === 'neonshadowyt.github.io' || urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
+                const params = new URLSearchParams(urlObj.search);
+                if (params.has('post')) {
+                    return true;
+                }
+            }
+        } catch {}
+        return false;
+    }
+
     async function addBookmark(bookmark) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
+        let finalUrl = bookmark.url;
         let embedUrl = null;
         let downloadUrl = null;
         let thumbnail = null;
         let finalTitle = bookmark.title;
+        let postType = bookmark.postType || null;
+
+        // Определяем тип контента
         if (bookmark.url) {
-            if (isEmbedUrl(bookmark.url)) {
+            // Пост сайта?
+            if (isSitePostUrl(bookmark.url)) {
+                postType = 'site-post';
+                // Для постов не ищем embed
+            } else if (isEmbedUrl(bookmark.url)) {
                 embedUrl = bookmark.url;
+                finalUrl = bookmark.url; // оставляем как есть
             } else {
+                // Пытаемся получить embed-ссылку
                 const oembed = await fetchEmbedData(bookmark.url);
                 if (oembed) {
                     if (oembed.html) {
@@ -344,23 +373,33 @@
                     if (oembed.title && !finalTitle) finalTitle = oembed.title;
                 }
                 if (!embedUrl) embedUrl = guessEmbedUrl(bookmark.url);
+                // Если получили embed-ссылку, заменяем исходный URL на неё для будущего быстрого открытия
+                if (embedUrl) {
+                    finalUrl = embedUrl;
+                }
                 if (!thumbnail && embedUrl && embedUrl.includes('youtube.com/embed/')) {
                     const videoId = embedUrl.split('/embed/')[1]?.split('?')[0];
                     if (videoId) thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
                 }
             }
         }
+
         const bookmarks = await loadBookmarks();
-        if (bookmarks && bookmarks.some(b => b.url === bookmark.url)) {
+        if (bookmarks && bookmarks.some(b => b.url === finalUrl)) {
             UIUtils.showToast('Уже в избранном', 'info');
             throw new Error('duplicate');
         }
         bookmark.id = Date.now() + '-' + Math.random().toString(36);
         bookmark.added = new Date().toISOString();
+        bookmark.url = finalUrl; // сохраняем преобразованную ссылку (embed или исходную)
         if (embedUrl) bookmark.embedUrl = embedUrl;
         if (downloadUrl) bookmark.downloadUrl = downloadUrl;
         if (thumbnail) bookmark.thumbnail = thumbnail;
         if (finalTitle) bookmark.title = finalTitle;
+        if (postType) bookmark.postType = postType;
+        // Если это пост сайта, сохраняем оригинальный URL в отдельное поле для открытия?
+        // Но url уже содержит ссылку с параметром ?post=... , так что открывать будем по ней.
+        
         const newBookmarks = bookmarks ? [...bookmarks, bookmark] : [bookmark];
         await saveBookmarks(newBookmarks);
         return bookmark;
@@ -529,44 +568,39 @@
         const contentHtml = `
             <div style="display:flex; flex-direction:column; gap:16px;">
                 <div class="storage-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                         <div class="access-switch" style="display:inline-flex;">
                             <button class="access-switch-btn ${sortOrder === 'new' ? 'active' : ''}" data-order="new">Новые</button>
                             <button class="access-switch-btn ${sortOrder === 'old' ? 'active' : ''}" data-order="old">Старые</button>
                         </div>
-                        <div style="width:1px; height:30px; background:var(--border); margin:0 4px;"></div>
-                        <div class="category-buttons" style="display:flex; gap:6px;">
+                        <div class="category-buttons" style="display:flex; gap:4px;">
                             <button class="button small cat-btn ${category === 'all' ? 'active' : ''}" data-cat="all">Все</button>
                             <button class="button small cat-btn ${category === 'video' ? 'active' : ''}" data-cat="video"><i class="fas fa-video"></i> Видео</button>
                             <button class="button small cat-btn ${category === 'post' ? 'active' : ''}" data-cat="post"><i class="fas fa-newspaper"></i> Посты</button>
                             <button class="button small cat-btn ${category === 'link' ? 'active' : ''}" data-cat="link"><i class="fas fa-link"></i> Ссылки</button>
                         </div>
                     </div>
-                    <div style="display:flex; gap:8px;">
-                        <button class="button" id="setup-recovery-btn"><i class="fas fa-shield-alt"></i> Восстановление</button>
-                        <button class="button" id="reset-storage-btn" style="background:#f44336;"><i class="fas fa-trash-alt"></i> Сброс</button>
-                        <button class="button" id="toggle-add-btn"><i class="fas fa-plus"></i> Добавить</button>
+                    <div style="display:flex; gap:6px;">
+                        <button class="button small" id="setup-recovery-btn"><i class="fas fa-shield-alt"></i> Восстановление</button>
+                        <button class="button small" id="reset-storage-btn" style="background:#f44336;"><i class="fas fa-trash-alt"></i> Сброс</button>
+                        <button class="button small" id="toggle-add-btn"><i class="fas fa-plus"></i> Добавить</button>
                     </div>
                 </div>
                 <div id="add-form" style="display:none; background:var(--bg-inner-gradient); border-radius:20px; padding:16px; margin-bottom:10px;">
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                         <input type="url" id="new-url" placeholder="Ссылка на видео, пост или страницу..." style="flex:3; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
                         <input type="text" id="new-title" placeholder="Название (опционально)" style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
-                        <button class="button" id="confirm-add"><i class="fas fa-check"></i> Добавить</button>
-                        <button class="button" id="cancel-add" style="background:#555;"><i class="fas fa-times"></i> Отмена</button>
+                        <button class="button small" id="confirm-add"><i class="fas fa-check"></i> Добавить</button>
                     </div>
                 </div>
                 <div class="projects-grid" id="bookmarks-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;"></div>
-                <div style="margin-top:20px; padding:16px; background:var(--bg-inner-gradient); border-radius:16px;">
-                    <p><i class="fas fa-info-circle"></i> <strong>Закладки</strong> хранятся в приватном GitHub Gist и синхронизируются.<br>
-                    <i class="fas fa-video"></i> Клик по видео — полноэкранный режим.<br>
-                    <i class="fas fa-pen"></i> Клик по названию — редактирование (иконка сохранит).<br>
-                    <i class="fas fa-shield-alt"></i> <strong>Восстановление</strong> — установите мастер-пароль, чтобы не потерять данные при смене токена.</p>
-                </div>
             </div>
         `;
 
         const { modal, closeModal } = UIUtils.createModal('Хранилище', contentHtml, { size: 'full' });
+        // Стилизуем фон модалки полупрозрачным
+        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        
         const grid = modal.querySelector('#bookmarks-grid');
         const orderBtns = modal.querySelectorAll('.access-switch-btn');
         const catBtns = modal.querySelectorAll('.cat-btn');
@@ -575,7 +609,6 @@
         const newUrlInput = modal.querySelector('#new-url');
         const newTitleInput = modal.querySelector('#new-title');
         const confirmAddBtn = modal.querySelector('#confirm-add');
-        const cancelAddBtn = modal.querySelector('#cancel-add');
         const setupRecoveryBtn = modal.querySelector('#setup-recovery-btn');
         const resetStorageBtn = modal.querySelector('#reset-storage-btn');
 
@@ -609,8 +642,8 @@
         function getFilteredBookmarks() {
             let filtered = [...currentBookmarks];
             if (category === 'video') filtered = filtered.filter(b => b.embedUrl);
-            else if (category === 'post') filtered = filtered.filter(b => b.postType && ['feedback','news','update'].includes(b.postType));
-            else if (category === 'link') filtered = filtered.filter(b => !b.embedUrl && !(b.postType && ['feedback','news','update'].includes(b.postType)));
+            else if (category === 'post') filtered = filtered.filter(b => b.postType && ['feedback','news','update','site-post'].includes(b.postType));
+            else if (category === 'link') filtered = filtered.filter(b => !b.embedUrl && !(b.postType && ['feedback','news','update','site-post'].includes(b.postType)));
             filtered.sort((a,b) => {
                 const dateA = new Date(a.added);
                 const dateB = new Date(b.added);
@@ -733,7 +766,6 @@
             if (addFormVisible) hideAddForm();
             else showAddForm();
         });
-        cancelAddBtn.addEventListener('click', hideAddForm);
 
         confirmAddBtn.addEventListener('click', async () => {
             const url = newUrlInput.value.trim();
