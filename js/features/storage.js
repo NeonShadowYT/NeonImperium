@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist с улучшенным UI и мульти-сервисным получением видео
+// js/features/storage.js — Хранилище закладок через GitHub Gist с улучшенным UI
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -161,11 +161,10 @@
 
     // --- Мульти-сервисное получение информации о ссылке ---
     async function fetchEmbedData(url) {
-        // Список сервисов для получения oEmbed (noembed.com, если не сработает — попробуем другие)
         const services = [
             `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
-            `https://api.embed.ly/1/oembed?url=${encodeURIComponent(url)}`, // требует ключ? но попробуем
-            `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`
+            `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`,
+            `https://api.embed.ly/1/oembed?url=${encodeURIComponent(url)}`
         ];
         for (const serviceUrl of services) {
             try {
@@ -179,7 +178,7 @@
                 console.warn(`Service ${serviceUrl} failed:`, err);
             }
         }
-        // Если oEmbed не дал результата, пробуем получить Open Graph мета-теги через прокси
+        // Fallback: Open Graph через прокси
         try {
             const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
             const proxyResp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
@@ -210,37 +209,34 @@
             const search = urlObj.search;
             let videoId = null;
 
-            // YouTube Shorts
-            if (path.includes('/shorts/')) {
-                videoId = path.split('/shorts/')[1]?.split('?')[0];
-                if (videoId) return `https://www.youtube.com/embed/${videoId}`;
+            // YouTube /shorts/ (основной домен и youtu.be)
+            if (url.includes('youtube.com/shorts/') || url.includes('youtu.be/shorts/')) {
+                const match = url.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([a-zA-Z0-9_-]+)/);
+                if (match) return `https://www.youtube.com/embed/${match[1]}`;
             }
-            if (path.includes('view_video.php') && search.includes('viewkey=')) {
-                const params = new URLSearchParams(search);
-                videoId = params.get('viewkey');
-                if (videoId) return `${origin}/embed/${videoId}`;
-            }
-            const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
-            if (viewMatch) {
-                videoId = viewMatch[2];
-                return `${origin}/embed/${videoId}`;
-            }
-            const vMatch = path.match(/^\/v\/([a-zA-Z0-9_-]+)/);
-            if (vMatch) {
-                videoId = vMatch[1];
-                return `${origin}/embed/${videoId}`;
-            }
-            const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
-            if (videoMatch) {
-                videoId = videoMatch[1];
-                return `${origin}/embed/${videoId}`;
-            }
+            // Обычные YouTube ссылки
             if (search.includes('v=')) {
                 const params = new URLSearchParams(search);
                 videoId = params.get('v');
                 if (videoId) return `https://www.youtube.com/embed/${videoId}`;
             }
-            if (path.match(/^\/embed\//)) return url;
+            if (path.includes('/embed/')) return url;
+            if (path.includes('/v/')) {
+                videoId = path.split('/v/')[1]?.split('?')[0];
+                if (videoId) return `${origin}/embed/${videoId}`;
+            }
+            // view_video.php?viewkey=...
+            if (path.includes('view_video.php') && search.includes('viewkey=')) {
+                const params = new URLSearchParams(search);
+                videoId = params.get('viewkey');
+                if (videoId) return `${origin}/embed/${videoId}`;
+            }
+            // /view/... или /watch/...
+            const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
+            if (viewMatch) return `${origin}/embed/${viewMatch[2]}`;
+            // /video/...
+            const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
+            if (videoMatch) return `${origin}/embed/${videoMatch[1]}`;
             return null;
         } catch (e) {
             return null;
@@ -253,7 +249,7 @@
         return lowerUrl.includes('/embed/') || lowerUrl.includes('/player/') || lowerUrl.includes('?embed');
     }
 
-    // --- Добавление закладки с мульти-сервисным получением ---
+    // --- Добавление закладки ---
     async function addBookmark(bookmark) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
         let embedUrl = null;
@@ -294,6 +290,8 @@
         if (downloadUrl) bookmark.downloadUrl = downloadUrl;
         if (thumbnail) bookmark.thumbnail = thumbnail;
         if (finalTitle) bookmark.title = finalTitle;
+        // Определяем тип: post если есть postType, иначе обычная закладка
+        if (bookmark.postType) bookmark.postType = bookmark.postType;
         bookmarks.push(bookmark);
         await saveBookmarks(bookmarks);
         return bookmark;
@@ -323,7 +321,6 @@
         const titleDiv = document.createElement('div');
         titleDiv.textContent = title;
         titleDiv.style.cssText = 'position:absolute;top:20px;left:20px;color:white;font-size:18px;font-family:"Russo One",sans-serif;background:rgba(0,0,0,0.5);padding:8px 16px;border-radius:30px;z-index:100001;';
-        const parent = iframeElement.parentNode;
         iframeElement.style.position = 'static';
         iframeElement.style.width = '90%';
         iframeElement.style.height = '85%';
@@ -410,31 +407,37 @@
         return card;
     }
 
-    // --- Модальное окно с сортировкой и анимированной формой добавления ---
+    // --- Модальное окно с сортировкой ---
     async function openStorageModalContent() {
         let currentBookmarks = [];
-        let currentSort = 'new'; // new, old, type_all, type_video, type_post, type_link
+        let sortOrder = 'new'; // 'new' или 'old'
+        let category = 'all';   // 'all', 'video', 'post', 'link'
         let addFormVisible = false;
 
         const contentHtml = `
             <div style="display:flex; flex-direction:column; gap:16px;">
                 <div class="storage-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                    <div class="sort-buttons" style="display:flex; gap:6px; flex-wrap:wrap;">
-                        <button class="button small sort-btn" data-sort="new" style="background:var(--accent);">📅 Новые</button>
-                        <button class="button small sort-btn" data-sort="old">📅 Старые</button>
-                        <button class="button small sort-btn" data-sort="type_all">📂 Все</button>
-                        <button class="button small sort-btn" data-sort="type_video">🎬 Видео</button>
-                        <button class="button small sort-btn" data-sort="type_post">📝 Посты</button>
-                        <button class="button small sort-btn" data-sort="type_link">🔗 Ссылки</button>
+                    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                        <div class="access-switch" style="display:inline-flex;">
+                            <button class="access-switch-btn ${sortOrder === 'new' ? 'active' : ''}" data-order="new">Новые</button>
+                            <button class="access-switch-btn ${sortOrder === 'old' ? 'active' : ''}" data-order="old">Старые</button>
+                        </div>
+                        <div style="width:1px; height:30px; background:var(--border); margin:0 4px;"></div>
+                        <div class="category-buttons" style="display:flex; gap:6px;">
+                            <button class="button small cat-btn ${category === 'all' ? 'active' : ''}" data-cat="all">Все</button>
+                            <button class="button small cat-btn ${category === 'video' ? 'active' : ''}" data-cat="video"><i class="fas fa-video"></i> Видео</button>
+                            <button class="button small cat-btn ${category === 'post' ? 'active' : ''}" data-cat="post"><i class="fas fa-newspaper"></i> Посты</button>
+                            <button class="button small cat-btn ${category === 'link' ? 'active' : ''}" data-cat="link"><i class="fas fa-link"></i> Ссылки</button>
+                        </div>
                     </div>
-                    <button class="button" id="toggle-add-btn" style="transition: all 0.2s;">➕ Добавить</button>
+                    <button class="button" id="toggle-add-btn" style="transition: all 0.2s;"><i class="fas fa-plus"></i> Добавить</button>
                 </div>
                 <div id="add-form" style="display:none; background:var(--bg-inner-gradient); border-radius:20px; padding:16px; margin-bottom:10px; transition: all 0.3s ease;">
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                        <input type="url" id="new-url" placeholder="Ссылка..." style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
+                        <input type="url" id="new-url" placeholder="Ссылка на видео, пост или страницу..." style="flex:3; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
                         <input type="text" id="new-title" placeholder="Название (опционально)" style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
-                        <button class="button" id="confirm-add" style="min-width:100px;">➕ Добавить</button>
-                        <button class="button" id="cancel-add" style="background:#555;">✖ Отмена</button>
+                        <button class="button" id="confirm-add"><i class="fas fa-check"></i> Добавить</button>
+                        <button class="button" id="cancel-add" style="background:#555;"><i class="fas fa-times"></i> Отмена</button>
                     </div>
                 </div>
                 <div class="projects-grid" id="bookmarks-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
@@ -442,14 +445,17 @@
                 </div>
                 <div style="margin-top:20px; padding:16px; background:var(--bg-inner-gradient); border-radius:16px;">
                     <p><i class="fas fa-info-circle"></i> <strong>Закладки</strong> хранятся в приватном GitHub Gist и синхронизируются.<br>
-                    <i class="fas fa-video"></i> Для видео автоматически подбирается плеер, кнопка скачивания (если доступно), клик по видео — полноэкранный режим.</p>
+                    <i class="fas fa-video"></i> Для видео автоматически подбирается плеер, кнопка скачивания (если доступно), клик по видео — полноэкранный режим.<br>
+                    <i class="fas fa-newspaper"></i> <strong>Посты</strong> — это сообщения с сайта (идеи, баги, отзывы, новости, обновления).<br>
+                    <i class="fas fa-link"></i> <strong>Ссылки</strong> — всё остальное.</p>
                 </div>
             </div>
         `;
 
         const { modal, closeModal } = UIUtils.createModal('Хранилище', contentHtml, { size: 'full' });
         const grid = modal.querySelector('#bookmarks-grid');
-        const sortBtns = modal.querySelectorAll('.sort-btn');
+        const orderBtns = modal.querySelectorAll('.access-switch-btn');
+        const catBtns = modal.querySelectorAll('.cat-btn');
         const toggleAddBtn = modal.querySelector('#toggle-add-btn');
         const addForm = modal.querySelector('#add-form');
         const newUrlInput = modal.querySelector('#new-url');
@@ -468,20 +474,20 @@
 
         function getFilteredBookmarks() {
             let filtered = [...currentBookmarks];
-            if (currentSort === 'type_video') {
+            // Фильтр по категории
+            if (category === 'video') {
                 filtered = filtered.filter(b => b.embedUrl);
-            } else if (currentSort === 'type_post') {
-                filtered = filtered.filter(b => !b.embedUrl && (b.title && b.title.length > 0));
-            } else if (currentSort === 'type_link') {
-                filtered = filtered.filter(b => !b.embedUrl && !(b.title && b.title.length > 0));
+            } else if (category === 'post') {
+                filtered = filtered.filter(b => b.postType && (b.postType === 'feedback' || b.postType === 'news' || b.postType === 'update'));
+            } else if (category === 'link') {
+                filtered = filtered.filter(b => !b.embedUrl && !(b.postType && (b.postType === 'feedback' || b.postType === 'news' || b.postType === 'update')));
             }
-            if (currentSort === 'new') {
-                filtered.sort((a,b) => new Date(b.added) - new Date(a.added));
-            } else if (currentSort === 'old') {
-                filtered.sort((a,b) => new Date(a.added) - new Date(b.added));
-            } else {
-                filtered.sort((a,b) => new Date(b.added) - new Date(a.added));
-            }
+            // Сортировка
+            filtered.sort((a,b) => {
+                const dateA = new Date(a.added);
+                const dateB = new Date(b.added);
+                return sortOrder === 'new' ? dateB - dateA : dateA - dateB;
+            });
             return filtered;
         }
 
@@ -574,32 +580,38 @@
             });
         }
 
-        // Сортировка
-        sortBtns.forEach(btn => {
+        // Обработка переключателя порядка
+        orderBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                currentSort = btn.dataset.sort;
-                sortBtns.forEach(b => b.style.background = '');
-                btn.style.background = 'var(--accent)';
+                sortOrder = btn.dataset.order;
+                orderBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
                 renderBookmarks();
             });
         });
-        // Устанавливаем активную по умолчанию
-        modal.querySelector('[data-sort="new"]').style.background = 'var(--accent)';
 
-        // Анимированное появление формы добавления
-        let isAnimating = false;
+        // Обработка категорий
+        catBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                category = btn.dataset.cat;
+                catBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderBookmarks();
+            });
+        });
+
+        // Анимированное появление/скрытие формы
         function showAddForm() {
             if (addFormVisible) return;
             addFormVisible = true;
             addForm.style.display = 'block';
             addForm.style.opacity = '0';
             addForm.style.transform = 'translateY(-10px)';
-            addForm.style.transition = 'opacity 0.2s, transform 0.2s';
             setTimeout(() => {
                 addForm.style.opacity = '1';
                 addForm.style.transform = 'translateY(0)';
             }, 10);
-            toggleAddBtn.textContent = '✖ Отмена';
+            toggleAddBtn.innerHTML = '<i class="fas fa-times"></i> Отмена';
         }
         function hideAddForm() {
             if (!addFormVisible) return;
@@ -611,7 +623,7 @@
                 addForm.style.opacity = '';
                 addForm.style.transform = '';
             }, 200);
-            toggleAddBtn.textContent = '➕ Добавить';
+            toggleAddBtn.innerHTML = '<i class="fas fa-plus"></i> Добавить';
             newUrlInput.value = '';
             newTitleInput.value = '';
         }
@@ -621,6 +633,7 @@
         });
         cancelAddBtn.addEventListener('click', hideAddForm);
 
+        // Добавление закладки
         confirmAddBtn.addEventListener('click', async () => {
             const url = newUrlInput.value.trim();
             if (!url) { UIUtils.showToast('Введите ссылку', 'error'); return; }
