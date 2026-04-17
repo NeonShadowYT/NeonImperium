@@ -1,4 +1,4 @@
-// ui-feedback.js — добавлена поддержка шифрования приватных постов и 3D-эффект
+// ui-feedback.js — с проверками разрешений repo/gist
 (function() {
     const REACTION_TYPES = [
         { content: '+1', emoji: '👍' }, { content: '-1', emoji: '👎' }, { content: 'laugh', emoji: '😄' },
@@ -39,13 +39,20 @@
 
     function renderReactions(container, issueNumber, reactions, currentUser, onAdd, onRemove) {
         if (!container) return;
+        const hasRepo = GithubAuth.hasScope('repo');
         const grouped = groupReactions(reactions, currentUser);
         const visible = grouped.slice(0,3);
         const hiddenCount = grouped.length - 3;
-        let html = visible.map(g => `<button class="reaction-button ${g.userReacted ? 'active' : ''}" data-content="${g.content}" data-reaction-id="${g.userReactionId||''}" data-count="${g.count}" ${!currentUser ? 'disabled' : ''} aria-label="${g.emoji} (${g.count})"><span class="reaction-emoji">${g.emoji}</span><span class="reaction-count">${g.count}</span></button>`).join('');
-        if (currentUser) html += hiddenCount > 0 ? `<button class="reaction-add-btn" data-more aria-label="Показать ещё реакции"><span>+${hiddenCount}</span></button>` : `<button class="reaction-add-btn" data-add aria-label="Добавить реакцию"><span>+</span></button>`;
+        let html = visible.map(g => {
+            const active = g.userReacted ? 'active' : '';
+            const disabled = (!currentUser || !hasRepo) ? 'disabled' : '';
+            return `<button class="reaction-button ${active}" data-content="${g.content}" data-reaction-id="${g.userReactionId||''}" data-count="${g.count}" ${disabled} aria-label="${g.emoji} (${g.count})"><span class="reaction-emoji">${g.emoji}</span><span class="reaction-count">${g.count}</span></button>`;
+        }).join('');
+        if (currentUser && hasRepo) {
+            html += hiddenCount > 0 ? `<button class="reaction-add-btn" data-more aria-label="Показать ещё реакции"><span>+${hiddenCount}</span></button>` : `<button class="reaction-add-btn" data-add aria-label="Добавить реакцию"><span>+</span></button>`;
+        }
         container.innerHTML = html;
-        if (!currentUser) return;
+        if (!currentUser || !hasRepo) return;
 
         container.querySelectorAll('.reaction-button:not([disabled])').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -146,15 +153,12 @@
         const menu = document.createElement('div');
         menu.className = 'reaction-menu';
         menu.setAttribute('role', 'menu');
-        menu.setAttribute('aria-label', 'Выберите реакцию');
         Object.assign(menu.style, { position: 'absolute', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '30px', padding: '5px', display: 'flex', gap: '5px', zIndex: '10010', boxShadow: 'var(--shadow)' });
         REACTION_TYPES.forEach(type => {
             const btn = document.createElement('button');
             btn.className = 'reaction-menu-btn';
             btn.innerHTML = type.emoji;
             btn.setAttribute('role', 'menuitem');
-            btn.setAttribute('aria-label', type.emoji);
-            btn.tabIndex = -1;
             btn.onclick = (e) => {
                 e.stopPropagation();
                 callback(type.content);
@@ -169,23 +173,10 @@
         document.body.appendChild(menu);
         const firstBtn = menu.querySelector('button');
         if (firstBtn) firstBtn.focus();
-        const handleKeyDown = (e) => {
-            const items = Array.from(menu.querySelectorAll('button'));
-            const current = document.activeElement;
-            const currentIndex = items.indexOf(current);
-            switch (e.key) {
-                case 'ArrowRight': case 'ArrowDown': e.preventDefault(); if (currentIndex < items.length - 1) items[currentIndex + 1].focus(); else items[0].focus(); break;
-                case 'ArrowLeft': case 'ArrowUp': e.preventDefault(); if (currentIndex > 0) items[currentIndex - 1].focus(); else items[items.length - 1].focus(); break;
-                case 'Enter': case ' ': e.preventDefault(); if (current) current.click(); break;
-                case 'Escape': e.preventDefault(); document.body.removeChild(menu); relativeTo.focus(); break;
-            }
-        };
-        menu.addEventListener('keydown', handleKeyDown);
         const closeMenu = (e) => {
             if (!menu.contains(e.target) && document.body.contains(menu)) {
                 document.body.removeChild(menu);
                 document.removeEventListener('click', closeMenu);
-                menu.removeEventListener('keydown', handleKeyDown);
                 relativeTo.focus();
             }
         };
@@ -193,18 +184,19 @@
     }
 
     function renderComments(container, comments, currentUser, issueNumber) {
+        const hasRepo = GithubAuth.hasScope('repo');
         const regularComments = comments.filter(c => !c.body.trim().startsWith('!vote'));
         container.innerHTML = regularComments.map(c => {
             const isAuthor = currentUser && c.user.login === currentUser;
             const isAdmin = GithubAuth.isAdmin();
-            const canEditDelete = isAuthor || isAdmin;
+            const canEditDelete = hasRepo && (isAuthor || isAdmin);
             let actionsHtml = '';
             if (canEditDelete) {
                 actionsHtml = `<div class="comment-actions"><button class="comment-edit" data-comment-id="${c.id}" data-comment-body="${GithubCore.escapeHtml(c.body)}" title="Редактировать"><i class="fas fa-edit"></i></button><button class="comment-delete" data-comment-id="${c.id}" title="Удалить"><i class="fas fa-trash-alt"></i></button></div>`;
             }
             return `<div class="comment" data-comment-id="${c.id}"><div class="comment-meta"><span class="comment-author">${GithubCore.escapeHtml(c.user.login)}</span></div><div class="comment-body">${GithubCore.escapeHtml(c.body).replace(/\n/g,'<br>')}</div>${actionsHtml}</div>`;
         }).join('');
-        if (currentUser) {
+        if (currentUser && hasRepo) {
             container.querySelectorAll('.comment-edit').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -248,17 +240,6 @@
         const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
 
         if (window.Editor) {
-            const updatePreview = () => {
-                const text = textarea.value;
-                if (text.trim()) {
-                    previewArea.innerHTML = '';
-                    if (!previewArea.classList.contains('markdown-body')) previewArea.classList.add('markdown-body');
-                    renderPostBody(previewArea, text, null);
-                    previewArea.style.display = 'block';
-                } else {
-                    previewArea.style.display = 'none';
-                }
-            };
             const toolbar = Editor.createEditorToolbar(textarea);
             toolbarContainer.appendChild(toolbar);
         }
@@ -351,6 +332,7 @@
 
     async function renderPoll(container, issueNumber, pollData) {
         const currentUser = GithubAuth.getCurrentUser();
+        const hasRepo = GithubAuth.hasScope('repo');
         const comments = await GithubAPI.loadComments(issueNumber);
         const voteComments = comments.filter(c => /^!vote \d+$/.test(c.body.trim()));
         const voteCounts = pollData.options.map((_, idx) => voteComments.filter(c => c.body.trim() === `!vote ${idx}`).length);
@@ -364,18 +346,18 @@
         pollData.options.forEach((option, index) => {
             const count = voteCounts[index], percent = totalVotes > 0 ? Math.round((count/totalVotes)*100) : 0;
             html += `<div class="poll-option" data-index="${index}"><div class="poll-option-text">${GithubCore.escapeHtml(option)}</div>`;
-            if (!currentUser) {}
+            if (!currentUser || !hasRepo) {}
             else if (!userVoted) html += `<button class="button poll-vote-btn" data-option="${index}">Голосовать</button>`;
             else html += `<div class="progress-bar"><div style="width:${percent}%;">${percent}% (${count})</div></div>`;
             html += '</div>';
         });
         html += '</div>';
-        if (!currentUser) html += '<p class="text-secondary small" style="margin-top:15px;"><i class="fas fa-info-circle"></i> Чтобы участвовать в опросе, <a href="#" id="poll-login-link">войдите в аккаунт</a>.</p>';
+        if (!currentUser || !hasRepo) html += '<p class="text-secondary small" style="margin-top:15px;"><i class="fas fa-info-circle"></i> Чтобы участвовать в опросе, <a href="#" id="poll-login-link">войдите в аккаунт</a> с разрешением "repo".</p>';
         else if (!userVoted) html += '<p class="text-secondary small" style="margin-top:10px;">Вы ещё не голосовали.</p>';
         pollDiv.innerHTML = html;
         container.innerHTML = '';
         container.appendChild(pollDiv);
-        if (currentUser && !userVoted) {
+        if (currentUser && hasRepo && !userVoted) {
             pollDiv.querySelectorAll('.poll-vote-btn').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     e.stopPropagation();
@@ -412,6 +394,7 @@
     }
 
     function setupCommentForm(container, item, currentUser) {
+        if (!GithubAuth.hasScope('repo')) return;
         const commentForm = document.createElement('div'); commentForm.className = 'comment-form';
         commentForm.innerHTML = `
             <input type="text" class="comment-input" placeholder="Написать комментарий...">
@@ -461,12 +444,14 @@
 
     function addHeaderActions(modalHeader, item, issue, currentUser, closeModal, escHandler) {
         const isAdmin = GithubAuth.isAdmin();
+        const hasRepo = GithubAuth.hasScope('repo');
+        const hasGist = GithubAuth.hasScope('gist');
         const postUrl = `${window.location.origin}${window.location.pathname}?post=${item.id}`;
         const actionsContainer = document.createElement('div');
         actionsContainer.className = 'modal-header-actions';
 
         let buttonsHtml = '';
-        if (isAdmin || (currentUser && issue.user.login === currentUser)) {
+        if (hasRepo && (isAdmin || (currentUser && issue.user.login === currentUser))) {
             buttonsHtml += `
                 <button class="action-btn edit-issue" title="Редактировать" aria-label="Редактировать"><i class="fas fa-edit"></i></button>
                 <button class="action-btn close-issue" title="Закрыть" aria-label="Закрыть"><i class="fas fa-trash-alt"></i></button>
@@ -474,8 +459,12 @@
         }
         buttonsHtml += `
             <button class="action-btn share-post" title="Поделиться" aria-label="Поделиться"><i class="fas fa-share-alt"></i></button>
-            <button class="action-btn bookmark-post" title="В избранное" aria-label="В избранное"><i class="fas fa-bookmark"></i></button>
         `;
+        if (hasGist && currentUser) {
+            buttonsHtml += `
+                <button class="action-btn bookmark-post" title="В избранное" aria-label="В избранное"><i class="fas fa-bookmark"></i></button>
+            `;
+        }
 
         actionsContainer.innerHTML = buttonsHtml;
 
@@ -574,7 +563,6 @@
                 addHeaderActions(modalHeader, item, issue, currentUser, closeModal, escHandler);
             }
             
-            // Расшифровка тела, если пост приватный и пользователь разрешён
             let finalBody = issue.body;
             const allowedStr = GithubCore.extractAllowed(issue.body);
             if (item.labels?.includes('private') && allowedStr && currentUser && allowedStr.split(',').map(s=>s.trim()).includes(currentUser)) {
@@ -603,6 +591,10 @@
     }
 
     function openEditorModal(mode, data, postType = 'feedback') {
+        if (!GithubAuth.hasScope('repo')) {
+            UIUtils.showToast('Для создания или редактирования постов необходимо разрешение "repo" в токене.', 'error');
+            return;
+        }
         const currentUser = GithubAuth.getCurrentUser();
         const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
 
@@ -668,7 +660,6 @@
                             <textarea id="modal-body" class="feedback-textarea" placeholder="Описание..." rows="12">${GithubCore.escapeHtml(bodyContent)}</textarea>
                         </div>
                         <div class="editor-split-right" id="modal-preview-area">
-                            <!-- живой предпросмотр появится здесь -->
                         </div>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top:10px;">
@@ -710,11 +701,9 @@
             textarea.addEventListener('input', updatePreview);
             updatePreview();
 
-            // --- Синхронизация прокрутки между textarea и preview-area ---
             const leftPane = modal.querySelector('.editor-split-left');
             const rightPane = modal.querySelector('.editor-split-right');
             if (leftPane && rightPane) {
-                // Устанавливаем одинаковую высоту (flex уже даёт равную высоту, но добавим явно)
                 leftPane.style.display = 'flex';
                 leftPane.style.flexDirection = 'column';
                 rightPane.style.display = 'flex';
@@ -722,14 +711,12 @@
                 const textareaEl = leftPane.querySelector('textarea');
                 const previewContainer = rightPane.querySelector('#modal-preview-area');
                 if (textareaEl && previewContainer) {
-                    // Синхронизация прокрутки при скролле textarea
                     textareaEl.addEventListener('scroll', () => {
                         const ratio = textareaEl.scrollTop / (textareaEl.scrollHeight - textareaEl.clientHeight);
                         if (previewContainer.scrollHeight > previewContainer.clientHeight) {
                             previewContainer.scrollTop = ratio * (previewContainer.scrollHeight - previewContainer.clientHeight);
                         }
                     });
-                    // Синхронизация прокрутки при скролле preview
                     previewContainer.addEventListener('scroll', () => {
                         const ratio = previewContainer.scrollTop / (previewContainer.scrollHeight - previewContainer.clientHeight);
                         if (textareaEl.scrollHeight > textareaEl.clientHeight) {
@@ -750,8 +737,6 @@
                 servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
             }
 
-            // Удалён весь код, связанный с preview-thumbnail (миниатюра под полем preview-url)
-
             const accessPublicBtn = modal.querySelector('[data-access="public"]');
             const accessPrivateBtn = modal.querySelector('[data-access="private"]');
             const privateUsersInput = modal.querySelector('#private-users');
@@ -768,7 +753,7 @@
             const saveDraftFn = () => {
                 const draft = {
                     title: titleInput.value.trim(),
-                    previewUrl: '', // больше не используем previewUrl для отображения
+                    previewUrl: '',
                     body: textarea.value.trim(),
                     category: categorySelect ? categorySelect.value : null,
                     access: accessPublicBtn.classList.contains('active') ? 'public' : 'private',
@@ -828,6 +813,10 @@
         const submitBtn = modal.querySelector('#modal-submit');
         submitBtn.addEventListener('click', async (e) => {
             e.preventDefault();
+            if (!GithubAuth.hasScope('repo')) {
+                UIUtils.showToast('Недостаточно прав (требуется scope "repo")', 'error');
+                return;
+            }
             if (!GithubAuth.getToken()) { UIUtils.showToast('Вы не авторизованы', 'error'); return; }
 
             let body = modal.querySelector('#modal-body').value.trim();

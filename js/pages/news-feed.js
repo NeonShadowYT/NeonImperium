@@ -1,8 +1,9 @@
+// news-feed.js — лента новостей с проверками разрешений
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
     const { openFullModal, canViewPost } = UIFeedback;
-    const { getCurrentUser, isAdmin } = GithubAuth;
+    const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
 
     const YT_CHANNELS = [
         { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
@@ -14,7 +15,7 @@
 
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
     let currentUser = null, currentAbort = null;
-    let videoLoading = false, videoError = false, retryVideoLoad = null;
+    let videoLoading = false, videoError = false;
 
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('news-section');
@@ -67,10 +68,7 @@
         if (postId) {
             setTimeout(async () => {
                 try {
-                    if (!GithubAPI || !UIFeedback) {
-                        console.warn('GithubAPI или UIFeedback не доступны');
-                        return;
-                    }
+                    if (!GithubAPI || !UIFeedback) return;
                     const issue = await loadIssue(postId);
                     if (issue.state === 'closed') {
                         UIUtils.showToast('Этот пост был закрыт и больше не доступен', 'error');
@@ -92,8 +90,7 @@
                     }
                     openFullModal(item);
                 } catch (err) {
-                    console.error('Ошибка загрузки поста по ссылке:', err);
-                    if (UIUtils) UIUtils.showToast('Пост не найден или произошла ошибка', 'error');
+                    UIUtils.showToast('Пост не найден или произошла ошибка', 'error');
                 }
             }, 1500);
         }
@@ -186,9 +183,7 @@
             cacheSet(cacheKey, serialized);
             return sorted;
         } catch (err) {
-            if (err.name === 'AbortError') {
-                UIUtils.showToast('Таймаут при загрузке видео', 'warning');
-            }
+            if (err.name === 'AbortError') UIUtils.showToast('Таймаут при загрузке видео', 'warning');
             throw err;
         } finally {
             clearTimeout(timeoutId);
@@ -225,9 +220,7 @@
             cacheSet(cacheKey, serialized);
             return posts;
         } catch (err) {
-            if (err.name === 'AbortError') {
-                UIUtils.showToast('Таймаут при загрузке новостей', 'warning');
-            }
+            if (err.name === 'AbortError') UIUtils.showToast('Таймаут при загрузке новостей', 'warning');
             throw err;
         } finally {
             clearTimeout(timeoutId);
@@ -251,9 +244,7 @@
         });
 
         let allItems = [...filteredPosts];
-        if (videosLoaded) {
-            allItems = allItems.concat(videos);
-        }
+        if (videosLoaded) allItems = allItems.concat(videos);
         allItems.sort((a, b) => b.date - a.date);
         const itemsToShow = allItems.slice(0, 6);
 
@@ -263,11 +254,8 @@
             grid.innerHTML = `<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">Пока нет новостей</p></div>`;
         } else {
             itemsToShow.forEach(item => {
-                if (item.type === 'video') {
-                    grid.appendChild(createVideoCard(item));
-                } else {
-                    grid.appendChild(createPostCard(item));
-                }
+                if (item.type === 'video') grid.appendChild(createVideoCard(item));
+                else grid.appendChild(createPostCard(item));
             });
         }
 
@@ -287,6 +275,23 @@
 
         container.innerHTML = '';
         container.appendChild(grid);
+
+        // Админ-кнопка добавления новости (только если есть repo)
+        const header = document.querySelector('.news-header');
+        if (header) {
+            const existingBtn = header.querySelector('.admin-news-btn');
+            if (isAdmin() && hasScope('repo')) {
+                if (!existingBtn) {
+                    const btn = document.createElement('button');
+                    btn.className = 'button admin-news-btn';
+                    btn.innerHTML = '<i class="fas fa-plus"></i> Добавить новость';
+                    btn.addEventListener('click', () => UIFeedback.openEditorModal('new', { game: null }, 'news'));
+                    header.appendChild(btn);
+                }
+            } else {
+                if (existingBtn) existingBtn.remove();
+            }
+        }
     }
 
     function createVideoCard(video) {
@@ -309,9 +314,7 @@
         const isPrivate = post.labels.includes('private');
         const allowedStr = extractAllowed(post.body);
         if (isPrivate && allowedStr && currentUser && allowedStr.split(',').map(s=>s.trim()).includes(currentUser)) {
-            try {
-                bodyForPreview = decryptPrivateBody(post.body, allowedStr);
-            } catch(e) {}
+            try { bodyForPreview = decryptPrivateBody(post.body, allowedStr); } catch(e) {}
         }
         const card = document.createElement('div'); card.className = 'project-card-link no-tilt tilt-card'; card.style.cursor = 'pointer';
         card.setAttribute('aria-label', `Читать пост: ${post.title}`);

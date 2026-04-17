@@ -1,10 +1,11 @@
+// admin-news.js — админские кнопки с проверкой repo
 (function() {
-    const { cacheRemove, CONFIG } = GithubCore;
-    const { isAdmin, getCurrentUser } = GithubAuth;
+    const { cacheRemove } = GithubCore;
+    const { isAdmin, hasScope } = GithubAuth;
     const { openEditorModal } = UIFeedback;
 
     function renderAdminPanels() {
-        if (!isAdmin()) {
+        if (!isAdmin() || !hasScope('repo')) {
             document.querySelectorAll('.admin-panel, .admin-news-btn, .admin-update-btn').forEach(el => el.remove());
             return;
         }
@@ -35,10 +36,7 @@
         const updatesContainer = document.getElementById('game-updates');
         if (updatesContainer && updatesContainer.dataset.game) {
             const game = String(updatesContainer.dataset.game).trim();
-            if (!game) {
-                console.warn('admin-news.js: data-game пустой или содержит только пробелы');
-                return;
-            }
+            if (!game) return;
             const parent = updatesContainer.parentNode;
             let header = parent.querySelector('.updates-header');
             if (!header) {
@@ -74,7 +72,7 @@
 
     function init() {
         setTimeout(() => {
-            if (isAdmin()) {
+            if (isAdmin() && hasScope('repo')) {
                 renderAdminPanels();
             } else {
                 removeAdminPanels();
@@ -83,7 +81,7 @@
 
         window.addEventListener('github-login-success', () => {
             setTimeout(() => {
-                if (isAdmin()) {
+                if (isAdmin() && hasScope('repo')) {
                     renderAdminPanels();
                 } else {
                     removeAdminPanels();

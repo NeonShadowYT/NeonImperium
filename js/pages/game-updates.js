@@ -1,8 +1,9 @@
+// game-updates.js — обновления игры с проверкой разрешений
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
     const { loadIssues } = GithubAPI;
     const { openFullModal, canViewPost } = UIFeedback;
-    const { getCurrentUser, isAdmin } = GithubAuth;
+    const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
 
     const DEFAULT_IMAGE = 'images/default-news.webp';
     let currentAbort = null;
@@ -82,6 +83,34 @@
             container.innerHTML = '';
             const grid = document.createElement('div'); grid.className = 'projects-grid'; container.appendChild(grid);
             posts.forEach(post => grid.appendChild(createUpdateCard(post)));
+
+            // Админ-кнопка добавления обновления
+            const parent = container.parentNode;
+            let header = parent.querySelector('.updates-header');
+            if (!header) {
+                const possibleHeader = parent.querySelector('div[style*="display: flex"]');
+                if (possibleHeader && possibleHeader.querySelector('h2')) header = possibleHeader;
+                else {
+                    header = document.createElement('div');
+                    header.className = 'updates-header';
+                    header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;';
+                    header.innerHTML = '<h2 data-lang="updatesTitle">Обновления</h2>';
+                    parent.insertBefore(header, container);
+                }
+            }
+            const existingBtn = header.querySelector('.admin-update-btn');
+            if (isAdmin() && hasScope('repo')) {
+                if (!existingBtn) {
+                    const btn = document.createElement('button');
+                    btn.className = 'button admin-update-btn';
+                    btn.innerHTML = '<i class="fas fa-plus"></i> Добавить обновление';
+                    btn.addEventListener('click', () => UIFeedback.openEditorModal('new', { game: currentGame }, 'update'));
+                    header.appendChild(btn);
+                }
+            } else {
+                if (existingBtn) existingBtn.remove();
+            }
+
         } catch (err) {
             if (err.name === 'AbortError') return;
             container.innerHTML = '<p class="error-message">Ошибка загрузки</p>';
@@ -97,9 +126,7 @@
         const allowedStr = extractAllowed(post.body);
         const currentUser = getCurrentUser();
         if (isPrivate && allowedStr && currentUser && allowedStr.split(',').map(s=>s.trim()).includes(currentUser)) {
-            try {
-                bodyForPreview = decryptPrivateBody(post.body, allowedStr);
-            } catch(e) {}
+            try { bodyForPreview = decryptPrivateBody(post.body, allowedStr); } catch(e) {}
         }
         const card = document.createElement('div'); card.className = 'project-card-link no-tilt tilt-card'; card.style.cursor = 'pointer';
         const inner = document.createElement('div'); inner.className = 'project-card';

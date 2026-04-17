@@ -1,4 +1,4 @@
-// js/core/github-auth.js — обновлённый интерфейс входа с проверкой scopes
+// github-auth.js — обновлённый интерфейс входа с проверкой scopes
 (function() {
     const CONFIG = GithubCore.CONFIG;
     const TOKEN_KEY = 'github_token';

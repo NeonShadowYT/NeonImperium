@@ -1,3 +1,4 @@
+// js/features/ui-utils.js
 (function() {
     function showToast(message, type = 'info', duration = 3000) {
         const toast = document.createElement('div');
@@ -47,6 +48,7 @@
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
         modal.setAttribute('aria-labelledby', 'modal-header-title');
+        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
         
         const headerHtml = `
             <div class="modal-header">

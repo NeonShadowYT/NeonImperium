@@ -1,4 +1,4 @@
-// editor.js — облегчённый тулбар (без предпросмотра)
+// editor.js — облегчённый тулбар с проверкой repo
 (function() {
     const TEMPLATES = {
         bold: { name: 'Жирный', icon: 'fas fa-bold', action: (textarea) => insertMarkdown(textarea, '**', 'текст', true) },
