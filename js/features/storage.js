@@ -46,6 +46,7 @@
         return toBase64(result);
     }
     function decryptWithToken(encrypted) {
+        if (!encrypted) return null;
         try {
             const key = getEncryptionKey();
             const decoded = fromBase64(encrypted);
@@ -54,6 +55,7 @@
                 const charCode = decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length);
                 result += String.fromCharCode(charCode);
             }
+            // Проверяем, что результат является валидным JSON
             return JSON.parse(result);
         } catch (e) {
             console.warn('Token decryption failed', e);
@@ -113,7 +115,10 @@
     async function fetchGist(gistId, token) {
         const url = `https://api.github.com/gists/${gistId}`;
         const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (!resp.ok) throw new Error(`Gist fetch failed: ${resp.status}`);
+        if (!resp.ok) {
+            if (resp.status === 404) return null; // Gist не найден
+            throw new Error(`Gist fetch failed: ${resp.status}`);
+        }
         return resp.json();
     }
 
@@ -150,6 +155,17 @@
         return gist.id;
     }
 
+    async function deleteGist(gistId, token) {
+        try {
+            await fetch(`https://api.github.com/gists/${gistId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) {
+            console.warn('Failed to delete gist', e);
+        }
+    }
+
     // ==================== ОСНОВНЫЕ ФУНКЦИИ РАБОТЫ С ХРАНИЛИЩЕМ ====================
     async function loadBookmarks() {
         if (!currentToken) {
@@ -160,20 +176,39 @@
                 const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
                 if (stored) gistId = JSON.parse(stored).gistId;
             }
-            if (!gistId) return [];
+            if (!gistId) return { bookmarks: [], needSetup: true };
+            
             const gist = await fetchGist(gistId, currentToken);
+            if (!gist) return { bookmarks: [], needSetup: true }; // Gist удалён
+            
             const file = gist.files[GIST_FILENAME];
-            if (!file) return [];
+            if (!file) return { bookmarks: [], needSetup: true };
+            
             const decrypted = decryptWithToken(file.content);
-            if (decrypted && decrypted.bookmarks) return decrypted.bookmarks;
-            if (decrypted && decrypted.recovery && decrypted.recovery.encryptedBookmarks) {
-                // Данные зашифрованы мастер-паролем, требуется восстановление
-                return null;
+            if (!decrypted) {
+                // Не удалось расшифровать токеном — возможно, данные зашифрованы старым токеном или повреждены
+                // Проверяем, есть ли recovery
+                // Попробуем распарсить хотя бы наличие recovery без расшифровки? Сложно.
+                // Вернём специальный статус
+                return { recoveryNeeded: true, gistExists: true };
             }
-            return [];
+            
+            if (decrypted.bookmarks) return { bookmarks: decrypted.bookmarks };
+            
+            if (decrypted.recovery && decrypted.recovery.encryptedBookmarks) {
+                return { recoveryNeeded: true, recoveryData: decrypted.recovery };
+            }
+            
+            // Неизвестный формат
+            return { bookmarks: [], needSetup: true };
         } catch (e) {
-            console.warn('Gist load failed, using local', e);
-            try { return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]'); } catch { return []; }
+            console.warn('Gist load failed', e);
+            // Если ошибка 403, вероятно, токен не имеет прав на gist
+            if (e.message.includes('403')) {
+                throw new Error('TOKEN_NO_GIST_SCOPE');
+            }
+            // Иначе пробуем локальные
+            try { return { bookmarks: JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]') }; } catch { return { bookmarks: [] }; }
         }
     }
 
@@ -199,6 +234,7 @@
     async function setupRecovery(masterPassword) {
         if (!currentToken || !gistId) throw new Error('No active storage');
         const gist = await fetchGist(gistId, currentToken);
+        if (!gist) throw new Error('Gist not found');
         const file = gist.files[GIST_FILENAME];
         if (!file) throw new Error('No data to protect');
         const currentData = decryptWithToken(file.content);
@@ -218,6 +254,7 @@
     async function recoverWithPassword(masterPassword) {
         if (!currentToken || !gistId) throw new Error('No storage to recover');
         const gist = await fetchGist(gistId, currentToken);
+        if (!gist) throw new Error('Gist not found');
         const file = gist.files[GIST_FILENAME];
         if (!file) throw new Error('No data found');
         const data = decryptWithToken(file.content);
@@ -233,16 +270,12 @@
     async function resetStorage() {
         if (!currentToken) return;
         if (gistId) {
-            try {
-                const url = `https://api.github.com/gists/${gistId}`;
-                await fetch(url, { method: 'DELETE', headers: { 'Authorization': `Bearer ${currentToken}` } });
-            } catch (e) { console.warn('Failed to delete gist', e); }
+            await deleteGist(gistId, currentToken);
         }
         gistId = null;
         localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);
         localStorage.removeItem(LOCAL_STORAGE_KEY);
         localStorage.removeItem(LOCAL_BACKUP_KEY);
-        await saveBookmarks([]);
     }
 
     // ==================== МУЛЬТИ-СЕРВИСНОЕ ПОЛУЧЕНИЕ ВИДЕО ====================
@@ -385,7 +418,8 @@
         }
 
         const bookmarks = await loadBookmarks();
-        if (bookmarks && bookmarks.some(b => b.url === finalUrl)) {
+        const bookmarksArray = bookmarks.bookmarks || bookmarks; // поддержка старого формата
+        if (bookmarksArray && bookmarksArray.some(b => b.url === finalUrl)) {
             UIUtils.showToast('Уже в избранном', 'info');
             throw new Error('duplicate');
         }
@@ -397,18 +431,17 @@
         if (thumbnail) bookmark.thumbnail = thumbnail;
         if (finalTitle) bookmark.title = finalTitle;
         if (postType) bookmark.postType = postType;
-        // Если это пост сайта, сохраняем оригинальный URL в отдельное поле для открытия?
-        // Но url уже содержит ссылку с параметром ?post=... , так что открывать будем по ней.
         
-        const newBookmarks = bookmarks ? [...bookmarks, bookmark] : [bookmark];
+        const newBookmarks = bookmarksArray ? [...bookmarksArray, bookmark] : [bookmark];
         await saveBookmarks(newBookmarks);
         return bookmark;
     }
 
     async function removeBookmark(bookmarkId) {
         let bookmarks = await loadBookmarks();
-        if (!bookmarks) bookmarks = [];
-        const filtered = bookmarks.filter(b => b.id !== bookmarkId);
+        const bookmarksArray = bookmarks.bookmarks || bookmarks;
+        if (!bookmarksArray) bookmarksArray = [];
+        const filtered = bookmarksArray.filter(b => b.id !== bookmarkId);
         await saveBookmarks(filtered);
     }
 
@@ -564,7 +597,86 @@
         let currentBookmarks = [];
         let sortOrder = 'new';
         let category = 'all';
+        let needSetup = false;
+        let recoveryNeeded = false;
+        let recoveryData = null;
 
+        // Шаг 1: Загружаем состояние хранилища
+        try {
+            const result = await loadBookmarks();
+            if (result.recoveryNeeded) {
+                recoveryNeeded = true;
+                recoveryData = result.recoveryData;
+            } else if (result.needSetup) {
+                needSetup = true;
+            } else {
+                currentBookmarks = result.bookmarks || [];
+            }
+        } catch (e) {
+            if (e.message === 'TOKEN_NO_GIST_SCOPE') {
+                UIUtils.showToast('Токен не имеет доступа к Gist. Убедитесь, что при создании токена выбрана область "repo".', 'error', 8000);
+                return;
+            }
+            UIUtils.showToast('Ошибка загрузки хранилища: ' + e.message, 'error');
+            return;
+        }
+
+        // Если требуется восстановление или настройка, обрабатываем до показа интерфейса
+        if (recoveryNeeded) {
+            const password = await new Promise(resolve => {
+                const pwd = prompt('Хранилище защищено мастер-паролем. Введите пароль для восстановления:');
+                resolve(pwd);
+            });
+            if (!password) {
+                UIUtils.showToast('Восстановление отменено', 'info');
+                return;
+            }
+            try {
+                const bookmarks = await recoverWithPassword(password);
+                currentBookmarks = bookmarks;
+                needSetup = false;
+                recoveryNeeded = false;
+                UIUtils.showToast('Хранилище успешно восстановлено!', 'success');
+            } catch (err) {
+                UIUtils.showToast('Неверный пароль или ошибка восстановления', 'error');
+                // Предлагаем сбросить?
+                if (confirm('Не удалось восстановить хранилище. Сбросить и создать новое?')) {
+                    await resetStorage();
+                    needSetup = true;
+                    recoveryNeeded = false;
+                } else {
+                    return;
+                }
+            }
+        }
+
+        if (needSetup) {
+            // Первый запуск или сброшенное хранилище — принудительно запрашиваем мастер-пароль
+            const password = await new Promise(resolve => {
+                const pwd = prompt('Создайте мастер-пароль для восстановления хранилища (запомните его! Минимум 4 символа):');
+                resolve(pwd);
+            });
+            if (!password || password.length < 4) {
+                UIUtils.showToast('Пароль слишком короткий. Хранилище не будет создано.', 'error');
+                return;
+            }
+            // Создаём пустое хранилище и сразу настраиваем recovery
+            try {
+                // Создаём gist с пустыми закладками
+                const encrypted = encryptWithToken({ bookmarks: [] });
+                gistId = await createGist(encrypted, currentToken);
+                localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
+                // Настраиваем recovery
+                await setupRecovery(password);
+                currentBookmarks = [];
+                UIUtils.showToast('Хранилище создано и защищено паролем!', 'success');
+            } catch (err) {
+                UIUtils.showToast('Ошибка создания хранилища: ' + err.message, 'error');
+                return;
+            }
+        }
+
+        // Теперь рендерим интерфейс
         const contentHtml = `
             <div style="display:flex; flex-direction:column; gap:16px;">
                 <div class="storage-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
@@ -612,34 +724,7 @@
         const setupRecoveryBtn = modal.querySelector('#setup-recovery-btn');
         const resetStorageBtn = modal.querySelector('#reset-storage-btn');
 
-        async function refreshAndRender() {
-            try {
-                let bookmarks = await loadBookmarks();
-                if (bookmarks === null) {
-                    // Требуется восстановление
-                    const masterPassword = prompt('Для доступа к закладкам требуется мастер-пароль восстановления:');
-                    if (masterPassword) {
-                        try {
-                            bookmarks = await recoverWithPassword(masterPassword);
-                            UIUtils.showToast('Восстановление успешно!', 'success');
-                        } catch (err) {
-                            UIUtils.showToast('Неверный пароль или ошибка восстановления', 'error');
-                            closeModal();
-                            return;
-                        }
-                    } else {
-                        closeModal();
-                        return;
-                    }
-                }
-                currentBookmarks = bookmarks || [];
-                renderBookmarks();
-            } catch (e) {
-                grid.innerHTML = `<p class="error-message">Ошибка загрузки: ${e.message}</p>`;
-            }
-        }
-
-        function getFilteredBookmarks() {
+        function renderBookmarks() {
             let filtered = [...currentBookmarks];
             if (category === 'video') filtered = filtered.filter(b => b.embedUrl);
             else if (category === 'post') filtered = filtered.filter(b => b.postType && ['feedback','news','update','site-post'].includes(b.postType));
@@ -649,11 +734,6 @@
                 const dateB = new Date(b.added);
                 return sortOrder === 'new' ? dateB - dateA : dateA - dateB;
             });
-            return filtered;
-        }
-
-        function renderBookmarks() {
-            const filtered = getFilteredBookmarks();
             if (filtered.length === 0) {
                 grid.innerHTML = '<div class="empty-state"><i class="fas fa-bookmark"></i><p>Нет закладок</p></div>';
                 return;
@@ -662,19 +742,14 @@
             filtered.forEach(b => {
                 const card = renderBookmarkCard(b,
                     async (id) => {
-                        const original = [...currentBookmarks];
                         const index = currentBookmarks.findIndex(bk => bk.id === id);
                         if (index === -1) return;
                         currentBookmarks.splice(index, 1);
                         renderBookmarks();
-                        localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(original));
                         try {
                             await removeBookmark(id);
-                            localStorage.removeItem(LOCAL_BACKUP_KEY);
                         } catch (e) {
                             UIUtils.showToast('Ошибка удаления', 'error');
-                            currentBookmarks = original;
-                            renderBookmarks();
                         }
                     },
                     async (updatedBookmark) => {
@@ -687,6 +762,8 @@
                 grid.appendChild(card);
             });
         }
+
+        renderBookmarks();
 
         orderBtns.forEach(btn => {
             btn.addEventListener('click', () => {
@@ -707,11 +784,11 @@
 
         // Кнопка настройки восстановления
         setupRecoveryBtn.addEventListener('click', async () => {
-            const masterPassword = prompt('Введите мастер-пароль для восстановления (запомните его!):');
+            const masterPassword = prompt('Введите новый мастер-пароль для восстановления (запомните его!):');
             if (masterPassword && masterPassword.length >= 4) {
                 try {
                     await setupRecovery(masterPassword);
-                    UIUtils.showToast('Восстановление настроено!', 'success');
+                    UIUtils.showToast('Восстановление обновлено!', 'success');
                 } catch (err) {
                     UIUtils.showToast('Ошибка настройки: ' + err.message, 'error');
                 }
@@ -728,6 +805,9 @@
                     currentBookmarks = [];
                     renderBookmarks();
                     UIUtils.showToast('Хранилище сброшено', 'success');
+                    // Закрываем и переоткрываем, чтобы заново прошла инициализация с паролем
+                    closeModal();
+                    setTimeout(() => openStorageModal(), 100);
                 } catch (err) {
                     UIUtils.showToast('Ошибка сброса: ' + err.message, 'error');
                 }
@@ -791,8 +871,6 @@
                 confirmAddBtn.disabled = false;
             }
         });
-
-        await refreshAndRender();
     }
 
     async function openStorageModal() {
