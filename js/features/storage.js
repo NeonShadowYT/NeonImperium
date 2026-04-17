@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist + oEmbed для видео
+// js/features/storage.js — Хранилище закладок через GitHub Gist + oEmbed + эвристическое преобразование
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -10,7 +10,6 @@
     let currentToken = null;
     let gistId = null;
 
-    // --- Безопасное Base64 (UTF-8) ---
     function toBase64(str) {
         const bytes = new TextEncoder().encode(str);
         let binary = '';
@@ -24,7 +23,6 @@
         return new TextDecoder().decode(bytes);
     }
 
-    // --- Шифрование (XOR на основе токена) ---
     function getEncryptionKey() {
         if (!currentToken) return 'default-key';
         let hash = 0;
@@ -62,7 +60,6 @@
         }
     }
 
-    // --- Состояние авторизации ---
     function updateAuthState() {
         currentUser = GithubAuth.getCurrentUser();
         currentToken = GithubAuth.getToken();
@@ -78,7 +75,6 @@
     window.addEventListener('github-login-success', updateAuthState);
     window.addEventListener('github-logout', updateAuthState);
 
-    // --- Работа с Gist ---
     async function getOrCreateGist() {
         if (!currentToken) throw new Error('No token');
         if (gistId) {
@@ -161,7 +157,7 @@
         }
     }
 
-    // --- Получение embed URL через oEmbed API (без ключей) ---
+    // --- oEmbed запрос (без указания доменов) ---
     async function fetchEmbedUrl(pageUrl) {
         try {
             const apiUrl = `https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`;
@@ -181,6 +177,54 @@
         }
     }
 
+    // --- Эвристическое преобразование обычной ссылки в embed ---
+    function guessEmbedUrl(url) {
+        if (!url) return null;
+        try {
+            const urlObj = new URL(url);
+            const origin = urlObj.origin;
+            const path = urlObj.pathname;
+            const search = urlObj.search;
+            let videoId = null;
+
+            // Паттерны
+            // view_video.php?viewkey=...
+            if (path.includes('view_video.php') && search.includes('viewkey=')) {
+                const params = new URLSearchParams(search);
+                videoId = params.get('viewkey');
+                if (videoId) return `${origin}/embed/${videoId}`;
+            }
+            // /view/... или /watch/...
+            const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
+            if (viewMatch) {
+                videoId = viewMatch[2];
+                return `${origin}/embed/${videoId}`;
+            }
+            // /v/... (короткая ссылка)
+            const vMatch = path.match(/^\/v\/([a-zA-Z0-9_-]+)/);
+            if (vMatch) {
+                videoId = vMatch[1];
+                return `${origin}/embed/${videoId}`;
+            }
+            // /video/...
+            const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
+            if (videoMatch) {
+                videoId = videoMatch[1];
+                return `${origin}/embed/${videoId}`;
+            }
+            // YouTube: /watch?v=... или /v/... или youtu.be/...
+            if (search.includes('v=')) {
+                const params = new URLSearchParams(search);
+                videoId = params.get('v');
+                if (videoId) return `https://www.youtube.com/embed/${videoId}`;
+            }
+            if (path.match(/^\/embed\//)) return url; // уже embed
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
     // --- Проверка, является ли URL embed-ссылкой ---
     function isEmbedUrl(url) {
         if (!url) return false;
@@ -195,7 +239,12 @@
             if (isEmbedUrl(bookmark.url)) {
                 embedUrl = bookmark.url;
             } else {
+                // Сначала пробуем oEmbed
                 embedUrl = await fetchEmbedUrl(bookmark.url);
+                if (!embedUrl) {
+                    // Если oEmbed не дал результат, пробуем эвристику
+                    embedUrl = guessEmbedUrl(bookmark.url);
+                }
             }
         }
         const bookmarks = await loadBookmarks();
@@ -217,7 +266,6 @@
         await saveBookmarks(filtered);
     }
 
-    // --- Рендеринг карточки с поддержкой видео-превью ---
     function renderBookmarkCard(bookmark, onDelete, onEdit) {
         const card = document.createElement('div');
         card.className = 'project-card-link tilt-card';
@@ -296,7 +344,6 @@
         return card;
     }
 
-    // --- Модальное окно хранилища ---
     async function openStorageModalContent() {
         const contentHtml = `
             <div style="display:flex; flex-direction:column; gap:16px;">
@@ -310,7 +357,7 @@
                 </div>
                 <div style="margin-top:20px; padding:16px; background:var(--bg-inner-gradient); border-radius:16px;">
                     <p><i class="fas fa-info-circle"></i> <strong>Закладки</strong> хранятся в приватном GitHub Gist и синхронизируются.<br>
-                    <i class="fas fa-video"></i> Для видео автоматически подбирается встраиваемый плеер (через oEmbed).</p>
+                    <i class="fas fa-video"></i> Для видео автоматически подбирается встраиваемый плеер (через oEmbed + эвристика).</p>
                 </div>
             </div>
         `;
@@ -383,6 +430,7 @@
                                     newEmbedUrl = newUrl;
                                 } else {
                                     newEmbedUrl = await fetchEmbedUrl(newUrl);
+                                    if (!newEmbedUrl) newEmbedUrl = guessEmbedUrl(newUrl);
                                 }
                             }
                             const updated = { 
@@ -423,6 +471,7 @@
                     embedUrl = url;
                 } else {
                     embedUrl = await fetchEmbedUrl(url);
+                    if (!embedUrl) embedUrl = guessEmbedUrl(url);
                 }
                 const final = { 
                     id: Date.now() + '-' + Math.random().toString(36),
