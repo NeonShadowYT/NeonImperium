@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist + oEmbed + эвристика + скачивание видео + полноэкранный просмотр
+// js/features/storage.js — Хранилище закладок через GitHub Gist + oEmbed + эвристика + скачивание видео + полноэкранный просмотр (без перезагрузки)
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -157,7 +157,6 @@
         }
     }
 
-    // --- oEmbed запрос ---
     async function fetchEmbedData(pageUrl) {
         try {
             const apiUrl = `https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`;
@@ -170,7 +169,6 @@
         }
     }
 
-    // --- Эвристическое преобразование обычной ссылки в embed ---
     function guessEmbedUrl(url) {
         if (!url) return null;
         try {
@@ -257,22 +255,98 @@
         await saveBookmarks(filtered);
     }
 
-    // --- Полноэкранная модалка с видео ---
-    function openVideoModal(embedUrl, title) {
-        const modalContent = `
-            <div style="width: 100%; height: 100%; display: flex; flex-direction: column; background: #000;">
-                <div style="padding: 10px; text-align: center; color: white; background: rgba(0,0,0,0.8);">
-                    ${title}
-                </div>
-                <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
-                    <iframe src="${embedUrl}" style="width: 90%; height: 90%; border: none; border-radius: 8px;" frameborder="0" allowfullscreen sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"></iframe>
-                </div>
-            </div>
-        `;
-        UIUtils.createModal(title, modalContent, { size: 'full', closeButton: true });
+    // --- Полноэкранная модалка с видео (без перезагрузки, используем существующий iframe) ---
+    function openVideoFullscreen(iframeElement, title) {
+        if (!iframeElement) return;
+        // Сохраняем исходные стили
+        const originalStyles = {
+            position: iframeElement.style.position,
+            top: iframeElement.style.top,
+            left: iframeElement.style.left,
+            width: iframeElement.style.width,
+            height: iframeElement.style.height,
+            zIndex: iframeElement.style.zIndex,
+            borderRadius: iframeElement.style.borderRadius
+        };
+        
+        // Создаём overlay для полноэкранного режима
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(0,0,0,0.95)';
+        overlay.style.zIndex = '100000';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.cursor = 'pointer';
+        
+        // Кнопка закрытия
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+        closeBtn.style.position = 'absolute';
+        closeBtn.style.top = '20px';
+        closeBtn.style.right = '20px';
+        closeBtn.style.backgroundColor = 'rgba(0,0,0,0.7)';
+        closeBtn.style.color = 'white';
+        closeBtn.style.border = 'none';
+        closeBtn.style.borderRadius = '50%';
+        closeBtn.style.width = '40px';
+        closeBtn.style.height = '40px';
+        closeBtn.style.fontSize = '20px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.style.zIndex = '100001';
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.body.removeChild(overlay);
+            // Восстанавливаем iframe на место
+            iframeElement.style.position = originalStyles.position;
+            iframeElement.style.top = originalStyles.top;
+            iframeElement.style.left = originalStyles.left;
+            iframeElement.style.width = originalStyles.width;
+            iframeElement.style.height = originalStyles.height;
+            iframeElement.style.zIndex = originalStyles.zIndex;
+            iframeElement.style.borderRadius = originalStyles.borderRadius;
+        });
+        
+        // Заголовок
+        const titleDiv = document.createElement('div');
+        titleDiv.textContent = title;
+        titleDiv.style.position = 'absolute';
+        titleDiv.style.top = '20px';
+        titleDiv.style.left = '20px';
+        titleDiv.style.color = 'white';
+        titleDiv.style.fontSize = '18px';
+        titleDiv.style.fontFamily = "'Russo One', sans-serif";
+        titleDiv.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        titleDiv.style.padding = '8px 16px';
+        titleDiv.style.borderRadius = '30px';
+        
+        // Временно перемещаем iframe в overlay
+        const parent = iframeElement.parentNode;
+        const nextSibling = iframeElement.nextSibling;
+        // Запоминаем родителя
+        iframeElement.style.position = 'static';
+        iframeElement.style.width = '90%';
+        iframeElement.style.height = '85%';
+        iframeElement.style.borderRadius = '12px';
+        iframeElement.style.margin = '0 auto';
+        overlay.appendChild(iframeElement);
+        overlay.appendChild(closeBtn);
+        overlay.appendChild(titleDiv);
+        document.body.appendChild(overlay);
+        
+        // При клике на overlay (но не на iframe) закрываем
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                closeBtn.click();
+            }
+        });
     }
 
-    // --- Рендеринг карточки ---
     function renderBookmarkCard(bookmark, onDelete, onEdit) {
         const card = document.createElement('div');
         card.className = 'project-card-link tilt-card';
@@ -284,11 +358,13 @@
 
         const imgWrapper = document.createElement('div');
         imgWrapper.className = 'image-wrapper';
+        imgWrapper.style.position = 'relative';
         
         const embedSrc = bookmark.embedUrl || (isEmbedUrl(bookmark.url) ? bookmark.url : null);
+        let iframe = null;
         
         if (embedSrc) {
-            const iframe = document.createElement('iframe');
+            iframe = document.createElement('iframe');
             iframe.src = embedSrc;
             iframe.style.width = '100%';
             iframe.style.height = '100%';
@@ -298,11 +374,23 @@
             iframe.setAttribute('allowfullscreen', 'true');
             iframe.setAttribute('loading', 'lazy');
             iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation');
-            iframe.addEventListener('click', (e) => {
+            
+            // Оборачиваем iframe в div, который будет ловить клик для открытия полноэкранного режима
+            const videoOverlay = document.createElement('div');
+            videoOverlay.style.position = 'absolute';
+            videoOverlay.style.top = '0';
+            videoOverlay.style.left = '0';
+            videoOverlay.style.width = '100%';
+            videoOverlay.style.height = '100%';
+            videoOverlay.style.cursor = 'pointer';
+            videoOverlay.style.zIndex = '1';
+            videoOverlay.addEventListener('click', (e) => {
                 e.stopPropagation();
-                openVideoModal(embedSrc, bookmark.title);
+                openVideoFullscreen(iframe, bookmark.title);
             });
+            
             imgWrapper.appendChild(iframe);
+            imgWrapper.appendChild(videoOverlay);
         } else {
             let thumbnailUrl = bookmark.thumbnail || 'images/default-news.webp';
             const img = document.createElement('img');
@@ -331,9 +419,8 @@
         actionsDiv.style.right = '8px';
         actionsDiv.style.display = 'flex';
         actionsDiv.style.gap = '6px';
-        actionsDiv.style.zIndex = '2';
+        actionsDiv.style.zIndex = '3'; // выше, чем videoOverlay
 
-        // Кнопка скачивания (если есть downloadUrl)
         if (bookmark.downloadUrl) {
             const downloadBtn = document.createElement('button');
             downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
@@ -364,7 +451,12 @@
         inner.appendChild(actionsDiv);
         card.appendChild(inner);
 
-        card.addEventListener('click', () => window.open(bookmark.url, '_blank'));
+        card.addEventListener('click', (e) => {
+            // Если клик был по кнопкам или по videoOverlay — не переходим
+            if (e.target.closest('button') || e.target.closest('.image-wrapper > div')) return;
+            window.open(bookmark.url, '_blank');
+        });
+        
         return card;
     }
 
