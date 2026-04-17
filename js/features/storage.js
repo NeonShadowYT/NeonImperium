@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist + oEmbed + эвристическое преобразование
+// js/features/storage.js — Хранилище закладок через GitHub Gist + oEmbed + эвристика
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -187,7 +187,6 @@
             const search = urlObj.search;
             let videoId = null;
 
-            // Паттерны
             // view_video.php?viewkey=...
             if (path.includes('view_video.php') && search.includes('viewkey=')) {
                 const params = new URLSearchParams(search);
@@ -200,7 +199,7 @@
                 videoId = viewMatch[2];
                 return `${origin}/embed/${videoId}`;
             }
-            // /v/... (короткая ссылка)
+            // /v/...
             const vMatch = path.match(/^\/v\/([a-zA-Z0-9_-]+)/);
             if (vMatch) {
                 videoId = vMatch[1];
@@ -225,7 +224,6 @@
         }
     }
 
-    // --- Проверка, является ли URL embed-ссылкой ---
     function isEmbedUrl(url) {
         if (!url) return false;
         const lowerUrl = url.toLowerCase();
@@ -239,12 +237,8 @@
             if (isEmbedUrl(bookmark.url)) {
                 embedUrl = bookmark.url;
             } else {
-                // Сначала пробуем oEmbed
                 embedUrl = await fetchEmbedUrl(bookmark.url);
-                if (!embedUrl) {
-                    // Если oEmbed не дал результат, пробуем эвристику
-                    embedUrl = guessEmbedUrl(bookmark.url);
-                }
+                if (!embedUrl) embedUrl = guessEmbedUrl(bookmark.url);
             }
         }
         const bookmarks = await loadBookmarks();
