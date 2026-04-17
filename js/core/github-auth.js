@@ -1,12 +1,14 @@
-// github-auth.js
+// js/core/github-auth.js — обновлённый интерфейс входа с проверкой scopes
 (function() {
     const CONFIG = GithubCore.CONFIG;
     const TOKEN_KEY = 'github_token';
     const USER_CACHE_KEY = 'github_user';
+    const SCOPES_CACHE_KEY = 'github_scopes';
     const LAST_CLEAR_KEY = 'last_cache_clear';
     const CLEAR_COOLDOWN = 10000;
 
     let navBar, profileContainer, modal, tokenInput, tokenToggle;
+    let currentScopes = [];
 
     document.addEventListener('DOMContentLoaded', init);
 
@@ -30,10 +32,12 @@
 
         const savedToken = localStorage.getItem(TOKEN_KEY);
         const cachedUser = sessionStorage.getItem(USER_CACHE_KEY);
+        const cachedScopes = sessionStorage.getItem(SCOPES_CACHE_KEY);
 
         if (savedToken && cachedUser) {
             try {
                 const user = JSON.parse(cachedUser);
+                currentScopes = cachedScopes ? JSON.parse(cachedScopes) : [];
                 renderProfile(user, savedToken);
                 if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) {
                     loadAdminScript();
@@ -92,7 +96,12 @@
                         <li><span data-lang="githubStep1">Перейдите в </span><a href="https://github.com/settings/tokens" target="_blank">Personal access tokens (classic)</a>.</li>
                         <li><span data-lang="githubStep2">Нажмите "Generate new token (classic)".</span></li>
                         <li><span data-lang="githubStep3">Дайте имя, выберите срок (например, 30 дней).</span></li>
-                        <li><span data-lang="githubStep4">В разделе "Select scopes" отметьте только </span><strong>repo</strong>.</li>
+                        <li><span data-lang="githubStep4">В разделе "Select scopes" отметьте:</span>
+                            <ul style="margin-top: 5px;">
+                                <li><strong>repo</strong> — для публикации постов, идей, комментариев.</li>
+                                <li><strong>gist</strong> — для работы хранилища закладок.</li>
+                            </ul>
+                        </li>
                         <li><span data-lang="githubStep5">Скопируйте токен и вставьте сюда.</span></li>
                     </ol>
                     <p class="text-secondary" style="font-size: 12px; background: var(--bg-primary); padding: 8px; border-radius: 8px;">
@@ -197,23 +206,40 @@
                 }
             }
 
+            // Получаем список scopes из заголовка X-OAuth-Scopes
+            const scopesHeader = userResponse.headers.get('X-OAuth-Scopes');
+            const scopes = scopesHeader ? scopesHeader.split(',').map(s => s.trim()) : [];
+
             const userData = await userResponse.json();
 
-            try {
-                await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}`, {
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    signal: AbortSignal.timeout(5000)
-                });
-            } catch (repoErr) {
-                console.warn('Could not verify repository access:', repoErr);
+            // Проверяем доступ к репозиторию (если есть repo scope)
+            let repoAccess = false;
+            if (scopes.includes('repo')) {
+                try {
+                    await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}`, {
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        signal: AbortSignal.timeout(5000)
+                    });
+                    repoAccess = true;
+                } catch (repoErr) {
+                    console.warn('Repository access check failed:', repoErr);
+                }
             }
 
             if (shouldSave) {
                 localStorage.setItem(TOKEN_KEY, token);
                 sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData));
+                sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(scopes));
             }
 
-            window.dispatchEvent(new CustomEvent('github-login-success', { detail: { login: userData.login } }));
+            currentScopes = scopes;
+            window.dispatchEvent(new CustomEvent('github-login-success', { 
+                detail: { 
+                    login: userData.login,
+                    scopes: scopes,
+                    repoAccess 
+                } 
+            }));
 
             renderProfile(userData, token);
             if (CONFIG.ALLOWED_AUTHORS.includes(userData.login)) {
@@ -227,12 +253,21 @@
             tokenToggle.setAttribute('aria-label', 'Показать токен');
             clearModalError();
 
+            // Показываем предупреждение, если не хватает важных scope
+            const missingScopes = [];
+            if (!scopes.includes('repo')) missingScopes.push('repo (посты и комментарии)');
+            if (!scopes.includes('gist')) missingScopes.push('gist (хранилище закладок)');
+            if (missingScopes.length > 0) {
+                UIUtils.showToast(`Внимание: у токена отсутствуют разрешения: ${missingScopes.join(', ')}. Некоторые функции будут недоступны.`, 'warning', 8000);
+            }
+
         } catch (error) {
             clearTimeout(timeoutId);
             console.error('Auth error:', error);
 
             localStorage.removeItem(TOKEN_KEY);
             sessionStorage.removeItem(USER_CACHE_KEY);
+            sessionStorage.removeItem(SCOPES_CACHE_KEY);
 
             if (error.name === 'AbortError') {
                 showModalError('githubTimeout');
@@ -241,7 +276,7 @@
             } else if (error.message.startsWith('http_')) {
                 const status = error.message.split('_')[1];
                 if (status === '403') {
-                    showModalError('githubForbidden', 'Проверьте права токена (нужен scope repo)');
+                    showModalError('githubForbidden', 'Проверьте права токена');
                 } else if (status === '404') {
                     showModalError('githubNotFound', 'Репозиторий не найден');
                 } else {
@@ -262,6 +297,15 @@
         const avatarUrl = user.avatar_url || 'images/default-avatar.webp';
         const login = user.login || 'User';
 
+        // Определяем статус scope для отображения иконок
+        const hasRepo = currentScopes.includes('repo');
+        const hasGist = currentScopes.includes('gist');
+        const scopeStatus = [];
+        if (hasRepo) scopeStatus.push('<span style="color:#4caf50;" title="Доступ к постам"><i class="fas fa-check-circle"></i> repo</span>');
+        else scopeStatus.push('<span style="color:#ff9800;" title="Нет доступа к постам"><i class="fas fa-exclamation-triangle"></i> repo</span>');
+        if (hasGist) scopeStatus.push('<span style="color:#4caf50;" title="Доступ к хранилищу"><i class="fas fa-check-circle"></i> gist</span>');
+        else scopeStatus.push('<span style="color:#ff9800;" title="Нет доступа к хранилищу"><i class="fas fa-exclamation-triangle"></i> gist</span>');
+
         profileContainer.innerHTML = `
             <img src="${avatarUrl}" alt="${login}" class="nav-profile-avatar" onerror="this.src='images/default-avatar.webp'" width="32" height="32">
             <span class="nav-profile-login">${login}</span>
@@ -272,9 +316,10 @@
                 </div>
                 <div class="profile-dropdown-item" data-action="token-info">
                     <i class="fas fa-key"></i> <span data-lang="githubTokenActive">Токен активен</span>
+                    <div style="font-size:11px; margin-left:8px;">${scopeStatus.join(' ')}</div>
                 </div>
                 <div class="profile-dropdown-item" data-action="storage">
-                    <i class="fas fa-box-archive"></i> <span>Хранилище</span>
+                    <i class="fas fa-box-archive"></i> <span>Хранилище</span> ${!hasGist ? '<span style="color:#ff9800; margin-left:5px;" title="Требуется gist scope">⚠️</span>' : ''}
                 </div>
                 <div class="profile-dropdown-item" data-action="revoke-token">
                     <i class="fas fa-external-link-alt"></i> <span data-lang="githubRevoke">Управление токенами</span>
@@ -291,6 +336,7 @@
 
         profileContainer.dataset.githubToken = token;
         profileContainer.dataset.githubLogin = login;
+        profileContainer.dataset.githubScopes = JSON.stringify(currentScopes);
 
         profileContainer.addEventListener('click', toggleDropdown);
         profileContainer.addEventListener('blur', () => {
@@ -335,6 +381,7 @@
     function handleDropdownAction(action) {
         const token = localStorage.getItem(TOKEN_KEY);
         const userLogin = profileContainer.dataset.githubLogin;
+        const scopes = currentScopes;
 
         switch(action) {
             case 'login':
@@ -342,15 +389,20 @@
                 tokenInput.focus();
                 break;
             case 'about':
-                UIUtils.showToast('Вход через GitHub позволяет оставлять идеи, голосовать и участвовать.', 'info');
+                UIUtils.showToast('Вход через GitHub позволяет оставлять идеи, голосовать и участвовать. Для постов нужен scope "repo", для хранилища — "gist".', 'info', 8000);
                 break;
             case 'profile':
                 if (userLogin) window.open(`https://github.com/${userLogin}`, '_blank');
                 break;
             case 'token-info':
-                if (token) UIUtils.showToast(`Вы вошли как ${userLogin}. Токен сохранён в браузере.`, 'success');
+                const scopeInfo = scopes.length ? scopes.join(', ') : 'отсутствуют';
+                UIUtils.showToast(`Вы вошли как ${userLogin}. Разрешения токена: ${scopeInfo}.`, 'info', 6000);
                 break;
             case 'storage':
+                if (!scopes.includes('gist')) {
+                    UIUtils.showToast('Для использования хранилища необходим токен с разрешением "gist". Пожалуйста, создайте новый токен с этим scope.', 'error', 8000);
+                    return;
+                }
                 if (window.BookmarkStorage) {
                     window.BookmarkStorage.openStorageModal();
                 } else {
@@ -370,6 +422,8 @@
                 window.dispatchEvent(new CustomEvent('github-logout'));
                 delete profileContainer.dataset.githubToken;
                 delete profileContainer.dataset.githubLogin;
+                delete profileContainer.dataset.githubScopes;
+                currentScopes = [];
                 showNotLoggedIn();
                 UIUtils.showToast('Вы вышли из аккаунта.', 'info');
                 location.reload();
@@ -401,6 +455,14 @@
             return profile ? profile.dataset.githubLogin : null;
         },
         getToken: () => localStorage.getItem(TOKEN_KEY),
+        getScopes: () => {
+            try {
+                return JSON.parse(sessionStorage.getItem(SCOPES_CACHE_KEY) || '[]');
+            } catch { return []; }
+        },
+        hasScope: (scope) => {
+            return window.GithubAuth.getScopes().includes(scope);
+        },
         isAdmin: () => {
             const user = window.GithubAuth.getCurrentUser();
             return user && GithubCore.CONFIG.ALLOWED_AUTHORS.includes(user);
