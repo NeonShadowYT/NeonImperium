@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist + oEmbed + эвристика + скачивание видео + полноэкранный просмотр (без перезагрузки)
+// js/features/storage.js — Хранилище закладок через GitHub Gist с улучшенным UI и мульти-сервисным получением видео
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -10,6 +10,7 @@
     let currentToken = null;
     let gistId = null;
 
+    // --- Base64 ---
     function toBase64(str) {
         const bytes = new TextEncoder().encode(str);
         let binary = '';
@@ -23,6 +24,7 @@
         return new TextDecoder().decode(bytes);
     }
 
+    // --- Шифрование ---
     function getEncryptionKey() {
         if (!currentToken) return 'default-key';
         let hash = 0;
@@ -32,7 +34,6 @@
         }
         return hash.toString(16);
     }
-
     function encryptData(data) {
         const key = getEncryptionKey();
         const json = JSON.stringify(data);
@@ -43,7 +44,6 @@
         }
         return toBase64(result);
     }
-
     function decryptData(encrypted) {
         try {
             const key = getEncryptionKey();
@@ -60,6 +60,7 @@
         }
     }
 
+    // --- Состояние авторизации ---
     function updateAuthState() {
         currentUser = GithubAuth.getCurrentUser();
         currentToken = GithubAuth.getToken();
@@ -75,6 +76,7 @@
     window.addEventListener('github-login-success', updateAuthState);
     window.addEventListener('github-logout', updateAuthState);
 
+    // --- Работа с Gist ---
     async function getOrCreateGist() {
         if (!currentToken) throw new Error('No token');
         if (gistId) {
@@ -157,16 +159,46 @@
         }
     }
 
-    async function fetchEmbedData(pageUrl) {
-        try {
-            const apiUrl = `https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`;
-            const response = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
-            if (!response.ok) return null;
-            return await response.json();
-        } catch (err) {
-            console.warn('oEmbed fetch failed:', err);
-            return null;
+    // --- Мульти-сервисное получение информации о ссылке ---
+    async function fetchEmbedData(url) {
+        // Список сервисов для получения oEmbed (noembed.com, если не сработает — попробуем другие)
+        const services = [
+            `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
+            `https://api.embed.ly/1/oembed?url=${encodeURIComponent(url)}`, // требует ключ? но попробуем
+            `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`
+        ];
+        for (const serviceUrl of services) {
+            try {
+                const response = await fetch(serviceUrl, { signal: AbortSignal.timeout(5000) });
+                if (!response.ok) continue;
+                const data = await response.json();
+                if (data && (data.html || data.url || data.thumbnail_url)) {
+                    return data;
+                }
+            } catch (err) {
+                console.warn(`Service ${serviceUrl} failed:`, err);
+            }
         }
+        // Если oEmbed не дал результата, пробуем получить Open Graph мета-теги через прокси
+        try {
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+            const proxyResp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+            if (proxyResp.ok) {
+                const proxyData = await proxyResp.json();
+                const html = proxyData.contents;
+                const titleMatch = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i);
+                const imageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i);
+                const videoMatch = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"[^>]*>/i);
+                return {
+                    title: titleMatch ? titleMatch[1] : null,
+                    thumbnail_url: imageMatch ? imageMatch[1] : null,
+                    url: videoMatch ? videoMatch[1] : null
+                };
+            }
+        } catch (err) {
+            console.warn('OpenGraph proxy failed:', err);
+        }
+        return null;
     }
 
     function guessEmbedUrl(url) {
@@ -178,6 +210,11 @@
             const search = urlObj.search;
             let videoId = null;
 
+            // YouTube Shorts
+            if (path.includes('/shorts/')) {
+                videoId = path.split('/shorts/')[1]?.split('?')[0];
+                if (videoId) return `https://www.youtube.com/embed/${videoId}`;
+            }
             if (path.includes('view_video.php') && search.includes('viewkey=')) {
                 const params = new URLSearchParams(search);
                 videoId = params.get('viewkey');
@@ -216,37 +253,50 @@
         return lowerUrl.includes('/embed/') || lowerUrl.includes('/player/') || lowerUrl.includes('?embed');
     }
 
+    // --- Добавление закладки с мульти-сервисным получением ---
     async function addBookmark(bookmark) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
         let embedUrl = null;
         let downloadUrl = null;
+        let thumbnail = null;
+        let finalTitle = bookmark.title;
         if (bookmark.url) {
             if (isEmbedUrl(bookmark.url)) {
                 embedUrl = bookmark.url;
             } else {
                 const oembed = await fetchEmbedData(bookmark.url);
-                if (oembed && oembed.html) {
-                    const iframeMatch = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-                    if (iframeMatch && iframeMatch[1]) embedUrl = iframeMatch[1];
+                if (oembed) {
+                    if (oembed.html) {
+                        const iframeMatch = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+                        if (iframeMatch && iframeMatch[1]) embedUrl = iframeMatch[1];
+                    }
                     if (oembed.url && (oembed.url.endsWith('.mp4') || oembed.url.endsWith('.webm') || oembed.url.includes('video/mp4'))) {
                         downloadUrl = oembed.url;
                     }
+                    if (oembed.thumbnail_url) thumbnail = oembed.thumbnail_url;
+                    if (oembed.title && !finalTitle) finalTitle = oembed.title;
                 }
                 if (!embedUrl) embedUrl = guessEmbedUrl(bookmark.url);
+                if (!thumbnail && embedUrl && embedUrl.includes('youtube.com/embed/')) {
+                    const videoId = embedUrl.split('/embed/')[1]?.split('?')[0];
+                    if (videoId) thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                }
             }
         }
         const bookmarks = await loadBookmarks();
         if (bookmarks.some(b => b.url === bookmark.url)) {
             UIUtils.showToast('Уже в избранном', 'info');
-            return;
+            throw new Error('duplicate');
         }
         bookmark.id = Date.now() + '-' + Math.random().toString(36);
         bookmark.added = new Date().toISOString();
         if (embedUrl) bookmark.embedUrl = embedUrl;
         if (downloadUrl) bookmark.downloadUrl = downloadUrl;
+        if (thumbnail) bookmark.thumbnail = thumbnail;
+        if (finalTitle) bookmark.title = finalTitle;
         bookmarks.push(bookmark);
         await saveBookmarks(bookmarks);
-        return { embedUrl, downloadUrl };
+        return bookmark;
     }
 
     async function removeBookmark(bookmarkId) {
@@ -255,114 +305,49 @@
         await saveBookmarks(filtered);
     }
 
-    // --- Полноэкранная модалка с видео (без перезагрузки, используем существующий iframe) ---
+    // --- Полноэкранный просмотр видео ---
     function openVideoFullscreen(iframeElement, title) {
         if (!iframeElement) return;
-        // Сохраняем исходные стили
-        const originalStyles = {
-            position: iframeElement.style.position,
-            top: iframeElement.style.top,
-            left: iframeElement.style.left,
-            width: iframeElement.style.width,
-            height: iframeElement.style.height,
-            zIndex: iframeElement.style.zIndex,
-            borderRadius: iframeElement.style.borderRadius
-        };
-        
-        // Создаём overlay для полноэкранного режима
         const overlay = document.createElement('div');
-        overlay.style.position = 'fixed';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.width = '100%';
-        overlay.style.height = '100%';
-        overlay.style.backgroundColor = 'rgba(0,0,0,0.95)';
-        overlay.style.zIndex = '100000';
-        overlay.style.display = 'flex';
-        overlay.style.flexDirection = 'column';
-        overlay.style.alignItems = 'center';
-        overlay.style.justifyContent = 'center';
-        overlay.style.cursor = 'pointer';
-        
-        // Кнопка закрытия
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;';
         const closeBtn = document.createElement('button');
         closeBtn.innerHTML = '<i class="fas fa-times"></i>';
-        closeBtn.style.position = 'absolute';
-        closeBtn.style.top = '20px';
-        closeBtn.style.right = '20px';
-        closeBtn.style.backgroundColor = 'rgba(0,0,0,0.7)';
-        closeBtn.style.color = 'white';
-        closeBtn.style.border = 'none';
-        closeBtn.style.borderRadius = '50%';
-        closeBtn.style.width = '40px';
-        closeBtn.style.height = '40px';
-        closeBtn.style.fontSize = '20px';
-        closeBtn.style.cursor = 'pointer';
-        closeBtn.style.zIndex = '100001';
-        closeBtn.addEventListener('click', (e) => {
+        closeBtn.style.cssText = 'position:absolute;top:20px;right:20px;background:rgba(0,0,0,0.7);color:white;border:none;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;z-index:100001;';
+        closeBtn.onclick = (e) => {
             e.stopPropagation();
             document.body.removeChild(overlay);
-            // Восстанавливаем iframe на место
-            iframeElement.style.position = originalStyles.position;
-            iframeElement.style.top = originalStyles.top;
-            iframeElement.style.left = originalStyles.left;
-            iframeElement.style.width = originalStyles.width;
-            iframeElement.style.height = originalStyles.height;
-            iframeElement.style.zIndex = originalStyles.zIndex;
-            iframeElement.style.borderRadius = originalStyles.borderRadius;
-        });
-        
-        // Заголовок
+            iframeElement.style.position = '';
+            iframeElement.style.width = '100%';
+            iframeElement.style.height = '100%';
+        };
         const titleDiv = document.createElement('div');
         titleDiv.textContent = title;
-        titleDiv.style.position = 'absolute';
-        titleDiv.style.top = '20px';
-        titleDiv.style.left = '20px';
-        titleDiv.style.color = 'white';
-        titleDiv.style.fontSize = '18px';
-        titleDiv.style.fontFamily = "'Russo One', sans-serif";
-        titleDiv.style.backgroundColor = 'rgba(0,0,0,0.5)';
-        titleDiv.style.padding = '8px 16px';
-        titleDiv.style.borderRadius = '30px';
-        
-        // Временно перемещаем iframe в overlay
+        titleDiv.style.cssText = 'position:absolute;top:20px;left:20px;color:white;font-size:18px;font-family:"Russo One",sans-serif;background:rgba(0,0,0,0.5);padding:8px 16px;border-radius:30px;z-index:100001;';
         const parent = iframeElement.parentNode;
-        const nextSibling = iframeElement.nextSibling;
-        // Запоминаем родителя
         iframeElement.style.position = 'static';
         iframeElement.style.width = '90%';
         iframeElement.style.height = '85%';
         iframeElement.style.borderRadius = '12px';
-        iframeElement.style.margin = '0 auto';
         overlay.appendChild(iframeElement);
         overlay.appendChild(closeBtn);
         overlay.appendChild(titleDiv);
         document.body.appendChild(overlay);
-        
-        // При клике на overlay (но не на iframe) закрываем
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                closeBtn.click();
-            }
-        });
+        overlay.onclick = (e) => { if (e.target === overlay) closeBtn.click(); };
     }
 
+    // --- Рендер карточки ---
     function renderBookmarkCard(bookmark, onDelete, onEdit) {
         const card = document.createElement('div');
         card.className = 'project-card-link tilt-card';
         card.style.cursor = 'pointer';
-
         const inner = document.createElement('div');
         inner.className = 'project-card';
         inner.style.position = 'relative';
-
         const imgWrapper = document.createElement('div');
         imgWrapper.className = 'image-wrapper';
         imgWrapper.style.position = 'relative';
-        
         const embedSrc = bookmark.embedUrl || (isEmbedUrl(bookmark.url) ? bookmark.url : null);
         let iframe = null;
-        
         if (embedSrc) {
             iframe = document.createElement('iframe');
             iframe.src = embedSrc;
@@ -374,154 +359,156 @@
             iframe.setAttribute('allowfullscreen', 'true');
             iframe.setAttribute('loading', 'lazy');
             iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation');
-            
-            // Оборачиваем iframe в div, который будет ловить клик для открытия полноэкранного режима
             const videoOverlay = document.createElement('div');
-            videoOverlay.style.position = 'absolute';
-            videoOverlay.style.top = '0';
-            videoOverlay.style.left = '0';
-            videoOverlay.style.width = '100%';
-            videoOverlay.style.height = '100%';
-            videoOverlay.style.cursor = 'pointer';
-            videoOverlay.style.zIndex = '1';
-            videoOverlay.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openVideoFullscreen(iframe, bookmark.title);
-            });
-            
+            videoOverlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer;z-index:1;';
+            videoOverlay.onclick = (e) => { e.stopPropagation(); openVideoFullscreen(iframe, bookmark.title); };
             imgWrapper.appendChild(iframe);
             imgWrapper.appendChild(videoOverlay);
         } else {
-            let thumbnailUrl = bookmark.thumbnail || 'images/default-news.webp';
             const img = document.createElement('img');
-            img.src = thumbnailUrl;
+            img.src = bookmark.thumbnail || 'images/default-news.webp';
             img.alt = bookmark.title;
             img.className = 'project-image';
             img.onerror = () => img.src = 'images/default-news.webp';
             imgWrapper.appendChild(img);
         }
-        
         inner.appendChild(imgWrapper);
-
         const title = document.createElement('h3');
         title.textContent = bookmark.title.length > 60 ? bookmark.title.substring(0,60)+'…' : bookmark.title;
         inner.appendChild(title);
-
         const meta = document.createElement('p');
         meta.className = 'text-secondary';
         meta.style.fontSize = '12px';
         meta.innerHTML = `<i class="fas fa-calendar-alt"></i> ${new Date(bookmark.added).toLocaleDateString()}`;
         inner.appendChild(meta);
-
         const actionsDiv = document.createElement('div');
-        actionsDiv.style.position = 'absolute';
-        actionsDiv.style.top = '8px';
-        actionsDiv.style.right = '8px';
-        actionsDiv.style.display = 'flex';
-        actionsDiv.style.gap = '6px';
-        actionsDiv.style.zIndex = '3'; // выше, чем videoOverlay
-
+        actionsDiv.style.cssText = 'position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:3;';
         if (bookmark.downloadUrl) {
             const downloadBtn = document.createElement('button');
             downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
             Object.assign(downloadBtn.style, { background:'rgba(0,0,0,0.6)', color:'white', border:'none', borderRadius:'50%', width:'30px', height:'30px', cursor:'pointer' });
             downloadBtn.title = 'Скачать видео';
-            downloadBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                window.open(bookmark.downloadUrl, '_blank');
-            });
+            downloadBtn.onclick = (e) => { e.stopPropagation(); window.open(bookmark.downloadUrl, '_blank'); };
             actionsDiv.appendChild(downloadBtn);
         }
-
         const editBtn = document.createElement('button');
         editBtn.innerHTML = '<i class="fas fa-pen"></i>';
         Object.assign(editBtn.style, { background:'rgba(0,0,0,0.6)', color:'white', border:'none', borderRadius:'50%', width:'30px', height:'30px', cursor:'pointer' });
-        editBtn.addEventListener('click', (e) => { e.stopPropagation(); onEdit(bookmark); });
-
+        editBtn.onclick = (e) => { e.stopPropagation(); onEdit(bookmark); };
         const deleteBtn = document.createElement('button');
         deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
         Object.assign(deleteBtn.style, { background:'rgba(0,0,0,0.6)', color:'white', border:'none', borderRadius:'50%', width:'30px', height:'30px', cursor:'pointer' });
-        deleteBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (confirm('Удалить из избранного?')) onDelete(bookmark.id);
-        });
-
+        deleteBtn.onclick = (e) => { e.stopPropagation(); if (confirm('Удалить из избранного?')) onDelete(bookmark.id); };
         actionsDiv.appendChild(editBtn);
         actionsDiv.appendChild(deleteBtn);
         inner.appendChild(actionsDiv);
         card.appendChild(inner);
-
-        card.addEventListener('click', (e) => {
-            // Если клик был по кнопкам или по videoOverlay — не переходим
+        card.onclick = (e) => {
             if (e.target.closest('button') || e.target.closest('.image-wrapper > div')) return;
             window.open(bookmark.url, '_blank');
-        });
-        
+        };
         return card;
     }
 
+    // --- Модальное окно с сортировкой и анимированной формой добавления ---
     async function openStorageModalContent() {
+        let currentBookmarks = [];
+        let currentSort = 'new'; // new, old, type_all, type_video, type_post, type_link
+        let addFormVisible = false;
+
         const contentHtml = `
             <div style="display:flex; flex-direction:column; gap:16px;">
-                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                    <input type="url" id="new-bookmark-url" placeholder="Ссылка на страницу или видео..." style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary); height:44px;">
-                    <input type="text" id="new-bookmark-title" placeholder="Название" style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary); height:44px;">
-                    <button class="button" id="add-bookmark-btn" style="padding:10px 20px; height:44px; white-space:nowrap; width:auto; min-width:120px;"><i class="fas fa-plus"></i> Добавить</button>
+                <div class="storage-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <div class="sort-buttons" style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button class="button small sort-btn" data-sort="new" style="background:var(--accent);">📅 Новые</button>
+                        <button class="button small sort-btn" data-sort="old">📅 Старые</button>
+                        <button class="button small sort-btn" data-sort="type_all">📂 Все</button>
+                        <button class="button small sort-btn" data-sort="type_video">🎬 Видео</button>
+                        <button class="button small sort-btn" data-sort="type_post">📝 Посты</button>
+                        <button class="button small sort-btn" data-sort="type_link">🔗 Ссылки</button>
+                    </div>
+                    <button class="button" id="toggle-add-btn" style="transition: all 0.2s;">➕ Добавить</button>
+                </div>
+                <div id="add-form" style="display:none; background:var(--bg-inner-gradient); border-radius:20px; padding:16px; margin-bottom:10px; transition: all 0.3s ease;">
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <input type="url" id="new-url" placeholder="Ссылка..." style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
+                        <input type="text" id="new-title" placeholder="Название (опционально)" style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary);">
+                        <button class="button" id="confirm-add" style="min-width:100px;">➕ Добавить</button>
+                        <button class="button" id="cancel-add" style="background:#555;">✖ Отмена</button>
+                    </div>
                 </div>
                 <div class="projects-grid" id="bookmarks-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
                 </div>
                 <div style="margin-top:20px; padding:16px; background:var(--bg-inner-gradient); border-radius:16px;">
                     <p><i class="fas fa-info-circle"></i> <strong>Закладки</strong> хранятся в приватном GitHub Gist и синхронизируются.<br>
-                    <i class="fas fa-video"></i> Для видео автоматически подбирается встраиваемый плеер, кнопка скачивания (если доступно), клик по видео — полноэкранный режим.</p>
+                    <i class="fas fa-video"></i> Для видео автоматически подбирается плеер, кнопка скачивания (если доступно), клик по видео — полноэкранный режим.</p>
                 </div>
             </div>
         `;
 
         const { modal, closeModal } = UIUtils.createModal('Хранилище', contentHtml, { size: 'full' });
         const grid = modal.querySelector('#bookmarks-grid');
-        const urlInput = modal.querySelector('#new-bookmark-url');
-        const titleInput = modal.querySelector('#new-bookmark-title');
-        const addBtn = modal.querySelector('#add-bookmark-btn');
+        const sortBtns = modal.querySelectorAll('.sort-btn');
+        const toggleAddBtn = modal.querySelector('#toggle-add-btn');
+        const addForm = modal.querySelector('#add-form');
+        const newUrlInput = modal.querySelector('#new-url');
+        const newTitleInput = modal.querySelector('#new-title');
+        const confirmAddBtn = modal.querySelector('#confirm-add');
+        const cancelAddBtn = modal.querySelector('#cancel-add');
 
-        let currentBookmarks = [];
-
-        async function refreshGrid() {
-            grid.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>';
+        async function refreshAndRender() {
             try {
                 currentBookmarks = await loadBookmarks();
-                if (currentBookmarks.length === 0) {
-                    grid.innerHTML = '<div class="empty-state"><i class="fas fa-bookmark"></i><p>Нет сохранённых закладок</p></div>';
-                    return;
-                }
-                renderBookmarks(currentBookmarks);
+                renderBookmarks();
             } catch (e) {
                 grid.innerHTML = `<p class="error-message">Ошибка загрузки: ${e.message}</p>`;
             }
         }
 
-        function renderBookmarks(bookmarks) {
+        function getFilteredBookmarks() {
+            let filtered = [...currentBookmarks];
+            if (currentSort === 'type_video') {
+                filtered = filtered.filter(b => b.embedUrl);
+            } else if (currentSort === 'type_post') {
+                filtered = filtered.filter(b => !b.embedUrl && (b.title && b.title.length > 0));
+            } else if (currentSort === 'type_link') {
+                filtered = filtered.filter(b => !b.embedUrl && !(b.title && b.title.length > 0));
+            }
+            if (currentSort === 'new') {
+                filtered.sort((a,b) => new Date(b.added) - new Date(a.added));
+            } else if (currentSort === 'old') {
+                filtered.sort((a,b) => new Date(a.added) - new Date(b.added));
+            } else {
+                filtered.sort((a,b) => new Date(b.added) - new Date(a.added));
+            }
+            return filtered;
+        }
+
+        function renderBookmarks() {
+            const filtered = getFilteredBookmarks();
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div class="empty-state"><i class="fas fa-bookmark"></i><p>Нет закладок</p></div>';
+                return;
+            }
             grid.innerHTML = '';
-            bookmarks.sort((a,b) => new Date(b.added) - new Date(a.added));
-            bookmarks.forEach(b => {
+            filtered.forEach(b => {
                 const card = renderBookmarkCard(b,
-                    (id) => {
+                    async (id) => {
                         const original = [...currentBookmarks];
                         const index = currentBookmarks.findIndex(bk => bk.id === id);
                         if (index === -1) return;
                         currentBookmarks.splice(index, 1);
-                        renderBookmarks(currentBookmarks);
+                        renderBookmarks();
                         localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(original));
-                        (async () => {
-                            try {
-                                await removeBookmark(id);
-                                localStorage.removeItem(LOCAL_BACKUP_KEY);
-                            } catch (e) {
-                                UIUtils.showToast('Ошибка удаления', 'error');
-                                currentBookmarks = original;
-                                renderBookmarks(currentBookmarks);
-                            }
-                        })();
+                        try {
+                            await removeBookmark(id);
+                            localStorage.removeItem(LOCAL_BACKUP_KEY);
+                        } catch (e) {
+                            UIUtils.showToast('Ошибка удаления', 'error');
+                            currentBookmarks = original;
+                            renderBookmarks();
+                        }
                     },
                     (bookmark) => {
                         const editHtml = `
@@ -542,31 +529,41 @@
                             if (!newUrl) { UIUtils.showToast('Введите ссылку', 'error'); return; }
                             let newEmbedUrl = bookmark.embedUrl;
                             let newDownloadUrl = bookmark.downloadUrl;
+                            let newThumbnail = bookmark.thumbnail;
+                            let newTitle = titleField.value.trim() || newUrl;
                             if (newUrl !== bookmark.url) {
-                                if (isEmbedUrl(newUrl)) {
-                                    newEmbedUrl = newUrl;
-                                } else {
-                                    const oembed = await fetchEmbedData(newUrl);
-                                    if (oembed && oembed.html) {
+                                const oembed = await fetchEmbedData(newUrl);
+                                newEmbedUrl = null;
+                                newDownloadUrl = null;
+                                newThumbnail = null;
+                                if (oembed) {
+                                    if (oembed.html) {
                                         const iframeMatch = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
                                         if (iframeMatch && iframeMatch[1]) newEmbedUrl = iframeMatch[1];
-                                        if (oembed.url && (oembed.url.endsWith('.mp4') || oembed.url.endsWith('.webm') || oembed.url.includes('video/mp4'))) {
-                                            newDownloadUrl = oembed.url;
-                                        }
                                     }
-                                    if (!newEmbedUrl) newEmbedUrl = guessEmbedUrl(newUrl);
+                                    if (oembed.url && (oembed.url.endsWith('.mp4') || oembed.url.endsWith('.webm') || oembed.url.includes('video/mp4'))) {
+                                        newDownloadUrl = oembed.url;
+                                    }
+                                    if (oembed.thumbnail_url) newThumbnail = oembed.thumbnail_url;
+                                    if (oembed.title && !newTitle) newTitle = oembed.title;
+                                }
+                                if (!newEmbedUrl) newEmbedUrl = guessEmbedUrl(newUrl);
+                                if (!newThumbnail && newEmbedUrl && newEmbedUrl.includes('youtube.com/embed/')) {
+                                    const videoId = newEmbedUrl.split('/embed/')[1]?.split('?')[0];
+                                    if (videoId) newThumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
                                 }
                             }
                             const updated = { 
                                 ...bookmark, 
                                 url: newUrl, 
-                                title: titleField.value.trim() || newUrl,
+                                title: newTitle,
                                 embedUrl: newEmbedUrl || undefined,
-                                downloadUrl: newDownloadUrl || undefined
+                                downloadUrl: newDownloadUrl || undefined,
+                                thumbnail: newThumbnail || undefined
                             };
                             const index = currentBookmarks.findIndex(b => b.id === bookmark.id);
                             if (index !== -1) currentBookmarks[index] = updated;
-                            renderBookmarks(currentBookmarks);
+                            renderBookmarks();
                             await saveBookmarks(currentBookmarks);
                             closeEditModal();
                         });
@@ -577,58 +574,85 @@
             });
         }
 
-        await refreshGrid();
+        // Сортировка
+        sortBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentSort = btn.dataset.sort;
+                sortBtns.forEach(b => b.style.background = '');
+                btn.style.background = 'var(--accent)';
+                renderBookmarks();
+            });
+        });
+        // Устанавливаем активную по умолчанию
+        modal.querySelector('[data-sort="new"]').style.background = 'var(--accent)';
 
-        addBtn.addEventListener('click', async () => {
-            const url = urlInput.value.trim();
+        // Анимированное появление формы добавления
+        let isAnimating = false;
+        function showAddForm() {
+            if (addFormVisible) return;
+            addFormVisible = true;
+            addForm.style.display = 'block';
+            addForm.style.opacity = '0';
+            addForm.style.transform = 'translateY(-10px)';
+            addForm.style.transition = 'opacity 0.2s, transform 0.2s';
+            setTimeout(() => {
+                addForm.style.opacity = '1';
+                addForm.style.transform = 'translateY(0)';
+            }, 10);
+            toggleAddBtn.textContent = '✖ Отмена';
+        }
+        function hideAddForm() {
+            if (!addFormVisible) return;
+            addFormVisible = false;
+            addForm.style.opacity = '0';
+            addForm.style.transform = 'translateY(-10px)';
+            setTimeout(() => {
+                addForm.style.display = 'none';
+                addForm.style.opacity = '';
+                addForm.style.transform = '';
+            }, 200);
+            toggleAddBtn.textContent = '➕ Добавить';
+            newUrlInput.value = '';
+            newTitleInput.value = '';
+        }
+        toggleAddBtn.addEventListener('click', () => {
+            if (addFormVisible) hideAddForm();
+            else showAddForm();
+        });
+        cancelAddBtn.addEventListener('click', hideAddForm);
+
+        confirmAddBtn.addEventListener('click', async () => {
+            const url = newUrlInput.value.trim();
             if (!url) { UIUtils.showToast('Введите ссылку', 'error'); return; }
-            let title = titleInput.value.trim() || url;
-            addBtn.disabled = true;
-            
-            const tempId = 'temp-' + Date.now();
-            const optimistic = { id: tempId, url, title, added: new Date().toISOString() };
-            currentBookmarks.unshift(optimistic);
-            renderBookmarks(currentBookmarks);
-
+            const title = newTitleInput.value.trim() || url;
+            confirmAddBtn.disabled = true;
+            const optimisticBookmark = {
+                id: 'temp-' + Date.now(),
+                url,
+                title,
+                added: new Date().toISOString(),
+                temp: true
+            };
+            currentBookmarks.unshift(optimisticBookmark);
+            renderBookmarks();
             try {
-                let embedUrl = null;
-                let downloadUrl = null;
-                if (isEmbedUrl(url)) {
-                    embedUrl = url;
-                } else {
-                    const oembed = await fetchEmbedData(url);
-                    if (oembed && oembed.html) {
-                        const iframeMatch = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-                        if (iframeMatch && iframeMatch[1]) embedUrl = iframeMatch[1];
-                        if (oembed.url && (oembed.url.endsWith('.mp4') || oembed.url.endsWith('.webm') || oembed.url.includes('video/mp4'))) {
-                            downloadUrl = oembed.url;
-                        }
-                    }
-                    if (!embedUrl) embedUrl = guessEmbedUrl(url);
-                }
-                const final = { 
-                    id: Date.now() + '-' + Math.random().toString(36),
-                    url,
-                    title,
-                    added: new Date().toISOString(),
-                    embedUrl: embedUrl || undefined,
-                    downloadUrl: downloadUrl || undefined
-                };
-                const index = currentBookmarks.findIndex(b => b.id === tempId);
+                const final = await addBookmark({ url, title });
+                const index = currentBookmarks.findIndex(b => b.id === optimisticBookmark.id);
                 if (index !== -1) currentBookmarks[index] = final;
-                await saveBookmarks(currentBookmarks);
-                renderBookmarks(currentBookmarks);
-                UIUtils.showToast(embedUrl ? (downloadUrl ? 'Добавлено (видео + скачивание)' : 'Добавлено (видео)') : 'Добавлено', 'success');
-                urlInput.value = '';
-                titleInput.value = '';
-            } catch (e) {
-                UIUtils.showToast('Ошибка: ' + e.message, 'error');
-                currentBookmarks = currentBookmarks.filter(b => b.id !== tempId);
-                renderBookmarks(currentBookmarks);
+                renderBookmarks();
+                UIUtils.showToast('Добавлено', 'success');
+                hideAddForm();
+            } catch (err) {
+                if (err.message !== 'duplicate') UIUtils.showToast('Ошибка: ' + err.message, 'error');
+                const index = currentBookmarks.findIndex(b => b.id === optimisticBookmark.id);
+                if (index !== -1) currentBookmarks.splice(index, 1);
+                renderBookmarks();
             } finally {
-                addBtn.disabled = false;
+                confirmAddBtn.disabled = false;
             }
         });
+
+        await refreshAndRender();
     }
 
     async function openStorageModal() {
