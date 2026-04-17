@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist + oEmbed + эвристика
+// js/features/storage.js — Хранилище закладок через GitHub Gist + oEmbed + эвристика + скачивание видео + полноэкранный просмотр
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -157,20 +157,13 @@
         }
     }
 
-    // --- oEmbed запрос (без указания доменов) ---
-    async function fetchEmbedUrl(pageUrl) {
+    // --- oEmbed запрос ---
+    async function fetchEmbedData(pageUrl) {
         try {
             const apiUrl = `https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`;
             const response = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
             if (!response.ok) return null;
-            const data = await response.json();
-            if (data.html) {
-                const iframeMatch = data.html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-                if (iframeMatch && iframeMatch[1]) return iframeMatch[1];
-                if (data.url) return data.url;
-            }
-            if (data.embed_url) return data.embed_url;
-            return null;
+            return await response.json();
         } catch (err) {
             console.warn('oEmbed fetch failed:', err);
             return null;
@@ -187,37 +180,32 @@
             const search = urlObj.search;
             let videoId = null;
 
-            // view_video.php?viewkey=...
             if (path.includes('view_video.php') && search.includes('viewkey=')) {
                 const params = new URLSearchParams(search);
                 videoId = params.get('viewkey');
                 if (videoId) return `${origin}/embed/${videoId}`;
             }
-            // /view/... или /watch/...
             const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
             if (viewMatch) {
                 videoId = viewMatch[2];
                 return `${origin}/embed/${videoId}`;
             }
-            // /v/...
             const vMatch = path.match(/^\/v\/([a-zA-Z0-9_-]+)/);
             if (vMatch) {
                 videoId = vMatch[1];
                 return `${origin}/embed/${videoId}`;
             }
-            // /video/...
             const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
             if (videoMatch) {
                 videoId = videoMatch[1];
                 return `${origin}/embed/${videoId}`;
             }
-            // YouTube: /watch?v=... или /v/... или youtu.be/...
             if (search.includes('v=')) {
                 const params = new URLSearchParams(search);
                 videoId = params.get('v');
                 if (videoId) return `https://www.youtube.com/embed/${videoId}`;
             }
-            if (path.match(/^\/embed\//)) return url; // уже embed
+            if (path.match(/^\/embed\//)) return url;
             return null;
         } catch (e) {
             return null;
@@ -233,11 +221,19 @@
     async function addBookmark(bookmark) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
         let embedUrl = null;
+        let downloadUrl = null;
         if (bookmark.url) {
             if (isEmbedUrl(bookmark.url)) {
                 embedUrl = bookmark.url;
             } else {
-                embedUrl = await fetchEmbedUrl(bookmark.url);
+                const oembed = await fetchEmbedData(bookmark.url);
+                if (oembed && oembed.html) {
+                    const iframeMatch = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+                    if (iframeMatch && iframeMatch[1]) embedUrl = iframeMatch[1];
+                    if (oembed.url && (oembed.url.endsWith('.mp4') || oembed.url.endsWith('.webm') || oembed.url.includes('video/mp4'))) {
+                        downloadUrl = oembed.url;
+                    }
+                }
                 if (!embedUrl) embedUrl = guessEmbedUrl(bookmark.url);
             }
         }
@@ -249,9 +245,10 @@
         bookmark.id = Date.now() + '-' + Math.random().toString(36);
         bookmark.added = new Date().toISOString();
         if (embedUrl) bookmark.embedUrl = embedUrl;
+        if (downloadUrl) bookmark.downloadUrl = downloadUrl;
         bookmarks.push(bookmark);
         await saveBookmarks(bookmarks);
-        return embedUrl;
+        return { embedUrl, downloadUrl };
     }
 
     async function removeBookmark(bookmarkId) {
@@ -260,6 +257,22 @@
         await saveBookmarks(filtered);
     }
 
+    // --- Полноэкранная модалка с видео ---
+    function openVideoModal(embedUrl, title) {
+        const modalContent = `
+            <div style="width: 100%; height: 100%; display: flex; flex-direction: column; background: #000;">
+                <div style="padding: 10px; text-align: center; color: white; background: rgba(0,0,0,0.8);">
+                    ${title}
+                </div>
+                <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+                    <iframe src="${embedUrl}" style="width: 90%; height: 90%; border: none; border-radius: 8px;" frameborder="0" allowfullscreen sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"></iframe>
+                </div>
+            </div>
+        `;
+        UIUtils.createModal(title, modalContent, { size: 'full', closeButton: true });
+    }
+
+    // --- Рендеринг карточки ---
     function renderBookmarkCard(bookmark, onDelete, onEdit) {
         const card = document.createElement('div');
         card.className = 'project-card-link tilt-card';
@@ -285,6 +298,10 @@
             iframe.setAttribute('allowfullscreen', 'true');
             iframe.setAttribute('loading', 'lazy');
             iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation');
+            iframe.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openVideoModal(embedSrc, bookmark.title);
+            });
             imgWrapper.appendChild(iframe);
         } else {
             let thumbnailUrl = bookmark.thumbnail || 'images/default-news.webp';
@@ -315,6 +332,19 @@
         actionsDiv.style.display = 'flex';
         actionsDiv.style.gap = '6px';
         actionsDiv.style.zIndex = '2';
+
+        // Кнопка скачивания (если есть downloadUrl)
+        if (bookmark.downloadUrl) {
+            const downloadBtn = document.createElement('button');
+            downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
+            Object.assign(downloadBtn.style, { background:'rgba(0,0,0,0.6)', color:'white', border:'none', borderRadius:'50%', width:'30px', height:'30px', cursor:'pointer' });
+            downloadBtn.title = 'Скачать видео';
+            downloadBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.open(bookmark.downloadUrl, '_blank');
+            });
+            actionsDiv.appendChild(downloadBtn);
+        }
 
         const editBtn = document.createElement('button');
         editBtn.innerHTML = '<i class="fas fa-pen"></i>';
@@ -351,7 +381,7 @@
                 </div>
                 <div style="margin-top:20px; padding:16px; background:var(--bg-inner-gradient); border-radius:16px;">
                     <p><i class="fas fa-info-circle"></i> <strong>Закладки</strong> хранятся в приватном GitHub Gist и синхронизируются.<br>
-                    <i class="fas fa-video"></i> Для видео автоматически подбирается встраиваемый плеер (через oEmbed + эвристика).</p>
+                    <i class="fas fa-video"></i> Для видео автоматически подбирается встраиваемый плеер, кнопка скачивания (если доступно), клик по видео — полноэкранный режим.</p>
                 </div>
             </div>
         `;
@@ -419,11 +449,19 @@
                             const newUrl = urlField.value.trim();
                             if (!newUrl) { UIUtils.showToast('Введите ссылку', 'error'); return; }
                             let newEmbedUrl = bookmark.embedUrl;
+                            let newDownloadUrl = bookmark.downloadUrl;
                             if (newUrl !== bookmark.url) {
                                 if (isEmbedUrl(newUrl)) {
                                     newEmbedUrl = newUrl;
                                 } else {
-                                    newEmbedUrl = await fetchEmbedUrl(newUrl);
+                                    const oembed = await fetchEmbedData(newUrl);
+                                    if (oembed && oembed.html) {
+                                        const iframeMatch = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+                                        if (iframeMatch && iframeMatch[1]) newEmbedUrl = iframeMatch[1];
+                                        if (oembed.url && (oembed.url.endsWith('.mp4') || oembed.url.endsWith('.webm') || oembed.url.includes('video/mp4'))) {
+                                            newDownloadUrl = oembed.url;
+                                        }
+                                    }
                                     if (!newEmbedUrl) newEmbedUrl = guessEmbedUrl(newUrl);
                                 }
                             }
@@ -431,7 +469,8 @@
                                 ...bookmark, 
                                 url: newUrl, 
                                 title: titleField.value.trim() || newUrl,
-                                embedUrl: newEmbedUrl || undefined
+                                embedUrl: newEmbedUrl || undefined,
+                                downloadUrl: newDownloadUrl || undefined
                             };
                             const index = currentBookmarks.findIndex(b => b.id === bookmark.id);
                             if (index !== -1) currentBookmarks[index] = updated;
@@ -461,10 +500,18 @@
 
             try {
                 let embedUrl = null;
+                let downloadUrl = null;
                 if (isEmbedUrl(url)) {
                     embedUrl = url;
                 } else {
-                    embedUrl = await fetchEmbedUrl(url);
+                    const oembed = await fetchEmbedData(url);
+                    if (oembed && oembed.html) {
+                        const iframeMatch = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+                        if (iframeMatch && iframeMatch[1]) embedUrl = iframeMatch[1];
+                        if (oembed.url && (oembed.url.endsWith('.mp4') || oembed.url.endsWith('.webm') || oembed.url.includes('video/mp4'))) {
+                            downloadUrl = oembed.url;
+                        }
+                    }
                     if (!embedUrl) embedUrl = guessEmbedUrl(url);
                 }
                 const final = { 
@@ -472,13 +519,14 @@
                     url,
                     title,
                     added: new Date().toISOString(),
-                    embedUrl: embedUrl || undefined
+                    embedUrl: embedUrl || undefined,
+                    downloadUrl: downloadUrl || undefined
                 };
                 const index = currentBookmarks.findIndex(b => b.id === tempId);
                 if (index !== -1) currentBookmarks[index] = final;
                 await saveBookmarks(currentBookmarks);
                 renderBookmarks(currentBookmarks);
-                UIUtils.showToast(embedUrl ? 'Добавлено (с поддержкой видео)' : 'Добавлено', 'success');
+                UIUtils.showToast(embedUrl ? (downloadUrl ? 'Добавлено (видео + скачивание)' : 'Добавлено (видео)') : 'Добавлено', 'success');
                 urlInput.value = '';
                 titleInput.value = '';
             } catch (e) {
