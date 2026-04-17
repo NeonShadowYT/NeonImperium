@@ -661,10 +661,6 @@
                         <input type="url" id="modal-preview-url" class="feedback-input preview-url-input" placeholder="Ссылка на превью (необязательно)" value="${GithubCore.escapeHtml(previewUrl)}" style="margin-bottom:0;">
                         <div id="preview-services-placeholder"></div>
                     </div>
-                    <div id="preview-thumbnail-container" class="preview-thumbnail" style="${previewUrl ? '' : 'display:none;'} margin-top:4px;">
-                        <img id="preview-thumbnail-img" src="${previewUrl ? GithubCore.escapeHtml(previewUrl) : ''}" alt="Preview">
-                        <button type="button" class="remove-preview" id="remove-preview-btn" title="Удалить превью"><i class="fas fa-times"></i></button>
-                    </div>
                     ${categoryHtml}
                     <div id="modal-editor-toolbar"></div>
                     <div class="editor-split">
@@ -714,6 +710,35 @@
             textarea.addEventListener('input', updatePreview);
             updatePreview();
 
+            // --- Синхронизация прокрутки между textarea и preview-area ---
+            const leftPane = modal.querySelector('.editor-split-left');
+            const rightPane = modal.querySelector('.editor-split-right');
+            if (leftPane && rightPane) {
+                // Устанавливаем одинаковую высоту (flex уже даёт равную высоту, но добавим явно)
+                leftPane.style.display = 'flex';
+                leftPane.style.flexDirection = 'column';
+                rightPane.style.display = 'flex';
+                rightPane.style.flexDirection = 'column';
+                const textareaEl = leftPane.querySelector('textarea');
+                const previewContainer = rightPane.querySelector('#modal-preview-area');
+                if (textareaEl && previewContainer) {
+                    // Синхронизация прокрутки при скролле textarea
+                    textareaEl.addEventListener('scroll', () => {
+                        const ratio = textareaEl.scrollTop / (textareaEl.scrollHeight - textareaEl.clientHeight);
+                        if (previewContainer.scrollHeight > previewContainer.clientHeight) {
+                            previewContainer.scrollTop = ratio * (previewContainer.scrollHeight - previewContainer.clientHeight);
+                        }
+                    });
+                    // Синхронизация прокрутки при скролле preview
+                    previewContainer.addEventListener('scroll', () => {
+                        const ratio = previewContainer.scrollTop / (previewContainer.scrollHeight - previewContainer.clientHeight);
+                        if (textareaEl.scrollHeight > textareaEl.clientHeight) {
+                            textareaEl.scrollTop = ratio * (textareaEl.scrollHeight - textareaEl.clientHeight);
+                        }
+                    });
+                }
+            }
+
             const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
             if (window.Editor) {
                 const toolbar = Editor.createEditorToolbar(textarea);
@@ -725,16 +750,7 @@
                 servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
             }
 
-            const previewUrlInput = modal.querySelector('#modal-preview-url');
-            const thumbnailContainer = modal.querySelector('#preview-thumbnail-container');
-            const thumbnailImg = modal.querySelector('#preview-thumbnail-img');
-            const removePreviewBtn = modal.querySelector('#remove-preview-btn');
-            function updateThumbnail(url) {
-                if (url && url.trim()) { thumbnailImg.src = url; thumbnailContainer.style.display = 'block'; }
-                else { thumbnailContainer.style.display = 'none'; thumbnailImg.src = ''; }
-            }
-            previewUrlInput.addEventListener('input', (e) => updateThumbnail(e.target.value.trim()));
-            removePreviewBtn.addEventListener('click', () => { previewUrlInput.value = ''; updateThumbnail(''); });
+            // Удалён весь код, связанный с preview-thumbnail (миниатюра под полем preview-url)
 
             const accessPublicBtn = modal.querySelector('[data-access="public"]');
             const accessPrivateBtn = modal.querySelector('[data-access="private"]');
@@ -752,7 +768,7 @@
             const saveDraftFn = () => {
                 const draft = {
                     title: titleInput.value.trim(),
-                    previewUrl: previewUrlInput.value.trim(),
+                    previewUrl: '', // больше не используем previewUrl для отображения
                     body: textarea.value.trim(),
                     category: categorySelect ? categorySelect.value : null,
                     access: accessPublicBtn.classList.contains('active') ? 'public' : 'private',
@@ -761,7 +777,6 @@
                 UIUtils.saveDraft(draftKey, draft);
             };
             titleInput.addEventListener('input', saveDraftFn);
-            previewUrlInput.addEventListener('input', saveDraftFn);
             textarea.addEventListener('input', saveDraftFn);
             if (categorySelect) categorySelect.addEventListener('change', saveDraftFn);
             accessPublicBtn.addEventListener('click', saveDraftFn);
@@ -769,10 +784,9 @@
             privateUsersInput.addEventListener('input', saveDraftFn);
 
             const savedDraft = UIUtils.loadDraft(draftKey);
-            if (savedDraft && (savedDraft.title || savedDraft.body || savedDraft.previewUrl)) {
+            if (savedDraft && (savedDraft.title || savedDraft.body)) {
                 if (confirm('Найден несохранённый черновик. Восстановить?')) {
                     titleInput.value = savedDraft.title || '';
-                    if (savedDraft.previewUrl) { previewUrlInput.value = savedDraft.previewUrl; updateThumbnail(savedDraft.previewUrl); }
                     textarea.value = savedDraft.body || '';
                     if (categorySelect && savedDraft.category) categorySelect.value = savedDraft.category;
                     if (savedDraft.access === 'private') accessPrivateBtn.click(); else accessPublicBtn.click();
@@ -784,7 +798,6 @@
             let hasChanges = false;
             const markChanged = () => { hasChanges = true; };
             titleInput.addEventListener('input', markChanged);
-            previewUrlInput.addEventListener('input', markChanged);
             textarea.addEventListener('input', markChanged);
             if (categorySelect) categorySelect.addEventListener('change', markChanged);
             accessPublicBtn.addEventListener('click', markChanged);
@@ -852,7 +865,6 @@
                 const allowedUsers = modal.querySelector('#private-users').value.trim();
                 if (allowedUsers) {
                     finalBody = `<!-- allowed: ${allowedUsers} -->\n\n` + finalBody;
-                    // Шифруем тело, если пост приватный
                     finalBody = GithubCore.encryptPrivateBody(finalBody, allowedUsers);
                     finalBody = `<!-- encrypted -->\n\n` + finalBody;
                 }

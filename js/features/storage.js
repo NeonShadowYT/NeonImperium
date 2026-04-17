@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist (минимальная версия)
+// js/features/storage.js — Хранилище закладок через GitHub Gist
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -182,7 +182,15 @@
         await saveBookmarks(filtered);
     }
 
-    // --- Рендеринг карточки с tilt-card ---
+    // Проверка, является ли URL embed-ссылкой
+    function isEmbedUrl(url) {
+        if (!url) return false;
+        // Ищем в URL характерные признаки embed-ссылок: /embed/, /player/, параметр embed
+        const lowerUrl = url.toLowerCase();
+        return lowerUrl.includes('/embed/') || lowerUrl.includes('/player/') || lowerUrl.includes('?embed');
+    }
+
+    // Рендеринг карточки с поддержкой видео-превью ---
     function renderBookmarkCard(bookmark, onDelete, onEdit) {
         const card = document.createElement('div');
         card.className = 'project-card-link tilt-card';
@@ -194,12 +202,32 @@
 
         const imgWrapper = document.createElement('div');
         imgWrapper.className = 'image-wrapper';
-        const img = document.createElement('img');
-        img.src = bookmark.thumbnail || 'images/default-news.webp';
-        img.alt = bookmark.title;
-        img.className = 'project-image';
-        img.onerror = () => img.src = 'images/default-news.webp';
-        imgWrapper.appendChild(img);
+        
+        let thumbnailUrl = bookmark.thumbnail || 'images/default-news.webp';
+        
+        // Если thumbnail является embed-ссылкой, показываем iframe
+        if (thumbnailUrl && isEmbedUrl(thumbnailUrl)) {
+            const iframe = document.createElement('iframe');
+            iframe.src = thumbnailUrl;
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.border = 'none';
+            iframe.style.borderRadius = 'var(--border-radius-small)';
+            iframe.setAttribute('frameborder', '0');
+            iframe.setAttribute('allowfullscreen', 'true');
+            iframe.setAttribute('loading', 'lazy');
+            iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation');
+            imgWrapper.appendChild(iframe);
+        } else {
+            // Обычное изображение
+            const img = document.createElement('img');
+            img.src = thumbnailUrl;
+            img.alt = bookmark.title;
+            img.className = 'project-image';
+            img.onerror = () => img.src = 'images/default-news.webp';
+            imgWrapper.appendChild(img);
+        }
+        
         inner.appendChild(imgWrapper);
 
         const title = document.createElement('h3');
@@ -239,13 +267,13 @@
         inner.appendChild(actionsDiv);
         card.appendChild(inner);
 
-        // Клик по карточке — просто открываем ссылку в новой вкладке
+        // Клик по карточке — открываем ссылку в новой вкладке
         card.addEventListener('click', () => window.open(bookmark.url, '_blank'));
 
         return card;
     }
 
-    // --- Модальное окно хранилища (исправлен размер кнопки)---
+    // Модальное окно хранилища
     async function openStorageModalContent() {
         const contentHtml = `
             <div style="display:flex; flex-direction:column; gap:16px;">
@@ -263,7 +291,7 @@
             </div>
         `;
 
-        const { modal } = UIUtils.createModal('Хранилище', contentHtml, { size: 'full' });
+        const { modal, closeModal } = UIUtils.createModal('Хранилище', contentHtml, { size: 'full' });
         const grid = modal.querySelector('#bookmarks-grid');
         const urlInput = modal.querySelector('#new-bookmark-url');
         const titleInput = modal.querySelector('#new-bookmark-title');
@@ -319,7 +347,7 @@
                                 </div>
                             </div>
                         `;
-                        const { modal: editModal, closeModal } = UIUtils.createModal('Редактировать', editHtml, { size: 'full' });
+                        const { modal: editModal, closeModal: closeEditModal } = UIUtils.createModal('Редактировать', editHtml, { size: 'full' });
                         const urlField = editModal.querySelector('#edit-url');
                         const titleField = editModal.querySelector('#edit-title');
                         editModal.querySelector('#save-edit').addEventListener('click', async () => {
@@ -330,9 +358,9 @@
                             if (index !== -1) currentBookmarks[index] = updated;
                             renderBookmarks(currentBookmarks);
                             await saveBookmarks(currentBookmarks);
-                            closeModal();
+                            closeEditModal();
                         });
-                        editModal.querySelector('#cancel-edit').addEventListener('click', closeModal);
+                        editModal.querySelector('#cancel-edit').addEventListener('click', closeEditModal);
                     }
                 );
                 grid.appendChild(card);
