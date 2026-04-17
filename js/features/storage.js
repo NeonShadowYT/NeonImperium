@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist
+// js/features/storage.js — Хранилище закладок через GitHub Gist + oEmbed для видео
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -89,7 +89,6 @@
                 if (resp.ok) return gistId;
             } catch {}
         }
-        // Ищем существующий
         const listResp = await fetch('https://api.github.com/gists', {
             headers: { 'Authorization': `Bearer ${currentToken}` }
         });
@@ -102,7 +101,6 @@
                 return existing.id;
             }
         }
-        // Создаём новый
         const createResp = await fetch('https://api.github.com/gists', {
             method: 'POST',
             headers: {
@@ -163,8 +161,43 @@
         }
     }
 
+    // --- Получение embed URL через oEmbed API (без ключей) ---
+    async function fetchEmbedUrl(pageUrl) {
+        try {
+            const apiUrl = `https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`;
+            const response = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
+            if (!response.ok) return null;
+            const data = await response.json();
+            if (data.html) {
+                const iframeMatch = data.html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+                if (iframeMatch && iframeMatch[1]) return iframeMatch[1];
+                if (data.url) return data.url;
+            }
+            if (data.embed_url) return data.embed_url;
+            return null;
+        } catch (err) {
+            console.warn('oEmbed fetch failed:', err);
+            return null;
+        }
+    }
+
+    // --- Проверка, является ли URL embed-ссылкой ---
+    function isEmbedUrl(url) {
+        if (!url) return false;
+        const lowerUrl = url.toLowerCase();
+        return lowerUrl.includes('/embed/') || lowerUrl.includes('/player/') || lowerUrl.includes('?embed');
+    }
+
     async function addBookmark(bookmark) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
+        let embedUrl = null;
+        if (bookmark.url) {
+            if (isEmbedUrl(bookmark.url)) {
+                embedUrl = bookmark.url;
+            } else {
+                embedUrl = await fetchEmbedUrl(bookmark.url);
+            }
+        }
         const bookmarks = await loadBookmarks();
         if (bookmarks.some(b => b.url === bookmark.url)) {
             UIUtils.showToast('Уже в избранном', 'info');
@@ -172,8 +205,10 @@
         }
         bookmark.id = Date.now() + '-' + Math.random().toString(36);
         bookmark.added = new Date().toISOString();
+        if (embedUrl) bookmark.embedUrl = embedUrl;
         bookmarks.push(bookmark);
         await saveBookmarks(bookmarks);
+        return embedUrl;
     }
 
     async function removeBookmark(bookmarkId) {
@@ -182,15 +217,7 @@
         await saveBookmarks(filtered);
     }
 
-    // Проверка, является ли URL embed-ссылкой
-    function isEmbedUrl(url) {
-        if (!url) return false;
-        // Ищем в URL характерные признаки embed-ссылок: /embed/, /player/, параметр embed
-        const lowerUrl = url.toLowerCase();
-        return lowerUrl.includes('/embed/') || lowerUrl.includes('/player/') || lowerUrl.includes('?embed');
-    }
-
-    // Рендеринг карточки с поддержкой видео-превью ---
+    // --- Рендеринг карточки с поддержкой видео-превью ---
     function renderBookmarkCard(bookmark, onDelete, onEdit) {
         const card = document.createElement('div');
         card.className = 'project-card-link tilt-card';
@@ -203,12 +230,11 @@
         const imgWrapper = document.createElement('div');
         imgWrapper.className = 'image-wrapper';
         
-        let thumbnailUrl = bookmark.thumbnail || 'images/default-news.webp';
+        const embedSrc = bookmark.embedUrl || (isEmbedUrl(bookmark.url) ? bookmark.url : null);
         
-        // Если thumbnail является embed-ссылкой, показываем iframe
-        if (thumbnailUrl && isEmbedUrl(thumbnailUrl)) {
+        if (embedSrc) {
             const iframe = document.createElement('iframe');
-            iframe.src = thumbnailUrl;
+            iframe.src = embedSrc;
             iframe.style.width = '100%';
             iframe.style.height = '100%';
             iframe.style.border = 'none';
@@ -219,7 +245,7 @@
             iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation');
             imgWrapper.appendChild(iframe);
         } else {
-            // Обычное изображение
+            let thumbnailUrl = bookmark.thumbnail || 'images/default-news.webp';
             const img = document.createElement('img');
             img.src = thumbnailUrl;
             img.alt = bookmark.title;
@@ -240,7 +266,6 @@
         meta.innerHTML = `<i class="fas fa-calendar-alt"></i> ${new Date(bookmark.added).toLocaleDateString()}`;
         inner.appendChild(meta);
 
-        // Кнопки
         const actionsDiv = document.createElement('div');
         actionsDiv.style.position = 'absolute';
         actionsDiv.style.top = '8px';
@@ -267,18 +292,16 @@
         inner.appendChild(actionsDiv);
         card.appendChild(inner);
 
-        // Клик по карточке — открываем ссылку в новой вкладке
         card.addEventListener('click', () => window.open(bookmark.url, '_blank'));
-
         return card;
     }
 
-    // Модальное окно хранилища
+    // --- Модальное окно хранилища ---
     async function openStorageModalContent() {
         const contentHtml = `
             <div style="display:flex; flex-direction:column; gap:16px;">
                 <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                    <input type="url" id="new-bookmark-url" placeholder="Ссылка..." style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary); height:44px;">
+                    <input type="url" id="new-bookmark-url" placeholder="Ссылка на страницу или видео..." style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary); height:44px;">
                     <input type="text" id="new-bookmark-title" placeholder="Название" style="flex:2; padding:10px 12px; border-radius:30px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary); height:44px;">
                     <button class="button" id="add-bookmark-btn" style="padding:10px 20px; height:44px; white-space:nowrap; width:auto; min-width:120px;"><i class="fas fa-plus"></i> Добавить</button>
                 </div>
@@ -286,7 +309,8 @@
                     <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
                 </div>
                 <div style="margin-top:20px; padding:16px; background:var(--bg-inner-gradient); border-radius:16px;">
-                    <p style="margin:0;"><i class="fas fa-info-circle"></i> <strong>Закладки</strong> хранятся в вашем приватном GitHub Gist и синхронизируются между устройствами.</p>
+                    <p><i class="fas fa-info-circle"></i> <strong>Закладки</strong> хранятся в приватном GitHub Gist и синхронизируются.<br>
+                    <i class="fas fa-video"></i> Для видео автоматически подбирается встраиваемый плеер (через oEmbed).</p>
                 </div>
             </div>
         `;
@@ -353,7 +377,20 @@
                         editModal.querySelector('#save-edit').addEventListener('click', async () => {
                             const newUrl = urlField.value.trim();
                             if (!newUrl) { UIUtils.showToast('Введите ссылку', 'error'); return; }
-                            const updated = { ...bookmark, url: newUrl, title: titleField.value.trim() || newUrl };
+                            let newEmbedUrl = bookmark.embedUrl;
+                            if (newUrl !== bookmark.url) {
+                                if (isEmbedUrl(newUrl)) {
+                                    newEmbedUrl = newUrl;
+                                } else {
+                                    newEmbedUrl = await fetchEmbedUrl(newUrl);
+                                }
+                            }
+                            const updated = { 
+                                ...bookmark, 
+                                url: newUrl, 
+                                title: titleField.value.trim() || newUrl,
+                                embedUrl: newEmbedUrl || undefined
+                            };
                             const index = currentBookmarks.findIndex(b => b.id === bookmark.id);
                             if (index !== -1) currentBookmarks[index] = updated;
                             renderBookmarks(currentBookmarks);
@@ -374,18 +411,31 @@
             if (!url) { UIUtils.showToast('Введите ссылку', 'error'); return; }
             let title = titleInput.value.trim() || url;
             addBtn.disabled = true;
+            
             const tempId = 'temp-' + Date.now();
             const optimistic = { id: tempId, url, title, added: new Date().toISOString() };
             currentBookmarks.unshift(optimistic);
             renderBookmarks(currentBookmarks);
 
             try {
-                const final = { ...optimistic, id: Date.now() + '-' + Math.random().toString(36) };
+                let embedUrl = null;
+                if (isEmbedUrl(url)) {
+                    embedUrl = url;
+                } else {
+                    embedUrl = await fetchEmbedUrl(url);
+                }
+                const final = { 
+                    id: Date.now() + '-' + Math.random().toString(36),
+                    url,
+                    title,
+                    added: new Date().toISOString(),
+                    embedUrl: embedUrl || undefined
+                };
                 const index = currentBookmarks.findIndex(b => b.id === tempId);
                 if (index !== -1) currentBookmarks[index] = final;
-                await addBookmark(final);
+                await saveBookmarks(currentBookmarks);
                 renderBookmarks(currentBookmarks);
-                UIUtils.showToast('Добавлено', 'success');
+                UIUtils.showToast(embedUrl ? 'Добавлено (с поддержкой видео)' : 'Добавлено', 'success');
                 urlInput.value = '';
                 titleInput.value = '';
             } catch (e) {
