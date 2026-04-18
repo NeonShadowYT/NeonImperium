@@ -707,7 +707,7 @@
                             <button class="button small cat-btn ${category === 'link' ? 'active' : ''}" data-cat="link"><i class="fas fa-link"></i> Ссылки</button>
                         </div>
                     </div>
-                    <div style="display:flex; gap:6px;">
+                    <div style="display:flex; gap:6px; flex-shrink:0;">
                         <button class="button small" id="setup-recovery-btn"><i class="fas fa-shield-alt"></i> Восстановление</button>
                         <button class="button small" id="reset-storage-btn" style="background:#f44336;"><i class="fas fa-trash-alt"></i> Сброс</button>
                         <button class="button small" id="toggle-add-btn"><i class="fas fa-plus"></i> Добавить</button>
