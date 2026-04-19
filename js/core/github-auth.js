@@ -1,4 +1,4 @@
-// github-auth.js — обновлённый интерфейс входа с проверкой scopes
+// github-auth.js — обновлённый интерфейс входа с проверкой scopes и ленивой загрузкой
 (function() {
     const CONFIG = GithubCore.CONFIG;
     const TOKEN_KEY = 'github_token';
@@ -9,6 +9,7 @@
 
     let navBar, profileContainer, modal, tokenInput, tokenToggle;
     let currentScopes = [];
+    let currentUserLogin = null;
 
     document.addEventListener('DOMContentLoaded', init);
 
@@ -37,8 +38,13 @@
         if (savedToken && cachedUser) {
             try {
                 const user = JSON.parse(cachedUser);
+                currentUserLogin = user.login;
                 currentScopes = cachedScopes ? JSON.parse(cachedScopes) : [];
                 renderProfile(user, savedToken);
+                // Динамически подгружаем админ-модули при необходимости
+                if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) {
+                    loadAdminFeatures();
+                }
             } catch {
                 validateAndShowProfile(savedToken);
             }
@@ -66,6 +72,20 @@
             clearModalError();
             if (modal) modal.classList.add('active');
         });
+    }
+
+    // Ленивая загрузка админских функций (если пользователь админ)
+    async function loadAdminFeatures() {
+        // Проверяем, не загружены ли уже модули
+        if (window.UIFeedback) return;
+        try {
+            await import('../features/editor.js');
+            await import('../features/ui-feedback.js');
+            // После загрузки диспатчим событие, чтобы страница обновила интерфейс
+            window.dispatchEvent(new CustomEvent('admin-modules-loaded'));
+        } catch (e) {
+            console.warn('Failed to load admin modules', e);
+        }
     }
 
     function createModal() {
@@ -199,6 +219,20 @@
             const scopes = scopesHeader ? scopesHeader.split(',').map(s => s.trim()) : [];
 
             const userData = await userResponse.json();
+            currentUserLogin = userData.login;
+
+            let repoAccess = false;
+            if (scopes.includes('repo')) {
+                try {
+                    await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}`, {
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        signal: AbortSignal.timeout(5000)
+                    });
+                    repoAccess = true;
+                } catch (repoErr) {
+                    console.warn('Repository access check failed:', repoErr);
+                }
+            }
 
             if (shouldSave) {
                 localStorage.setItem(TOKEN_KEY, token);
@@ -207,12 +241,12 @@
             }
 
             currentScopes = scopes;
-
+            
             window.dispatchEvent(new CustomEvent('github-login-success', { 
                 detail: { 
                     login: userData.login,
                     scopes: scopes,
-                    repoAccess: scopes.includes('repo')
+                    repoAccess 
                 } 
             }));
 
@@ -232,6 +266,12 @@
                 UIUtils.showToast(`Внимание: у токена отсутствуют разрешения: ${missingScopes.join(', ')}. Некоторые функции будут недоступны.`, 'warning', 8000);
             }
 
+            // Загружаем админ-модули, если пользователь админ
+            if (CONFIG.ALLOWED_AUTHORS.includes(userData.login)) {
+                loadAdminFeatures();
+            }
+
+            // Обновляем интерфейсы, которые могли не успеть подписаться
             if (window.refreshNewsFeed) window.refreshNewsFeed();
             if (window.refreshGameUpdates && window.currentGame) window.refreshGameUpdates(window.currentGame);
 
@@ -242,7 +282,6 @@
             localStorage.removeItem(TOKEN_KEY);
             sessionStorage.removeItem(USER_CACHE_KEY);
             sessionStorage.removeItem(SCOPES_CACHE_KEY);
-            currentScopes = [];
 
             if (error.name === 'AbortError') {
                 showModalError('githubTimeout');
@@ -352,7 +391,7 @@
         });
     }
 
-    function handleDropdownAction(action) {
+    async function handleDropdownAction(action) {
         const token = localStorage.getItem(TOKEN_KEY);
         const userLogin = profileContainer.dataset.githubLogin;
         const scopes = currentScopes;
@@ -377,10 +416,14 @@
                     UIUtils.showToast('Для использования хранилища необходим токен с разрешением "gist".', 'error', 8000);
                     return;
                 }
-                if (window.BookmarkStorage) {
-                    window.BookmarkStorage.openStorageModal();
-                } else {
-                    UIUtils.showToast('Модуль хранилища не загружен', 'error');
+                // Ленивая загрузка хранилища
+                try {
+                    const module = await import('../features/storage.js');
+                    if (module.BookmarkStorage) {
+                        module.BookmarkStorage.openStorageModal();
+                    }
+                } catch (e) {
+                    UIUtils.showToast('Ошибка загрузки хранилища', 'error');
                 }
                 break;
             case 'revoke-token':
@@ -398,6 +441,7 @@
                 delete profileContainer.dataset.githubLogin;
                 delete profileContainer.dataset.githubScopes;
                 currentScopes = [];
+                currentUserLogin = null;
                 showNotLoggedIn();
                 UIUtils.showToast('Вы вышли из аккаунта.', 'info');
                 location.reload();
@@ -424,21 +468,12 @@
     }
 
     window.GithubAuth = {
-        getCurrentUser: () => {
-            const profile = document.querySelector('.nav-profile');
-            return profile ? profile.dataset.githubLogin : null;
-        },
+        getCurrentUser: () => currentUserLogin,
         getToken: () => localStorage.getItem(TOKEN_KEY),
-        getScopes: () => {
-            // Возвращаем актуальный массив scopes из замыкания модуля
-            return currentScopes.slice();
-        },
-        hasScope: (scope) => {
-            return currentScopes.includes(scope);
-        },
+        getScopes: () => currentScopes,
+        hasScope: (scope) => currentScopes.includes(scope),
         isAdmin: () => {
-            const user = window.GithubAuth.getCurrentUser();
-            return user && GithubCore.CONFIG.ALLOWED_AUTHORS.includes(user);
+            return currentUserLogin && GithubCore.CONFIG.ALLOWED_AUTHORS.includes(currentUserLogin);
         }
     };
 })();
