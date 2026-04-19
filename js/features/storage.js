@@ -328,6 +328,10 @@
     // При вызове извне (например, из ui-feedback) пароль уже должен быть установлен
     async function addBookmark(bookmark) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
+        if (!GithubAuth.hasScope('gist')) {
+            UIUtils.showToast('Требуется разрешение gist', 'error');
+            return;
+        }
         if (!masterPassword) {
             // Если пароль не введён, открываем хранилище для аутентификации
             await openStorageModal();
@@ -547,6 +551,7 @@
 
     // ==================== МОДАЛЬНОЕ ОКНО ХРАНИЛИЩА ====================
     async function openStorageModalContent() {
+        await waitForAuthReady();
         if (!GithubAuth.hasScope('gist')) {
             UIUtils.showToast('Для использования хранилища необходим токен с разрешением "gist".', 'error', 8000);
             return;
@@ -897,6 +902,24 @@
             gistId = null;
             masterPassword = null;
         }
+    }
+
+    // Вспомогательная функция ожидания готовности GithubAuth
+    function waitForAuthReady() {
+        return new Promise(resolve => {
+            if (window.GithubAuth && typeof window.GithubAuth.getCurrentUser === 'function') {
+                resolve();
+            } else {
+                const check = () => {
+                    if (window.GithubAuth && typeof window.GithubAuth.getCurrentUser === 'function') {
+                        resolve();
+                    } else {
+                        setTimeout(check, 50);
+                    }
+                };
+                check();
+            }
+        });
     }
 
     window.addEventListener('github-login-success', updateAuthState);

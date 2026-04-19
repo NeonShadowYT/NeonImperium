@@ -39,10 +39,6 @@
                 const user = JSON.parse(cachedUser);
                 currentScopes = cachedScopes ? JSON.parse(cachedScopes) : [];
                 renderProfile(user, savedToken);
-                // Админ-скрипт больше не нужен, но оставим вызов для совместимости
-                if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) {
-                    // Ничего не делаем, админ-кнопки добавляются в соответствующих модулях
-                }
             } catch {
                 validateAndShowProfile(savedToken);
             }
@@ -71,9 +67,6 @@
             if (modal) modal.classList.add('active');
         });
     }
-
-    // Устаревшая функция, оставлена для совместимости
-    function loadAdminScript() {}
 
     function createModal() {
         modal = document.createElement('div');
@@ -207,19 +200,6 @@
 
             const userData = await userResponse.json();
 
-            let repoAccess = false;
-            if (scopes.includes('repo')) {
-                try {
-                    await fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}`, {
-                        headers: { 'Authorization': `Bearer ${token}` },
-                        signal: AbortSignal.timeout(5000)
-                    });
-                    repoAccess = true;
-                } catch (repoErr) {
-                    console.warn('Repository access check failed:', repoErr);
-                }
-            }
-
             if (shouldSave) {
                 localStorage.setItem(TOKEN_KEY, token);
                 sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData));
@@ -227,13 +207,12 @@
             }
 
             currentScopes = scopes;
-            
-            // Диспатчим событие с актуальными scopes
+
             window.dispatchEvent(new CustomEvent('github-login-success', { 
                 detail: { 
                     login: userData.login,
                     scopes: scopes,
-                    repoAccess 
+                    repoAccess: scopes.includes('repo')
                 } 
             }));
 
@@ -253,7 +232,6 @@
                 UIUtils.showToast(`Внимание: у токена отсутствуют разрешения: ${missingScopes.join(', ')}. Некоторые функции будут недоступны.`, 'warning', 8000);
             }
 
-            // Принудительно обновляем интерфейсы, которые могли не успеть подписаться
             if (window.refreshNewsFeed) window.refreshNewsFeed();
             if (window.refreshGameUpdates && window.currentGame) window.refreshGameUpdates(window.currentGame);
 
@@ -264,6 +242,7 @@
             localStorage.removeItem(TOKEN_KEY);
             sessionStorage.removeItem(USER_CACHE_KEY);
             sessionStorage.removeItem(SCOPES_CACHE_KEY);
+            currentScopes = [];
 
             if (error.name === 'AbortError') {
                 showModalError('githubTimeout');
@@ -451,12 +430,11 @@
         },
         getToken: () => localStorage.getItem(TOKEN_KEY),
         getScopes: () => {
-            try {
-                return JSON.parse(sessionStorage.getItem(SCOPES_CACHE_KEY) || '[]');
-            } catch { return []; }
+            // Возвращаем актуальный массив scopes из замыкания модуля
+            return currentScopes.slice();
         },
         hasScope: (scope) => {
-            return window.GithubAuth.getScopes().includes(scope);
+            return currentScopes.includes(scope);
         },
         isAdmin: () => {
             const user = window.GithubAuth.getCurrentUser();
