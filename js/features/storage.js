@@ -1,4 +1,5 @@
 // js/features/storage.js — Хранилище закладок через GitHub Gist
+// Шифрование только на мастер-пароле (AES-GCM), токен используется только для доступа к API.
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -10,6 +11,7 @@
     let currentUser = null;
     let currentToken = null;
     let gistId = null;
+    let masterPassword = null; // хранится только в памяти на время сессии
 
     // ==================== УТИЛИТЫ ====================
     function toBase64(str) {
@@ -130,8 +132,7 @@
     }
 
     // ==================== ОСНОВНЫЕ ФУНКЦИИ ХРАНИЛИЩА ====================
-    // Загружает закладки: если есть gist, пытается расшифровать с паролем.
-    // Если пароль не передан, возвращает объект с признаком необходимости ввода пароля.
+    // Загружает закладки. Если пароль не передан, может вернуть { passwordRequired: true }
     async function loadBookmarks(password = null) {
         if (!currentToken) {
             try { return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]'); } catch { return []; }
@@ -154,7 +155,7 @@
                 payload = JSON.parse(file.content);
             } catch {
                 // старый формат? пробуем как есть
-                payload = { encrypted: file.content };
+                payload = { encryptedBookmarks: file.content };
             }
 
             // Если есть поле encryptedBookmarks, значит данные зашифрованы мастер-паролем
@@ -167,7 +168,6 @@
                 return { bookmarks };
             } else if (payload.bookmarks) {
                 // Устаревший формат без шифрования (или старый recovery)
-                // Для совместимости возвращаем как есть, но предложим установить пароль.
                 return { bookmarks: payload.bookmarks, legacy: true };
             } else {
                 return { bookmarks: [], needSetup: true };
@@ -182,8 +182,8 @@
         }
     }
 
-    // Сохраняет закладки, шифруя их переданным паролем.
-    async function saveBookmarks(bookmarks, password) {
+    // Сохраняет закладки, шифруя их текущим мастер-паролем.
+    async function saveBookmarks(bookmarks, password = masterPassword) {
         if (!currentToken) {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
             return;
@@ -220,6 +220,7 @@
         if (result.needSetup) throw new Error('Storage not initialized');
         const bookmarks = result.bookmarks || [];
         await saveBookmarks(bookmarks, newPassword);
+        masterPassword = newPassword;
         return true;
     }
 
@@ -230,6 +231,7 @@
             await deleteGist(gistId, currentToken);
         }
         gistId = null;
+        masterPassword = null;
         localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);
         localStorage.removeItem(LOCAL_STORAGE_KEY);
         localStorage.removeItem(LOCAL_BACKUP_KEY);
@@ -323,8 +325,15 @@
     }
 
     // ==================== ДОБАВЛЕНИЕ/УДАЛЕНИЕ ЗАКЛАДОК ====================
-    async function addBookmark(bookmark, password) {
+    // При вызове извне (например, из ui-feedback) пароль уже должен быть установлен
+    async function addBookmark(bookmark) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
+        if (!masterPassword) {
+            // Если пароль не введён, открываем хранилище для аутентификации
+            await openStorageModal();
+            if (!masterPassword) return; // пользователь не ввёл пароль
+        }
+
         let finalUrl = bookmark.url;
         let embedUrl = null;
         let downloadUrl = null;
@@ -360,7 +369,7 @@
             }
         }
 
-        const result = await loadBookmarks(password);
+        const result = await loadBookmarks(masterPassword);
         if (result.passwordRequired) throw new Error('Password required');
         const bookmarksArray = result.bookmarks || [];
         if (bookmarksArray.some(b => b.url === finalUrl)) {
@@ -377,16 +386,17 @@
         if (postType) bookmark.postType = postType;
 
         const newBookmarks = [...bookmarksArray, bookmark];
-        await saveBookmarks(newBookmarks, password);
+        await saveBookmarks(newBookmarks, masterPassword);
         return bookmark;
     }
 
-    async function removeBookmark(bookmarkId, password) {
-        const result = await loadBookmarks(password);
+    async function removeBookmark(bookmarkId) {
+        if (!masterPassword) throw new Error('Master password not set');
+        const result = await loadBookmarks(masterPassword);
         if (result.passwordRequired) throw new Error('Password required');
         const bookmarksArray = result.bookmarks || [];
         const filtered = bookmarksArray.filter(b => b.id !== bookmarkId);
-        await saveBookmarks(filtered, password);
+        await saveBookmarks(filtered, masterPassword);
     }
 
     // ==================== ПОЛНОЭКРАННЫЙ РЕЖИМ ДЛЯ ВИДЕО ====================
@@ -543,7 +553,6 @@
         }
 
         let currentBookmarks = [];
-        let masterPassword = null;
         let sortOrder = 'new';
         let category = 'all';
         let needSetup = false;
@@ -560,6 +569,9 @@
             } else {
                 currentBookmarks = result.bookmarks || [];
                 if (result.legacy) legacy = true;
+                // если пароль уже был в памяти (например, после предыдущего входа), используем его
+                // но в loadBookmarks мы не передавали пароль, поэтому он не расшифрует.
+                // Это нормально, т.к. мы должны явно запросить пароль при passwordRequired.
             }
         } catch (e) {
             if (e.message === 'TOKEN_NO_GIST_SCOPE') {
@@ -593,9 +605,27 @@
                     await resetStorage();
                     needSetup = true;
                     passwordRequired = false;
+                    masterPassword = null;
                 } else {
                     return;
                 }
+            }
+        } else if (masterPassword && !needSetup) {
+            // Пароль уже есть в памяти, но данные могли быть не расшифрованы (если мы не передавали его в loadBookmarks выше)
+            // Загрузим с паролем
+            try {
+                const result = await loadBookmarks(masterPassword);
+                if (result.passwordRequired) {
+                    // такое возможно, если пароль не подходит
+                    masterPassword = null;
+                    passwordRequired = true;
+                    // рекурсивно перезапустим
+                    return openStorageModalContent();
+                }
+                currentBookmarks = result.bookmarks || [];
+            } catch (e) {
+                UIUtils.showToast('Ошибка загрузки: ' + e.message, 'error');
+                return;
             }
         }
 
@@ -621,7 +651,6 @@
         } else if (legacy) {
             // Устаревший формат без шифрования — предлагаем установить пароль
             UIUtils.showToast('Обнаружено старое хранилище. Рекомендуется установить мастер-пароль.', 'warning', 6000);
-            // Можно сразу предложить
             const setPwd = confirm('Хотите установить мастер-пароль для защиты хранилища?');
             if (setPwd) {
                 const newPwd = prompt('Введите новый мастер-пароль (минимум 4 символа):');
@@ -637,13 +666,12 @@
             }
         }
 
-        // Функция для сохранения (требует пароль)
-        const saveWithPassword = async (bookmarks) => {
+        // Функция для сохранения (использует текущий masterPassword)
+        const saveWithCurrentPassword = async (bookmarks) => {
             if (!masterPassword) {
                 // Если пароль не задан (например, legacy без пароля), запросить
                 const pwd = prompt('Введите мастер-пароль для сохранения изменений:');
                 if (!pwd) throw new Error('Password required');
-                // Проверим, что пароль подходит
                 const test = await loadBookmarks(pwd);
                 if (test.passwordRequired) throw new Error('Invalid password');
                 masterPassword = pwd;
@@ -721,7 +749,7 @@
                         currentBookmarks.splice(index, 1);
                         renderBookmarks();
                         try {
-                            await saveWithPassword(currentBookmarks);
+                            await saveWithCurrentPassword(currentBookmarks);
                         } catch (e) {
                             UIUtils.showToast('Ошибка сохранения: ' + e.message, 'error');
                         }
@@ -729,7 +757,7 @@
                     async (updatedBookmark) => {
                         const index = currentBookmarks.findIndex(b => b.id === updatedBookmark.id);
                         if (index !== -1) currentBookmarks[index] = updatedBookmark;
-                        await saveWithPassword(currentBookmarks);
+                        await saveWithCurrentPassword(currentBookmarks);
                         renderBookmarks();
                     }
                 );
@@ -766,7 +794,6 @@
             }
             try {
                 await changeMasterPassword(oldPwd, newPwd);
-                masterPassword = newPwd;
                 UIUtils.showToast('Пароль успешно изменён!', 'success');
             } catch (err) {
                 UIUtils.showToast('Ошибка смены пароля: ' + err.message, 'error');
@@ -830,7 +857,7 @@
             currentBookmarks.unshift(optimisticBookmark);
             renderBookmarks();
             try {
-                const final = await addBookmark({ url, title }, masterPassword);
+                const final = await addBookmark({ url, title }); // использует masterPassword из замыкания
                 const index = currentBookmarks.findIndex(b => b.id === optimisticBookmark.id);
                 if (index !== -1) currentBookmarks[index] = final;
                 renderBookmarks();
@@ -868,6 +895,7 @@
             }
         } else {
             gistId = null;
+            masterPassword = null;
         }
     }
 
