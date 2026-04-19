@@ -41,7 +41,6 @@
                 currentUserLogin = user.login;
                 currentScopes = cachedScopes ? JSON.parse(cachedScopes) : [];
                 renderProfile(user, savedToken);
-                // Динамически подгружаем админ-модули при необходимости
                 if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) {
                     loadAdminFeatures();
                 }
@@ -74,17 +73,54 @@
         });
     }
 
-    // Ленивая загрузка админских функций (если пользователь админ)
-    async function loadAdminFeatures() {
-        // Проверяем, не загружены ли уже модули
-        if (window.UIFeedback) return;
-        try {
-            await import('../features/editor.js');
-            await import('../features/ui-feedback.js');
-            // После загрузки диспатчим событие, чтобы страница обновила интерфейс
-            window.dispatchEvent(new CustomEvent('admin-modules-loaded'));
-        } catch (e) {
-            console.warn('Failed to load admin modules', e);
+    // Загрузка админских модулей (редактор, фидбек, хранилище)
+    function loadAdminFeatures() {
+        // Загружаем editor.js
+        if (!window.Editor) {
+            loadScript('js/features/editor.js');
+        }
+        // Загружаем ui-feedback.js
+        if (!window.UIFeedback) {
+            loadScript('js/features/ui-feedback.js', () => {
+                window.dispatchEvent(new CustomEvent('admin-modules-loaded'));
+            });
+        }
+        // Хранилище загрузим по требованию, но можно предзагрузить
+    }
+
+    // Вспомогательная функция для динамической загрузки скрипта
+    function loadScript(src, onLoad) {
+        if (document.querySelector(`script[src="${src}"]`)) {
+            if (onLoad) onLoad();
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.defer = true;
+        script.onload = onLoad || null;
+        document.body.appendChild(script);
+    }
+
+    // Открытие хранилища с динамической загрузкой модуля
+    async function openStorage() {
+        if (!currentScopes.includes('gist')) {
+            UIUtils.showToast('Для хранилища нужен scope "gist"', 'error', 8000);
+            return;
+        }
+        // Если модуль ещё не загружен, загружаем
+        if (!window.BookmarkStorage) {
+            UIUtils.showToast('Загрузка хранилища...', 'info', 1000);
+            await new Promise((resolve, reject) => {
+                loadScript('js/features/storage.js', () => {
+                    if (window.BookmarkStorage) resolve();
+                    else reject(new Error('Storage module failed to load'));
+                });
+            });
+        }
+        if (window.BookmarkStorage) {
+            window.BookmarkStorage.openStorageModal();
+        } else {
+            UIUtils.showToast('Не удалось загрузить хранилище', 'error');
         }
     }
 
@@ -266,12 +302,10 @@
                 UIUtils.showToast(`Внимание: у токена отсутствуют разрешения: ${missingScopes.join(', ')}. Некоторые функции будут недоступны.`, 'warning', 8000);
             }
 
-            // Загружаем админ-модули, если пользователь админ
             if (CONFIG.ALLOWED_AUTHORS.includes(userData.login)) {
                 loadAdminFeatures();
             }
 
-            // Обновляем интерфейсы, которые могли не успеть подписаться
             if (window.refreshNewsFeed) window.refreshNewsFeed();
             if (window.refreshGameUpdates && window.currentGame) window.refreshGameUpdates(window.currentGame);
 
@@ -412,19 +446,7 @@
                 UIUtils.showToast(`Вы вошли как ${userLogin}. Разрешения токена: ${scopeInfo}.`, 'info', 6000);
                 break;
             case 'storage':
-                if (!scopes.includes('gist')) {
-                    UIUtils.showToast('Для использования хранилища необходим токен с разрешением "gist".', 'error', 8000);
-                    return;
-                }
-                // Ленивая загрузка хранилища
-                try {
-                    const module = await import('../features/storage.js');
-                    if (module.BookmarkStorage) {
-                        module.BookmarkStorage.openStorageModal();
-                    }
-                } catch (e) {
-                    UIUtils.showToast('Ошибка загрузки хранилища', 'error');
-                }
+                await openStorage();
                 break;
             case 'revoke-token':
                 window.open('https://github.com/settings/tokens', '_blank');

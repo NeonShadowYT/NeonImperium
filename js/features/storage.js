@@ -3,6 +3,9 @@
 (function() {
     'use strict';
 
+    // Защита от повторной загрузки
+    if (window.BookmarkStorage) return;
+
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
     const STORAGE_KEY_PREFIX = 'bookmarks_';
@@ -1126,8 +1129,6 @@
         resetStorage
     };
 
-    if (!window.BookmarkStorage) {
-        window.BookmarkStorage = API;
-        init();
-    }
+    window.BookmarkStorage = API;
+    init();
 })();
