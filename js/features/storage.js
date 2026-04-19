@@ -1,6 +1,8 @@
 // js/features/storage.js — Хранилище закладок через GitHub Gist
-// Полностью переработанный интерфейс с анимациями, адаптивностью и оптимистичными обновлениями.
-const BookmarkStorage = (function() {
+// Полная версия с адаптивным интерфейсом и анимациями
+(function() {
+    'use strict';
+
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
     const STORAGE_KEY_PREFIX = 'bookmarks_';
@@ -77,7 +79,6 @@ const BookmarkStorage = (function() {
             );
             return JSON.parse(new TextDecoder().decode(decrypted));
         } catch (e) {
-            console.warn('Password decryption failed', e);
             return null;
         }
     }
@@ -132,12 +133,10 @@ const BookmarkStorage = (function() {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-        } catch (e) {
-            console.warn('Failed to delete gist', e);
-        }
+        } catch (e) {}
     }
 
-    // ==================== УПРАВЛЕНИЕ КЭШЕМ ====================
+    // ==================== КЭШ СЕССИИ ====================
     function saveSessionCache(bookmarks, password) {
         if (password) {
             try {
@@ -171,7 +170,7 @@ const BookmarkStorage = (function() {
         cachedBookmarks = null;
     }
 
-    // ==================== ОСНОВНЫЕ ОПЕРАЦИИ ====================
+    // ==================== ЗАГРУЗКА/СОХРАНЕНИЕ ====================
     async function loadBookmarks(password = null) {
         if (!currentToken) {
             try { return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]'); } catch { return []; }
@@ -216,7 +215,6 @@ const BookmarkStorage = (function() {
                 return { bookmarks: [], needSetup: true };
             }
         } catch (e) {
-            console.warn('Gist load failed', e);
             if (e.message.includes('403')) throw new Error('TOKEN_NO_GIST_SCOPE');
             if (e.message === 'Invalid password') throw e;
             try { return { bookmarks: JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]') }; } catch { return { bookmarks: [] }; }
@@ -249,7 +247,6 @@ const BookmarkStorage = (function() {
                 localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
             }
         } catch (e) {
-            console.warn('Gist save failed, using local', e);
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
         }
     }
@@ -267,9 +264,7 @@ const BookmarkStorage = (function() {
 
     async function resetStorage() {
         if (!currentToken) return;
-        if (gistId) {
-            await deleteGist(gistId, currentToken);
-        }
+        if (gistId) await deleteGist(gistId, currentToken);
         gistId = null;
         masterPassword = null;
         clearSessionCache();
@@ -277,7 +272,7 @@ const BookmarkStorage = (function() {
         localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
 
-    // ==================== OEmbed и обработка ссылок ====================
+    // ==================== OEmbed ====================
     async function fetchEmbedData(url) {
         const services = [
             `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
@@ -342,7 +337,7 @@ const BookmarkStorage = (function() {
             const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
             if (videoMatch) return `${origin}/embed/${videoMatch[1]}`;
             return null;
-        } catch (e) {
+        } catch {
             return null;
         }
     }
@@ -364,7 +359,7 @@ const BookmarkStorage = (function() {
         return false;
     }
 
-    // ==================== ДОБАВЛЕНИЕ ЗАКЛАДКИ ====================
+    // ==================== ДОБАВЛЕНИЕ/УДАЛЕНИЕ ====================
     async function addBookmark(bookmark) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
         if (!masterPassword) {
@@ -494,7 +489,7 @@ const BookmarkStorage = (function() {
         overlay.onclick = (e) => { if (e.target === overlay) closeBtn.click(); };
     }
 
-    // ==================== РЕНДЕР КАРТОЧКИ ====================
+    // ==================== КАРТОЧКА ЗАКЛАДКИ ====================
     function renderBookmarkCard(bookmark, onDelete, onEditSave) {
         const card = document.createElement('div');
         card.className = 'bookmark-card tilt-card';
@@ -599,7 +594,7 @@ const BookmarkStorage = (function() {
         return card;
     }
 
-    // ==================== РЕНДЕР СЕТКИ ====================
+    // ==================== СЕТКА ЗАКЛАДОК ====================
     function renderBookmarksGrid(bookmarks) {
         if (!currentGrid) return;
         let filtered = [...bookmarks];
@@ -651,8 +646,20 @@ const BookmarkStorage = (function() {
     // ==================== МОДАЛЬНОЕ ОКНО ====================
     async function openStorageModal() {
         updateAuthState();
-        if (!currentUser) { UIUtils.showToast('Войдите в аккаунт GitHub', 'error'); return; }
-        if (!currentToken) { UIUtils.showToast('Токен не найден. Перезайдите.', 'error'); return; }
+
+        if (!window.GithubAuth) {
+            setTimeout(openStorageModal, 100);
+            return;
+        }
+
+        if (!currentUser) {
+            UIUtils.showToast('Войдите в аккаунт GitHub', 'error');
+            return;
+        }
+        if (!currentToken) {
+            UIUtils.showToast('Токен не найден. Перезайдите.', 'error');
+            return;
+        }
 
         if (!window.GithubAuth.hasScope('gist')) {
             UIUtils.showToast('Для хранилища нужен scope "gist"', 'error');
@@ -758,7 +765,6 @@ const BookmarkStorage = (function() {
             }
         }
 
-        // Создание модального окна
         const modalHtml = `
             <div class="storage-modal-container">
                 <div class="storage-header">
@@ -802,7 +808,6 @@ const BookmarkStorage = (function() {
         const { modal, closeModal } = UIUtils.createModal('📚 Хранилище', modalHtml, { size: 'full' });
         currentModal = modal;
         
-        // Добавляем стили для хранилища
         const style = document.createElement('style');
         style.textContent = `
             .storage-modal-container {
@@ -1083,24 +1088,36 @@ const BookmarkStorage = (function() {
     }
 
     function updateAuthState() {
-        currentUser = window.GithubAuth?.getCurrentUser();
-        currentToken = window.GithubAuth?.getToken();
-        if (currentUser && currentToken) {
-            const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
-            if (stored) {
-                try { gistId = JSON.parse(stored).gistId; } catch {}
+        if (window.GithubAuth) {
+            currentUser = window.GithubAuth.getCurrentUser();
+            currentToken = window.GithubAuth.getToken();
+            if (currentUser && currentToken) {
+                const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
+                if (stored) {
+                    try { gistId = JSON.parse(stored).gistId; } catch {}
+                }
+            } else {
+                gistId = null;
+                masterPassword = null;
+                clearSessionCache();
             }
-        } else {
-            gistId = null;
-            masterPassword = null;
-            clearSessionCache();
         }
     }
 
-    window.addEventListener('github-login-success', updateAuthState);
-    window.addEventListener('github-logout', updateAuthState);
+    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
+    function init() {
+        updateAuthState();
+        window.addEventListener('github-login-success', updateAuthState);
+        window.addEventListener('github-logout', () => {
+            currentUser = null;
+            currentToken = null;
+            gistId = null;
+            masterPassword = null;
+            clearSessionCache();
+        });
+    }
 
-    return {
+    const API = {
         openStorageModal,
         addBookmark,
         loadBookmarks,
@@ -1108,6 +1125,9 @@ const BookmarkStorage = (function() {
         changeMasterPassword,
         resetStorage
     };
-})();
 
-window.BookmarkStorage = BookmarkStorage;
+    if (!window.BookmarkStorage) {
+        window.BookmarkStorage = API;
+        init();
+    }
+})();
