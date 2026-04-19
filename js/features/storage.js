@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist с восстановлением и полным UI
+// js/features/storage.js — Хранилище закладок через GitHub Gist
 (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -11,13 +11,14 @@
     let currentToken = null;
     let gistId = null;
 
-    // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+    // ==================== УТИЛИТЫ ====================
     function toBase64(str) {
         const bytes = new TextEncoder().encode(str);
         let binary = '';
         for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
         return btoa(binary);
     }
+
     function fromBase64(base64) {
         const binary = atob(base64);
         const bytes = new Uint8Array(binary.length);
@@ -25,44 +26,7 @@
         return new TextDecoder().decode(bytes);
     }
 
-    // Шифрование данных токеном GitHub (основной слой для текущих закладок)
-    function getEncryptionKey() {
-        if (!currentToken) return 'default-key';
-        let hash = 0;
-        for (let i = 0; i < currentToken.length; i++) {
-            hash = ((hash << 5) - hash) + currentToken.charCodeAt(i);
-            hash |= 0;
-        }
-        return hash.toString(16);
-    }
-    function encryptWithToken(data) {
-        const key = getEncryptionKey();
-        const json = JSON.stringify(data);
-        let result = '';
-        for (let i = 0; i < json.length; i++) {
-            const charCode = json.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-            result += String.fromCharCode(charCode);
-        }
-        return toBase64(result);
-    }
-    function decryptWithToken(encrypted) {
-        if (!encrypted) return null;
-        try {
-            const key = getEncryptionKey();
-            const decoded = fromBase64(encrypted);
-            let result = '';
-            for (let i = 0; i < decoded.length; i++) {
-                const charCode = decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-                result += String.fromCharCode(charCode);
-            }
-            return JSON.parse(result);
-        } catch (e) {
-            console.warn('Token decryption failed', e);
-            return null;
-        }
-    }
-
-    // Функции для работы с мастер-паролем (Web Crypto API)
+    // ==================== КРИПТОГРАФИЯ НА ОСНОВЕ ПАРОЛЯ (Web Crypto API) ====================
     async function deriveKeyFromPassword(password, salt) {
         const enc = new TextEncoder();
         const keyMaterial = await crypto.subtle.importKey(
@@ -110,12 +74,12 @@
         }
     }
 
-    // Работа с Gist через GitHub API
+    // ==================== РАБОТА С GIST (только API, без шифрования) ====================
     async function fetchGist(gistId, token) {
         const url = `https://api.github.com/gists/${gistId}`;
         const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
         if (!resp.ok) {
-            if (resp.status === 404) return null; // Gist не найден
+            if (resp.status === 404) return null;
             throw new Error(`Gist fetch failed: ${resp.status}`);
         }
         return resp.json();
@@ -165,8 +129,10 @@
         }
     }
 
-    // ==================== ОСНОВНЫЕ ФУНКЦИИ РАБОТЫ С ХРАНИЛИЩЕМ ====================
-    async function loadBookmarks() {
+    // ==================== ОСНОВНЫЕ ФУНКЦИИ ХРАНИЛИЩА ====================
+    // Загружает закладки: если есть gist, пытается расшифровать с паролем.
+    // Если пароль не передан, возвращает объект с признаком необходимости ввода пароля.
+    async function loadBookmarks(password = null) {
         if (!currentToken) {
             try { return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]'); } catch { return []; }
         }
@@ -176,71 +142,68 @@
                 if (stored) gistId = JSON.parse(stored).gistId;
             }
             if (!gistId) return { bookmarks: [], needSetup: true };
-            
+
             const gist = await fetchGist(gistId, currentToken);
             if (!gist) return { bookmarks: [], needSetup: true };
-            
+
             const file = gist.files[GIST_FILENAME];
             if (!file) return { bookmarks: [], needSetup: true };
-            
-            // Пытаемся расшифровать токеном
-            const decrypted = decryptWithToken(file.content);
-            if (decrypted && decrypted.bookmarks) {
-                return { bookmarks: decrypted.bookmarks };
-            }
-            
-            // Если не получилось, проверяем, есть ли recovery (может быть в поле recovery внутри зашифрованного токеном объекта)
-            if (decrypted && decrypted.recovery) {
-                return { recoveryNeeded: true, recoveryData: decrypted.recovery };
-            }
-            
-            // Возможно, файл вообще не зашифрован токеном (устаревший формат) или повреждён
-            // Пробуем распарсить как обычный JSON (для обратной совместимости)
+
+            let payload;
             try {
-                const raw = JSON.parse(file.content);
-                if (raw.recovery) return { recoveryNeeded: true, recoveryData: raw.recovery };
-                if (raw.bookmarks) return { bookmarks: raw.bookmarks };
-            } catch {}
-            
-            return { bookmarks: [], needSetup: true };
+                payload = JSON.parse(file.content);
+            } catch {
+                // старый формат? пробуем как есть
+                payload = { encrypted: file.content };
+            }
+
+            // Если есть поле encryptedBookmarks, значит данные зашифрованы мастер-паролем
+            if (payload.encryptedBookmarks) {
+                if (!password) {
+                    return { passwordRequired: true, user: payload.user, version: payload.version };
+                }
+                const bookmarks = await decryptWithPassword(payload.encryptedBookmarks, password);
+                if (!bookmarks) throw new Error('Invalid password');
+                return { bookmarks };
+            } else if (payload.bookmarks) {
+                // Устаревший формат без шифрования (или старый recovery)
+                // Для совместимости возвращаем как есть, но предложим установить пароль.
+                return { bookmarks: payload.bookmarks, legacy: true };
+            } else {
+                return { bookmarks: [], needSetup: true };
+            }
         } catch (e) {
             console.warn('Gist load failed', e);
             if (e.message.includes('403')) {
                 throw new Error('TOKEN_NO_GIST_SCOPE');
             }
+            if (e.message === 'Invalid password') throw e;
             try { return { bookmarks: JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]') }; } catch { return { bookmarks: [] }; }
         }
     }
 
-    async function saveBookmarks(bookmarks) {
+    // Сохраняет закладки, шифруя их переданным паролем.
+    async function saveBookmarks(bookmarks, password) {
         if (!currentToken) {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
             return;
         }
-        // Получаем текущий gist, чтобы сохранить recovery если есть
-        let recoveryData = null;
-        if (gistId) {
-            try {
-                const gist = await fetchGist(gistId, currentToken);
-                if (gist && gist.files[GIST_FILENAME]) {
-                    const content = gist.files[GIST_FILENAME].content;
-                    const decrypted = decryptWithToken(content);
-                    if (decrypted && decrypted.recovery) {
-                        recoveryData = decrypted.recovery;
-                    }
-                }
-            } catch {}
-        }
-        
-        const payload = { bookmarks };
-        if (recoveryData) payload.recovery = recoveryData;
-        
-        const encrypted = encryptWithToken(payload);
+        if (!password) throw new Error('Master password is required to save');
+
+        const encrypted = await encryptWithPassword(bookmarks, password);
+        const payload = {
+            version: 2,
+            user: currentUser,
+            encryptedBookmarks: encrypted,
+            timestamp: Date.now()
+        };
+        const content = JSON.stringify(payload);
+
         try {
             if (gistId) {
-                await updateGist(gistId, encrypted, currentToken);
+                await updateGist(gistId, content, currentToken);
             } else {
-                gistId = await createGist(encrypted, currentToken);
+                gistId = await createGist(content, currentToken);
                 localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
             }
         } catch (e) {
@@ -249,58 +212,18 @@
         }
     }
 
-    async function setupRecovery(masterPassword) {
+    // Установка/смена мастер-пароля
+    async function changeMasterPassword(oldPassword, newPassword) {
         if (!currentToken || !gistId) throw new Error('No active storage');
-        const gist = await fetchGist(gistId, currentToken);
-        if (!gist) throw new Error('Gist not found');
-        const file = gist.files[GIST_FILENAME];
-        if (!file) throw new Error('No data to protect');
-        const currentData = decryptWithToken(file.content);
-        const bookmarks = currentData?.bookmarks || [];
-        const encryptedBookmarks = await encryptWithPassword(bookmarks, masterPassword);
-        const recoveryPayload = {
-            version: 1,
-            user: currentUser,
-            encryptedBookmarks,
-            timestamp: Date.now()
-        };
-        const newPayload = { bookmarks, recovery: recoveryPayload };
-        const encrypted = encryptWithToken(newPayload);
-        await updateGist(gistId, encrypted, currentToken);
+        const result = await loadBookmarks(oldPassword);
+        if (result.passwordRequired) throw new Error('Old password required');
+        if (result.needSetup) throw new Error('Storage not initialized');
+        const bookmarks = result.bookmarks || [];
+        await saveBookmarks(bookmarks, newPassword);
         return true;
     }
 
-    async function recoverWithPassword(masterPassword) {
-        if (!currentToken || !gistId) throw new Error('No storage to recover');
-        const gist = await fetchGist(gistId, currentToken);
-        if (!gist) throw new Error('Gist not found');
-        const file = gist.files[GIST_FILENAME];
-        if (!file) throw new Error('No data found');
-        
-        let recovery;
-        // Пробуем расшифровать токеном
-        const decrypted = decryptWithToken(file.content);
-        if (decrypted && decrypted.recovery) {
-            recovery = decrypted.recovery;
-        } else {
-            // Может быть старый формат без шифрования токеном
-            try {
-                const raw = JSON.parse(file.content);
-                if (raw.recovery) recovery = raw.recovery;
-            } catch {}
-        }
-        if (!recovery) throw new Error('No recovery data available');
-        
-        const bookmarks = await decryptWithPassword(recovery.encryptedBookmarks, masterPassword);
-        if (!bookmarks) throw new Error('Invalid master password');
-        
-        // Сохраняем расшифрованные данные обратно в Gist
-        const newPayload = { bookmarks, recovery };
-        const encrypted = encryptWithToken(newPayload);
-        await updateGist(gistId, encrypted, currentToken);
-        return bookmarks;
-    }
-
+    // Сброс хранилища (удаление Gist и локальных данных)
     async function resetStorage() {
         if (!currentToken) return;
         if (gistId) {
@@ -399,7 +322,8 @@
         return false;
     }
 
-    async function addBookmark(bookmark) {
+    // ==================== ДОБАВЛЕНИЕ/УДАЛЕНИЕ ЗАКЛАДОК ====================
+    async function addBookmark(bookmark, password) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
         let finalUrl = bookmark.url;
         let embedUrl = null;
@@ -436,9 +360,10 @@
             }
         }
 
-        const bookmarks = await loadBookmarks();
-        const bookmarksArray = bookmarks.bookmarks || bookmarks;
-        if (bookmarksArray && bookmarksArray.some(b => b.url === finalUrl)) {
+        const result = await loadBookmarks(password);
+        if (result.passwordRequired) throw new Error('Password required');
+        const bookmarksArray = result.bookmarks || [];
+        if (bookmarksArray.some(b => b.url === finalUrl)) {
             UIUtils.showToast('Уже в избранном', 'info');
             throw new Error('duplicate');
         }
@@ -450,18 +375,18 @@
         if (thumbnail) bookmark.thumbnail = thumbnail;
         if (finalTitle) bookmark.title = finalTitle;
         if (postType) bookmark.postType = postType;
-        
-        const newBookmarks = bookmarksArray ? [...bookmarksArray, bookmark] : [bookmark];
-        await saveBookmarks(newBookmarks);
+
+        const newBookmarks = [...bookmarksArray, bookmark];
+        await saveBookmarks(newBookmarks, password);
         return bookmark;
     }
 
-    async function removeBookmark(bookmarkId) {
-        let bookmarks = await loadBookmarks();
-        const bookmarksArray = bookmarks.bookmarks || bookmarks;
-        if (!bookmarksArray) return;
+    async function removeBookmark(bookmarkId, password) {
+        const result = await loadBookmarks(password);
+        if (result.passwordRequired) throw new Error('Password required');
+        const bookmarksArray = result.bookmarks || [];
         const filtered = bookmarksArray.filter(b => b.id !== bookmarkId);
-        await saveBookmarks(filtered);
+        await saveBookmarks(filtered, password);
     }
 
     // ==================== ПОЛНОЭКРАННЫЙ РЕЖИМ ДЛЯ ВИДЕО ====================
@@ -618,21 +543,23 @@
         }
 
         let currentBookmarks = [];
+        let masterPassword = null;
         let sortOrder = 'new';
         let category = 'all';
         let needSetup = false;
-        let recoveryNeeded = false;
-        let recoveryData = null;
+        let passwordRequired = false;
+        let legacy = false;
 
+        // Первая попытка загрузить без пароля (узнать состояние)
         try {
             const result = await loadBookmarks();
-            if (result.recoveryNeeded) {
-                recoveryNeeded = true;
-                recoveryData = result.recoveryData;
+            if (result.passwordRequired) {
+                passwordRequired = true;
             } else if (result.needSetup) {
                 needSetup = true;
             } else {
                 currentBookmarks = result.bookmarks || [];
+                if (result.legacy) legacy = true;
             }
         } catch (e) {
             if (e.message === 'TOKEN_NO_GIST_SCOPE') {
@@ -643,55 +570,88 @@
             return;
         }
 
-        if (recoveryNeeded) {
-            const password = await new Promise(resolve => {
-                const pwd = prompt('Хранилище защищено мастер-паролем. Введите пароль для восстановления:');
-                resolve(pwd);
+        // Если требуется пароль, запрашиваем его
+        if (passwordRequired) {
+            const pwd = await new Promise(resolve => {
+                const input = prompt('Введите мастер-пароль для доступа к хранилищу:');
+                resolve(input);
             });
-            if (!password) {
-                UIUtils.showToast('Восстановление отменено', 'info');
+            if (!pwd) {
+                UIUtils.showToast('Доступ к хранилищу отменён', 'info');
                 return;
             }
             try {
-                const bookmarks = await recoverWithPassword(password);
-                currentBookmarks = bookmarks;
+                const result = await loadBookmarks(pwd);
+                if (result.passwordRequired) throw new Error('Invalid password');
+                currentBookmarks = result.bookmarks || [];
+                masterPassword = pwd;
+                passwordRequired = false;
                 needSetup = false;
-                recoveryNeeded = false;
-                UIUtils.showToast('Хранилище успешно восстановлено!', 'success');
             } catch (err) {
-                UIUtils.showToast('Неверный пароль или ошибка восстановления', 'error');
-                if (confirm('Не удалось восстановить хранилище. Сбросить и создать новое?')) {
+                UIUtils.showToast('Неверный пароль', 'error');
+                if (confirm('Не удалось расшифровать хранилище. Сбросить и создать новое? (Все данные будут потеряны)')) {
                     await resetStorage();
                     needSetup = true;
-                    recoveryNeeded = false;
+                    passwordRequired = false;
                 } else {
                     return;
                 }
             }
         }
 
+        // Если хранилище не создано (needSetup)
         if (needSetup) {
-            const password = await new Promise(resolve => {
-                const pwd = prompt('Создайте мастер-пароль для восстановления хранилища (запомните его! Минимум 4 символа):');
-                resolve(pwd);
+            const pwd = await new Promise(resolve => {
+                const input = prompt('Создайте мастер-пароль для защиты хранилища (запомните его! Минимум 4 символа):');
+                resolve(input);
             });
-            if (!password || password.length < 4) {
+            if (!pwd || pwd.length < 4) {
                 UIUtils.showToast('Пароль слишком короткий. Хранилище не будет создано.', 'error');
                 return;
             }
+            masterPassword = pwd;
+            currentBookmarks = [];
             try {
-                const encrypted = encryptWithToken({ bookmarks: [] });
-                gistId = await createGist(encrypted, currentToken);
-                localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
-                await setupRecovery(password);
-                currentBookmarks = [];
+                await saveBookmarks(currentBookmarks, masterPassword);
                 UIUtils.showToast('Хранилище создано и защищено паролем!', 'success');
             } catch (err) {
                 UIUtils.showToast('Ошибка создания хранилища: ' + err.message, 'error');
                 return;
             }
+        } else if (legacy) {
+            // Устаревший формат без шифрования — предлагаем установить пароль
+            UIUtils.showToast('Обнаружено старое хранилище. Рекомендуется установить мастер-пароль.', 'warning', 6000);
+            // Можно сразу предложить
+            const setPwd = confirm('Хотите установить мастер-пароль для защиты хранилища?');
+            if (setPwd) {
+                const newPwd = prompt('Введите новый мастер-пароль (минимум 4 символа):');
+                if (newPwd && newPwd.length >= 4) {
+                    try {
+                        await saveBookmarks(currentBookmarks, newPwd);
+                        masterPassword = newPwd;
+                        UIUtils.showToast('Пароль установлен!', 'success');
+                    } catch (e) {
+                        UIUtils.showToast('Ошибка установки пароля: ' + e.message, 'error');
+                    }
+                }
+            }
         }
 
+        // Функция для сохранения (требует пароль)
+        const saveWithPassword = async (bookmarks) => {
+            if (!masterPassword) {
+                // Если пароль не задан (например, legacy без пароля), запросить
+                const pwd = prompt('Введите мастер-пароль для сохранения изменений:');
+                if (!pwd) throw new Error('Password required');
+                // Проверим, что пароль подходит
+                const test = await loadBookmarks(pwd);
+                if (test.passwordRequired) throw new Error('Invalid password');
+                masterPassword = pwd;
+            }
+            await saveBookmarks(bookmarks, masterPassword);
+        };
+
+        // ===== Построение UI =====
         const contentHtml = `
             <div style="display:flex; flex-direction:column; gap:16px;">
                 <div class="storage-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
@@ -708,7 +668,7 @@
                         </div>
                     </div>
                     <div style="display:flex; gap:6px; flex-shrink:0;">
-                        <button class="button small" id="setup-recovery-btn"><i class="fas fa-shield-alt"></i> Восстановление</button>
+                        <button class="button small" id="change-password-btn"><i class="fas fa-key"></i> Сменить пароль</button>
                         <button class="button small" id="reset-storage-btn" style="background:#f44336;"><i class="fas fa-trash-alt"></i> Сброс</button>
                         <button class="button small" id="toggle-add-btn"><i class="fas fa-plus"></i> Добавить</button>
                     </div>
@@ -726,7 +686,7 @@
 
         const { modal, closeModal } = UIUtils.createModal('Хранилище', contentHtml, { size: 'full' });
         modal.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        
+
         const grid = modal.querySelector('#bookmarks-grid');
         const orderBtns = modal.querySelectorAll('.access-switch-btn');
         const catBtns = modal.querySelectorAll('.cat-btn');
@@ -735,7 +695,7 @@
         const newUrlInput = modal.querySelector('#new-url');
         const newTitleInput = modal.querySelector('#new-title');
         const confirmAddBtn = modal.querySelector('#confirm-add');
-        const setupRecoveryBtn = modal.querySelector('#setup-recovery-btn');
+        const changePasswordBtn = modal.querySelector('#change-password-btn');
         const resetStorageBtn = modal.querySelector('#reset-storage-btn');
 
         function renderBookmarks() {
@@ -761,15 +721,15 @@
                         currentBookmarks.splice(index, 1);
                         renderBookmarks();
                         try {
-                            await removeBookmark(id);
+                            await saveWithPassword(currentBookmarks);
                         } catch (e) {
-                            UIUtils.showToast('Ошибка удаления', 'error');
+                            UIUtils.showToast('Ошибка сохранения: ' + e.message, 'error');
                         }
                     },
                     async (updatedBookmark) => {
                         const index = currentBookmarks.findIndex(b => b.id === updatedBookmark.id);
                         if (index !== -1) currentBookmarks[index] = updatedBookmark;
-                        await saveBookmarks(currentBookmarks);
+                        await saveWithPassword(currentBookmarks);
                         renderBookmarks();
                     }
                 );
@@ -796,17 +756,20 @@
             });
         });
 
-        setupRecoveryBtn.addEventListener('click', async () => {
-            const masterPassword = prompt('Введите новый мастер-пароль для восстановления (запомните его!):');
-            if (masterPassword && masterPassword.length >= 4) {
-                try {
-                    await setupRecovery(masterPassword);
-                    UIUtils.showToast('Восстановление обновлено!', 'success');
-                } catch (err) {
-                    UIUtils.showToast('Ошибка настройки: ' + err.message, 'error');
-                }
-            } else {
+        changePasswordBtn.addEventListener('click', async () => {
+            const oldPwd = masterPassword || prompt('Введите текущий мастер-пароль:');
+            if (!oldPwd) return;
+            const newPwd = prompt('Введите новый мастер-пароль (минимум 4 символа):');
+            if (!newPwd || newPwd.length < 4) {
                 UIUtils.showToast('Пароль должен быть не менее 4 символов', 'warning');
+                return;
+            }
+            try {
+                await changeMasterPassword(oldPwd, newPwd);
+                masterPassword = newPwd;
+                UIUtils.showToast('Пароль успешно изменён!', 'success');
+            } catch (err) {
+                UIUtils.showToast('Ошибка смены пароля: ' + err.message, 'error');
             }
         });
 
@@ -815,6 +778,7 @@
                 try {
                     await resetStorage();
                     currentBookmarks = [];
+                    masterPassword = null;
                     renderBookmarks();
                     UIUtils.showToast('Хранилище сброшено', 'success');
                     closeModal();
@@ -866,7 +830,7 @@
             currentBookmarks.unshift(optimisticBookmark);
             renderBookmarks();
             try {
-                const final = await addBookmark({ url, title });
+                const final = await addBookmark({ url, title }, masterPassword);
                 const index = currentBookmarks.findIndex(b => b.id === optimisticBookmark.id);
                 if (index !== -1) currentBookmarks[index] = final;
                 renderBookmarks();
@@ -915,8 +879,7 @@
         addBookmark,
         loadBookmarks,
         removeBookmark,
-        setupRecovery,
-        recoverWithPassword,
+        changeMasterPassword,
         resetStorage
     };
 
