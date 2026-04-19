@@ -39,8 +39,9 @@
                 const user = JSON.parse(cachedUser);
                 currentScopes = cachedScopes ? JSON.parse(cachedScopes) : [];
                 renderProfile(user, savedToken);
+                // Админ-скрипт больше не нужен, но оставим вызов для совместимости
                 if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) {
-                    loadAdminScript();
+                    // Ничего не делаем, админ-кнопки добавляются в соответствующих модулях
                 }
             } catch {
                 validateAndShowProfile(savedToken);
@@ -71,13 +72,8 @@
         });
     }
 
-    function loadAdminScript() {
-        if (document.querySelector('script[src="js/features/admin-news.js"]')) return;
-        const script = document.createElement('script');
-        script.src = 'js/features/admin-news.js';
-        script.defer = true;
-        document.body.appendChild(script);
-    }
+    // Устаревшая функция, оставлена для совместимости
+    function loadAdminScript() {}
 
     function createModal() {
         modal = document.createElement('div');
@@ -206,13 +202,11 @@
                 }
             }
 
-            // Получаем список scopes из заголовка X-OAuth-Scopes
             const scopesHeader = userResponse.headers.get('X-OAuth-Scopes');
             const scopes = scopesHeader ? scopesHeader.split(',').map(s => s.trim()) : [];
 
             const userData = await userResponse.json();
 
-            // Проверяем доступ к репозиторию (если есть repo scope)
             let repoAccess = false;
             if (scopes.includes('repo')) {
                 try {
@@ -233,6 +227,8 @@
             }
 
             currentScopes = scopes;
+            
+            // Диспатчим событие с актуальными scopes
             window.dispatchEvent(new CustomEvent('github-login-success', { 
                 detail: { 
                     login: userData.login,
@@ -242,9 +238,6 @@
             }));
 
             renderProfile(userData, token);
-            if (CONFIG.ALLOWED_AUTHORS.includes(userData.login)) {
-                loadAdminScript();
-            }
 
             modal.classList.remove('active');
             tokenInput.value = '';
@@ -253,13 +246,16 @@
             tokenToggle.setAttribute('aria-label', 'Показать токен');
             clearModalError();
 
-            // Показываем предупреждение, если не хватает важных scope
             const missingScopes = [];
             if (!scopes.includes('repo')) missingScopes.push('repo (посты и комментарии)');
             if (!scopes.includes('gist')) missingScopes.push('gist (хранилище закладок)');
             if (missingScopes.length > 0) {
                 UIUtils.showToast(`Внимание: у токена отсутствуют разрешения: ${missingScopes.join(', ')}. Некоторые функции будут недоступны.`, 'warning', 8000);
             }
+
+            // Принудительно обновляем интерфейсы, которые могли не успеть подписаться
+            if (window.refreshNewsFeed) window.refreshNewsFeed();
+            if (window.refreshGameUpdates && window.currentGame) window.refreshGameUpdates(window.currentGame);
 
         } catch (error) {
             clearTimeout(timeoutId);
@@ -297,7 +293,6 @@
         const avatarUrl = user.avatar_url || 'images/default-avatar.webp';
         const login = user.login || 'User';
 
-        // Определяем статус scope для отображения иконок
         const hasRepo = currentScopes.includes('repo');
         const hasGist = currentScopes.includes('gist');
         const scopeStatus = [];
@@ -400,7 +395,7 @@
                 break;
             case 'storage':
                 if (!scopes.includes('gist')) {
-                    UIUtils.showToast('Для использования хранилища необходим токен с разрешением "gist". Пожалуйста, создайте новый токен с этим scope.', 'error', 8000);
+                    UIUtils.showToast('Для использования хранилища необходим токен с разрешением "gist".', 'error', 8000);
                     return;
                 }
                 if (window.BookmarkStorage) {

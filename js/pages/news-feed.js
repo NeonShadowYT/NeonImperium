@@ -276,7 +276,6 @@
         container.innerHTML = '';
         container.appendChild(grid);
 
-        // Админ-кнопка добавления новости (только если есть repo)
         const header = document.querySelector('.news-header');
         if (header) {
             const existingBtn = header.querySelector('.admin-news-btn');

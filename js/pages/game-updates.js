@@ -13,6 +13,7 @@
         const container = document.getElementById('game-updates');
         if (container && container.dataset.game) {
             currentGame = container.dataset.game;
+            window.currentGame = currentGame;
             loadGameUpdates(container, currentGame);
         }
 
@@ -47,6 +48,19 @@
             }
             const card = createUpdateCard(newPost);
             grid.insertBefore(card, grid.firstChild);
+        });
+
+        window.addEventListener('github-login-success', () => {
+            if (currentGame) {
+                const container = document.getElementById('game-updates');
+                if (container) loadGameUpdates(container, currentGame);
+            }
+        });
+        window.addEventListener('github-logout', () => {
+            if (currentGame) {
+                const container = document.getElementById('game-updates');
+                if (container) loadGameUpdates(container, currentGame);
+            }
         });
     });
 
