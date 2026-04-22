@@ -499,16 +499,8 @@
             navigator.clipboard.writeText(postUrl).then(() => UIUtils.showToast('Ссылка скопирована', 'success')).catch(() => UIUtils.showToast('Ошибка копирования', 'error'));
         });
 
-        actionsContainer.querySelector('.bookmark-post')?.addEventListener('click', async (e) => {
+        actionsContainer.querySelector('.bookmark-post')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (!window.BookmarkStorage) {
-                try {
-                    await import('../features/storage.js');
-                } catch (err) {
-                    UIUtils.showToast('Ошибка загрузки хранилища', 'error');
-                    return;
-                }
-            }
             if (window.BookmarkStorage) {
                 window.BookmarkStorage.addBookmark({
                     url: postUrl,

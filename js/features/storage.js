@@ -1,8 +1,11 @@
-// js/features/storage.js — Хранилище закладок (v4 — стабильная версия)
+// js/features/storage.js — Хранилище закладок через GitHub Gist
+// Полная версия с адаптивным интерфейсом и анимациями
 (function() {
     'use strict';
 
-    // ==================== КОНФИГУРАЦИЯ ====================
+    // Защита от повторной загрузки
+    if (window.BookmarkStorage) return;
+
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
     const STORAGE_KEY_PREFIX = 'bookmarks_';
@@ -10,14 +13,11 @@
     const SESSION_CACHE_KEY = 'bookmarks_session_cache';
     const RECOVERY_SALT = new TextEncoder().encode('neon-imperium-recovery-salt-v1');
 
-    // Состояние модуля
     let currentUser = null;
     let currentToken = null;
     let gistId = null;
     let masterPassword = null;
     let cachedBookmarks = null;
-    
-    // UI состояние
     let currentModal = null;
     let currentGrid = null;
     let currentBookmarks = [];
@@ -25,105 +25,165 @@
     let category = 'all';
     let addFormVisible = false;
 
-    // ==================== УТИЛИТЫ (Base64, Crypto) ====================
-    const Base64 = {
-        encode: (str) => btoa(String.fromCharCode(...new TextEncoder().encode(str))),
-        decode: (base64) => new TextDecoder().decode(Uint8Array.from(atob(base64), c => c.charCodeAt(0)))
-    };
+    // ==================== УТИЛИТЫ ====================
+    function toBase64(str) {
+        const bytes = new TextEncoder().encode(str);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        return btoa(binary);
+    }
 
-    const Crypto = {
-        async deriveKey(password, salt) {
-            const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
-            return crypto.subtle.deriveKey(
-                { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-                keyMaterial,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['encrypt', 'decrypt']
+    function fromBase64(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return new TextDecoder().decode(bytes);
+    }
+
+    async function deriveKeyFromPassword(password, salt) {
+        const enc = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey(
+            'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']
+        );
+        return crypto.subtle.deriveKey(
+            { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+            keyMaterial,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+    }
+
+    async function encryptWithPassword(data, password) {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const key = await deriveKeyFromPassword(password, RECOVERY_SALT);
+        const enc = new TextEncoder();
+        const encrypted = await crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv },
+            key,
+            enc.encode(JSON.stringify(data))
+        );
+        const combined = new Uint8Array(iv.length + encrypted.byteLength);
+        combined.set(iv);
+        combined.set(new Uint8Array(encrypted), iv.length);
+        return toBase64(String.fromCharCode(...combined));
+    }
+
+    async function decryptWithPassword(encryptedBase64, password) {
+        try {
+            const combined = new Uint8Array(fromBase64(encryptedBase64).split('').map(c => c.charCodeAt(0)));
+            const iv = combined.slice(0, 12);
+            const encryptedData = combined.slice(12);
+            const key = await deriveKeyFromPassword(password, RECOVERY_SALT);
+            const decrypted = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv },
+                key,
+                encryptedData
             );
-        },
-        async encrypt(data, password) {
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const key = await this.deriveKey(password, RECOVERY_SALT);
-            const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(data)));
-            const combined = new Uint8Array(iv.length + encrypted.byteLength);
-            combined.set(iv);
-            combined.set(new Uint8Array(encrypted), iv.length);
-            return Base64.encode(String.fromCharCode(...combined));
-        },
-        async decrypt(encryptedBase64, password) {
-            try {
-                const combined = Uint8Array.from(Base64.decode(encryptedBase64), c => c.charCodeAt(0));
-                const iv = combined.slice(0, 12);
-                const data = combined.slice(12);
-                const key = await this.deriveKey(password, RECOVERY_SALT);
-                const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
-                return JSON.parse(new TextDecoder().decode(decrypted));
-            } catch { return null; }
+            return JSON.parse(new TextDecoder().decode(decrypted));
+        } catch (e) {
+            return null;
         }
-    };
+    }
 
     // ==================== GIST API ====================
-    const GistAPI = {
-        async fetch(gistId, token) {
-            const resp = await fetch(`https://api.github.com/gists/${gistId}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (!resp.ok) return resp.status === 404 ? null : Promise.reject(new Error(`Gist fetch: ${resp.status}`));
-            return resp.json();
-        },
-        async update(gistId, content, token) {
-            const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
-                method: 'PATCH',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ files: { [GIST_FILENAME]: { content } } })
-            });
-            if (!resp.ok) throw new Error(`Gist update: ${resp.status}`);
-            return resp.json();
-        },
-        async create(content, token) {
-            const resp = await fetch('https://api.github.com/gists', {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ description: GIST_DESCRIPTION, public: false, files: { [GIST_FILENAME]: { content } } })
-            });
-            if (!resp.ok) throw new Error(`Gist create: ${resp.status}`);
-            const gist = await resp.json();
-            return gist.id;
-        },
-        async delete(gistId, token) {
-            try { await fetch(`https://api.github.com/gists/${gistId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); } catch {}
+    async function fetchGist(gistId, token) {
+        const url = `https://api.github.com/gists/${gistId}`;
+        const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!resp.ok) {
+            if (resp.status === 404) return null;
+            throw new Error(`Gist fetch failed: ${resp.status}`);
         }
-    };
+        return resp.json();
+    }
+
+    async function updateGist(gistId, content, token) {
+        const url = `https://api.github.com/gists/${gistId}`;
+        const resp = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ files: { [GIST_FILENAME]: { content } } })
+        });
+        if (!resp.ok) throw new Error(`Gist update failed: ${resp.status}`);
+        return resp.json();
+    }
+
+    async function createGist(content, token) {
+        const url = 'https://api.github.com/gists';
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                description: GIST_DESCRIPTION,
+                public: false,
+                files: { [GIST_FILENAME]: { content } }
+            })
+        });
+        if (!resp.ok) throw new Error(`Gist create failed: ${resp.status}`);
+        const gist = await resp.json();
+        return gist.id;
+    }
+
+    async function deleteGist(gistId, token) {
+        try {
+            await fetch(`https://api.github.com/gists/${gistId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) {}
+    }
 
     // ==================== КЭШ СЕССИИ ====================
-    const SessionCache = {
-        save(bookmarks, password) {
-            if (!password) return;
-            try { sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ user: currentUser, bookmarks, timestamp: Date.now() })); } catch {}
-            cachedBookmarks = bookmarks;
-        },
-        load() {
-            if (cachedBookmarks) return cachedBookmarks;
+    function saveSessionCache(bookmarks, password) {
+        if (password) {
             try {
-                const data = JSON.parse(sessionStorage.getItem(SESSION_CACHE_KEY));
-                if (data?.user === currentUser) { cachedBookmarks = data.bookmarks; return data.bookmarks; }
-            } catch {}
-            return null;
-        },
-        clear() {
-            sessionStorage.removeItem(SESSION_CACHE_KEY);
-            cachedBookmarks = null;
+                sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({
+                    user: currentUser,
+                    bookmarks: bookmarks,
+                    timestamp: Date.now()
+                }));
+            } catch (e) {}
         }
-    };
+        cachedBookmarks = bookmarks;
+    }
+
+    function loadSessionCache() {
+        if (cachedBookmarks) return cachedBookmarks;
+        try {
+            const cached = sessionStorage.getItem(SESSION_CACHE_KEY);
+            if (cached) {
+                const data = JSON.parse(cached);
+                if (data.user === currentUser) {
+                    cachedBookmarks = data.bookmarks;
+                    return data.bookmarks;
+                }
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function clearSessionCache() {
+        sessionStorage.removeItem(SESSION_CACHE_KEY);
+        cachedBookmarks = null;
+    }
 
     // ==================== ЗАГРУЗКА/СОХРАНЕНИЕ ====================
     async function loadBookmarks(password = null) {
         if (!currentToken) {
             try { return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]'); } catch { return []; }
         }
+
         if (!password) {
-            const cached = SessionCache.load();
-            if (cached) return { bookmarks: cached };
+            const sessionCache = loadSessionCache();
+            if (sessionCache) return { bookmarks: sessionCache };
         }
+
         try {
             if (!gistId) {
                 const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
@@ -131,23 +191,32 @@
             }
             if (!gistId) return { bookmarks: [], needSetup: true };
 
-            const gist = await GistAPI.fetch(gistId, currentToken);
+            const gist = await fetchGist(gistId, currentToken);
             if (!gist) return { bookmarks: [], needSetup: true };
-            const file = gist.files?.[GIST_FILENAME];
+
+            const file = gist.files[GIST_FILENAME];
             if (!file) return { bookmarks: [], needSetup: true };
 
             let payload;
-            try { payload = JSON.parse(file.content); } catch { payload = { encryptedBookmarks: file.content }; }
+            try {
+                payload = JSON.parse(file.content);
+            } catch {
+                payload = { encryptedBookmarks: file.content };
+            }
 
             if (payload.encryptedBookmarks) {
-                if (!password) return { passwordRequired: true, user: payload.user };
-                const bookmarks = await Crypto.decrypt(payload.encryptedBookmarks, password);
+                if (!password) {
+                    return { passwordRequired: true, user: payload.user, version: payload.version };
+                }
+                const bookmarks = await decryptWithPassword(payload.encryptedBookmarks, password);
                 if (!bookmarks) throw new Error('Invalid password');
-                SessionCache.save(bookmarks, password);
+                saveSessionCache(bookmarks, password);
                 return { bookmarks };
+            } else if (payload.bookmarks) {
+                return { bookmarks: payload.bookmarks, legacy: true };
+            } else {
+                return { bookmarks: [], needSetup: true };
             }
-            if (payload.bookmarks) return { bookmarks: payload.bookmarks, legacy: true };
-            return { bookmarks: [], needSetup: true };
         } catch (e) {
             if (e.message.includes('403')) throw new Error('TOKEN_NO_GIST_SCOPE');
             if (e.message === 'Invalid password') throw e;
@@ -156,16 +225,28 @@
     }
 
     async function saveBookmarks(bookmarks, password = masterPassword) {
-        if (!currentToken) { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks)); return; }
-        if (!password) throw new Error('Master password required');
-        SessionCache.save(bookmarks, password);
-        const encrypted = await Crypto.encrypt(bookmarks, password);
-        const payload = { version: 4, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
+        if (!currentToken) {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
+            return;
+        }
+        if (!password) throw new Error('Master password is required');
+
+        saveSessionCache(bookmarks, password);
+
+        const encrypted = await encryptWithPassword(bookmarks, password);
+        const payload = {
+            version: 2,
+            user: currentUser,
+            encryptedBookmarks: encrypted,
+            timestamp: Date.now()
+        };
         const content = JSON.stringify(payload);
+
         try {
-            if (gistId) await GistAPI.update(gistId, content, currentToken);
-            else {
-                gistId = await GistAPI.create(content, currentToken);
+            if (gistId) {
+                await updateGist(gistId, content, currentToken);
+            } else {
+                gistId = await createGist(content, currentToken);
                 localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
             }
         } catch (e) {
@@ -173,226 +254,183 @@
         }
     }
 
-    // ==================== РАСПОЗНАВАНИЕ URL ====================
-    const UrlUtils = {
-        isEmbed(url) {
-            if (!url) return false;
-            const u = url.toLowerCase();
-            return u.includes('/embed/') || u.includes('/player/') || u.includes('?embed') || u.includes('/v/');
-        },
-        isSitePost(url) {
-            try {
-                const u = new URL(url);
-                return (u.hostname === 'neonshadowyt.github.io' || u.hostname === 'localhost') && u.searchParams.has('post');
-            } catch { return false; }
-        },
-        // Улучшенное определение embed для разных платформ
-        guessEmbed(url) {
-            if (!url) return null;
-            try {
-                const u = new URL(url);
-                const origin = u.origin;
-                const path = u.pathname;
-                const search = u.search;
+    async function changeMasterPassword(oldPassword, newPassword) {
+        if (!currentToken || !gistId) throw new Error('No active storage');
+        const result = await loadBookmarks(oldPassword);
+        if (result.passwordRequired) throw new Error('Old password required');
+        if (result.needSetup) throw new Error('Storage not initialized');
+        const bookmarks = result.bookmarks || [];
+        await saveBookmarks(bookmarks, newPassword);
+        masterPassword = newPassword;
+        return true;
+    }
 
-                // view_video.php?viewkey=...
-                if (path.includes('view_video.php') && search.includes('viewkey=')) {
-                    const key = new URLSearchParams(search).get('viewkey');
-                    if (key) return `${origin}/embed/${key}`;
-                }
-                // vk.com video
-                if (u.hostname.includes('vk.com') && path.includes('video')) {
-                    const match = url.match(/video(-?\d+)_(\d+)/);
-                    if (match) return `https://vk.com/video_ext.php?oid=${match[1]}&id=${match[2]}&hd=2`;
-                }
-                // rutube
-                if (u.hostname.includes('rutube.ru') && path.includes('/video/')) {
-                    const id = path.split('/video/')[1]?.split('/')[0];
-                    if (id) return `https://rutube.ru/play/embed/${id}`;
-                }
-                // YouTube shorts
-                const shortMatch = url.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([a-zA-Z0-9_-]+)/);
-                if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}`;
-                // YouTube watch
-                if (search.includes('v=')) {
-                    const v = new URLSearchParams(search).get('v');
-                    if (v) return `https://www.youtube.com/embed/${v}`;
-                }
-                // Уже embed
-                if (path.includes('/embed/')) return url;
-                // /v/...
-                if (path.includes('/v/')) {
-                    const id = path.split('/v/')[1]?.split('?')[0];
-                    if (id) return `${origin}/embed/${id}`;
-                }
-                // /view/ или /watch/
-                const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
-                if (viewMatch) return `${origin}/embed/${viewMatch[2]}`;
-                const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
-                if (videoMatch) return `${origin}/embed/${videoMatch[1]}`;
-            } catch {}
-            return null;
-        }
-    };
+    async function resetStorage() {
+        if (!currentToken) return;
+        if (gistId) await deleteGist(gistId, currentToken);
+        gistId = null;
+        masterPassword = null;
+        clearSessionCache();
+        localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+    }
 
-    // ==================== OEmbed и прямые ссылки ====================
-    const OEMBED_PROVIDERS = [
-        (url) => `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
-        (url) => `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`
-    ];
-
-    async function fetchOEmbedData(url) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        for (const provider of OEMBED_PROVIDERS) {
+    // ==================== OEmbed ====================
+    async function fetchEmbedData(url) {
+        const services = [
+            `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
+            `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`,
+            `https://api.embed.ly/1/oembed?url=${encodeURIComponent(url)}`
+        ];
+        for (const serviceUrl of services) {
             try {
-                const apiUrl = provider(url);
-                const resp = await fetch(apiUrl, { signal: controller.signal });
-                if (!resp.ok) continue;
-                const data = await resp.json();
-                clearTimeout(timeout);
-                if (data) {
-                    return {
-                        title: data.title,
-                        thumbnail_url: data.thumbnail_url || data.image || data.thumbnail,
-                        url: data.url,
-                        html: data.html
-                    };
-                }
+                const response = await fetch(serviceUrl, { signal: AbortSignal.timeout(5000) });
+                if (!response.ok) continue;
+                const data = await response.json();
+                if (data && (data.html || data.url || data.thumbnail_url)) return data;
             } catch {}
         }
-        clearTimeout(timeout);
+        try {
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+            const proxyResp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+            if (proxyResp.ok) {
+                const proxyData = await proxyResp.json();
+                const html = proxyData.contents;
+                const titleMatch = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i);
+                const imageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i);
+                const videoMatch = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"[^>]*>/i);
+                return {
+                    title: titleMatch ? titleMatch[1] : null,
+                    thumbnail_url: imageMatch ? imageMatch[1] : null,
+                    url: videoMatch ? videoMatch[1] : null
+                };
+            }
+        } catch {}
         return null;
     }
 
-    // Улучшенные сервисы для получения прямой ссылки на видеофайл
-    const VIDEO_SERVICES = [
-        {
-            name: 'Cobalt',
-            fetch: async (url) => {
-                const resp = await fetch('https://co.wuk.sh/api/json', {
-                    method: 'POST',
-                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url, aFormat: 'best', vCodec: 'h264' })
-                });
-                if (!resp.ok) return null;
-                const data = await resp.json();
-                return data.status === 'success' ? data.url : null;
+    function guessEmbedUrl(url) {
+        if (!url) return null;
+        try {
+            const urlObj = new URL(url);
+            const origin = urlObj.origin;
+            const path = urlObj.pathname;
+            const search = urlObj.search;
+            if (url.includes('youtube.com/shorts/') || url.includes('youtu.be/shorts/')) {
+                const match = url.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([a-zA-Z0-9_-]+)/);
+                if (match) return `https://www.youtube.com/embed/${match[1]}`;
             }
-        },
-        {
-            name: 'YtDlpAPI',
-            fetch: async (url) => {
-                const resp = await fetch(`https://yt-dlp-api.vercel.app/api/extract?url=${encodeURIComponent(url)}`);
-                if (!resp.ok) return null;
-                const data = await resp.json();
-                return data.formats?.find(f => f.vcodec !== 'none' && f.acodec !== 'none')?.url || data.url;
+            if (search.includes('v=')) {
+                const params = new URLSearchParams(search);
+                const videoId = params.get('v');
+                if (videoId) return `https://www.youtube.com/embed/${videoId}`;
             }
-        },
-        {
-            name: 'Vimeo',
-            fetch: async (url) => {
-                if (!url.includes('vimeo.com')) return null;
-                const oembed = await fetchOEmbedData(url);
-                if (oembed?.html) {
-                    const src = oembed.html.match(/src=["']([^"']+)["']/i)?.[1];
-                    if (src) {
-                        const resp = await fetch(src);
-                        const text = await resp.text();
-                        const match = text.match(/"progressive":\[{"url":"([^"]+\.mp4)"/);
-                        if (match) return match[1];
-                    }
-                }
-                return null;
+            if (path.includes('view_video.php') && search.includes('viewkey=')) {
+                const params = new URLSearchParams(search);
+                const videoId = params.get('viewkey');
+                if (videoId) return `${origin}/embed/${videoId}`;
             }
+            if (path.includes('/embed/')) return url;
+            if (path.includes('/v/')) {
+                const videoId = path.split('/v/')[1]?.split('?')[0];
+                if (videoId) return `${origin}/embed/${videoId}`;
+            }
+            const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
+            if (viewMatch) return `${origin}/embed/${viewMatch[2]}`;
+            const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
+            if (videoMatch) return `${origin}/embed/${videoMatch[1]}`;
+            return null;
+        } catch {
+            return null;
         }
-    ];
-
-    async function fetchDirectVideoUrl(url) {
-        const promises = VIDEO_SERVICES.map(s => s.fetch(url).catch(() => null));
-        try { return await Promise.any(promises); } catch { return null; }
     }
 
-    // ==================== ДОБАВЛЕНИЕ ЗАКЛАДКИ ====================
+    function isEmbedUrl(url) {
+        if (!url) return false;
+        const lowerUrl = url.toLowerCase();
+        return lowerUrl.includes('/embed/') || lowerUrl.includes('/player/') || lowerUrl.includes('?embed') || lowerUrl.includes('/v/');
+    }
+
+    function isSitePostUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            if (urlObj.hostname === 'neonshadowyt.github.io' || urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
+                const params = new URLSearchParams(urlObj.search);
+                if (params.has('post')) return true;
+            }
+        } catch {}
+        return false;
+    }
+
+    // ==================== ДОБАВЛЕНИЕ/УДАЛЕНИЕ ====================
     async function addBookmark(bookmark) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
         if (!masterPassword) {
             await openStorageModal();
             if (!masterPassword) return;
         }
-        if (!bookmark?.url) { UIUtils.showToast('Некорректная ссылка', 'error'); return; }
 
         let finalUrl = bookmark.url;
         let embedUrl = null;
         let downloadUrl = null;
         let thumbnail = null;
-        let finalTitle = bookmark.title || bookmark.url;
+        let finalTitle = bookmark.title;
         let postType = bookmark.postType || null;
 
-        // Определяем embed и прочие метаданные
-        if (UrlUtils.isSitePost(finalUrl)) {
-            postType = 'site-post';
-        } else if (UrlUtils.isEmbed(finalUrl)) {
-            embedUrl = finalUrl;
-        } else {
-            const guessed = UrlUtils.guessEmbed(finalUrl);
-            if (guessed) embedUrl = guessed;
-
-            // Пытаемся получить oembed и прямую ссылку параллельно
-            const [oembed, direct] = await Promise.allSettled([
-                fetchOEmbedData(finalUrl),
-                fetchDirectVideoUrl(finalUrl)
-            ]);
-
-            if (oembed.status === 'fulfilled' && oembed.value) {
-                const data = oembed.value;
-                if (data.html) {
-                    const iframeSrc = data.html.match(/<iframe[^>]+src=["']([^"']+)["']/i)?.[1];
-                    if (iframeSrc) embedUrl = iframeSrc;
+        if (bookmark.url) {
+            if (isSitePostUrl(bookmark.url)) {
+                postType = 'site-post';
+            } else if (isEmbedUrl(bookmark.url)) {
+                embedUrl = bookmark.url;
+                finalUrl = bookmark.url;
+            } else {
+                const oembed = await fetchEmbedData(bookmark.url);
+                if (oembed) {
+                    if (oembed.html) {
+                        const iframeMatch = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+                        if (iframeMatch && iframeMatch[1]) embedUrl = iframeMatch[1];
+                    }
+                    if (oembed.url && (oembed.url.endsWith('.mp4') || oembed.url.endsWith('.webm') || oembed.url.includes('video/mp4'))) {
+                        downloadUrl = oembed.url;
+                    }
+                    if (oembed.thumbnail_url) thumbnail = oembed.thumbnail_url;
+                    if (oembed.title && !finalTitle) finalTitle = oembed.title;
                 }
-                if (data.url && /\.(mp4|webm|mov)/i.test(data.url)) downloadUrl = data.url;
-                if (data.thumbnail_url) thumbnail = data.thumbnail_url;
-                if (data.title) finalTitle = data.title;
-            }
-
-            if (direct.status === 'fulfilled' && direct.value) {
-                downloadUrl = direct.value;
-            }
-
-            if (!thumbnail && embedUrl?.includes('youtube.com/embed/')) {
-                const vid = embedUrl.split('/embed/')[1]?.split('?')[0];
-                if (vid) thumbnail = `https://img.youtube.com/vi/${vid}/mqdefault.jpg`;
+                if (!embedUrl) embedUrl = guessEmbedUrl(bookmark.url);
+                if (embedUrl) finalUrl = embedUrl;
+                if (!thumbnail && embedUrl && embedUrl.includes('youtube.com/embed/')) {
+                    const videoId = embedUrl.split('/embed/')[1]?.split('?')[0];
+                    if (videoId) thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                }
             }
         }
 
-        // Создаём объект закладки
+        const result = await loadBookmarks(masterPassword);
+        if (result.passwordRequired) throw new Error('Password required');
+        let bookmarksArray = result.bookmarks || [];
+        
+        if (bookmarksArray.some(b => b.url === finalUrl)) {
+            UIUtils.showToast('Уже в избранном', 'info');
+            throw new Error('duplicate');
+        }
+
         const newBookmark = {
             id: Date.now() + '-' + Math.random().toString(36),
             added: new Date().toISOString(),
             url: finalUrl,
-            title: finalTitle,
+            title: finalTitle || finalUrl,
             embedUrl,
             downloadUrl,
             thumbnail,
             postType
         };
 
-        // Загружаем текущие закладки
-        const res = await loadBookmarks(masterPassword);
-        if (res.passwordRequired) throw new Error('Password required');
-        const bookmarks = res.bookmarks || [];
+        const optimisticBookmarks = [...bookmarksArray, newBookmark];
+        saveSessionCache(optimisticBookmarks, masterPassword);
+        if (currentGrid) renderBookmarksGrid(optimisticBookmarks);
 
-        // Проверка на дубликат
-        if (bookmarks.some(b => b.url === finalUrl)) {
-            UIUtils.showToast('Уже в избранном', 'info');
-            throw new Error('duplicate');
-        }
-
-        const updated = [...bookmarks, newBookmark];
-        SessionCache.save(updated, masterPassword);
-        // Сохраняем в Gist в фоне
-        saveBookmarks(updated, masterPassword).catch(e => {
-            console.warn('Background sync failed', e);
+        saveBookmarks(optimisticBookmarks, masterPassword).catch(e => {
+            UIUtils.showToast('Ошибка синхронизации', 'error');
         });
 
         return newBookmark;
@@ -400,131 +438,207 @@
 
     async function removeBookmark(bookmarkId) {
         if (!masterPassword) throw new Error('Master password not set');
-        const res = await loadBookmarks(masterPassword);
-        const filtered = (res.bookmarks || []).filter(b => b.id !== bookmarkId);
-        SessionCache.save(filtered, masterPassword);
-        saveBookmarks(filtered, masterPassword).catch(e => UIUtils.showToast('Ошибка синхронизации', 'error'));
+        const result = await loadBookmarks(masterPassword);
+        if (result.passwordRequired) throw new Error('Password required');
+        const bookmarksArray = result.bookmarks || [];
+        const filtered = bookmarksArray.filter(b => b.id !== bookmarkId);
+        
+        saveSessionCache(filtered, masterPassword);
+        if (currentGrid) renderBookmarksGrid(filtered);
+
+        saveBookmarks(filtered, masterPassword).catch(e => {
+            UIUtils.showToast('Ошибка синхронизации', 'error');
+        });
     }
 
-    // ==================== UI КОМПОНЕНТЫ ====================
-    function openVideoFullscreen(iframe, title) {
+    // ==================== ПОЛНОЭКРАННОЕ ВИДЕО ====================
+    function openVideoFullscreen(iframeElement, title) {
+        if (!iframeElement) return;
         const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;';
-        const close = document.createElement('button');
-        close.innerHTML = '<i class="fas fa-times"></i>';
-        close.style.cssText = 'position:absolute;top:20px;right:20px;background:rgba(0,0,0,0.7);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;';
-        close.onclick = () => overlay.remove();
+        overlay.className = 'storage-fullscreen-overlay';
+        overlay.style.cssText = `
+            position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);
+            z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            cursor:pointer;animation:fadeIn 0.2s ease;
+        `;
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+        closeBtn.style.cssText = `
+            position:absolute;top:20px;right:20px;background:rgba(0,0,0,0.7);color:white;
+            border:none;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;z-index:100001;
+            transition:transform 0.2s;
+        `;
+        closeBtn.onmouseover = () => closeBtn.style.transform = 'scale(1.1)';
+        closeBtn.onmouseleave = () => closeBtn.style.transform = 'scale(1)';
+        closeBtn.onclick = (e) => {
+            e.stopPropagation();
+            overlay.style.animation = 'fadeOut 0.2s ease forwards';
+            setTimeout(() => overlay.remove(), 200);
+        };
         const titleDiv = document.createElement('div');
         titleDiv.textContent = title;
-        titleDiv.style.cssText = 'position:absolute;top:20px;left:20px;color:#fff;font-size:18px;background:rgba(0,0,0,0.5);padding:8px 16px;border-radius:30px;';
-        iframe.style.cssText = 'width:90%;height:85%;border-radius:12px;border:none;';
-        overlay.append(iframe, close, titleDiv);
+        titleDiv.style.cssText = `
+            position:absolute;top:20px;left:20px;color:white;font-size:18px;
+            font-family:"Russo One",sans-serif;background:rgba(0,0,0,0.5);padding:8px 16px;
+            border-radius:30px;z-index:100001;
+        `;
+        iframeElement.style.cssText = `
+            width:90%;height:85%;border-radius:12px;border:none;
+        `;
+        overlay.appendChild(iframeElement);
+        overlay.appendChild(closeBtn);
+        overlay.appendChild(titleDiv);
         document.body.appendChild(overlay);
-        overlay.onclick = e => e.target === overlay && close.click();
+        overlay.onclick = (e) => { if (e.target === overlay) closeBtn.click(); };
     }
 
+    // ==================== КАРТОЧКА ЗАКЛАДКИ ====================
     function renderBookmarkCard(bookmark, onDelete, onEditSave) {
-        if (!bookmark) return document.createElement('div');
-
         const card = document.createElement('div');
-        card.className = 'bookmark-card project-card tilt-card';
-        card.style.cssText = 'background:var(--bg-inner-gradient);border-radius:20px;border:1px solid var(--border);cursor:pointer;transition:transform 0.3s;overflow:hidden;display:flex;flex-direction:column;height:100%;';
+        card.className = 'bookmark-card tilt-card';
+        card.style.cssText = `
+            background:var(--bg-inner-gradient);border-radius:20px;padding:0;
+            border:1px solid var(--border);cursor:pointer;transition:all 0.3s cubic-bezier(0.25,0.46,0.45,0.94);
+            overflow:hidden;display:flex;flex-direction:column;height:100%;
+        `;
+        card.onmouseenter = () => card.style.transform = 'translateY(-5px) scale(1.02)';
+        card.onmouseleave = () => card.style.transform = 'translateY(0) scale(1)';
 
         const mediaContainer = document.createElement('div');
-        mediaContainer.className = 'image-wrapper';
-        mediaContainer.style.cssText = 'margin:-16px -16px 12px -16px;width:calc(100% + 32px);position:relative;padding-bottom:56.25%;background:var(--bg-primary);border-bottom:1px solid var(--border);';
-
-        const embedSrc = bookmark.embedUrl || (UrlUtils.isEmbed(bookmark.url) ? bookmark.url : null);
+        mediaContainer.style.cssText = `
+            position:relative;width:100%;padding-bottom:56.25%;background:var(--bg-primary);
+            border-bottom:1px solid var(--border);
+        `;
+        
+        const embedSrc = bookmark.embedUrl || (isEmbedUrl(bookmark.url) ? bookmark.url : null);
+        let mediaElement;
         if (embedSrc) {
-            const iframe = document.createElement('iframe');
-            iframe.src = embedSrc;
-            iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
-            iframe.setAttribute('allowfullscreen', 'true');
-            iframe.loading = 'lazy';
+            mediaElement = document.createElement('iframe');
+            mediaElement.src = embedSrc;
+            mediaElement.style.cssText = `
+                position:absolute;top:0;left:0;width:100%;height:100%;border:none;
+            `;
+            mediaElement.setAttribute('allowfullscreen', 'true');
+            mediaElement.setAttribute('loading', 'lazy');
+            mediaElement.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation');
             const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer;z-index:2;';
-            overlay.onclick = e => { e.stopPropagation(); openVideoFullscreen(iframe, bookmark.title); };
-            mediaContainer.append(iframe, overlay);
+            overlay.style.cssText = `
+                position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer;z-index:2;
+            `;
+            overlay.onclick = (e) => { e.stopPropagation(); openVideoFullscreen(mediaElement, bookmark.title); };
+            mediaContainer.appendChild(mediaElement);
+            mediaContainer.appendChild(overlay);
         } else {
-            const img = document.createElement('img');
-            img.src = bookmark.thumbnail || 'images/default-news.webp';
-            img.alt = bookmark.title;
-            img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;';
-            img.onerror = () => img.src = 'images/default-news.webp';
-            mediaContainer.appendChild(img);
+            mediaElement = document.createElement('img');
+            mediaElement.src = bookmark.thumbnail || 'images/default-news.webp';
+            mediaElement.alt = bookmark.title;
+            mediaElement.style.cssText = `
+                position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;
+            `;
+            mediaElement.onerror = () => mediaElement.src = 'images/default-news.webp';
+            mediaContainer.appendChild(mediaElement);
         }
 
         const content = document.createElement('div');
-        content.style.cssText = 'padding:0 0 12px 0;flex:1;display:flex;flex-direction:column;';
-        const titleEl = document.createElement('h4');
-        titleEl.textContent = bookmark.title.length > 60 ? bookmark.title.slice(0,60)+'…' : bookmark.title;
-        titleEl.style.cssText = 'margin:0 0 6px;font-size:16px;color:var(--text-primary);';
+        content.style.cssText = 'padding:16px;flex:1;display:flex;flex-direction:column;';
+
+        const titleEl = document.createElement('h3');
+        titleEl.textContent = bookmark.title.length > 60 ? bookmark.title.substring(0,60)+'…' : bookmark.title;
+        titleEl.style.cssText = 'margin:0 0 8px;font-size:18px;color:var(--text-primary);';
+
         const meta = document.createElement('div');
-        meta.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;font-size:11px;color:var(--text-secondary);';
+        meta.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:12px;font-size:13px;color:var(--text-secondary);';
         meta.innerHTML = `<span><i class="fas fa-calendar-alt"></i> ${new Date(bookmark.added).toLocaleDateString()}</span>`;
 
         const actions = document.createElement('div');
-        actions.style.cssText = 'display:flex;gap:4px;margin-top:auto;justify-content:flex-end;';
+        actions.style.cssText = 'display:flex;gap:8px;margin-top:auto;justify-content:flex-end;';
+        
         if (bookmark.downloadUrl) {
-            const btn = document.createElement('button');
-            btn.innerHTML = '<i class="fas fa-download"></i>';
-            btn.className = 'bookmark-action-btn';
-            btn.title = 'Скачать';
-            btn.onclick = e => { e.stopPropagation(); window.open(bookmark.downloadUrl, '_blank'); };
-            actions.appendChild(btn);
+            const downloadBtn = document.createElement('button');
+            downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
+            downloadBtn.className = 'bookmark-action-btn';
+            downloadBtn.title = 'Скачать';
+            downloadBtn.onclick = (e) => { e.stopPropagation(); window.open(bookmark.downloadUrl, '_blank'); };
+            actions.appendChild(downloadBtn);
         }
+
         const editBtn = document.createElement('button');
         editBtn.innerHTML = '<i class="fas fa-pen"></i>';
         editBtn.className = 'bookmark-action-btn';
-        editBtn.onclick = e => {
+        editBtn.title = 'Редактировать';
+        editBtn.onclick = (e) => {
             e.stopPropagation();
             const newTitle = prompt('Новое название:', bookmark.title);
             if (newTitle && newTitle !== bookmark.title) {
                 bookmark.title = newTitle;
-                titleEl.textContent = newTitle.length > 60 ? newTitle.slice(0,60)+'…' : newTitle;
+                titleEl.textContent = newTitle.length > 60 ? newTitle.substring(0,60)+'…' : newTitle;
                 onEditSave(bookmark);
             }
         };
-        const delBtn = document.createElement('button');
-        delBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
-        delBtn.className = 'bookmark-action-btn';
-        delBtn.style.color = '#f44336';
-        delBtn.onclick = e => { e.stopPropagation(); if (confirm('Удалить закладку?')) onDelete(bookmark.id); };
-        actions.append(editBtn, delBtn);
+        actions.appendChild(editBtn);
 
-        content.append(titleEl, meta, actions);
-        card.append(mediaContainer, content);
-        card.onclick = e => { if (!e.target.closest('button')) window.open(bookmark.url, '_blank'); };
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+        deleteBtn.className = 'bookmark-action-btn';
+        deleteBtn.style.color = '#f44336';
+        deleteBtn.title = 'Удалить';
+        deleteBtn.onclick = (e) => { e.stopPropagation(); if (confirm('Удалить закладку?')) onDelete(bookmark.id); };
+        actions.appendChild(deleteBtn);
+
+        content.appendChild(titleEl);
+        content.appendChild(meta);
+        content.appendChild(actions);
+        card.appendChild(mediaContainer);
+        card.appendChild(content);
+        card.onclick = (e) => {
+            if (e.target.closest('button')) return;
+            window.open(bookmark.url, '_blank');
+        };
         return card;
     }
 
+    // ==================== СЕТКА ЗАКЛАДОК ====================
     function renderBookmarksGrid(bookmarks) {
         if (!currentGrid) return;
-        let filtered = bookmarks.filter(b => {
-            if (!b) return false;
-            if (category === 'video') return b.embedUrl;
-            if (category === 'post') return b.postType && ['feedback','news','update','site-post'].includes(b.postType);
-            if (category === 'link') return !b.embedUrl && !(b.postType && ['feedback','news','update','site-post'].includes(b.postType));
-            return true;
+        let filtered = [...bookmarks];
+        if (category === 'video') filtered = filtered.filter(b => b.embedUrl);
+        else if (category === 'post') filtered = filtered.filter(b => b.postType && ['feedback','news','update','site-post'].includes(b.postType));
+        else if (category === 'link') filtered = filtered.filter(b => !b.embedUrl && !(b.postType && ['feedback','news','update','site-post'].includes(b.postType)));
+        
+        filtered.sort((a,b) => {
+            const dateA = new Date(a.added);
+            const dateB = new Date(b.added);
+            return sortOrder === 'new' ? dateB - dateA : dateA - dateB;
         });
-        filtered.sort((a,b) => (sortOrder === 'new' ? new Date(b.added) - new Date(a.added) : new Date(a.added) - new Date(b.added)));
-        if (!filtered.length) {
-            currentGrid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;text-align:center;padding:40px;"><i class="fas fa-bookmark" style="font-size:48px;color:var(--accent);opacity:0.6;"></i><p>Нет закладок</p></div>';
+
+        if (filtered.length === 0) {
+            currentGrid.innerHTML = `
+                <div class="empty-state" style="grid-column:1/-1;text-align:center;padding:40px;">
+                    <i class="fas fa-bookmark" style="font-size:48px;color:var(--accent);opacity:0.6;margin-bottom:16px;"></i>
+                    <p>Нет закладок</p>
+                </div>
+            `;
             return;
         }
+
         currentGrid.innerHTML = '';
         filtered.forEach(b => {
-            if (!b) return;
             const card = renderBookmarkCard(b,
-                id => {
-                    currentBookmarks = currentBookmarks.filter(bk => bk && bk.id !== id);
+                async (id) => {
+                    const index = currentBookmarks.findIndex(bk => bk.id === id);
+                    if (index === -1) return;
+                    currentBookmarks.splice(index, 1);
                     renderBookmarksGrid(currentBookmarks);
-                    removeBookmark(id);
+                    try {
+                        await removeBookmark(id);
+                    } catch (e) {
+                        UIUtils.showToast('Ошибка удаления', 'error');
+                    }
                 },
-                updated => {
-                    const idx = currentBookmarks.findIndex(bk => bk && bk.id === updated.id);
-                    if (idx>=0) currentBookmarks[idx] = updated;
-                    saveBookmarks(currentBookmarks);
+                async (updated) => {
+                    const index = currentBookmarks.findIndex(b => b.id === updated.id);
+                    if (index !== -1) currentBookmarks[index] = updated;
+                    await saveBookmarks(currentBookmarks);
                     renderBookmarksGrid(currentBookmarks);
                 }
             );
@@ -534,216 +648,479 @@
 
     // ==================== МОДАЛЬНОЕ ОКНО ====================
     async function openStorageModal() {
-        if (!window.GithubAuth) return setTimeout(openStorageModal, 100);
         updateAuthState();
-        if (!currentUser) return UIUtils.showToast('Войдите в аккаунт GitHub', 'error');
-        if (!currentToken) return UIUtils.showToast('Токен не найден', 'error');
-        if (!GithubAuth.hasScope('gist')) return UIUtils.showToast('Нужен scope "gist"', 'error');
 
-        let needSetup = false, passwordRequired = false;
+        if (!window.GithubAuth) {
+            setTimeout(openStorageModal, 100);
+            return;
+        }
+
+        if (!currentUser) {
+            UIUtils.showToast('Войдите в аккаунт GitHub', 'error');
+            return;
+        }
+        if (!currentToken) {
+            UIUtils.showToast('Токен не найден. Перезайдите.', 'error');
+            return;
+        }
+
+        if (!window.GithubAuth.hasScope('gist')) {
+            UIUtils.showToast('Для хранилища нужен scope "gist"', 'error');
+            return;
+        }
+
+        let needSetup = false;
+        let passwordRequired = false;
+        let legacy = false;
+
         try {
-            const res = await loadBookmarks();
-            if (res.passwordRequired) passwordRequired = true;
-            else if (res.needSetup) needSetup = true;
-            else currentBookmarks = res.bookmarks || [];
+            const result = await loadBookmarks();
+            if (result.passwordRequired) {
+                passwordRequired = true;
+            } else if (result.needSetup) {
+                needSetup = true;
+            } else {
+                currentBookmarks = result.bookmarks || [];
+                if (result.legacy) legacy = true;
+            }
         } catch (e) {
-            if (e.message === 'TOKEN_NO_GIST_SCOPE') return UIUtils.showToast('Нет доступа к Gist', 'error');
-            return UIUtils.showToast('Ошибка: ' + e.message, 'error');
+            if (e.message === 'TOKEN_NO_GIST_SCOPE') {
+                UIUtils.showToast('Токен не имеет доступа к Gist', 'error');
+                return;
+            }
+            UIUtils.showToast('Ошибка загрузки: ' + e.message, 'error');
+            return;
         }
 
         if (passwordRequired) {
-            const pwd = prompt('Введите мастер-пароль:');
-            if (!pwd) return UIUtils.showToast('Отменено', 'info');
+            const pwd = await new Promise(resolve => {
+                const input = prompt('Введите мастер-пароль:');
+                resolve(input);
+            });
+            if (!pwd) {
+                UIUtils.showToast('Доступ отменён', 'info');
+                return;
+            }
             try {
-                const res = await loadBookmarks(pwd);
-                if (res.passwordRequired) throw new Error('Invalid password');
-                currentBookmarks = res.bookmarks || [];
+                const result = await loadBookmarks(pwd);
+                if (result.passwordRequired) throw new Error('Invalid password');
+                currentBookmarks = result.bookmarks || [];
                 masterPassword = pwd;
-            } catch {
+                passwordRequired = false;
+                needSetup = false;
+            } catch (err) {
                 UIUtils.showToast('Неверный пароль', 'error');
-                if (confirm('Сбросить хранилище?')) { await resetStorage(); needSetup = true; masterPassword = null; }
-                else return;
+                if (confirm('Сбросить хранилище?')) {
+                    await resetStorage();
+                    needSetup = true;
+                    passwordRequired = false;
+                    masterPassword = null;
+                } else {
+                    return;
+                }
+            }
+        } else if (masterPassword && !needSetup) {
+            try {
+                const result = await loadBookmarks(masterPassword);
+                if (result.passwordRequired) {
+                    masterPassword = null;
+                    passwordRequired = true;
+                    return openStorageModal();
+                }
+                currentBookmarks = result.bookmarks || [];
+            } catch (e) {
+                UIUtils.showToast('Ошибка загрузки: ' + e.message, 'error');
+                return;
             }
         }
 
         if (needSetup) {
-            const pwd = prompt('Создайте мастер-пароль (мин. 4 символа):');
-            if (!pwd || pwd.length < 4) return UIUtils.showToast('Пароль короткий', 'error');
+            const pwd = await new Promise(resolve => {
+                const input = prompt('Создайте мастер-пароль (мин. 4 символа):');
+                resolve(input);
+            });
+            if (!pwd || pwd.length < 4) {
+                UIUtils.showToast('Пароль слишком короткий', 'error');
+                return;
+            }
             masterPassword = pwd;
             currentBookmarks = [];
-            await saveBookmarks(currentBookmarks, pwd);
-            UIUtils.showToast('Хранилище создано!', 'success');
+            try {
+                await saveBookmarks(currentBookmarks, masterPassword);
+                UIUtils.showToast('Хранилище создано!', 'success');
+            } catch (err) {
+                UIUtils.showToast('Ошибка создания: ' + err.message, 'error');
+                return;
+            }
+        } else if (legacy) {
+            UIUtils.showToast('Обнаружено старое хранилище. Рекомендуется установить пароль.', 'warning', 6000);
+            if (confirm('Установить мастер-пароль?')) {
+                const newPwd = prompt('Новый пароль (мин. 4 символа):');
+                if (newPwd && newPwd.length >= 4) {
+                    try {
+                        await saveBookmarks(currentBookmarks, newPwd);
+                        masterPassword = newPwd;
+                        UIUtils.showToast('Пароль установлен!', 'success');
+                    } catch (e) {
+                        UIUtils.showToast('Ошибка: ' + e.message, 'error');
+                    }
+                }
+            }
         }
 
-        const html = `
+        const modalHtml = `
             <div class="storage-modal-container">
                 <div class="storage-header">
                     <div class="storage-controls">
                         <div class="storage-sort">
-                            <button class="sort-btn ${sortOrder==='new'?'active':''}" data-order="new"><i class="fas fa-arrow-down"></i> Новые</button>
-                            <button class="sort-btn ${sortOrder==='old'?'active':''}" data-order="old"><i class="fas fa-arrow-up"></i> Старые</button>
+                            <button class="sort-btn ${sortOrder === 'new' ? 'active' : ''}" data-order="new">
+                                <i class="fas fa-arrow-down"></i> Новые
+                            </button>
+                            <button class="sort-btn ${sortOrder === 'old' ? 'active' : ''}" data-order="old">
+                                <i class="fas fa-arrow-up"></i> Старые
+                            </button>
                         </div>
                         <div class="storage-categories">
-                            <button class="cat-btn ${category==='all'?'active':''}" data-cat="all"><i class="fas fa-globe"></i> Все</button>
-                            <button class="cat-btn ${category==='video'?'active':''}" data-cat="video"><i class="fas fa-video"></i> Видео</button>
-                            <button class="cat-btn ${category==='post'?'active':''}" data-cat="post"><i class="fas fa-newspaper"></i> Посты</button>
-                            <button class="cat-btn ${category==='link'?'active':''}" data-cat="link"><i class="fas fa-link"></i> Ссылки</button>
+                            <button class="cat-btn ${category === 'all' ? 'active' : ''}" data-cat="all">Все</button>
+                            <button class="cat-btn ${category === 'video' ? 'active' : ''}" data-cat="video"><i class="fas fa-video"></i> Видео</button>
+                            <button class="cat-btn ${category === 'post' ? 'active' : ''}" data-cat="post"><i class="fas fa-newspaper"></i> Посты</button>
+                            <button class="cat-btn ${category === 'link' ? 'active' : ''}" data-cat="link"><i class="fas fa-link"></i> Ссылки</button>
                         </div>
                     </div>
                     <div class="storage-actions">
-                        <button class="storage-btn" id="change-password-btn"><i class="fas fa-key"></i></button>
-                        <button class="storage-btn danger" id="reset-storage-btn"><i class="fas fa-trash-alt"></i></button>
-                        <button class="storage-btn primary" id="toggle-add-btn"><i class="fas fa-plus"></i> Добавить</button>
+                        <button class="storage-btn" id="change-password-btn" title="Сменить пароль">
+                            <i class="fas fa-key"></i>
+                        </button>
+                        <button class="storage-btn danger" id="reset-storage-btn" title="Сбросить хранилище">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                        <button class="storage-btn primary" id="toggle-add-btn">
+                            <i class="fas fa-plus"></i> Добавить
+                        </button>
                     </div>
                 </div>
-                <div id="add-form" class="storage-add-form ${addFormVisible?'visible':''}">
-                    <input type="url" id="new-url" placeholder="Ссылка..." autocomplete="off">
-                    <input type="text" id="new-title" placeholder="Название">
-                    <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> Добавить</button>
+                <div id="add-form" class="storage-add-form ${addFormVisible ? 'visible' : ''}">
+                    <input type="url" id="new-url" placeholder="Ссылка на видео, пост или страницу..." autocomplete="off">
+                    <input type="text" id="new-title" placeholder="Название (опционально)">
+                    <button class="storage-btn primary" id="confirm-add">Добавить</button>
                 </div>
                 <div class="bookmarks-grid" id="bookmarks-grid"></div>
             </div>
         `;
-        const { modal, closeModal } = UIUtils.createModal('Хранилище', html, { size: 'full' });
+
+        const { modal, closeModal } = UIUtils.createModal('📚 Хранилище', modalHtml, { size: 'full' });
         currentModal = modal;
+        
         const style = document.createElement('style');
         style.textContent = `
-            .storage-modal-container{display:flex;flex-direction:column;gap:20px}
-            .storage-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px}
-            .storage-controls{display:flex;gap:15px;flex-wrap:wrap}
-            .storage-sort{display:flex;background:var(--bg-primary);border-radius:40px;padding:4px;border:1px solid var(--border)}
-            .sort-btn{background:0;border:0;color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s}
-            .sort-btn.active{background:var(--accent);color:#fff}
-            .storage-categories{display:flex;gap:6px;flex-wrap:wrap}
-            .cat-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:8px 14px;border-radius:40px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px;transition:0.2s}
-            .cat-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-            .storage-actions{display:flex;gap:8px}
-            .storage-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s}
-            .storage-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-            .storage-btn.danger{color:#f44336}
-            .storage-btn:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.2)}
-            .storage-add-form{display:none;grid-template-columns:1fr 1fr auto;gap:10px;background:var(--bg-inner-gradient);padding:16px;border-radius:20px;border:1px solid var(--border);opacity:0;transform:translateY(-10px);transition:0.3s;align-items:center}
-            .storage-add-form.visible{display:grid;opacity:1;transform:translateY(0)}
-            .storage-add-form input{padding:12px 16px;background:var(--bg-primary);border:1px solid var(--border);border-radius:40px;color:var(--text-primary)}
-            .bookmarks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
-            .bookmark-action-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:0.2s;font-size:12px}
-            .bookmark-action-btn:hover{background:var(--accent);color:#fff;transform:scale(1.1)}
-            @media (max-width:700px){.storage-header{flex-direction:column;align-items:stretch}.storage-add-form{grid-template-columns:1fr}.bookmarks-grid{grid-template-columns:1fr}}
+            .storage-modal-container {
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+            .storage-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 15px;
+            }
+            .storage-controls {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                flex-wrap: wrap;
+            }
+            .storage-sort {
+                display: flex;
+                background: var(--bg-primary);
+                border-radius: 40px;
+                padding: 4px;
+                border: 1px solid var(--border);
+            }
+            .sort-btn {
+                background: transparent;
+                border: none;
+                color: var(--text-secondary);
+                padding: 8px 16px;
+                border-radius: 40px;
+                font-size: 14px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                transition: all 0.2s;
+                font-family: 'Russo One', sans-serif;
+            }
+            .sort-btn.active {
+                background: var(--accent);
+                color: white;
+            }
+            .storage-categories {
+                display: flex;
+                gap: 6px;
+                flex-wrap: wrap;
+            }
+            .cat-btn {
+                background: var(--bg-primary);
+                border: 1px solid var(--border);
+                color: var(--text-secondary);
+                padding: 8px 14px;
+                border-radius: 40px;
+                font-size: 13px;
+                cursor: pointer;
+                transition: all 0.2s;
+                font-family: 'Russo One', sans-serif;
+            }
+            .cat-btn.active {
+                background: var(--accent);
+                color: white;
+                border-color: var(--accent);
+            }
+            .storage-actions {
+                display: flex;
+                gap: 8px;
+            }
+            .storage-btn {
+                background: var(--bg-primary);
+                border: 1px solid var(--border);
+                color: var(--text-secondary);
+                padding: 8px 16px;
+                border-radius: 40px;
+                font-size: 14px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                transition: all 0.2s;
+                font-family: 'Russo One', sans-serif;
+            }
+            .storage-btn.primary {
+                background: var(--accent);
+                color: white;
+                border-color: var(--accent);
+            }
+            .storage-btn.danger {
+                color: #f44336;
+            }
+            .storage-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            }
+            .storage-add-form {
+                display: grid;
+                grid-template-columns: 2fr 1fr auto;
+                gap: 10px;
+                background: var(--bg-inner-gradient);
+                padding: 16px;
+                border-radius: 20px;
+                border: 1px solid var(--border);
+                opacity: 0;
+                transform: translateY(-10px);
+                transition: opacity 0.3s, transform 0.3s;
+                display: none;
+            }
+            .storage-add-form.visible {
+                display: grid;
+                opacity: 1;
+                transform: translateY(0);
+            }
+            .storage-add-form input {
+                padding: 12px 16px;
+                background: var(--bg-primary);
+                border: 1px solid var(--border);
+                border-radius: 40px;
+                color: var(--text-primary);
+                font-family: 'Russo One', sans-serif;
+            }
+            .bookmarks-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 20px;
+            }
+            .bookmark-action-btn {
+                background: var(--bg-primary);
+                border: 1px solid var(--border);
+                color: var(--text-secondary);
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .bookmark-action-btn:hover {
+                background: var(--accent);
+                color: white;
+                transform: scale(1.1);
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+            @media (max-width: 700px) {
+                .storage-header {
+                    flex-direction: column;
+                    align-items: stretch;
+                }
+                .storage-controls {
+                    justify-content: space-between;
+                }
+                .storage-add-form {
+                    grid-template-columns: 1fr;
+                }
+                .bookmarks-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
         `;
         modal.appendChild(style);
+
         currentGrid = modal.querySelector('#bookmarks-grid');
-
-        // Обработчики сортировки и категорий
-        modal.querySelectorAll('.sort-btn').forEach(b => b.addEventListener('click', () => { sortOrder = b.dataset.order; renderBookmarksGrid(currentBookmarks); }));
-        modal.querySelectorAll('.cat-btn').forEach(b => b.addEventListener('click', () => { category = b.dataset.cat; renderBookmarksGrid(currentBookmarks); }));
-
-        const toggleAdd = modal.querySelector('#toggle-add-btn');
+        const sortBtns = modal.querySelectorAll('.sort-btn');
+        const catBtns = modal.querySelectorAll('.cat-btn');
+        const toggleAddBtn = modal.querySelector('#toggle-add-btn');
         const addForm = modal.querySelector('#add-form');
-        toggleAdd.addEventListener('click', () => {
-            addFormVisible = !addFormVisible;
-            addForm.classList.toggle('visible', addFormVisible);
-            toggleAdd.innerHTML = addFormVisible ? '<i class="fas fa-times"></i> Отмена' : '<i class="fas fa-plus"></i> Добавить';
-            if (addFormVisible) modal.querySelector('#new-url').focus();
+        const newUrlInput = modal.querySelector('#new-url');
+        const newTitleInput = modal.querySelector('#new-title');
+        const confirmAddBtn = modal.querySelector('#confirm-add');
+        const changePasswordBtn = modal.querySelector('#change-password-btn');
+        const resetStorageBtn = modal.querySelector('#reset-storage-btn');
+
+        renderBookmarksGrid(currentBookmarks);
+
+        sortBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                sortOrder = btn.dataset.order;
+                sortBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderBookmarksGrid(currentBookmarks);
+            });
         });
 
-        modal.querySelector('#confirm-add').addEventListener('click', async () => {
-            const url = modal.querySelector('#new-url').value.trim();
-            if (!url) return UIUtils.showToast('Введите ссылку', 'error');
-            const title = modal.querySelector('#new-title').value.trim() || url;
-            const btn = modal.querySelector('#confirm-add');
-            btn.disabled = true;
-
-            // Оптимистичное добавление (всегда отображается)
-            const tempId = 'temp-' + Date.now();
-            const optimistic = { id: tempId, url, title, added: new Date().toISOString() };
-            currentBookmarks.unshift(optimistic);
-            renderBookmarksGrid(currentBookmarks);
-            addFormVisible = false;
-            addForm.classList.remove('visible');
-            toggleAdd.innerHTML = '<i class="fas fa-plus"></i> Добавить';
-
-            try {
-                const final = await addBookmark({ url, title });
-                // Заменяем временную запись на полноценную
-                const idx = currentBookmarks.findIndex(b => b.id === tempId);
-                if (idx >= 0) currentBookmarks[idx] = final;
+        catBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                category = btn.dataset.cat;
+                catBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
                 renderBookmarksGrid(currentBookmarks);
-                UIUtils.showToast('Добавлено', 'success');
-            } catch (e) {
-                if (e.message === 'duplicate') {
-                    // Удаляем дубликат
-                    currentBookmarks = currentBookmarks.filter(b => b.id !== tempId);
-                    renderBookmarksGrid(currentBookmarks);
-                    UIUtils.showToast('Уже в избранном', 'info');
-                } else {
-                    // Ошибка, но временная запись остаётся (можно будет повторить или удалить)
-                    console.error('Ошибка добавления закладки:', e);
-                    UIUtils.showToast('Ошибка при добавлении. Закладка сохранена локально, попробуйте позже.', 'warning', 5000);
-                }
-            } finally {
-                btn.disabled = false;
-                modal.querySelector('#new-url').value = '';
-                modal.querySelector('#new-title').value = '';
+            });
+        });
+
+        toggleAddBtn.addEventListener('click', () => {
+            addFormVisible = !addFormVisible;
+            addForm.classList.toggle('visible', addFormVisible);
+            if (addFormVisible) {
+                newUrlInput.focus();
+                toggleAddBtn.innerHTML = '<i class="fas fa-times"></i> Отмена';
+            } else {
+                toggleAddBtn.innerHTML = '<i class="fas fa-plus"></i> Добавить';
             }
         });
 
-        modal.querySelector('#change-password-btn').addEventListener('click', async () => {
-            const old = masterPassword || prompt('Текущий пароль:');
-            if (!old) return;
-            const newPwd = prompt('Новый пароль (мин. 4):');
-            if (!newPwd || newPwd.length<4) return UIUtils.showToast('Слишком короткий', 'warning');
-            try { await changeMasterPassword(old, newPwd); UIUtils.showToast('Пароль изменён', 'success'); }
-            catch(e) { UIUtils.showToast('Ошибка: '+e.message, 'error'); }
+        confirmAddBtn.addEventListener('click', async () => {
+            const url = newUrlInput.value.trim();
+            if (!url) { UIUtils.showToast('Введите ссылку', 'error'); return; }
+            const title = newTitleInput.value.trim() || url;
+            confirmAddBtn.disabled = true;
+            
+            const tempId = 'temp-' + Date.now();
+            const optimistic = {
+                id: tempId, url, title, added: new Date().toISOString(), temp: true
+            };
+            currentBookmarks.unshift(optimistic);
+            renderBookmarksGrid(currentBookmarks);
+            
+            try {
+                const final = await addBookmark({ url, title });
+                const index = currentBookmarks.findIndex(b => b.id === tempId);
+                if (index !== -1) currentBookmarks[index] = final;
+                renderBookmarksGrid(currentBookmarks);
+                UIUtils.showToast('Добавлено', 'success');
+                addFormVisible = false;
+                addForm.classList.remove('visible');
+                toggleAddBtn.innerHTML = '<i class="fas fa-plus"></i> Добавить';
+                newUrlInput.value = '';
+                newTitleInput.value = '';
+            } catch (err) {
+                if (err.message !== 'duplicate') UIUtils.showToast('Ошибка: ' + err.message, 'error');
+                const index = currentBookmarks.findIndex(b => b.id === tempId);
+                if (index !== -1) currentBookmarks.splice(index, 1);
+                renderBookmarksGrid(currentBookmarks);
+            } finally {
+                confirmAddBtn.disabled = false;
+            }
         });
 
-        modal.querySelector('#reset-storage-btn').addEventListener('click', async () => {
-            if (!confirm('Удалить все закладки?')) return;
-            await resetStorage();
-            currentBookmarks = []; masterPassword = null;
-            renderBookmarksGrid([]);
-            UIUtils.showToast('Хранилище сброшено', 'success');
-            closeModal();
+        changePasswordBtn.addEventListener('click', async () => {
+            const oldPwd = masterPassword || prompt('Текущий пароль:');
+            if (!oldPwd) return;
+            const newPwd = prompt('Новый пароль (мин. 4 символа):');
+            if (!newPwd || newPwd.length < 4) {
+                UIUtils.showToast('Пароль слишком короткий', 'warning');
+                return;
+            }
+            try {
+                await changeMasterPassword(oldPwd, newPwd);
+                UIUtils.showToast('Пароль изменён!', 'success');
+            } catch (err) {
+                UIUtils.showToast('Ошибка: ' + err.message, 'error');
+            }
         });
 
-        renderBookmarksGrid(currentBookmarks);
-    }
-
-    async function changeMasterPassword(oldPwd, newPwd) {
-        const res = await loadBookmarks(oldPwd);
-        if (res.passwordRequired) throw new Error('Old password required');
-        const bookmarks = res.bookmarks || [];
-        await saveBookmarks(bookmarks, newPwd);
-        masterPassword = newPwd;
-        return true;
-    }
-
-    async function resetStorage() {
-        if (gistId) await GistAPI.delete(gistId, currentToken).catch(()=>{});
-        gistId = null;
-        masterPassword = null;
-        SessionCache.clear();
-        localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);
-        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        resetStorageBtn.addEventListener('click', async () => {
+            if (confirm('Удалить все закладки безвозвратно?')) {
+                try {
+                    await resetStorage();
+                    currentBookmarks = [];
+                    masterPassword = null;
+                    renderBookmarksGrid([]);
+                    UIUtils.showToast('Хранилище сброшено', 'success');
+                    closeModal();
+                } catch (err) {
+                    UIUtils.showToast('Ошибка: ' + err.message, 'error');
+                }
+            }
+        });
     }
 
     function updateAuthState() {
-        if (!window.GithubAuth) return;
-        currentUser = GithubAuth.getCurrentUser();
-        currentToken = GithubAuth.getToken();
-        if (currentUser && currentToken) {
-            const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
-            if (stored) try { gistId = JSON.parse(stored).gistId; } catch {}
-        } else {
-            gistId = null; masterPassword = null; SessionCache.clear();
+        if (window.GithubAuth) {
+            currentUser = window.GithubAuth.getCurrentUser();
+            currentToken = window.GithubAuth.getToken();
+            if (currentUser && currentToken) {
+                const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
+                if (stored) {
+                    try { gistId = JSON.parse(stored).gistId; } catch {}
+                }
+            } else {
+                gistId = null;
+                masterPassword = null;
+                clearSessionCache();
+            }
         }
     }
 
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
-    window.addEventListener('github-login-success', updateAuthState);
-    window.addEventListener('github-logout', () => { currentUser = null; currentToken = null; gistId = null; masterPassword = null; SessionCache.clear(); });
-    updateAuthState();
+    function init() {
+        updateAuthState();
+        window.addEventListener('github-login-success', updateAuthState);
+        window.addEventListener('github-logout', () => {
+            currentUser = null;
+            currentToken = null;
+            gistId = null;
+            masterPassword = null;
+            clearSessionCache();
+        });
+    }
 
-    window.BookmarkStorage = {
+    const API = {
         openStorageModal,
         addBookmark,
         loadBookmarks,
@@ -751,4 +1128,7 @@
         changeMasterPassword,
         resetStorage
     };
+
+    window.BookmarkStorage = API;
+    init();
 })();
