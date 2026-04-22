@@ -1,10 +1,7 @@
 // js/features/storage.js — Хранилище закладок через GitHub Gist
-// Полная версия с адаптивным интерфейсом и анимациями
+// Компактные карточки, 3D tilt, адаптивность
 (function() {
     'use strict';
-
-    // Защита от повторной загрузки
-    if (window.BookmarkStorage) return;
 
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -492,15 +489,16 @@
         overlay.onclick = (e) => { if (e.target === overlay) closeBtn.click(); };
     }
 
-    // ==================== КАРТОЧКА ЗАКЛАДКИ ====================
+    // ==================== КАРТОЧКА ЗАКЛАДКИ (компактная) ====================
     function renderBookmarkCard(bookmark, onDelete, onEditSave) {
         const card = document.createElement('div');
         card.className = 'bookmark-card tilt-card';
         card.style.cssText = `
-            background:var(--bg-inner-gradient);border-radius:20px;padding:0;
+            background:var(--bg-inner-gradient);border-radius:16px;padding:0;
             border:1px solid var(--border);cursor:pointer;transition:all 0.3s cubic-bezier(0.25,0.46,0.45,0.94);
             overflow:hidden;display:flex;flex-direction:column;height:100%;
         `;
+        // 3D tilt эффект будет добавлен через общий обработчик в effects.js, но добавим базовый hover
         card.onmouseenter = () => card.style.transform = 'translateY(-5px) scale(1.02)';
         card.onmouseleave = () => card.style.transform = 'translateY(0) scale(1)';
 
@@ -540,18 +538,18 @@
         }
 
         const content = document.createElement('div');
-        content.style.cssText = 'padding:16px;flex:1;display:flex;flex-direction:column;';
+        content.style.cssText = 'padding:12px;flex:1;display:flex;flex-direction:column;';
 
         const titleEl = document.createElement('h3');
-        titleEl.textContent = bookmark.title.length > 60 ? bookmark.title.substring(0,60)+'…' : bookmark.title;
-        titleEl.style.cssText = 'margin:0 0 8px;font-size:18px;color:var(--text-primary);';
+        titleEl.textContent = bookmark.title.length > 50 ? bookmark.title.substring(0,50)+'…' : bookmark.title;
+        titleEl.style.cssText = 'margin:0 0 6px;font-size:16px;color:var(--text-primary);line-height:1.3;';
 
         const meta = document.createElement('div');
-        meta.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:12px;font-size:13px;color:var(--text-secondary);';
+        meta.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;color:var(--text-secondary);';
         meta.innerHTML = `<span><i class="fas fa-calendar-alt"></i> ${new Date(bookmark.added).toLocaleDateString()}</span>`;
 
         const actions = document.createElement('div');
-        actions.style.cssText = 'display:flex;gap:8px;margin-top:auto;justify-content:flex-end;';
+        actions.style.cssText = 'display:flex;gap:6px;margin-top:auto;justify-content:flex-end;';
         
         if (bookmark.downloadUrl) {
             const downloadBtn = document.createElement('button');
@@ -571,7 +569,7 @@
             const newTitle = prompt('Новое название:', bookmark.title);
             if (newTitle && newTitle !== bookmark.title) {
                 bookmark.title = newTitle;
-                titleEl.textContent = newTitle.length > 60 ? newTitle.substring(0,60)+'…' : newTitle;
+                titleEl.textContent = newTitle.length > 50 ? newTitle.substring(0,50)+'…' : newTitle;
                 onEditSave(bookmark);
             }
         };
@@ -802,13 +800,14 @@
                 <div id="add-form" class="storage-add-form ${addFormVisible ? 'visible' : ''}">
                     <input type="url" id="new-url" placeholder="Ссылка на видео, пост или страницу..." autocomplete="off">
                     <input type="text" id="new-title" placeholder="Название (опционально)">
-                    <button class="storage-btn primary" id="confirm-add">Добавить</button>
+                    <button class="storage-btn primary" id="confirm-add" style="padding:12px 20px;">Добавить</button>
                 </div>
                 <div class="bookmarks-grid" id="bookmarks-grid"></div>
             </div>
         `;
 
-        const { modal, closeModal } = UIUtils.createModal('📚 Хранилище', modalHtml, { size: 'full' });
+        // Используем иконку Font Awesome в заголовке
+        const { modal, closeModal } = UIUtils.createModal('<i class="fas fa-box-archive"></i> Хранилище', modalHtml, { size: 'full' });
         currentModal = modal;
         
         const style = document.createElement('style');
@@ -935,15 +934,15 @@
             }
             .bookmarks-grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-                gap: 20px;
+                grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+                gap: 16px;
             }
             .bookmark-action-btn {
                 background: var(--bg-primary);
                 border: 1px solid var(--border);
                 color: var(--text-secondary);
-                width: 36px;
-                height: 36px;
+                width: 32px;
+                height: 32px;
                 border-radius: 50%;
                 display: flex;
                 align-items: center;
@@ -1129,6 +1128,8 @@
         resetStorage
     };
 
-    window.BookmarkStorage = API;
-    init();
+    if (!window.BookmarkStorage) {
+        window.BookmarkStorage = API;
+        init();
+    }
 })();
