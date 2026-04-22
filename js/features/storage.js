@@ -1,8 +1,6 @@
 // js/features/storage.js — Хранилище закладок через GitHub Gist
-// Компактные карточки, 3D tilt, адаптивность
-(function() {
-    'use strict';
-
+// Полностью переработанный интерфейс с анимациями, адаптивностью и оптимистичными обновлениями.
+const BookmarkStorage = (function() {
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
     const STORAGE_KEY_PREFIX = 'bookmarks_';
@@ -272,39 +270,7 @@
         localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
 
-    // ==================== OEmbed ====================
-    async function fetchEmbedData(url) {
-        const services = [
-            `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
-            `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`,
-            `https://api.embed.ly/1/oembed?url=${encodeURIComponent(url)}`
-        ];
-        for (const serviceUrl of services) {
-            try {
-                const response = await fetch(serviceUrl, { signal: AbortSignal.timeout(5000) });
-                if (!response.ok) continue;
-                const data = await response.json();
-                if (data && (data.html || data.url || data.thumbnail_url)) return data;
-            } catch {}
-        }
-        try {
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-            const proxyResp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-            if (proxyResp.ok) {
-                const proxyData = await proxyResp.json();
-                const html = proxyData.contents;
-                const titleMatch = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i);
-                const imageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i);
-                const videoMatch = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"[^>]*>/i);
-                return {
-                    title: titleMatch ? titleMatch[1] : null,
-                    thumbnail_url: imageMatch ? imageMatch[1] : null,
-                    url: videoMatch ? videoMatch[1] : null
-                };
-            }
-        } catch {}
-        return null;
-    }
+    // ==================== ПРОДВИНУТОЕ ПОЛУЧЕНИЕ ДАННЫХ ====================
 
     function guessEmbedUrl(url) {
         if (!url) return null;
@@ -313,6 +279,14 @@
             const origin = urlObj.origin;
             const path = urlObj.pathname;
             const search = urlObj.search;
+            
+            // Обработка view_video.php
+            if (path.includes('view_video.php') && search.includes('viewkey=')) {
+                const params = new URLSearchParams(search);
+                const videoId = params.get('viewkey');
+                if (videoId) return `${origin}/embed/${videoId}`;
+            }
+            
             if (url.includes('youtube.com/shorts/') || url.includes('youtu.be/shorts/')) {
                 const match = url.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([a-zA-Z0-9_-]+)/);
                 if (match) return `https://www.youtube.com/embed/${match[1]}`;
@@ -321,11 +295,6 @@
                 const params = new URLSearchParams(search);
                 const videoId = params.get('v');
                 if (videoId) return `https://www.youtube.com/embed/${videoId}`;
-            }
-            if (path.includes('view_video.php') && search.includes('viewkey=')) {
-                const params = new URLSearchParams(search);
-                const videoId = params.get('viewkey');
-                if (videoId) return `${origin}/embed/${videoId}`;
             }
             if (path.includes('/embed/')) return url;
             if (path.includes('/v/')) {
@@ -359,6 +328,117 @@
         return false;
     }
 
+    // Расширенный список oEmbed провайдеров
+    const OEMBED_PROVIDERS = [
+        (url) => `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
+        (url) => `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`,
+        (url) => `https://api.embed.ly/1/oembed?url=${encodeURIComponent(url)}`,
+        (url) => `https://app.embed.rocks/api/oembed?url=${encodeURIComponent(url)}`,
+        (url) => `https://api.microlink.io/?url=${encodeURIComponent(url)}`,
+        (url) => `https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`,
+        (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
+    ];
+
+    async function fetchOEmbedData(url) {
+        const controllers = OEMBED_PROVIDERS.map(() => new AbortController());
+        const timeoutId = setTimeout(() => controllers.forEach(c => c.abort()), 5000);
+
+        const promises = OEMBED_PROVIDERS.map(async (provider, index) => {
+            try {
+                const apiUrl = provider(url);
+                const resp = await fetch(apiUrl, { signal: controllers[index].signal });
+                if (!resp.ok) return null;
+                const data = await resp.json();
+                if (data) {
+                    // Адаптация под разные форматы ответов
+                    if (data.contents) {
+                        const html = data.contents;
+                        const titleMatch = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i);
+                        const imageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i);
+                        const videoMatch = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"[^>]*>/i);
+                        return {
+                            title: titleMatch ? titleMatch[1] : null,
+                            thumbnail_url: imageMatch ? imageMatch[1] : null,
+                            url: videoMatch ? videoMatch[1] : null
+                        };
+                    }
+                    if (data.html || data.url || data.thumbnail_url || data.image || data.title) {
+                        return {
+                            title: data.title || null,
+                            thumbnail_url: data.thumbnail_url || data.image || data.thumbnail || null,
+                            url: data.url || null,
+                            html: data.html || null
+                        };
+                    }
+                }
+                return null;
+            } catch {
+                return null;
+            }
+        });
+
+        try {
+            const result = await Promise.any(promises);
+            clearTimeout(timeoutId);
+            return result;
+        } catch {
+            clearTimeout(timeoutId);
+            return null;
+        }
+    }
+
+    // Сервисы для получения прямых ссылок на видео
+    const VIDEO_DOWNLOAD_SERVICES = [
+        {
+            name: 'Cobalt',
+            endpoint: 'https://co.wuk.sh/api/json',
+            method: 'POST',
+            getBody: (url) => JSON.stringify({ url, aFormat: 'best', vCodec: 'h264' })
+        },
+        {
+            name: 'AllMedia',
+            endpoint: 'https://allmedia-downloader.p.rapidapi.com/download',
+            method: 'GET',
+            getUrl: (url) => `https://allmedia-downloader.p.rapidapi.com/download?url=${encodeURIComponent(url)}`
+        }
+    ];
+
+    async function fetchDirectVideoUrl(url) {
+        const promises = VIDEO_DOWNLOAD_SERVICES.map(async (service) => {
+            try {
+                let resp;
+                if (service.method === 'POST') {
+                    resp = await fetch(service.endpoint, {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                        body: service.getBody(url)
+                    });
+                } else {
+                    resp = await fetch(service.getUrl(url));
+                }
+                if (!resp.ok) return null;
+                const data = await resp.json();
+                // Cobalt API
+                if (data.status === 'success' || data.url) {
+                    return data.url;
+                }
+                // AllMedia API
+                if (data.success && data.data && data.data.url) {
+                    return data.data.url;
+                }
+                return null;
+            } catch {
+                return null;
+            }
+        });
+
+        try {
+            return await Promise.any(promises);
+        } catch {
+            return null;
+        }
+    }
+
     // ==================== ДОБАВЛЕНИЕ/УДАЛЕНИЕ ====================
     async function addBookmark(bookmark) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
@@ -366,14 +446,19 @@
             await openStorageModal();
             if (!masterPassword) return;
         }
-
+    
+        if (!bookmark || !bookmark.url) {
+            UIUtils.showToast('Некорректная ссылка', 'error');
+            return;
+        }
+    
         let finalUrl = bookmark.url;
         let embedUrl = null;
         let downloadUrl = null;
         let thumbnail = null;
         let finalTitle = bookmark.title;
         let postType = bookmark.postType || null;
-
+    
         if (bookmark.url) {
             if (isSitePostUrl(bookmark.url)) {
                 postType = 'site-post';
@@ -381,7 +466,15 @@
                 embedUrl = bookmark.url;
                 finalUrl = bookmark.url;
             } else {
-                const oembed = await fetchEmbedData(bookmark.url);
+                // Сначала пробуем угадать embed
+                const guessedEmbed = guessEmbedUrl(bookmark.url);
+                if (guessedEmbed) {
+                    embedUrl = guessedEmbed;
+                    finalUrl = guessedEmbed;
+                }
+    
+                // Параллельно получаем oEmbed данные
+                const oembed = await fetchOEmbedData(bookmark.url);
                 if (oembed) {
                     if (oembed.html) {
                         const iframeMatch = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
@@ -393,7 +486,13 @@
                     if (oembed.thumbnail_url) thumbnail = oembed.thumbnail_url;
                     if (oembed.title && !finalTitle) finalTitle = oembed.title;
                 }
-                if (!embedUrl) embedUrl = guessEmbedUrl(bookmark.url);
+    
+                // Пытаемся получить прямую ссылку на видео
+                if (!downloadUrl) {
+                    const directUrl = await fetchDirectVideoUrl(bookmark.url);
+                    if (directUrl) downloadUrl = directUrl;
+                }
+    
                 if (embedUrl) finalUrl = embedUrl;
                 if (!thumbnail && embedUrl && embedUrl.includes('youtube.com/embed/')) {
                     const videoId = embedUrl.split('/embed/')[1]?.split('?')[0];
@@ -401,7 +500,7 @@
                 }
             }
         }
-
+    
         const result = await loadBookmarks(masterPassword);
         if (result.passwordRequired) throw new Error('Password required');
         let bookmarksArray = result.bookmarks || [];
@@ -410,7 +509,7 @@
             UIUtils.showToast('Уже в избранном', 'info');
             throw new Error('duplicate');
         }
-
+    
         const newBookmark = {
             id: Date.now() + '-' + Math.random().toString(36),
             added: new Date().toISOString(),
@@ -421,15 +520,15 @@
             thumbnail,
             postType
         };
-
+    
         const optimisticBookmarks = [...bookmarksArray, newBookmark];
         saveSessionCache(optimisticBookmarks, masterPassword);
         if (currentGrid) renderBookmarksGrid(optimisticBookmarks);
-
+    
         saveBookmarks(optimisticBookmarks, masterPassword).catch(e => {
             UIUtils.showToast('Ошибка синхронизации', 'error');
         });
-
+    
         return newBookmark;
     }
 
@@ -489,18 +588,31 @@
         overlay.onclick = (e) => { if (e.target === overlay) closeBtn.click(); };
     }
 
-    // ==================== КАРТОЧКА ЗАКЛАДКИ (компактная) ====================
+    // ==================== КАРТОЧКА ЗАКЛАДКИ ====================
     function renderBookmarkCard(bookmark, onDelete, onEditSave) {
         const card = document.createElement('div');
         card.className = 'bookmark-card tilt-card';
         card.style.cssText = `
-            background:var(--bg-inner-gradient);border-radius:16px;padding:0;
+            background:var(--bg-inner-gradient);border-radius:20px;padding:0;
             border:1px solid var(--border);cursor:pointer;transition:all 0.3s cubic-bezier(0.25,0.46,0.45,0.94);
             overflow:hidden;display:flex;flex-direction:column;height:100%;
         `;
-        // 3D tilt эффект будет добавлен через общий обработчик в effects.js, но добавим базовый hover
-        card.onmouseenter = () => card.style.transform = 'translateY(-5px) scale(1.02)';
-        card.onmouseleave = () => card.style.transform = 'translateY(0) scale(1)';
+        
+        // 3D эффект при наведении
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            const rotateX = (y - centerY) / 15;
+            const rotateY = (centerX - x) / 15;
+            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
+        });
+        
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)';
+        });
 
         const mediaContainer = document.createElement('div');
         mediaContainer.style.cssText = `
@@ -540,16 +652,16 @@
         const content = document.createElement('div');
         content.style.cssText = 'padding:12px;flex:1;display:flex;flex-direction:column;';
 
-        const titleEl = document.createElement('h3');
-        titleEl.textContent = bookmark.title.length > 50 ? bookmark.title.substring(0,50)+'…' : bookmark.title;
-        titleEl.style.cssText = 'margin:0 0 6px;font-size:16px;color:var(--text-primary);line-height:1.3;';
+        const titleEl = document.createElement('h4');
+        titleEl.textContent = bookmark.title.length > 60 ? bookmark.title.substring(0,60)+'…' : bookmark.title;
+        titleEl.style.cssText = 'margin:0 0 6px;font-size:16px;color:var(--text-primary);font-weight:500;';
 
         const meta = document.createElement('div');
-        meta.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;color:var(--text-secondary);';
+        meta.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;color:var(--text-secondary);';
         meta.innerHTML = `<span><i class="fas fa-calendar-alt"></i> ${new Date(bookmark.added).toLocaleDateString()}</span>`;
 
         const actions = document.createElement('div');
-        actions.style.cssText = 'display:flex;gap:6px;margin-top:auto;justify-content:flex-end;';
+        actions.style.cssText = 'display:flex;gap:4px;margin-top:auto;justify-content:flex-end;';
         
         if (bookmark.downloadUrl) {
             const downloadBtn = document.createElement('button');
@@ -569,7 +681,7 @@
             const newTitle = prompt('Новое название:', bookmark.title);
             if (newTitle && newTitle !== bookmark.title) {
                 bookmark.title = newTitle;
-                titleEl.textContent = newTitle.length > 50 ? newTitle.substring(0,50)+'…' : newTitle;
+                titleEl.textContent = newTitle.length > 60 ? newTitle.substring(0,60)+'…' : newTitle;
                 onEditSave(bookmark);
             }
         };
@@ -779,7 +891,7 @@
                             </button>
                         </div>
                         <div class="storage-categories">
-                            <button class="cat-btn ${category === 'all' ? 'active' : ''}" data-cat="all">Все</button>
+                            <button class="cat-btn ${category === 'all' ? 'active' : ''}" data-cat="all"><i class="fas fa-globe"></i> Все</button>
                             <button class="cat-btn ${category === 'video' ? 'active' : ''}" data-cat="video"><i class="fas fa-video"></i> Видео</button>
                             <button class="cat-btn ${category === 'post' ? 'active' : ''}" data-cat="post"><i class="fas fa-newspaper"></i> Посты</button>
                             <button class="cat-btn ${category === 'link' ? 'active' : ''}" data-cat="link"><i class="fas fa-link"></i> Ссылки</button>
@@ -800,14 +912,13 @@
                 <div id="add-form" class="storage-add-form ${addFormVisible ? 'visible' : ''}">
                     <input type="url" id="new-url" placeholder="Ссылка на видео, пост или страницу..." autocomplete="off">
                     <input type="text" id="new-title" placeholder="Название (опционально)">
-                    <button class="storage-btn primary" id="confirm-add" style="padding:12px 20px;">Добавить</button>
+                    <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> Добавить</button>
                 </div>
                 <div class="bookmarks-grid" id="bookmarks-grid"></div>
             </div>
         `;
 
-        // Используем иконку Font Awesome в заголовке
-        const { modal, closeModal } = UIUtils.createModal('<i class="fas fa-box-archive"></i> Хранилище', modalHtml, { size: 'full' });
+        const { modal, closeModal } = UIUtils.createModal('Хранилище', modalHtml, { size: 'full' });
         currentModal = modal;
         
         const style = document.createElement('style');
@@ -870,6 +981,9 @@
                 cursor: pointer;
                 transition: all 0.2s;
                 font-family: 'Russo One', sans-serif;
+                display: flex;
+                align-items: center;
+                gap: 4px;
             }
             .cat-btn.active {
                 background: var(--accent);
@@ -908,7 +1022,7 @@
             }
             .storage-add-form {
                 display: grid;
-                grid-template-columns: 2fr 1fr auto;
+                grid-template-columns: 1fr 1fr auto;
                 gap: 10px;
                 background: var(--bg-inner-gradient);
                 padding: 16px;
@@ -918,6 +1032,7 @@
                 transform: translateY(-10px);
                 transition: opacity 0.3s, transform 0.3s;
                 display: none;
+                align-items: center;
             }
             .storage-add-form.visible {
                 display: grid;
@@ -934,21 +1049,22 @@
             }
             .bookmarks-grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-                gap: 16px;
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 20px;
             }
             .bookmark-action-btn {
                 background: var(--bg-primary);
                 border: 1px solid var(--border);
                 color: var(--text-secondary);
-                width: 32px;
-                height: 32px;
+                width: 28px;
+                height: 28px;
                 border-radius: 50%;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 cursor: pointer;
                 transition: all 0.2s;
+                font-size: 12px;
             }
             .bookmark-action-btn:hover {
                 background: var(--accent);
