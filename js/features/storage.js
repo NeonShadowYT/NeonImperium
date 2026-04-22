@@ -1,5 +1,4 @@
-// js/features/storage.js — Хранилище закладок через GitHub Gist
-// Версия 3.0 — исправлены ошибки, улучшен стиль, добавлена кнопка скачивания
+// js/features/storage.js — Хранилище закладок (v4 — стабильная версия)
 (function() {
     'use strict';
 
@@ -161,7 +160,7 @@
         if (!password) throw new Error('Master password required');
         SessionCache.save(bookmarks, password);
         const encrypted = await Crypto.encrypt(bookmarks, password);
-        const payload = { version: 3, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
+        const payload = { version: 4, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
         const content = JSON.stringify(payload);
         try {
             if (gistId) await GistAPI.update(gistId, content, currentToken);
@@ -172,24 +171,6 @@
         } catch (e) {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
         }
-    }
-
-    async function changeMasterPassword(oldPwd, newPwd) {
-        const res = await loadBookmarks(oldPwd);
-        if (res.passwordRequired) throw new Error('Old password required');
-        const bookmarks = res.bookmarks || [];
-        await saveBookmarks(bookmarks, newPwd);
-        masterPassword = newPwd;
-        return true;
-    }
-
-    async function resetStorage() {
-        if (gistId) await GistAPI.delete(gistId, currentToken);
-        gistId = null;
-        masterPassword = null;
-        SessionCache.clear();
-        localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);
-        localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
 
     // ==================== РАСПОЗНАВАНИЕ URL ====================
@@ -205,6 +186,7 @@
                 return (u.hostname === 'neonshadowyt.github.io' || u.hostname === 'localhost') && u.searchParams.has('post');
             } catch { return false; }
         },
+        // Улучшенное определение embed для разных платформ
         guessEmbed(url) {
             if (!url) return null;
             try {
@@ -212,21 +194,38 @@
                 const origin = u.origin;
                 const path = u.pathname;
                 const search = u.search;
+
+                // view_video.php?viewkey=...
                 if (path.includes('view_video.php') && search.includes('viewkey=')) {
                     const key = new URLSearchParams(search).get('viewkey');
                     if (key) return `${origin}/embed/${key}`;
                 }
+                // vk.com video
+                if (u.hostname.includes('vk.com') && path.includes('video')) {
+                    const match = url.match(/video(-?\d+)_(\d+)/);
+                    if (match) return `https://vk.com/video_ext.php?oid=${match[1]}&id=${match[2]}&hd=2`;
+                }
+                // rutube
+                if (u.hostname.includes('rutube.ru') && path.includes('/video/')) {
+                    const id = path.split('/video/')[1]?.split('/')[0];
+                    if (id) return `https://rutube.ru/play/embed/${id}`;
+                }
+                // YouTube shorts
                 const shortMatch = url.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([a-zA-Z0-9_-]+)/);
                 if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}`;
+                // YouTube watch
                 if (search.includes('v=')) {
                     const v = new URLSearchParams(search).get('v');
                     if (v) return `https://www.youtube.com/embed/${v}`;
                 }
+                // Уже embed
                 if (path.includes('/embed/')) return url;
+                // /v/...
                 if (path.includes('/v/')) {
                     const id = path.split('/v/')[1]?.split('?')[0];
                     if (id) return `${origin}/embed/${id}`;
                 }
+                // /view/ или /watch/
                 const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
                 if (viewMatch) return `${origin}/embed/${viewMatch[2]}`;
                 const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
@@ -239,31 +238,20 @@
     // ==================== OEmbed и прямые ссылки ====================
     const OEMBED_PROVIDERS = [
         (url) => `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
-        (url) => `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`,
-        (url) => `https://api.embed.ly/1/oembed?url=${encodeURIComponent(url)}`,
-        (url) => `https://app.embed.rocks/api/oembed?url=${encodeURIComponent(url)}`,
-        (url) => `https://api.microlink.io/?url=${encodeURIComponent(url)}`,
-        (url) => `https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`,
-        (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
+        (url) => `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`
     ];
 
     async function fetchOEmbedData(url) {
-        const controllers = OEMBED_PROVIDERS.map(() => new AbortController());
-        const timeout = setTimeout(() => controllers.forEach(c => c.abort()), 5000);
-        const promises = OEMBED_PROVIDERS.map(async (provider, i) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        for (const provider of OEMBED_PROVIDERS) {
             try {
                 const apiUrl = provider(url);
-                const resp = await fetch(apiUrl, { signal: controllers[i].signal });
-                if (!resp.ok) return null;
+                const resp = await fetch(apiUrl, { signal: controller.signal });
+                if (!resp.ok) continue;
                 const data = await resp.json();
+                clearTimeout(timeout);
                 if (data) {
-                    if (data.contents) {
-                        const html = data.contents;
-                        const title = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
-                        const image = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
-                        const video = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
-                        return { title, thumbnail_url: image, url: video };
-                    }
                     return {
                         title: data.title,
                         thumbnail_url: data.thumbnail_url || data.image || data.thumbnail,
@@ -272,18 +260,12 @@
                     };
                 }
             } catch {}
-            return null;
-        });
-        try {
-            const result = await Promise.any(promises);
-            clearTimeout(timeout);
-            return result;
-        } catch {
-            clearTimeout(timeout);
-            return null;
         }
+        clearTimeout(timeout);
+        return null;
     }
 
+    // Улучшенные сервисы для получения прямой ссылки на видеофайл
     const VIDEO_SERVICES = [
         {
             name: 'Cobalt',
@@ -299,15 +281,6 @@
             }
         },
         {
-            name: 'AllMedia',
-            fetch: async (url) => {
-                const resp = await fetch(`https://allmedia-downloader.p.rapidapi.com/download?url=${encodeURIComponent(url)}`);
-                if (!resp.ok) return null;
-                const data = await resp.json();
-                return data.success ? data.data?.url : null;
-            }
-        },
-        {
             name: 'YtDlpAPI',
             fetch: async (url) => {
                 const resp = await fetch(`https://yt-dlp-api.vercel.app/api/extract?url=${encodeURIComponent(url)}`);
@@ -319,7 +292,7 @@
         {
             name: 'Vimeo',
             fetch: async (url) => {
-                // Vimeo OEmbed часто содержит прямую ссылку
+                if (!url.includes('vimeo.com')) return null;
                 const oembed = await fetchOEmbedData(url);
                 if (oembed?.html) {
                     const src = oembed.html.match(/src=["']([^"']+)["']/i)?.[1];
@@ -353,65 +326,75 @@
         let embedUrl = null;
         let downloadUrl = null;
         let thumbnail = null;
-        let finalTitle = bookmark.title;
+        let finalTitle = bookmark.title || bookmark.url;
         let postType = bookmark.postType || null;
 
-        if (bookmark.url) {
-            if (UrlUtils.isSitePost(bookmark.url)) {
-                postType = 'site-post';
-            } else if (UrlUtils.isEmbed(bookmark.url)) {
-                embedUrl = bookmark.url;
-                finalUrl = bookmark.url;
-            } else {
-                const guessed = UrlUtils.guessEmbed(bookmark.url);
-                if (guessed) { embedUrl = guessed; finalUrl = guessed; }
+        // Определяем embed и прочие метаданные
+        if (UrlUtils.isSitePost(finalUrl)) {
+            postType = 'site-post';
+        } else if (UrlUtils.isEmbed(finalUrl)) {
+            embedUrl = finalUrl;
+        } else {
+            const guessed = UrlUtils.guessEmbed(finalUrl);
+            if (guessed) embedUrl = guessed;
 
-                const [oembed, direct] = await Promise.all([
-                    fetchOEmbedData(bookmark.url),
-                    fetchDirectVideoUrl(bookmark.url)
-                ]);
-                if (oembed) {
-                    if (oembed.html) {
-                        const iframeSrc = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i)?.[1];
-                        if (iframeSrc) embedUrl = iframeSrc;
-                        // Попробуем извлечь прямую ссылку из HTML (video тег)
-                        if (!downloadUrl) {
-                            const videoMatch = oembed.html.match(/<video[^>]+src=["']([^"']+\.mp4)["']/i);
-                            if (videoMatch) downloadUrl = videoMatch[1];
-                        }
-                    }
-                    if (oembed.url && /\.(mp4|webm|mov)/i.test(oembed.url)) downloadUrl = oembed.url;
-                    if (oembed.thumbnail_url) thumbnail = oembed.thumbnail_url;
-                    if (oembed.title && !finalTitle) finalTitle = oembed.title;
+            // Пытаемся получить oembed и прямую ссылку параллельно
+            const [oembed, direct] = await Promise.allSettled([
+                fetchOEmbedData(finalUrl),
+                fetchDirectVideoUrl(finalUrl)
+            ]);
+
+            if (oembed.status === 'fulfilled' && oembed.value) {
+                const data = oembed.value;
+                if (data.html) {
+                    const iframeSrc = data.html.match(/<iframe[^>]+src=["']([^"']+)["']/i)?.[1];
+                    if (iframeSrc) embedUrl = iframeSrc;
                 }
-                if (direct) downloadUrl = direct;
-                if (!thumbnail && embedUrl?.includes('youtube.com/embed/')) {
-                    const vid = embedUrl.split('/embed/')[1]?.split('?')[0];
-                    if (vid) thumbnail = `https://img.youtube.com/vi/${vid}/mqdefault.jpg`;
-                }
+                if (data.url && /\.(mp4|webm|mov)/i.test(data.url)) downloadUrl = data.url;
+                if (data.thumbnail_url) thumbnail = data.thumbnail_url;
+                if (data.title) finalTitle = data.title;
+            }
+
+            if (direct.status === 'fulfilled' && direct.value) {
+                downloadUrl = direct.value;
+            }
+
+            if (!thumbnail && embedUrl?.includes('youtube.com/embed/')) {
+                const vid = embedUrl.split('/embed/')[1]?.split('?')[0];
+                if (vid) thumbnail = `https://img.youtube.com/vi/${vid}/mqdefault.jpg`;
             }
         }
 
+        // Создаём объект закладки
+        const newBookmark = {
+            id: Date.now() + '-' + Math.random().toString(36),
+            added: new Date().toISOString(),
+            url: finalUrl,
+            title: finalTitle,
+            embedUrl,
+            downloadUrl,
+            thumbnail,
+            postType
+        };
+
+        // Загружаем текущие закладки
         const res = await loadBookmarks(masterPassword);
         if (res.passwordRequired) throw new Error('Password required');
         const bookmarks = res.bookmarks || [];
+
+        // Проверка на дубликат
         if (bookmarks.some(b => b.url === finalUrl)) {
             UIUtils.showToast('Уже в избранном', 'info');
             throw new Error('duplicate');
         }
 
-        const newBookmark = {
-            id: Date.now() + '-' + Math.random().toString(36),
-            added: new Date().toISOString(),
-            url: finalUrl,
-            title: finalTitle || finalUrl,
-            embedUrl, downloadUrl, thumbnail, postType
-        };
+        const updated = [...bookmarks, newBookmark];
+        SessionCache.save(updated, masterPassword);
+        // Сохраняем в Gist в фоне
+        saveBookmarks(updated, masterPassword).catch(e => {
+            console.warn('Background sync failed', e);
+        });
 
-        const optimistic = [...bookmarks, newBookmark];
-        SessionCache.save(optimistic, masterPassword);
-        if (currentGrid) renderBookmarksGrid(optimistic);
-        saveBookmarks(optimistic, masterPassword).catch(e => UIUtils.showToast('Ошибка синхронизации', 'error'));
         return newBookmark;
     }
 
@@ -420,20 +403,17 @@
         const res = await loadBookmarks(masterPassword);
         const filtered = (res.bookmarks || []).filter(b => b.id !== bookmarkId);
         SessionCache.save(filtered, masterPassword);
-        if (currentGrid) renderBookmarksGrid(filtered);
         saveBookmarks(filtered, masterPassword).catch(e => UIUtils.showToast('Ошибка синхронизации', 'error'));
     }
 
     // ==================== UI КОМПОНЕНТЫ ====================
     function openVideoFullscreen(iframe, title) {
         const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;animation:fadeIn 0.2s;';
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;';
         const close = document.createElement('button');
         close.innerHTML = '<i class="fas fa-times"></i>';
-        close.style.cssText = 'position:absolute;top:20px;right:20px;background:rgba(0,0,0,0.7);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;transition:transform 0.2s;';
-        close.onmouseover = () => close.style.transform = 'scale(1.1)';
-        close.onmouseleave = () => close.style.transform = 'scale(1)';
-        close.onclick = () => { overlay.style.animation = 'fadeOut 0.2s forwards'; setTimeout(() => overlay.remove(), 200); };
+        close.style.cssText = 'position:absolute;top:20px;right:20px;background:rgba(0,0,0,0.7);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;';
+        close.onclick = () => overlay.remove();
         const titleDiv = document.createElement('div');
         titleDiv.textContent = title;
         titleDiv.style.cssText = 'position:absolute;top:20px;left:20px;color:#fff;font-size:18px;background:rgba(0,0,0,0.5);padding:8px 16px;border-radius:30px;';
@@ -444,22 +424,16 @@
     }
 
     function renderBookmarkCard(bookmark, onDelete, onEditSave) {
-        if (!bookmark) return document.createElement('div'); // защита от undefined
+        if (!bookmark) return document.createElement('div');
 
         const card = document.createElement('div');
         card.className = 'bookmark-card project-card tilt-card';
         card.style.cssText = 'background:var(--bg-inner-gradient);border-radius:20px;border:1px solid var(--border);cursor:pointer;transition:transform 0.3s;overflow:hidden;display:flex;flex-direction:column;height:100%;';
-        card.addEventListener('mousemove', e => {
-            const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left, y = e.clientY - rect.top;
-            const rotX = (y - rect.height/2) / 15, rotY = (rect.width/2 - x) / 15;
-            card.style.transform = `perspective(1000px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.02)`;
-        });
-        card.addEventListener('mouseleave', () => card.style.transform = '');
 
         const mediaContainer = document.createElement('div');
         mediaContainer.className = 'image-wrapper';
         mediaContainer.style.cssText = 'margin:-16px -16px 12px -16px;width:calc(100% + 32px);position:relative;padding-bottom:56.25%;background:var(--bg-primary);border-bottom:1px solid var(--border);';
+
         const embedSrc = bookmark.embedUrl || (UrlUtils.isEmbed(bookmark.url) ? bookmark.url : null);
         if (embedSrc) {
             const iframe = document.createElement('iframe');
@@ -467,7 +441,6 @@
             iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
             iframe.setAttribute('allowfullscreen', 'true');
             iframe.loading = 'lazy';
-            iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
             const overlay = document.createElement('div');
             overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer;z-index:2;';
             overlay.onclick = e => { e.stopPropagation(); openVideoFullscreen(iframe, bookmark.title); };
@@ -543,8 +516,17 @@
         filtered.forEach(b => {
             if (!b) return;
             const card = renderBookmarkCard(b,
-                id => { currentBookmarks = currentBookmarks.filter(bk => bk && bk.id !== id); renderBookmarksGrid(currentBookmarks); removeBookmark(id); },
-                updated => { const idx = currentBookmarks.findIndex(bk => bk && bk.id === updated.id); if (idx>=0) currentBookmarks[idx] = updated; saveBookmarks(currentBookmarks); renderBookmarksGrid(currentBookmarks); }
+                id => {
+                    currentBookmarks = currentBookmarks.filter(bk => bk && bk.id !== id);
+                    renderBookmarksGrid(currentBookmarks);
+                    removeBookmark(id);
+                },
+                updated => {
+                    const idx = currentBookmarks.findIndex(bk => bk && bk.id === updated.id);
+                    if (idx>=0) currentBookmarks[idx] = updated;
+                    saveBookmarks(currentBookmarks);
+                    renderBookmarksGrid(currentBookmarks);
+                }
             );
             currentGrid.appendChild(card);
         });
@@ -650,8 +632,11 @@
         `;
         modal.appendChild(style);
         currentGrid = modal.querySelector('#bookmarks-grid');
+
+        // Обработчики сортировки и категорий
         modal.querySelectorAll('.sort-btn').forEach(b => b.addEventListener('click', () => { sortOrder = b.dataset.order; renderBookmarksGrid(currentBookmarks); }));
         modal.querySelectorAll('.cat-btn').forEach(b => b.addEventListener('click', () => { category = b.dataset.cat; renderBookmarksGrid(currentBookmarks); }));
+
         const toggleAdd = modal.querySelector('#toggle-add-btn');
         const addForm = modal.querySelector('#add-form');
         toggleAdd.addEventListener('click', () => {
@@ -660,30 +645,48 @@
             toggleAdd.innerHTML = addFormVisible ? '<i class="fas fa-times"></i> Отмена' : '<i class="fas fa-plus"></i> Добавить';
             if (addFormVisible) modal.querySelector('#new-url').focus();
         });
+
         modal.querySelector('#confirm-add').addEventListener('click', async () => {
             const url = modal.querySelector('#new-url').value.trim();
             if (!url) return UIUtils.showToast('Введите ссылку', 'error');
             const title = modal.querySelector('#new-title').value.trim() || url;
             const btn = modal.querySelector('#confirm-add');
             btn.disabled = true;
-            const tempId = 'temp-'+Date.now();
+
+            // Оптимистичное добавление (всегда отображается)
+            const tempId = 'temp-' + Date.now();
             const optimistic = { id: tempId, url, title, added: new Date().toISOString() };
             currentBookmarks.unshift(optimistic);
             renderBookmarksGrid(currentBookmarks);
+            addFormVisible = false;
+            addForm.classList.remove('visible');
+            toggleAdd.innerHTML = '<i class="fas fa-plus"></i> Добавить';
+
             try {
                 const final = await addBookmark({ url, title });
+                // Заменяем временную запись на полноценную
                 const idx = currentBookmarks.findIndex(b => b.id === tempId);
                 if (idx >= 0) currentBookmarks[idx] = final;
                 renderBookmarksGrid(currentBookmarks);
                 UIUtils.showToast('Добавлено', 'success');
-                addFormVisible = false; addForm.classList.remove('visible');
-                toggleAdd.innerHTML = '<i class="fas fa-plus"></i> Добавить';
             } catch (e) {
-                if (e.message !== 'duplicate') UIUtils.showToast('Ошибка: '+e.message, 'error');
-                currentBookmarks = currentBookmarks.filter(b => b.id !== tempId);
-                renderBookmarksGrid(currentBookmarks);
-            } finally { btn.disabled = false; }
+                if (e.message === 'duplicate') {
+                    // Удаляем дубликат
+                    currentBookmarks = currentBookmarks.filter(b => b.id !== tempId);
+                    renderBookmarksGrid(currentBookmarks);
+                    UIUtils.showToast('Уже в избранном', 'info');
+                } else {
+                    // Ошибка, но временная запись остаётся (можно будет повторить или удалить)
+                    console.error('Ошибка добавления закладки:', e);
+                    UIUtils.showToast('Ошибка при добавлении. Закладка сохранена локально, попробуйте позже.', 'warning', 5000);
+                }
+            } finally {
+                btn.disabled = false;
+                modal.querySelector('#new-url').value = '';
+                modal.querySelector('#new-title').value = '';
+            }
         });
+
         modal.querySelector('#change-password-btn').addEventListener('click', async () => {
             const old = masterPassword || prompt('Текущий пароль:');
             if (!old) return;
@@ -692,6 +695,7 @@
             try { await changeMasterPassword(old, newPwd); UIUtils.showToast('Пароль изменён', 'success'); }
             catch(e) { UIUtils.showToast('Ошибка: '+e.message, 'error'); }
         });
+
         modal.querySelector('#reset-storage-btn').addEventListener('click', async () => {
             if (!confirm('Удалить все закладки?')) return;
             await resetStorage();
@@ -700,7 +704,26 @@
             UIUtils.showToast('Хранилище сброшено', 'success');
             closeModal();
         });
+
         renderBookmarksGrid(currentBookmarks);
+    }
+
+    async function changeMasterPassword(oldPwd, newPwd) {
+        const res = await loadBookmarks(oldPwd);
+        if (res.passwordRequired) throw new Error('Old password required');
+        const bookmarks = res.bookmarks || [];
+        await saveBookmarks(bookmarks, newPwd);
+        masterPassword = newPwd;
+        return true;
+    }
+
+    async function resetStorage() {
+        if (gistId) await GistAPI.delete(gistId, currentToken).catch(()=>{});
+        gistId = null;
+        masterPassword = null;
+        SessionCache.clear();
+        localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
 
     function updateAuthState() {
