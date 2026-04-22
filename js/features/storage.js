@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок (v4 — стабильная версия)
+// js/features/storage.js — Хранилище закладок (v5 — асинхронное обогащение + retry)
 (function() {
     'use strict';
 
@@ -9,6 +9,7 @@
     const LOCAL_STORAGE_KEY = 'neon_imperium_bookmarks_local';
     const SESSION_CACHE_KEY = 'bookmarks_session_cache';
     const RECOVERY_SALT = new TextEncoder().encode('neon-imperium-recovery-salt-v1');
+    const ENRICH_MAX_ATTEMPTS = 3;
 
     // Состояние модуля
     let currentUser = null;
@@ -160,7 +161,7 @@
         if (!password) throw new Error('Master password required');
         SessionCache.save(bookmarks, password);
         const encrypted = await Crypto.encrypt(bookmarks, password);
-        const payload = { version: 4, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
+        const payload = { version: 5, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
         const content = JSON.stringify(payload);
         try {
             if (gistId) await GistAPI.update(gistId, content, currentToken);
@@ -186,7 +187,6 @@
                 return (u.hostname === 'neonshadowyt.github.io' || u.hostname === 'localhost') && u.searchParams.has('post');
             } catch { return false; }
         },
-        // Улучшенное определение embed для разных платформ
         guessEmbed(url) {
             if (!url) return null;
             try {
@@ -195,37 +195,29 @@
                 const path = u.pathname;
                 const search = u.search;
 
-                // view_video.php?viewkey=...
                 if (path.includes('view_video.php') && search.includes('viewkey=')) {
                     const key = new URLSearchParams(search).get('viewkey');
                     if (key) return `${origin}/embed/${key}`;
                 }
-                // vk.com video
                 if (u.hostname.includes('vk.com') && path.includes('video')) {
                     const match = url.match(/video(-?\d+)_(\d+)/);
                     if (match) return `https://vk.com/video_ext.php?oid=${match[1]}&id=${match[2]}&hd=2`;
                 }
-                // rutube
                 if (u.hostname.includes('rutube.ru') && path.includes('/video/')) {
                     const id = path.split('/video/')[1]?.split('/')[0];
                     if (id) return `https://rutube.ru/play/embed/${id}`;
                 }
-                // YouTube shorts
                 const shortMatch = url.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([a-zA-Z0-9_-]+)/);
                 if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}`;
-                // YouTube watch
                 if (search.includes('v=')) {
                     const v = new URLSearchParams(search).get('v');
                     if (v) return `https://www.youtube.com/embed/${v}`;
                 }
-                // Уже embed
                 if (path.includes('/embed/')) return url;
-                // /v/...
                 if (path.includes('/v/')) {
                     const id = path.split('/v/')[1]?.split('?')[0];
                     if (id) return `${origin}/embed/${id}`;
                 }
-                // /view/ или /watch/
                 const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
                 if (viewMatch) return `${origin}/embed/${viewMatch[2]}`;
                 const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
@@ -265,7 +257,6 @@
         return null;
     }
 
-    // Улучшенные сервисы для получения прямой ссылки на видеофайл
     const VIDEO_SERVICES = [
         {
             name: 'Cobalt',
@@ -313,35 +304,21 @@
         try { return await Promise.any(promises); } catch { return null; }
     }
 
-    // ==================== ДОБАВЛЕНИЕ ЗАКЛАДКИ ====================
-    async function addBookmark(bookmark) {
-        if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
-        if (!masterPassword) {
-            await openStorageModal();
-            if (!masterPassword) return;
-        }
-        if (!bookmark?.url) { UIUtils.showToast('Некорректная ссылка', 'error'); return; }
+    // ==================== ФУНКЦИИ ОБОГАЩЕНИЯ ЗАКЛАДКИ ====================
+    async function fetchMetadata(url) {
+        let embedUrl = null, downloadUrl = null, thumbnail = null, title = null, postType = null;
 
-        let finalUrl = bookmark.url;
-        let embedUrl = null;
-        let downloadUrl = null;
-        let thumbnail = null;
-        let finalTitle = bookmark.title || bookmark.url;
-        let postType = bookmark.postType || null;
-
-        // Определяем embed и прочие метаданные
-        if (UrlUtils.isSitePost(finalUrl)) {
+        if (UrlUtils.isSitePost(url)) {
             postType = 'site-post';
-        } else if (UrlUtils.isEmbed(finalUrl)) {
-            embedUrl = finalUrl;
+        } else if (UrlUtils.isEmbed(url)) {
+            embedUrl = url;
         } else {
-            const guessed = UrlUtils.guessEmbed(finalUrl);
+            const guessed = UrlUtils.guessEmbed(url);
             if (guessed) embedUrl = guessed;
 
-            // Пытаемся получить oembed и прямую ссылку параллельно
             const [oembed, direct] = await Promise.allSettled([
-                fetchOEmbedData(finalUrl),
-                fetchDirectVideoUrl(finalUrl)
+                fetchOEmbedData(url),
+                fetchDirectVideoUrl(url)
             ]);
 
             if (oembed.status === 'fulfilled' && oembed.value) {
@@ -352,7 +329,7 @@
                 }
                 if (data.url && /\.(mp4|webm|mov)/i.test(data.url)) downloadUrl = data.url;
                 if (data.thumbnail_url) thumbnail = data.thumbnail_url;
-                if (data.title) finalTitle = data.title;
+                if (data.title) title = data.title;
             }
 
             if (direct.status === 'fulfilled' && direct.value) {
@@ -365,35 +342,93 @@
             }
         }
 
-        // Создаём объект закладки
+        return { embedUrl, downloadUrl, thumbnail, title, postType };
+    }
+
+    async function updateBookmarkInStorage(bookmark) {
+        const res = await loadBookmarks(masterPassword);
+        const bookmarks = res.bookmarks || [];
+        const idx = bookmarks.findIndex(b => b.id === bookmark.id);
+        if (idx !== -1) {
+            bookmarks[idx] = bookmark;
+            SessionCache.save(bookmarks, masterPassword);
+            saveBookmarks(bookmarks, masterPassword);
+            if (currentGrid) {
+                // Точечное обновление карточки
+                const cardElement = currentGrid.querySelector(`.bookmark-card[data-id="${bookmark.id}"]`);
+                if (cardElement) {
+                    const onDelete = (id) => {
+                        currentBookmarks = currentBookmarks.filter(b => b.id !== id);
+                        renderBookmarksGrid(currentBookmarks);
+                        removeBookmark(id);
+                    };
+                    const onEditSave = (updated) => {
+                        const idx = currentBookmarks.findIndex(b => b.id === updated.id);
+                        if (idx >= 0) currentBookmarks[idx] = updated;
+                        saveBookmarks(currentBookmarks);
+                        renderBookmarksGrid(currentBookmarks);
+                    };
+                    const newCard = renderBookmarkCard(bookmark, onDelete, onEditSave);
+                    cardElement.replaceWith(newCard);
+                } else {
+                    renderBookmarksGrid(bookmarks);
+                }
+            }
+        }
+    }
+
+    async function enrichBookmarkAsync(bookmark, attempt = 1) {
+        try {
+            const metadata = await fetchMetadata(bookmark.url);
+            Object.assign(bookmark, metadata, { enriched: true });
+            await updateBookmarkInStorage(bookmark);
+        } catch (error) {
+            if (attempt < ENRICH_MAX_ATTEMPTS) {
+                const delay = Math.pow(2, attempt) * 1000;
+                setTimeout(() => enrichBookmarkAsync(bookmark, attempt + 1), delay);
+            } else {
+                bookmark.enrichFailed = true;
+                await updateBookmarkInStorage(bookmark);
+            }
+        }
+    }
+
+    // ==================== ДОБАВЛЕНИЕ ЗАКЛАДКИ ====================
+    async function addBookmark(bookmark) {
+        if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
+        if (!masterPassword) {
+            await openStorageModal();
+            if (!masterPassword) return;
+        }
+        if (!bookmark?.url) { UIUtils.showToast('Некорректная ссылка', 'error'); return; }
+
         const newBookmark = {
             id: Date.now() + '-' + Math.random().toString(36),
             added: new Date().toISOString(),
-            url: finalUrl,
-            title: finalTitle,
-            embedUrl,
-            downloadUrl,
-            thumbnail,
-            postType
+            url: bookmark.url,
+            title: bookmark.title || bookmark.url,
+            embedUrl: null,
+            downloadUrl: null,
+            thumbnail: null,
+            postType: null,
+            enriched: false
         };
 
-        // Загружаем текущие закладки
         const res = await loadBookmarks(masterPassword);
         if (res.passwordRequired) throw new Error('Password required');
         const bookmarks = res.bookmarks || [];
 
-        // Проверка на дубликат
-        if (bookmarks.some(b => b.url === finalUrl)) {
+        if (bookmarks.some(b => b.url === newBookmark.url)) {
             UIUtils.showToast('Уже в избранном', 'info');
             throw new Error('duplicate');
         }
 
         const updated = [...bookmarks, newBookmark];
         SessionCache.save(updated, masterPassword);
-        // Сохраняем в Gist в фоне
-        saveBookmarks(updated, masterPassword).catch(e => {
-            console.warn('Background sync failed', e);
-        });
+        if (currentGrid) renderBookmarksGrid(updated);
+        saveBookmarks(updated, masterPassword).catch(e => console.warn('Background sync failed', e));
+
+        enrichBookmarkAsync(newBookmark).catch(e => console.warn('Enrichment failed', e));
 
         return newBookmark;
     }
@@ -428,6 +463,7 @@
 
         const card = document.createElement('div');
         card.className = 'bookmark-card project-card tilt-card';
+        card.dataset.id = bookmark.id;
         card.style.cssText = 'background:var(--bg-inner-gradient);border-radius:20px;border:1px solid var(--border);cursor:pointer;transition:transform 0.3s;overflow:hidden;display:flex;flex-direction:column;height:100%;';
 
         const mediaContainer = document.createElement('div');
@@ -452,6 +488,13 @@
             img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;';
             img.onerror = () => img.src = 'images/default-news.webp';
             mediaContainer.appendChild(img);
+            if (!bookmark.enriched && !bookmark.enrichFailed) {
+                const loader = document.createElement('div');
+                loader.className = 'loading-spinner';
+                loader.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;';
+                loader.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:24px;color:var(--accent);"></i>';
+                mediaContainer.appendChild(loader);
+            }
         }
 
         const content = document.createElement('div');
@@ -462,6 +505,11 @@
         const meta = document.createElement('div');
         meta.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;font-size:11px;color:var(--text-secondary);';
         meta.innerHTML = `<span><i class="fas fa-calendar-alt"></i> ${new Date(bookmark.added).toLocaleDateString()}</span>`;
+        if (bookmark.enrichFailed) {
+            meta.innerHTML += '<span style="color:#f44336;"><i class="fas fa-exclamation-triangle"></i> Не удалось загрузить превью</span>';
+        } else if (!bookmark.enriched) {
+            meta.innerHTML += '<span style="color:var(--accent);"><i class="fas fa-spinner fa-pulse"></i> Загрузка...</span>';
+        }
 
         const actions = document.createElement('div');
         actions.style.cssText = 'display:flex;gap:4px;margin-top:auto;justify-content:flex-end;';
@@ -633,7 +681,6 @@
         modal.appendChild(style);
         currentGrid = modal.querySelector('#bookmarks-grid');
 
-        // Обработчики сортировки и категорий
         modal.querySelectorAll('.sort-btn').forEach(b => b.addEventListener('click', () => { sortOrder = b.dataset.order; renderBookmarksGrid(currentBookmarks); }));
         modal.querySelectorAll('.cat-btn').forEach(b => b.addEventListener('click', () => { category = b.dataset.cat; renderBookmarksGrid(currentBookmarks); }));
 
@@ -653,9 +700,8 @@
             const btn = modal.querySelector('#confirm-add');
             btn.disabled = true;
 
-            // Оптимистичное добавление (всегда отображается)
             const tempId = 'temp-' + Date.now();
-            const optimistic = { id: tempId, url, title, added: new Date().toISOString() };
+            const optimistic = { id: tempId, url, title, added: new Date().toISOString(), enriched: false };
             currentBookmarks.unshift(optimistic);
             renderBookmarksGrid(currentBookmarks);
             addFormVisible = false;
@@ -664,19 +710,16 @@
 
             try {
                 const final = await addBookmark({ url, title });
-                // Заменяем временную запись на полноценную
                 const idx = currentBookmarks.findIndex(b => b.id === tempId);
                 if (idx >= 0) currentBookmarks[idx] = final;
                 renderBookmarksGrid(currentBookmarks);
                 UIUtils.showToast('Добавлено', 'success');
             } catch (e) {
                 if (e.message === 'duplicate') {
-                    // Удаляем дубликат
                     currentBookmarks = currentBookmarks.filter(b => b.id !== tempId);
                     renderBookmarksGrid(currentBookmarks);
                     UIUtils.showToast('Уже в избранном', 'info');
                 } else {
-                    // Ошибка, но временная запись остаётся (можно будет повторить или удалить)
                     console.error('Ошибка добавления закладки:', e);
                     UIUtils.showToast('Ошибка при добавлении. Закладка сохранена локально, попробуйте позже.', 'warning', 5000);
                 }
@@ -738,7 +781,6 @@
         }
     }
 
-    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
     window.addEventListener('github-login-success', updateAuthState);
     window.addEventListener('github-logout', () => { currentUser = null; currentToken = null; gistId = null; masterPassword = null; SessionCache.clear(); });
     updateAuthState();

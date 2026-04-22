@@ -1,4 +1,4 @@
-/* cards.css — стили карточек с изображениями от края до края */
+/* cards.css — стили карточек с изображениями от края до края + исправления для ПНСД */
 
 :root {
     --border-radius-card: 20px;
@@ -104,20 +104,27 @@
     border-radius: var(--border-radius-inner);
     padding: 16px;
     border: 1px solid var(--border);
-    transition: border-color var(--transition-default), transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: border-color 0.2s, transform 0.25s cubic-bezier(0.2, 0.9, 0.4, 1), box-shadow 0.25s;
     display: flex;
     flex-direction: column;
     height: 100%;
-    overflow: hidden; /* для обрезания изображения по скругленным углам */
+    overflow: hidden;
+    will-change: transform;
+    contain: layout style;
 }
-.project-card-link:hover .project-card { border-color: var(--accent); }
+.project-card-link:hover .project-card {
+    border-color: var(--accent);
+    transform: translateY(-6px) scale(1.01);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5);
+    will-change: transform, box-shadow;
+}
 
-/* Изображение — без отступов по краям */
+/* Изображение — без отступов по краям (стандартные карточки) */
 .project-card .image-wrapper {
-    margin: -16px -16px 12px -16px;  /* выходит за пределы padding */
+    margin: -16px -16px 12px -16px;
     width: calc(100% + 32px);
     height: 0;
-    padding-bottom: 56.25%; /* 16:9 */
+    padding-bottom: 56.25%;
     position: relative;
     overflow: hidden;
     border-radius: 0;
@@ -355,7 +362,7 @@
     margin: 24px 0;
 }
 
-/* Небольшие проекты на главной */
+/* ===== НЕБОЛЬШИЕ ПРОЕКТЫ НА ГЛАВНОЙ ===== */
 .small-projects-container {
     display: grid;
     grid-template-columns: 2fr 1fr 1fr 1fr;
@@ -374,18 +381,22 @@
     width: 100%;
     aspect-ratio: 16 / 9;
 }
+/* Переопределяем для маленьких проектов — убираем отрицательные отступы */
 .small-projects-container .project-card {
     height: 100%;
     padding: 12px;
 }
 .small-projects-container .project-card .image-wrapper {
-    flex: 1;
+    margin: 0 0 8px 0;        /* убираем вылезание */
     width: 100%;
-    margin-bottom: 8px;
+    padding-bottom: 56.25%;
     border-radius: var(--border-radius-small);
     overflow: hidden;
 }
 .small-projects-container .project-card .image-wrapper img {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
