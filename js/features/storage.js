@@ -1,5 +1,5 @@
 // js/features/storage.js — Хранилище закладок через GitHub Gist
-// Версия 2.0 — улучшенная архитектура, больше сервисов, исправления ошибок
+// Версия 3.0 — исправлены ошибки, улучшен стиль, добавлена кнопка скачивания
 (function() {
     'use strict';
 
@@ -161,7 +161,7 @@
         if (!password) throw new Error('Master password required');
         SessionCache.save(bookmarks, password);
         const encrypted = await Crypto.encrypt(bookmarks, password);
-        const payload = { version: 2, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
+        const payload = { version: 3, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
         const content = JSON.stringify(payload);
         try {
             if (gistId) await GistAPI.update(gistId, content, currentToken);
@@ -212,27 +212,21 @@
                 const origin = u.origin;
                 const path = u.pathname;
                 const search = u.search;
-                // view_video.php?viewkey=...
                 if (path.includes('view_video.php') && search.includes('viewkey=')) {
                     const key = new URLSearchParams(search).get('viewkey');
                     if (key) return `${origin}/embed/${key}`;
                 }
-                // YouTube shorts
                 const shortMatch = url.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([a-zA-Z0-9_-]+)/);
                 if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}`;
-                // YouTube watch
                 if (search.includes('v=')) {
                     const v = new URLSearchParams(search).get('v');
                     if (v) return `https://www.youtube.com/embed/${v}`;
                 }
-                // Уже embed
                 if (path.includes('/embed/')) return url;
-                // /v/...
                 if (path.includes('/v/')) {
                     const id = path.split('/v/')[1]?.split('?')[0];
                     if (id) return `${origin}/embed/${id}`;
                 }
-                // /view/ или /watch/
                 const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
                 if (viewMatch) return `${origin}/embed/${viewMatch[2]}`;
                 const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
@@ -263,7 +257,7 @@
                 if (!resp.ok) return null;
                 const data = await resp.json();
                 if (data) {
-                    if (data.contents) { // allorigins
+                    if (data.contents) {
                         const html = data.contents;
                         const title = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
                         const image = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
@@ -290,7 +284,6 @@
         }
     }
 
-    // Сервисы прямых ссылок на видео
     const VIDEO_SERVICES = [
         {
             name: 'Cobalt',
@@ -321,6 +314,23 @@
                 if (!resp.ok) return null;
                 const data = await resp.json();
                 return data.formats?.find(f => f.vcodec !== 'none' && f.acodec !== 'none')?.url || data.url;
+            }
+        },
+        {
+            name: 'Vimeo',
+            fetch: async (url) => {
+                // Vimeo OEmbed часто содержит прямую ссылку
+                const oembed = await fetchOEmbedData(url);
+                if (oembed?.html) {
+                    const src = oembed.html.match(/src=["']([^"']+)["']/i)?.[1];
+                    if (src) {
+                        const resp = await fetch(src);
+                        const text = await resp.text();
+                        const match = text.match(/"progressive":\[{"url":"([^"]+\.mp4)"/);
+                        if (match) return match[1];
+                    }
+                }
+                return null;
             }
         }
     ];
@@ -364,6 +374,11 @@
                     if (oembed.html) {
                         const iframeSrc = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i)?.[1];
                         if (iframeSrc) embedUrl = iframeSrc;
+                        // Попробуем извлечь прямую ссылку из HTML (video тег)
+                        if (!downloadUrl) {
+                            const videoMatch = oembed.html.match(/<video[^>]+src=["']([^"']+\.mp4)["']/i);
+                            if (videoMatch) downloadUrl = videoMatch[1];
+                        }
                     }
                     if (oembed.url && /\.(mp4|webm|mov)/i.test(oembed.url)) downloadUrl = oembed.url;
                     if (oembed.thumbnail_url) thumbnail = oembed.thumbnail_url;
@@ -429,8 +444,10 @@
     }
 
     function renderBookmarkCard(bookmark, onDelete, onEditSave) {
+        if (!bookmark) return document.createElement('div'); // защита от undefined
+
         const card = document.createElement('div');
-        card.className = 'bookmark-card tilt-card';
+        card.className = 'bookmark-card project-card tilt-card';
         card.style.cssText = 'background:var(--bg-inner-gradient);border-radius:20px;border:1px solid var(--border);cursor:pointer;transition:transform 0.3s;overflow:hidden;display:flex;flex-direction:column;height:100%;';
         card.addEventListener('mousemove', e => {
             const rect = card.getBoundingClientRect();
@@ -441,7 +458,8 @@
         card.addEventListener('mouseleave', () => card.style.transform = '');
 
         const mediaContainer = document.createElement('div');
-        mediaContainer.style.cssText = 'position:relative;padding-bottom:56.25%;background:var(--bg-primary);border-bottom:1px solid var(--border);';
+        mediaContainer.className = 'image-wrapper';
+        mediaContainer.style.cssText = 'margin:-16px -16px 12px -16px;width:calc(100% + 32px);position:relative;padding-bottom:56.25%;background:var(--bg-primary);border-bottom:1px solid var(--border);';
         const embedSrc = bookmark.embedUrl || (UrlUtils.isEmbed(bookmark.url) ? bookmark.url : null);
         if (embedSrc) {
             const iframe = document.createElement('iframe');
@@ -464,7 +482,7 @@
         }
 
         const content = document.createElement('div');
-        content.style.cssText = 'padding:12px;flex:1;display:flex;flex-direction:column;';
+        content.style.cssText = 'padding:0 0 12px 0;flex:1;display:flex;flex-direction:column;';
         const titleEl = document.createElement('h4');
         titleEl.textContent = bookmark.title.length > 60 ? bookmark.title.slice(0,60)+'…' : bookmark.title;
         titleEl.style.cssText = 'margin:0 0 6px;font-size:16px;color:var(--text-primary);';
@@ -510,6 +528,7 @@
     function renderBookmarksGrid(bookmarks) {
         if (!currentGrid) return;
         let filtered = bookmarks.filter(b => {
+            if (!b) return false;
             if (category === 'video') return b.embedUrl;
             if (category === 'post') return b.postType && ['feedback','news','update','site-post'].includes(b.postType);
             if (category === 'link') return !b.embedUrl && !(b.postType && ['feedback','news','update','site-post'].includes(b.postType));
@@ -522,9 +541,10 @@
         }
         currentGrid.innerHTML = '';
         filtered.forEach(b => {
+            if (!b) return;
             const card = renderBookmarkCard(b,
-                id => { currentBookmarks = currentBookmarks.filter(bk => bk.id !== id); renderBookmarksGrid(currentBookmarks); removeBookmark(id); },
-                updated => { const idx = currentBookmarks.findIndex(bk => bk.id === updated.id); if (idx>=0) currentBookmarks[idx] = updated; saveBookmarks(currentBookmarks); renderBookmarksGrid(currentBookmarks); }
+                id => { currentBookmarks = currentBookmarks.filter(bk => bk && bk.id !== id); renderBookmarksGrid(currentBookmarks); removeBookmark(id); },
+                updated => { const idx = currentBookmarks.findIndex(bk => bk && bk.id === updated.id); if (idx>=0) currentBookmarks[idx] = updated; saveBookmarks(currentBookmarks); renderBookmarksGrid(currentBookmarks); }
             );
             currentGrid.appendChild(card);
         });
