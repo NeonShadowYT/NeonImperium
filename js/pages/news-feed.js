@@ -1,4 +1,4 @@
-// js/pages/news-feed.js — лента новостей с улучшенной кнопкой избранного (без «Читать пост»)
+// js/pages/news-feed.js — лента новостей с кнопкой избранного и ленивой загрузкой хранилища
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
@@ -183,7 +183,6 @@
         }
     }
 
-    // Асинхронное добавление в избранное с подгрузкой хранилища
     async function handleBookmark(item) {
         if (!window.BookmarkStorage) {
             try { await loadModule('js/features/storage.js'); }
@@ -203,6 +202,7 @@
             await BookmarkStorage.addBookmark(bookmark);
             UIUtils.showToast('Добавлено в избранное', 'success');
         } catch (err) {
+            if (err.message === 'password_cancelled') return;
             if (err.message !== 'duplicate') UIUtils.showToast('Ошибка: ' + err.message, 'error');
         }
     }
@@ -219,7 +219,6 @@
         const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
 
-        // Кнопка избранного в правом верхнем углу карточки
         const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'Добавить в избранное' });
         favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
         favBtn.addEventListener('click', (e) => {
@@ -256,7 +255,6 @@
         const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
         preview.textContent = summary;
 
-        // Избранное в углу
         const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'Добавить в избранное' });
         favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
         favBtn.addEventListener('click', (e) => {

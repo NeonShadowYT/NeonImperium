@@ -1,4 +1,4 @@
-// js/features/storage.js — хранилище с ленивой загрузкой, исправленными кнопками и надёжным добавлением
+// js/features/storage.js — хранилище с гибкой работой с паролем и надёжным добавлением
 (function() {
     const {
         CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce, loadModule
@@ -15,7 +15,6 @@
     let currentModal, currentGrid, currentBookmarks = [];
     let sortOrder = 'new', category = 'all', addFormVisible = false;
 
-    // ========== Утилиты Base64 и Crypto ==========
     const Base64 = {
         encode: str => btoa(String.fromCharCode(...new TextEncoder().encode(str))),
         decode: b64 => new TextDecoder().decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)))
@@ -48,7 +47,6 @@
         }
     };
 
-    // ========== Gist API ==========
     const GistAPI = {
         async fetch(id, token) {
             const r = await fetch(`https://api.github.com/gists/${id}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -78,7 +76,6 @@
         }
     };
 
-    // ========== Кэш сессии ==========
     const SessionCache = {
         save(bookmarks, pwd) {
             if (!pwd) return;
@@ -96,10 +93,10 @@
         clear() { sessionStorage.removeItem(SESSION_CACHE_KEY); cachedBookmarks = null; }
     };
 
-    // ========== Загрузка/сохранение ==========
+    // Загрузка закладок: если пароль не указан, пытаемся загрузить незашифрованные данные
     async function loadBookmarks(password = null) {
         if (!currentToken) {
-            try { return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]'); } catch { return []; }
+            try { return { bookmarks: JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]') }; } catch { return { bookmarks: [] }; }
         }
         if (!password) {
             const cached = SessionCache.load();
@@ -124,8 +121,8 @@
                 SessionCache.save(bookmarks, password);
                 return { bookmarks };
             }
-            if (payload.bookmarks) return { bookmarks: payload.bookmarks, legacy: true };
-            return { bookmarks: [], needSetup: true };
+            if (payload.bookmarks) return { bookmarks: payload.bookmarks };
+            return { bookmarks: [] };
         } catch (e) {
             if (e.message.includes('403')) throw new Error('TOKEN_NO_GIST_SCOPE');
             if (e.message === 'Invalid password') throw e;
@@ -133,21 +130,39 @@
         }
     }
 
-    async function saveBookmarks(bookmarks, password = masterPassword) {
-        if (!currentToken) { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks)); return; }
-        if (!password) throw new Error('Master password required');
-        SessionCache.save(bookmarks, password);
-        const encrypted = await Crypto.encrypt(bookmarks, password);
-        const payload = { version: 2, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
-        const content = JSON.stringify(payload);
-        try {
-            if (gistId) await GistAPI.update(gistId, content, currentToken);
-            else {
-                gistId = await GistAPI.create(content, currentToken);
-                localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
-            }
-        } catch (e) {
+    // Сохраняет закладки: если пароль передан – шифрует, иначе сохраняет открытый JSON
+    async function saveBookmarks(bookmarks, password = null) {
+        if (!currentToken) {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
+            return;
+        }
+        if (password) {
+            SessionCache.save(bookmarks, password);
+            const encrypted = await Crypto.encrypt(bookmarks, password);
+            const payload = { version: 2, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
+            const content = JSON.stringify(payload);
+            try {
+                if (gistId) await GistAPI.update(gistId, content, currentToken);
+                else {
+                    gistId = await GistAPI.create(content, currentToken);
+                    localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
+                }
+            } catch (e) {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
+            }
+        } else {
+            // Незашифрованное сохранение
+            const payload = { version: 2, bookmarks, timestamp: Date.now() };
+            const content = JSON.stringify(payload);
+            try {
+                if (gistId) await GistAPI.update(gistId, content, currentToken);
+                else {
+                    gistId = await GistAPI.create(content, currentToken);
+                    localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
+                }
+            } catch (e) {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
+            }
         }
     }
 
@@ -168,7 +183,6 @@
         localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
 
-    // ========== URL утилиты ==========
     const UrlUtils = {
         isEmbed: url => url && /\/embed\/|\/player\/|\?embed|\/v\//i.test(url),
         isSitePost: url => {
@@ -203,14 +217,12 @@
         }
     };
 
-    // ========== OEmbed и прямые ссылки ==========
+    // OEmbed сервисы
     const OEMBED_PROVIDERS = [
         url => `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
         url => `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`,
-        url => `https://api.embed.ly/1/oembed?url=${encodeURIComponent(url)}`,
         url => `https://api.microlink.io/?url=${encodeURIComponent(url)}`,
-        url => `https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`,
-        url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
+        url => `https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`
     ];
 
     async function fetchOEmbedData(url) {
@@ -243,10 +255,11 @@
         catch { clearTimeout(timeout); return null; }
     }
 
+    // Сервисы прямого скачивания видео (расширенный список)
     const VIDEO_SERVICES = [
         {
             name: 'Cobalt',
-            fetch: async url => {
+            fetch: async (url) => {
                 const r = await fetch('https://co.wuk.sh/api/json', {
                     method: 'POST',
                     headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
@@ -258,12 +271,49 @@
             }
         },
         {
+            name: 'CobaltTools',
+            fetch: async (url) => {
+                const r = await fetch('https://api.cobalt.tools/api/json', {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                if (!r.ok) return null;
+                const d = await r.json();
+                return d.status === 'success' ? d.url : null;
+            }
+        },
+        {
+            name: '9xbuddy',
+            fetch: async (url) => {
+                const formData = new FormData();
+                formData.append('url', url);
+                const r = await fetch('https://9xbuddy.com/process', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!r.ok) return null;
+                const text = await r.text();
+                const match = text.match(/href="(https?:\/\/[^"]+\.(?:mp4|webm|mkv)[^"]*)"/i);
+                return match ? match[1] : null;
+            }
+        },
+        {
             name: 'YtDlpAPI',
-            fetch: async url => {
+            fetch: async (url) => {
                 const r = await fetch(`https://yt-dlp-api.vercel.app/api/extract?url=${encodeURIComponent(url)}`);
                 if (!r.ok) return null;
                 const d = await r.json();
                 return d.formats?.find(f => f.vcodec !== 'none' && f.acodec !== 'none')?.url || d.url;
+            }
+        },
+        {
+            name: 'dltkk',
+            fetch: async (url) => {
+                const r = await fetch(`https://dltkk.to/api/download?url=${encodeURIComponent(url)}`);
+                if (!r.ok) return null;
+                const d = await r.json();
+                return d.direct_link || d.url;
             }
         }
     ];
@@ -273,26 +323,26 @@
         try { return await Promise.any(promises); } catch { return null; }
     }
 
-    // ========== Добавление/удаление (исправлено) ==========
+    // Добавление закладки (публичный метод)
     async function addBookmark(bookmark) {
         if (!currentUser) {
             UIUtils.showToast('Войдите в аккаунт', 'error');
             throw new Error('not logged in');
         }
-        // Открываем модальное окно, если нет пароля
-        if (!masterPassword) {
+
+        let res = await loadBookmarks();
+        if (res.passwordRequired) {
             await openStorageModal();
             if (!masterPassword) throw new Error('password_cancelled');
+            res = await loadBookmarks(masterPassword);
+            if (res.passwordRequired) throw new Error('invalid password');
         }
-        if (!bookmark?.url) {
-            UIUtils.showToast('Некорректная ссылка', 'error');
-            throw new Error('invalid url');
-        }
+        const bookmarks = res.bookmarks || [];
 
-        let finalUrl = bookmark.url, embedUrl = null, downloadUrl = null, thumbnail = null;
+        let finalUrl = bookmark.url, embedUrl = null, downloadUrl = null, thumbnail = bookmark.thumbnail || null;
         let finalTitle = bookmark.title, postType = bookmark.postType || null;
 
-        if (bookmark.url) {
+        if (bookmark.url && !bookmark.type) {
             if (UrlUtils.isSitePost(bookmark.url)) postType = 'site-post';
             else if (UrlUtils.isEmbed(bookmark.url)) embedUrl = finalUrl = bookmark.url;
             else {
@@ -314,17 +364,15 @@
                     if (vid) thumbnail = `https://img.youtube.com/vi/${vid}/mqdefault.jpg`;
                 }
             }
-        }
-
-        const res = await loadBookmarks(masterPassword);
-        if (res.passwordRequired) {
-            UIUtils.showToast('Требуется пароль', 'error');
-            throw new Error('password required');
-        }
-        const bookmarks = res.bookmarks || [];
-        if (bookmarks.some(b => b.url === finalUrl)) {
-            UIUtils.showToast('Уже в избранном', 'info');
-            throw new Error('duplicate');
+        } else if (bookmark.type === 'video') {
+            if (finalUrl.includes('youtube.com/watch') || finalUrl.includes('youtu.be/')) {
+                const vid = finalUrl.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1];
+                if (vid) {
+                    embedUrl = `https://www.youtube.com/embed/${vid}`;
+                    thumbnail = thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`;
+                }
+            }
+            downloadUrl = await fetchDirectVideoUrl(finalUrl);
         }
 
         const newBookmark = {
@@ -334,42 +382,42 @@
             embedUrl, downloadUrl, thumbnail, postType
         };
 
-        const optimistic = [...bookmarks, newBookmark];
-        // Оптимистичное обновление UI
-        SessionCache.save(optimistic, masterPassword);
-        if (currentGrid) renderBookmarksGrid(optimistic);
-        currentBookmarks = optimistic;
+        if (bookmarks.some(b => b.url === finalUrl)) {
+            UIUtils.showToast('Уже в избранном', 'info');
+            throw new Error('duplicate');
+        }
+
+        const updated = [...bookmarks, newBookmark];
+        currentBookmarks = updated;
+        if (currentGrid) renderBookmarksGrid(updated);
 
         try {
-            await saveBookmarks(optimistic, masterPassword);
+            if (masterPassword) await saveBookmarks(updated, masterPassword);
+            else await saveBookmarks(updated);
             return newBookmark;
         } catch (e) {
-            // Откат
-            const idx = currentBookmarks.findIndex(b => b.id === newBookmark.id);
-            if (idx >= 0) currentBookmarks.splice(idx, 1);
-            SessionCache.save(currentBookmarks, masterPassword);
-            if (currentGrid) renderBookmarksGrid(currentBookmarks);
             UIUtils.showToast('Ошибка синхронизации', 'error');
             throw e;
         }
     }
 
     async function removeBookmark(bookmarkId) {
-        if (!masterPassword) throw new Error('Master password not set');
-        const res = await loadBookmarks(masterPassword);
-        const filtered = (res.bookmarks || []).filter(b => b.id !== bookmarkId);
-        SessionCache.save(filtered, masterPassword);
-        if (currentGrid) renderBookmarksGrid(filtered);
-        currentBookmarks = filtered;
-        try {
-            await saveBookmarks(filtered, masterPassword);
-        } catch (e) {
-            UIUtils.showToast('Ошибка синхронизации', 'error');
-            throw e;
+        if (!masterPassword && !currentToken) {
+            const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+            const filtered = local.filter(b => b.id !== bookmarkId);
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
+            currentBookmarks = filtered;
+            if (currentGrid) renderBookmarksGrid(filtered);
+            return;
         }
+        const res = await loadBookmarks(masterPassword);
+        const bookmarks = (res.bookmarks || []).filter(b => b.id !== bookmarkId);
+        currentBookmarks = bookmarks;
+        if (currentGrid) renderBookmarksGrid(bookmarks);
+        if (masterPassword) await saveBookmarks(bookmarks, masterPassword);
+        else await saveBookmarks(bookmarks);
     }
 
-    // ========== UI компоненты ==========
     function openVideoFullscreen(iframe, title) {
         const overlay = createElement('div', '', {
             position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -493,13 +541,12 @@
         filtered.forEach(b => {
             const card = renderBookmarkCard(b,
                 id => { currentBookmarks = currentBookmarks.filter(bk => bk.id !== id); renderBookmarksGrid(currentBookmarks); removeBookmark(id); },
-                updated => { const idx = currentBookmarks.findIndex(bk => bk.id === updated.id); if (idx>=0) currentBookmarks[idx] = updated; saveBookmarks(currentBookmarks).then(() => renderBookmarksGrid(currentBookmarks)); }
+                updated => { const idx = currentBookmarks.findIndex(bk => bk.id === updated.id); if (idx>=0) currentBookmarks[idx] = updated; saveBookmarks(currentBookmarks, masterPassword).then(() => renderBookmarksGrid(currentBookmarks)); }
             );
             currentGrid.appendChild(card);
         });
     }
 
-    // ========== Модальное окно (исправлены кнопки и шрифт) ==========
     async function openStorageModal() {
         if (!window.GithubAuth) return setTimeout(openStorageModal, 100);
         updateAuthState();
@@ -542,7 +589,6 @@
             UIUtils.showToast('Хранилище создано!', 'success');
         }
 
-        // Формируем HTML с корректными классами active на основе текущих sortOrder/category
         const html = `
             <div class="storage-modal-container">
                 <div class="storage-header">
@@ -598,7 +644,6 @@
         modal.appendChild(style);
         currentGrid = modal.querySelector('#bookmarks-grid');
 
-        // Обработчики сортировки и категорий с переключением active
         modal.querySelectorAll('.sort-btn').forEach(b => {
             b.addEventListener('click', () => {
                 sortOrder = b.dataset.order;

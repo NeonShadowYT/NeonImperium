@@ -218,5 +218,5 @@
     background: rgba(0,0,0,0.6);
 }
 .news-bookmark-btn.bookmarked i {
-    font-weight: 900; /* иконка становится сплошной */
+    font-weight: 900;
 }
