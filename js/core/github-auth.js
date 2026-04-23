@@ -56,9 +56,8 @@
                 currentUserLogin = user.login;
                 currentScopes = cachedScopes ? JSON.parse(cachedScopes) : [];
                 renderProfile(user, savedToken);
-                if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) {
-                    preloadAdminModules();
-                }
+                // Для всех авторизованных пользователей загружаем UIFeedback
+                preloadUIFeedback();
             } catch {
                 validateAndShowProfile(savedToken);
             }
@@ -82,8 +81,8 @@
         });
     }
 
-    async function preloadAdminModules() {
-        // Предзагружаем админские модули в фоне
+    async function preloadUIFeedback() {
+        // Загружаем модули для всех авторизованных пользователей
         ModuleLoader.load('js/features/editor.js').catch(()=>{});
         ModuleLoader.load('js/features/ui-feedback.js').catch(()=>{});
     }
@@ -92,6 +91,7 @@
         modal = createElement('div', 'modal', {}, {
             role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'github-modal-title'
         });
+
         modal.innerHTML = `
             <div class="modal-content">
                 <h3 id="github-modal-title"><i class="fab fa-github"></i> <span data-lang="githubLoginTitle">Вход через GitHub</span></h3>
@@ -223,9 +223,7 @@
                 UIUtils.showToast(`Внимание: отсутствуют разрешения ${missingScopes.join(', ')}`, 'warning', 8000);
             }
 
-            if (CONFIG.ALLOWED_AUTHORS.includes(userData.login)) {
-                preloadAdminModules();
-            }
+            preloadUIFeedback();
 
             // Обновляем страницу при необходимости
             if (window.refreshNewsFeed) window.refreshNewsFeed();
@@ -234,6 +232,7 @@
         } catch (error) {
             clearTimeout(timeoutId);
             console.error('Auth error:', error);
+
             localStorage.removeItem(TOKEN_KEY);
             sessionStorage.removeItem(USER_CACHE_KEY);
             sessionStorage.removeItem(SCOPES_CACHE_KEY);

@@ -27,7 +27,6 @@
 
     let { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
     let loadIssues, loadIssue, openFullModal, canViewPost, getCurrentUser, isAdmin, hasScope;
-
     const YT_CHANNELS = [
         { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
         { id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' },
