@@ -1,9 +1,4 @@
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
+* { margin:0; padding:0; box-sizing:border-box; }
 body {
     font-family: 'Russo One', sans-serif;
     background: var(--bg-primary);
@@ -12,20 +7,10 @@ body {
     padding: 20px;
     font-size: 16px;
     min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
 }
-
-.page {
-    max-width: 1200px;
-    margin: 0 auto;
-    width: 100%;
-}
-
-a {
-    color: var(--accent);
-    text-decoration: none;
-}
-a:hover { text-decoration: none; }
-
-img {
-    image-rendering: auto;
-}
+.page { max-width: 1200px; margin:0 auto; width:100%; }
+a { color:var(--accent); text-decoration:none; }
+a:hover { text-decoration:none; }
+img { max-width:100%; height:auto; display:block; }

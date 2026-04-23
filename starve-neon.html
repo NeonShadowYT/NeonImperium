@@ -24,7 +24,6 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" media="print" onload="this.media='all'">
-    <script type="text/javascript" src="https://static.itch.io/api.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/features/ui-utils.js" defer></script>
@@ -36,6 +35,25 @@
     <script src="js/platform.js" defer></script>
     <script src="js/lang.js" defer></script>
     <script src="js/effects.js" defer></script>
+    <style>
+        .lazy-yt {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .lazy-yt iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+    </style>
 </head>
 <body>
     <div class="page">
@@ -77,9 +95,7 @@
             <div class="row">
                 <section class="card trailer-card">
                     <h2 data-lang="trailerTitle">Трейлер</h2>
-                    <div class="video-embed">
-                        <iframe src="https://www.youtube.com/embed/videoseries?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
-                    </div>
+                    <div class="lazy-yt" data-src="https://www.youtube.com/embed/videoseries?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX"></div>
                 </section>
 
                 <section class="card developer-card">
@@ -191,11 +207,11 @@
                 <h2 data-lang="videoTitle">Видео</h2>
                 <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
                 <div class="video-grid">
-                    <iframe src="https://www.youtube.com/embed/videoseries?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
-                    <iframe src="https://www.youtube.com/embed/videoseries?list=PLKE0gB8r2LfIFUF9To0uvtPcGwrY95I34" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
-                    <iframe src="https://www.youtube.com/embed/videoseries?list=PLEdyxawD7ICRGhMZ4460wapu4HV0E7lxn" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
-                    <iframe src="https://www.youtube.com/embed/videoseries?list=PLWU6pprP3Hd8vtSsR4B90UBdc5llgqyel" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
-                    <iframe src="https://www.youtube.com/embed/videoseries?list=PLjbbtkkybwidYmRENfKJem5KC3crUZ1IN" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe>
+                    <div class="lazy-yt" data-src="https://www.youtube.com/embed/videoseries?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube.com/embed/videoseries?list=PLKE0gB8r2LfIFUF9To0uvtPcGwrY95I34"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube.com/embed/videoseries?list=PLEdyxawD7ICRGhMZ4460wapu4HV0E7lxn"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube.com/embed/videoseries?list=PLWU6pprP3Hd8vtSsR4B90UBdc5llgqyel"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube.com/embed/videoseries?list=PLjbbtkkybwidYmRENfKJem5KC3crUZ1IN"></div>
                 </div>
             </section>
 
@@ -219,33 +235,82 @@
                 <i class="fas fa-heart"></i>
                 <span data-lang="donateButton">Поддержать</span>
             </button>
-            <script>
-                (function() {
-                    function updateDonateButtonText() {
-                        const donateBtn = document.getElementById('donate-button');
-                        if (!donateBtn) return;
-                        const span = donateBtn.querySelector('span[data-lang="donateButton"]');
-                        if (!span) return;
-                        const lang = localStorage.getItem('preferredLanguage') || 'ru';
-                        span.textContent = (window.translations && translations[lang] && translations[lang].donateButton) 
-                            ? translations[lang].donateButton : (lang === 'en' ? 'Support' : 'Поддержать');
-                    }
-                    function init() {
-                        const btn = document.getElementById('donate-button');
-                        if (!btn) return;
-                        if (typeof Itch === 'undefined') return;
-                        try { Itch.attachBuyButton(btn, { user: 'neon-imperium', game: 'starve-neon', width: 700, height: 500 }); } 
-                        catch (e) {}
-                        updateDonateButtonText();
-                    }
-                    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(init, 100));
-                    else setTimeout(init, 100);
-                    window.addEventListener('languageChanged', updateDonateButtonText);
-                    const orig = window.setLanguage;
-                    if (orig) window.setLanguage = function(l) { orig(l); updateDonateButtonText(); window.dispatchEvent(new Event('languageChanged')); };
-                })();
-            </script>
         </main>
     </div>
+
+    <script>
+        // Ленивая загрузка YouTube
+        (function() {
+            if ('IntersectionObserver' in window) {
+                const lazyVids = document.querySelectorAll('.lazy-yt');
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const el = entry.target;
+                            const src = el.dataset.src;
+                            if (src) {
+                                const iframe = document.createElement('iframe');
+                                iframe.src = src;
+                                iframe.setAttribute('frameborder', '0');
+                                iframe.setAttribute('allowfullscreen', '');
+                                iframe.setAttribute('loading', 'lazy');
+                                el.appendChild(iframe);
+                                el.classList.add('loaded');
+                            }
+                            observer.unobserve(el);
+                        }
+                    });
+                }, { rootMargin: '200px' });
+                lazyVids.forEach(el => observer.observe(el));
+            } else {
+                document.querySelectorAll('.lazy-yt').forEach(el => {
+                    const src = el.dataset.src;
+                    if (src) {
+                        const iframe = document.createElement('iframe');
+                        iframe.src = src;
+                        iframe.setAttribute('frameborder', '0');
+                        iframe.setAttribute('allowfullscreen', '');
+                        el.appendChild(iframe);
+                    }
+                });
+            }
+        })();
+    </script>
+
+    <script>
+        // Itch.io загружается при клике
+        (function() {
+            const donateBtn = document.getElementById('donate-button');
+            if (!donateBtn) return;
+            let itchLoaded = false;
+            function loadItch() {
+                if (itchLoaded) return;
+                itchLoaded = true;
+                const script = document.createElement('script');
+                script.src = 'https://static.itch.io/api.js';
+                script.onload = function() {
+                    if (typeof Itch !== 'undefined') {
+                        Itch.attachBuyButton(donateBtn, {
+                            user: 'neon-imperium',
+                            game: 'starve-neon',
+                            width: 700,
+                            height: 500
+                        });
+                    }
+                };
+                document.head.appendChild(script);
+            }
+            donateBtn.addEventListener('click', loadItch, { once: true });
+            function updateDonateText() {
+                const span = donateBtn.querySelector('span[data-lang="donateButton"]');
+                if (!span) return;
+                const lang = localStorage.getItem('preferredLanguage') || 'ru';
+                span.textContent = (window.translations && translations[lang] && translations[lang].donateButton)
+                    ? translations[lang].donateButton : (lang === 'en' ? 'Support' : 'Поддержать');
+            }
+            window.addEventListener('languageChanged', updateDonateText);
+            updateDonateText();
+        })();
+    </script>
 </body>
 </html>

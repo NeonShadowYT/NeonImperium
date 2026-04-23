@@ -1,20 +1,19 @@
 :root {
-    /* Основные тона — глубокий сине-фиолетовый */
-    --bg-primary: #0f0f1a;              /* фон страницы — тёмный и насыщенный */
-    --bg-card: #1e1e30;                  /* базовый фон карточек */
-    --bg-card-gradient: linear-gradient(145deg, #1e1e30, #2c2c44); /* мягкий градиент: от тёмно-синего к фиолетово-синему */
-    --bg-card-solid: #1a1a2b;             /* сплошной фон для внутренних элементов */
-    --bg-inner-gradient: linear-gradient(145deg, #2a2a40, #353551); /* градиент для карточек внутри карточек, светлее и заметнее */
-    
-    /* Акцент — приглушённый, но узнаваемый бирюзовый */
+    --bg-primary: #0f0f1a;
+    --bg-card: #1e1e30;
+    --bg-card-gradient: linear-gradient(145deg, #1e1e30, #2c2c44);
+    --bg-card-solid: #1a1a2b;
+    --bg-inner-gradient: linear-gradient(145deg, #2a2a40, #353551);
     --accent: #3d9eb3;
     --accent-light: #5ab5c9;
-    
-    /* Текст */
     --text-primary: #ffffff;
-    --text-secondary: #c0c0d0;           /* чуть светлее для лучшей читаемости */
-    
-    /* Границы и тени */
+    --text-secondary: #c0c0d0;
     --border: #3a3a55;
     --shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+    --shadow-hover: 0 18px 35px rgba(0,0,0,0.9);
+    --radius-sm: 12px;
+    --radius-md: 20px;
+    --radius-lg: 24px;
+    --radius-full: 50%;
+    --transition: 0.2s ease;
 }
