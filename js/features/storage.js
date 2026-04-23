@@ -1,4 +1,4 @@
-// js/features/storage.js — хранилище с ленивой загрузкой и улучшенной производительностью
+// js/features/storage.js — хранилище с ленивой загрузкой и исправленной обработкой пароля
 (function() {
     const {
         CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce
@@ -332,7 +332,12 @@
     }
 
     async function removeBookmark(bookmarkId) {
-        if (!masterPassword) throw new Error('Master password not set');
+        if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
+        if (!masterPassword) {
+            // Открываем хранилище для ввода пароля
+            await openStorageModal();
+            if (!masterPassword) return; // пользователь не ввёл пароль
+        }
         const res = await loadBookmarks(masterPassword);
         const filtered = (res.bookmarks || []).filter(b => b.id !== bookmarkId);
         SessionCache.save(filtered, masterPassword);
@@ -463,7 +468,7 @@
         currentGrid.innerHTML = '';
         filtered.forEach(b => {
             const card = renderBookmarkCard(b,
-                id => { currentBookmarks = currentBookmarks.filter(bk => bk.id !== id); renderBookmarksGrid(currentBookmarks); removeBookmark(id); },
+                id => removeBookmark(id),
                 updated => { const idx = currentBookmarks.findIndex(bk => bk.id === updated.id); if (idx>=0) currentBookmarks[idx] = updated; saveBookmarks(currentBookmarks); renderBookmarksGrid(currentBookmarks); }
             );
             currentGrid.appendChild(card);

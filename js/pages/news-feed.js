@@ -1,5 +1,28 @@
 // news-feed.js — лента новостей с динамической загрузкой и админ-кнопкой
 (function() {
+    // Функция ожидания модуля
+    function waitForModule(name, callback, timeout = 5000) {
+        if (window[name]) {
+            callback();
+            return;
+        }
+        const start = Date.now();
+        const timer = setInterval(() => {
+            if (window[name]) {
+                clearInterval(timer);
+                callback();
+            } else if (Date.now() - start > timeout) {
+                clearInterval(timer);
+                console.error(`Module ${name} not loaded`);
+            }
+        }, 50);
+    }
+
+    // Дождёмся UIFeedback и GithubAuth перед выполнением основного кода
+    waitForModule('UIFeedback', function() {
+        waitForModule('GithubAuth', init);
+    });
+
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
     const { openFullModal, canViewPost } = UIFeedback;
@@ -17,7 +40,7 @@
     let currentUser = null, currentAbort = null;
     let videoLoading = false, videoError = false;
 
-    document.addEventListener('DOMContentLoaded', () => {
+    function init() {
         const section = document.getElementById('news-section');
         if (!section) return;
         let header = section.querySelector('.news-header');
@@ -53,7 +76,7 @@
 
         const postId = new URLSearchParams(location.search).get('post');
         if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
-    });
+    }
 
     async function openPostFromUrl(postId) {
         try {
