@@ -189,3 +189,34 @@
     .tilt-card { transform: none !important; }
     .tilt-card:hover { transform: translateY(-5px) !important; }
 }
+/* Кнопка избранного на карточках новостей */
+.news-bookmark-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #fff;
+    font-size: 16px;
+    z-index: 5;
+    transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+.news-bookmark-btn:hover {
+    background: var(--accent);
+    color: #fff;
+    transform: scale(1.1);
+}
+.news-bookmark-btn.bookmarked {
+    color: var(--accent);
+    background: rgba(0,0,0,0.6);
+}
+.news-bookmark-btn.bookmarked i {
+    font-weight: 900; /* иконка становится сплошной */
+}

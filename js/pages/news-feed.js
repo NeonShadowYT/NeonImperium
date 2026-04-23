@@ -1,4 +1,4 @@
-// js/pages/news-feed.js — лента новостей с иконками избранного и корректным добавлением
+// js/pages/news-feed.js — лента новостей с улучшенной кнопкой избранного (без «Читать пост»)
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
@@ -79,6 +79,7 @@
     };
 
     async function loadNewsFeed() {
+        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>';
         try { posts = await loadPosts(); postsLoaded = true; } catch { posts = []; postsLoaded = true; }
         loadVideosAsync();
     }
@@ -182,7 +183,7 @@
         }
     }
 
-    // Вспомогательная функция для избранного
+    // Асинхронное добавление в избранное с подгрузкой хранилища
     async function handleBookmark(item) {
         if (!window.BookmarkStorage) {
             try { await loadModule('js/features/storage.js'); }
@@ -217,17 +218,17 @@
         title.textContent = video.title.length > 70 ? video.title.slice(0,70)+'…' : video.title;
         const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
-        
-        // Минималистичные кнопки: иконки с tooltip
-        const actions = GithubCore.createElement('div', '', { display: 'flex', gap: '8px', marginTop: 'auto', justifyContent: 'flex-end' });
-        const playBtn = GithubCore.createElement('button', 'bookmark-action-btn', {}, { title: 'Смотреть видео' });
-        playBtn.innerHTML = '<i class="fas fa-play"></i>';
-        playBtn.onclick = e => { e.stopPropagation(); window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank'); };
-        const favBtn = GithubCore.createElement('button', 'bookmark-action-btn', {}, { title: 'В избранное' });
-        favBtn.innerHTML = '<i class="fas fa-bookmark"></i>';
-        favBtn.onclick = e => { e.stopPropagation(); handleBookmark(video); };
-        actions.append(playBtn, favBtn);
-        inner.append(imgW, title, meta, actions);
+
+        // Кнопка избранного в правом верхнем углу карточки
+        const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'Добавить в избранное' });
+        favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
+        favBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleBookmark(video);
+        });
+        inner.appendChild(favBtn);
+
+        inner.append(imgW, title, meta);
         card.appendChild(inner);
         card.addEventListener('click', () => window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank'));
         return card;
@@ -254,17 +255,17 @@
         const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
         const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
         preview.textContent = summary;
-        
-        // Минималистичные кнопки
-        const actions = GithubCore.createElement('div', '', { display: 'flex', gap: '8px', marginTop: 'auto', justifyContent: 'flex-end' });
-        const readBtn = GithubCore.createElement('button', 'bookmark-action-btn', {}, { title: 'Читать пост' });
-        readBtn.innerHTML = '<i class="fas fa-book-open"></i>';
-        readBtn.onclick = e => { e.stopPropagation(); openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }); };
-        const favBtn = GithubCore.createElement('button', 'bookmark-action-btn', {}, { title: 'В избранное' });
-        favBtn.innerHTML = '<i class="fas fa-bookmark"></i>';
-        favBtn.onclick = e => { e.stopPropagation(); handleBookmark({ type: 'post', ...post, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE }); };
-        actions.append(readBtn, favBtn);
-        inner.append(imgW, title, meta, preview, actions);
+
+        // Избранное в углу
+        const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'Добавить в избранное' });
+        favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
+        favBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleBookmark({ type: 'post', ...post, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE });
+        });
+        inner.appendChild(favBtn);
+
+        inner.append(imgW, title, meta, preview);
         card.appendChild(inner);
         card.addEventListener('click', () => openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }));
         return card;
