@@ -1,4 +1,4 @@
-// js/features/storage.js — хранилище с гибкой работой с паролем и надёжным добавлением
+// js/features/storage.js — Хранилище закладок с ленивой загрузкой, расширенными сервисами и исправленной логикой
 (function() {
     const {
         CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce, loadModule
@@ -93,7 +93,7 @@
         clear() { sessionStorage.removeItem(SESSION_CACHE_KEY); cachedBookmarks = null; }
     };
 
-    // Загрузка закладок: если пароль не указан, пытаемся загрузить незашифрованные данные
+    // Загрузка закладок
     async function loadBookmarks(password = null) {
         if (!currentToken) {
             try { return { bookmarks: JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]') }; } catch { return { bookmarks: [] }; }
@@ -130,7 +130,7 @@
         }
     }
 
-    // Сохраняет закладки: если пароль передан – шифрует, иначе сохраняет открытый JSON
+    // Сохранение закладок
     async function saveBookmarks(bookmarks, password = null) {
         if (!currentToken) {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
@@ -255,75 +255,134 @@
         catch { clearTimeout(timeout); return null; }
     }
 
-    // Сервисы прямого скачивания видео (расширенный список)
-    const VIDEO_SERVICES = [
-        {
-            name: 'Cobalt',
-            fetch: async (url) => {
-                const r = await fetch('https://co.wuk.sh/api/json', {
-                    method: 'POST',
-                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url, aFormat: 'best', vCodec: 'h264' })
-                });
-                if (!r.ok) return null;
-                const d = await r.json();
-                return d.status === 'success' ? d.url : null;
-            }
-        },
-        {
-            name: 'CobaltTools',
-            fetch: async (url) => {
-                const r = await fetch('https://api.cobalt.tools/api/json', {
-                    method: 'POST',
-                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url })
-                });
-                if (!r.ok) return null;
-                const d = await r.json();
-                return d.status === 'success' ? d.url : null;
-            }
-        },
-        {
-            name: '9xbuddy',
-            fetch: async (url) => {
-                const formData = new FormData();
-                formData.append('url', url);
-                const r = await fetch('https://9xbuddy.com/process', {
-                    method: 'POST',
-                    body: formData
-                });
-                if (!r.ok) return null;
-                const text = await r.text();
-                const match = text.match(/href="(https?:\/\/[^"]+\.(?:mp4|webm|mkv)[^"]*)"/i);
-                return match ? match[1] : null;
-            }
-        },
-        {
-            name: 'YtDlpAPI',
-            fetch: async (url) => {
-                const r = await fetch(`https://yt-dlp-api.vercel.app/api/extract?url=${encodeURIComponent(url)}`);
-                if (!r.ok) return null;
-                const d = await r.json();
-                return d.formats?.find(f => f.vcodec !== 'none' && f.acodec !== 'none')?.url || d.url;
-            }
-        },
-        {
-            name: 'dltkk',
-            fetch: async (url) => {
-                const r = await fetch(`https://dltkk.to/api/download?url=${encodeURIComponent(url)}`);
-                if (!r.ok) return null;
-                const d = await r.json();
-                return d.direct_link || d.url;
-            }
-        }
-    ];
-
+    // ========== НОВЫЕ СЕРВИСЫ ДЛЯ ПРЯМОГО СКАЧИВАНИЯ ==========
     async function fetchDirectVideoUrl(url) {
-        const promises = VIDEO_SERVICES.map(s => s.fetch(url).catch(() => null));
-        try { return await Promise.any(promises); } catch { return null; }
+        const promises = [
+            fetchFromCobalt(url),
+            fetchFromCobaltTools(url),
+            fetchFrom9xbuddy(url),
+            fetchFromY2mate(url),
+            fetchFromCatchvideo(url),
+            fetchFromTubeninja(url),
+            fetchFromIvigo(url),
+            fetchFromDltkk(url)
+        ].map(p => p.catch(() => null));
+
+        try {
+            const directUrl = await Promise.any(promises);
+            return directUrl || null;
+        } catch {
+            return null;
+        }
     }
 
-    // Добавление закладки (публичный метод)
+    async function fetchFromCobalt(url) {
+        try {
+            const r = await fetch('https://api.cobalt.tools/api/json', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            if (!r.ok) return null;
+            const d = await r.json();
+            return d.url || null;
+        } catch { return null; }
+    }
+
+    async function fetchFromCobaltTools(url) {
+        try {
+            const r = await fetch('https://co.wuk.sh/api/json', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, aFormat: 'best', vCodec: 'h264' })
+            });
+            if (!r.ok) return null;
+            const d = await r.json();
+            return d.status === 'success' ? d.url : null;
+        } catch { return null; }
+    }
+
+    async function fetchFrom9xbuddy(url) {
+        try {
+            const formData = new FormData();
+            formData.append('url', url);
+            const r = await fetch('https://9xbuddy.com/process', {
+                method: 'POST',
+                body: formData
+            });
+            if (!r.ok) return null;
+            const html = await r.text();
+            const match = html.match(/href="(https?:\/\/[^"]+\.(?:mp4|webm|mkv)[^"]*)"/i);
+            return match ? match[1] : null;
+        } catch { return null; }
+    }
+
+    async function fetchFromY2mate(url) {
+        try {
+            const r = await fetch('https://www.y2mate.com/mates/analyzeV2/ajax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ k_query: url, k_page: 'home', hl: 'en', q_auto: '1' })
+            });
+            if (!r.ok) return null;
+            const data = await r.json();
+            if (data.links && data.links.mp4) {
+                const mp4Links = Object.values(data.links.mp4);
+                return mp4Links.length > 0 ? mp4Links[0] : null;
+            }
+            return null;
+        } catch { return null; }
+    }
+
+    async function fetchFromCatchvideo(url) {
+        try {
+            const r = await fetch('https://catchvideo.net/api/video', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            if (!r.ok) return null;
+            const d = await r.json();
+            return d.url || null;
+        } catch { return null; }
+    }
+
+    async function fetchFromTubeninja(url) {
+        try {
+            const r = await fetch('https://www.tubeninja.net/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            if (!r.ok) return null;
+            const d = await r.json();
+            return d.download_url || null;
+        } catch { return null; }
+    }
+
+    async function fetchFromIvigo(url) {
+        try {
+            const r = await fetch('https://ivigo.cc/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            if (!r.ok) return null;
+            const d = await r.json();
+            return d.url || null;
+        } catch { return null; }
+    }
+
+    async function fetchFromDltkk(url) {
+        try {
+            const r = await fetch(`https://dltkk.to/api/download?url=${encodeURIComponent(url)}`);
+            if (!r.ok) return null;
+            const d = await r.json();
+            return d.direct_link || d.url || null;
+        } catch { return null; }
+    }
+
+    // ========== ДОБАВЛЕНИЕ ЗАКЛАДКИ ==========
     async function addBookmark(bookmark) {
         if (!currentUser) {
             UIUtils.showToast('Войдите в аккаунт', 'error');
@@ -332,7 +391,7 @@
 
         let res = await loadBookmarks();
         if (res.passwordRequired) {
-            await openStorageModal();
+            await openStorageModal(); // модалка запросит пароль, если нужно
             if (!masterPassword) throw new Error('password_cancelled');
             res = await loadBookmarks(masterPassword);
             if (res.passwordRequired) throw new Error('invalid password');
@@ -348,7 +407,10 @@
             else {
                 const guessed = UrlUtils.guessEmbed(bookmark.url);
                 if (guessed) { embedUrl = finalUrl = guessed; }
-                const [oembed, direct] = await Promise.all([fetchOEmbedData(bookmark.url), fetchDirectVideoUrl(bookmark.url)]);
+                const [oembed, direct] = await Promise.all([
+                    fetchOEmbedData(bookmark.url),
+                    fetchDirectVideoUrl(bookmark.url)
+                ]);
                 if (oembed) {
                     if (oembed.html) {
                         const iframeSrc = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i)?.[1];
@@ -547,6 +609,7 @@
         });
     }
 
+    // ========== МОДАЛЬНОЕ ОКНО ==========
     async function openStorageModal() {
         if (!window.GithubAuth) return setTimeout(openStorageModal, 100);
         updateAuthState();
