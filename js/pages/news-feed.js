@@ -13,20 +13,20 @@
                 callback();
             } else if (Date.now() - start > timeout) {
                 clearInterval(timer);
-                console.error(`Module ${name} not loaded after ${timeout}ms`);
+                console.error(`Module ${name} not loaded`);
             }
         }, 50);
     }
 
     // Дождёмся UIFeedback и GithubAuth перед выполнением основного кода
     waitForModule('UIFeedback', function() {
-        waitForModule('GithubAuth', function() {
-            waitForModule('UIUtils', init);
-        });
+        waitForModule('GithubAuth', init);
     });
 
-    let { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
-    let loadIssues, loadIssue, openFullModal, canViewPost, getCurrentUser, isAdmin, hasScope;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
+    const { loadIssues, loadIssue } = GithubAPI;
+    const { openFullModal, canViewPost } = UIFeedback;
+    const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
 
     const YT_CHANNELS = [
         { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
@@ -41,15 +41,6 @@
     let videoLoading = false, videoError = false;
 
     function init() {
-        // Получаем ссылки на API после загрузки модулей
-        loadIssues = GithubAPI.loadIssues;
-        loadIssue = GithubAPI.loadIssue;
-        openFullModal = UIFeedback.openFullModal;
-        canViewPost = UIFeedback.canViewPost;
-        getCurrentUser = GithubAuth.getCurrentUser;
-        isAdmin = GithubAuth.isAdmin;
-        hasScope = GithubAuth.hasScope;
-
         const section = document.getElementById('news-section');
         if (!section) return;
         let header = section.querySelector('.news-header');
