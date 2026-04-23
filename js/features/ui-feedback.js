@@ -1,4 +1,4 @@
-// ui-feedback.js — интерфейс обратной связи с оптимизированным рендерингом и выровненными формами
+// js/features/ui-feedback.js — интерфейс обратной связи с динамической подгрузкой хранилища
 (function() {
     const REACTION_TYPES = [
         { content: '+1', emoji: '👍' }, { content: '-1', emoji: '👎' }, { content: 'laugh', emoji: '😄' },
@@ -10,7 +10,7 @@
     const commentsCache = new Map();
     const reactionLocks = new Map();
 
-    const { escapeHtml, renderMarkdown, extractAllowed, decryptPrivateBody, createElement } = GithubCore;
+    const { escapeHtml, renderMarkdown, extractAllowed, decryptPrivateBody, createElement, loadModule } = GithubCore;
 
     function getCached(key, cacheMap) {
         const cached = cacheMap.get(key);
@@ -67,7 +67,6 @@
             container.appendChild(addBtn);
         }
 
-        // Обработчики событий
         if (!currentUser || !hasRepo) return;
         container.querySelectorAll('.reaction-button:not([disabled])').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -395,7 +394,7 @@
             btns += `<button class="action-btn close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>`;
         }
         btns += `<button class="action-btn share-post" title="Поделиться"><i class="fas fa-share-alt"></i></button>`;
-        if (hasGist && currentUser) {
+        if (currentUser) {
             btns += `<button class="action-btn bookmark-post" title="В избранное"><i class="fas fa-bookmark"></i></button>`;
         }
         actions.innerHTML = btns;
@@ -422,9 +421,17 @@
             e.stopPropagation();
             navigator.clipboard.writeText(postUrl).then(() => UIUtils.showToast('Ссылка скопирована', 'success')).catch(() => UIUtils.showToast('Ошибка', 'error'));
         });
-        actions.querySelector('.bookmark-post')?.addEventListener('click', (e) => {
+        actions.querySelector('.bookmark-post')?.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!window.BookmarkStorage) return UIUtils.showToast('Модуль хранилища не загружен', 'error');
+            // Проверяем наличие модуля хранилища, подгружаем при необходимости
+            if (!window.BookmarkStorage) {
+                try {
+                    await loadModule('js/features/storage.js');
+                } catch (err) {
+                    return UIUtils.showToast('Не удалось загрузить хранилище', 'error');
+                }
+            }
+            if (!window.BookmarkStorage) return UIUtils.showToast('Хранилище не загружено', 'error');
             BookmarkStorage.addBookmark({
                 url: postUrl,
                 title: item.title,
@@ -432,8 +439,8 @@
                 thumbnail: extractFirstImage(issue.body) || 'images/default-news.webp',
                 author: item.author,
                 date: item.date
-            });
-            UIUtils.showToast('Добавлено в избранное', 'success');
+            }).then(() => UIUtils.showToast('Добавлено в избранное', 'success'))
+              .catch(err => UIUtils.showToast('Ошибка: ' + err.message, 'error'));
         });
     }
 

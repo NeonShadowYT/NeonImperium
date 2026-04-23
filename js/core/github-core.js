@@ -1,4 +1,4 @@
-// js/core/github-core.js — расширенное ядро с утилитами и конфигурацией
+// js/core/github-core.js — расширенное ядро с утилитами, конфигурацией и динамической загрузкой модулей
 const GithubCore = (function() {
     const CONFIG = {
         REPO_OWNER: 'NeonShadowYT',
@@ -153,13 +153,28 @@ const GithubCore = (function() {
         return new Date(date).toLocaleDateString();
     }
 
+    // Динамический загрузчик модулей (кэширует загруженные скрипты)
+    const loadedScripts = new Set();
+    function loadModule(path) {
+        if (loadedScripts.has(path)) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = path;
+            script.async = true;
+            script.onload = () => { loadedScripts.add(path); resolve(); };
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+
     return {
         CONFIG,
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
         escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable,
         stripHtml, extractMeta, extractAllowed, extractSummary,
         encryptPrivateBody, decryptPrivateBody,
-        createElement, debounce, formatDate
+        createElement, debounce, formatDate,
+        loadModule
     };
 })();
 

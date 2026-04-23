@@ -1,6 +1,6 @@
-// news-feed.js — лента новостей с динамической загрузкой и админ-кнопкой
+// js/pages/news-feed.js — лента новостей с кнопкой избранного и ленивой загрузкой хранилища
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
     const { openFullModal, canViewPost } = UIFeedback;
     const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
@@ -79,7 +79,6 @@
     };
 
     async function loadNewsFeed() {
-        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>${translations[localStorage.getItem('preferredLanguage')||'ru'].newsLoading}</p></div>`;
         try { posts = await loadPosts(); postsLoaded = true; } catch { posts = []; postsLoaded = true; }
         loadVideosAsync();
     }
@@ -183,6 +182,37 @@
         }
     }
 
+    // Функция добавления в избранное, автоматически подгружает модуль хранилища
+    async function addBookmark(item) {
+        // Проверяем наличие BookmarkStorage
+        if (!window.BookmarkStorage) {
+            try {
+                await loadModule('js/features/storage.js');
+            } catch (e) {
+                UIUtils.showToast('Не удалось загрузить хранилище', 'error');
+                return;
+            }
+        }
+        if (!window.BookmarkStorage) return UIUtils.showToast('Хранилище не загружено', 'error');
+
+        const bookmark = {
+            url: item.type === 'video'
+                ? `https://www.youtube.com/watch?v=${item.id}`
+                : `${location.origin}${location.pathname}?post=${item.id}`,
+            title: item.title || (item.type === 'video' ? item.title : item.title),
+            type: item.type === 'video' ? 'video' : 'post',
+            thumbnail: item.thumbnail || DEFAULT_IMAGE,
+            author: item.author,
+            date: item.date
+        };
+        try {
+            await BookmarkStorage.addBookmark(bookmark);
+            UIUtils.showToast('Добавлено в избранное', 'success');
+        } catch (err) {
+            UIUtils.showToast('Ошибка: ' + err.message, 'error');
+        }
+    }
+
     function createVideoCard(video) {
         const card = GithubCore.createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
         card.setAttribute('aria-label', `Смотреть видео: ${video.title}`);
@@ -194,9 +224,23 @@
         title.textContent = video.title.length > 70 ? video.title.slice(0,70)+'…' : video.title;
         const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
-        const btn = GithubCore.createElement('span', 'button');
-        btn.innerHTML = '<i class="fas fa-play"></i> Смотреть';
-        inner.append(imgW, title, meta, btn);
+        
+        // Кнопки действий
+        const actions = GithubCore.createElement('div', '', { display: 'flex', gap: '8px', marginTop: 'auto' });
+        const watchBtn = GithubCore.createElement('span', 'button');
+        watchBtn.innerHTML = '<i class="fas fa-play"></i> Смотреть';
+        watchBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank');
+        });
+        const bookmarkBtn = GithubCore.createElement('span', 'button');
+        bookmarkBtn.innerHTML = '<i class="fas fa-bookmark"></i> В избранное';
+        bookmarkBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            addBookmark(video);
+        });
+        actions.append(watchBtn, bookmarkBtn);
+        inner.append(imgW, title, meta, actions);
         card.appendChild(inner);
         card.addEventListener('click', () => window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank'));
         return card;
@@ -223,7 +267,23 @@
         const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
         const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
         preview.textContent = summary;
-        inner.append(imgW, title, meta, preview);
+        
+        // Кнопка избранного
+        const actions = GithubCore.createElement('div', '', { display: 'flex', gap: '8px', marginTop: 'auto' });
+        const readBtn = GithubCore.createElement('span', 'button');
+        readBtn.innerHTML = 'Читать';
+        readBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels });
+        });
+        const bookmarkBtn = GithubCore.createElement('span', 'button');
+        bookmarkBtn.innerHTML = '<i class="fas fa-bookmark"></i> В избранное';
+        bookmarkBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            addBookmark({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE, labels: post.labels });
+        });
+        actions.append(readBtn, bookmarkBtn);
+        inner.append(imgW, title, meta, preview, actions);
         card.appendChild(inner);
         card.addEventListener('click', () => openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }));
         return card;
