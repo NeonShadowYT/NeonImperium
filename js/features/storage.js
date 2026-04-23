@@ -1,104 +1,87 @@
-// js/features/storage.js — Хранилище закладок (v5 — асинхронное обогащение + retry)
+// js/features/storage.js — хранилище с ленивой загрузкой и улучшенной производительностью
 (function() {
-    'use strict';
+    const {
+        CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce
+    } = GithubCore;
 
-    // ==================== КОНФИГУРАЦИЯ ====================
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
     const STORAGE_KEY_PREFIX = 'bookmarks_';
     const LOCAL_STORAGE_KEY = 'neon_imperium_bookmarks_local';
     const SESSION_CACHE_KEY = 'bookmarks_session_cache';
     const RECOVERY_SALT = new TextEncoder().encode('neon-imperium-recovery-salt-v1');
-    const ENRICH_MAX_ATTEMPTS = 3;
 
-    // Состояние модуля
-    let currentUser = null;
-    let currentToken = null;
-    let gistId = null;
-    let masterPassword = null;
-    let cachedBookmarks = null;
-    
-    // UI состояние
-    let currentModal = null;
-    let currentGrid = null;
-    let currentBookmarks = [];
-    let sortOrder = 'new';
-    let category = 'all';
-    let addFormVisible = false;
+    let currentUser, currentToken, gistId, masterPassword, cachedBookmarks;
+    let currentModal, currentGrid, currentBookmarks = [];
+    let sortOrder = 'new', category = 'all', addFormVisible = false;
 
-    // ==================== УТИЛИТЫ (Base64, Crypto) ====================
+    // ========== Утилиты Base64 и Crypto ==========
     const Base64 = {
-        encode: (str) => btoa(String.fromCharCode(...new TextEncoder().encode(str))),
-        decode: (base64) => new TextDecoder().decode(Uint8Array.from(atob(base64), c => c.charCodeAt(0)))
+        encode: str => btoa(String.fromCharCode(...new TextEncoder().encode(str))),
+        decode: b64 => new TextDecoder().decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)))
     };
 
     const Crypto = {
-        async deriveKey(password, salt) {
-            const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+        async deriveKey(pwd, salt) {
+            const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(pwd), 'PBKDF2', false, ['deriveKey']);
             return crypto.subtle.deriveKey(
                 { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-                keyMaterial,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['encrypt', 'decrypt']
+                keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
             );
         },
-        async encrypt(data, password) {
+        async encrypt(data, pwd) {
             const iv = crypto.getRandomValues(new Uint8Array(12));
-            const key = await this.deriveKey(password, RECOVERY_SALT);
-            const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(data)));
-            const combined = new Uint8Array(iv.length + encrypted.byteLength);
-            combined.set(iv);
-            combined.set(new Uint8Array(encrypted), iv.length);
+            const key = await this.deriveKey(pwd, RECOVERY_SALT);
+            const enc = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(data)));
+            const combined = new Uint8Array(iv.length + enc.byteLength);
+            combined.set(iv); combined.set(new Uint8Array(enc), iv.length);
             return Base64.encode(String.fromCharCode(...combined));
         },
-        async decrypt(encryptedBase64, password) {
+        async decrypt(b64, pwd) {
             try {
-                const combined = Uint8Array.from(Base64.decode(encryptedBase64), c => c.charCodeAt(0));
-                const iv = combined.slice(0, 12);
-                const data = combined.slice(12);
-                const key = await this.deriveKey(password, RECOVERY_SALT);
-                const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
-                return JSON.parse(new TextDecoder().decode(decrypted));
+                const combined = Uint8Array.from(Base64.decode(b64), c => c.charCodeAt(0));
+                const iv = combined.slice(0, 12), data = combined.slice(12);
+                const key = await this.deriveKey(pwd, RECOVERY_SALT);
+                const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+                return JSON.parse(new TextDecoder().decode(dec));
             } catch { return null; }
         }
     };
 
-    // ==================== GIST API ====================
+    // ========== Gist API ==========
     const GistAPI = {
-        async fetch(gistId, token) {
-            const resp = await fetch(`https://api.github.com/gists/${gistId}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (!resp.ok) return resp.status === 404 ? null : Promise.reject(new Error(`Gist fetch: ${resp.status}`));
-            return resp.json();
+        async fetch(id, token) {
+            const r = await fetch(`https://api.github.com/gists/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+            return r.ok ? r.json() : (r.status === 404 ? null : Promise.reject(new Error(`Gist fetch: ${r.status}`)));
         },
-        async update(gistId, content, token) {
-            const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
+        async update(id, content, token) {
+            const r = await fetch(`https://api.github.com/gists/${id}`, {
                 method: 'PATCH',
                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ files: { [GIST_FILENAME]: { content } } })
             });
-            if (!resp.ok) throw new Error(`Gist update: ${resp.status}`);
-            return resp.json();
+            if (!r.ok) throw new Error(`Gist update: ${r.status}`);
+            return r.json();
         },
         async create(content, token) {
-            const resp = await fetch('https://api.github.com/gists', {
+            const r = await fetch('https://api.github.com/gists', {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ description: GIST_DESCRIPTION, public: false, files: { [GIST_FILENAME]: { content } } })
             });
-            if (!resp.ok) throw new Error(`Gist create: ${resp.status}`);
-            const gist = await resp.json();
+            if (!r.ok) throw new Error(`Gist create: ${r.status}`);
+            const gist = await r.json();
             return gist.id;
         },
-        async delete(gistId, token) {
-            try { await fetch(`https://api.github.com/gists/${gistId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); } catch {}
+        async delete(id, token) {
+            try { await fetch(`https://api.github.com/gists/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); } catch {}
         }
     };
 
-    // ==================== КЭШ СЕССИИ ====================
+    // ========== Кэш сессии ==========
     const SessionCache = {
-        save(bookmarks, password) {
-            if (!password) return;
+        save(bookmarks, pwd) {
+            if (!pwd) return;
             try { sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ user: currentUser, bookmarks, timestamp: Date.now() })); } catch {}
             cachedBookmarks = bookmarks;
         },
@@ -110,13 +93,10 @@
             } catch {}
             return null;
         },
-        clear() {
-            sessionStorage.removeItem(SESSION_CACHE_KEY);
-            cachedBookmarks = null;
-        }
+        clear() { sessionStorage.removeItem(SESSION_CACHE_KEY); cachedBookmarks = null; }
     };
 
-    // ==================== ЗАГРУЗКА/СОХРАНЕНИЕ ====================
+    // ========== Загрузка/сохранение ==========
     async function loadBookmarks(password = null) {
         if (!currentToken) {
             try { return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]'); } catch { return []; }
@@ -131,15 +111,12 @@
                 if (stored) gistId = JSON.parse(stored).gistId;
             }
             if (!gistId) return { bookmarks: [], needSetup: true };
-
             const gist = await GistAPI.fetch(gistId, currentToken);
             if (!gist) return { bookmarks: [], needSetup: true };
             const file = gist.files?.[GIST_FILENAME];
             if (!file) return { bookmarks: [], needSetup: true };
-
             let payload;
             try { payload = JSON.parse(file.content); } catch { payload = { encryptedBookmarks: file.content }; }
-
             if (payload.encryptedBookmarks) {
                 if (!password) return { passwordRequired: true, user: payload.user };
                 const bookmarks = await Crypto.decrypt(payload.encryptedBookmarks, password);
@@ -161,7 +138,7 @@
         if (!password) throw new Error('Master password required');
         SessionCache.save(bookmarks, password);
         const encrypted = await Crypto.encrypt(bookmarks, password);
-        const payload = { version: 5, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
+        const payload = { version: 2, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
         const content = JSON.stringify(payload);
         try {
             if (gistId) await GistAPI.update(gistId, content, currentToken);
@@ -174,38 +151,37 @@
         }
     }
 
-    // ==================== РАСПОЗНАВАНИЕ URL ====================
+    async function changeMasterPassword(oldPwd, newPwd) {
+        const res = await loadBookmarks(oldPwd);
+        if (res.passwordRequired) throw new Error('Old password required');
+        const bookmarks = res.bookmarks || [];
+        await saveBookmarks(bookmarks, newPwd);
+        masterPassword = newPwd;
+        return true;
+    }
+
+    async function resetStorage() {
+        if (gistId) await GistAPI.delete(gistId, currentToken);
+        gistId = masterPassword = null;
+        SessionCache.clear();
+        localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+    }
+
+    // ========== URL утилиты ==========
     const UrlUtils = {
-        isEmbed(url) {
-            if (!url) return false;
-            const u = url.toLowerCase();
-            return u.includes('/embed/') || u.includes('/player/') || u.includes('?embed') || u.includes('/v/');
+        isEmbed: url => url && /\/embed\/|\/player\/|\?embed|\/v\//i.test(url),
+        isSitePost: url => {
+            try { const u = new URL(url); return (u.hostname === 'neonshadowyt.github.io' || u.hostname === 'localhost') && u.searchParams.has('post'); } catch { return false; }
         },
-        isSitePost(url) {
-            try {
-                const u = new URL(url);
-                return (u.hostname === 'neonshadowyt.github.io' || u.hostname === 'localhost') && u.searchParams.has('post');
-            } catch { return false; }
-        },
-        guessEmbed(url) {
+        guessEmbed: url => {
             if (!url) return null;
             try {
                 const u = new URL(url);
-                const origin = u.origin;
-                const path = u.pathname;
-                const search = u.search;
-
+                const origin = u.origin, path = u.pathname, search = u.search;
                 if (path.includes('view_video.php') && search.includes('viewkey=')) {
                     const key = new URLSearchParams(search).get('viewkey');
                     if (key) return `${origin}/embed/${key}`;
-                }
-                if (u.hostname.includes('vk.com') && path.includes('video')) {
-                    const match = url.match(/video(-?\d+)_(\d+)/);
-                    if (match) return `https://vk.com/video_ext.php?oid=${match[1]}&id=${match[2]}&hd=2`;
-                }
-                if (u.hostname.includes('rutube.ru') && path.includes('/video/')) {
-                    const id = path.split('/video/')[1]?.split('/')[0];
-                    if (id) return `https://rutube.ru/play/embed/${id}`;
                 }
                 const shortMatch = url.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([a-zA-Z0-9_-]+)/);
                 if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}`;
@@ -227,74 +203,67 @@
         }
     };
 
-    // ==================== OEmbed и прямые ссылки ====================
+    // ========== OEmbed и прямые ссылки ==========
     const OEMBED_PROVIDERS = [
-        (url) => `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
-        (url) => `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`
+        url => `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
+        url => `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`,
+        url => `https://api.embed.ly/1/oembed?url=${encodeURIComponent(url)}`,
+        url => `https://api.microlink.io/?url=${encodeURIComponent(url)}`,
+        url => `https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`,
+        url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
     ];
 
     async function fetchOEmbedData(url) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        for (const provider of OEMBED_PROVIDERS) {
+        const controllers = OEMBED_PROVIDERS.map(() => new AbortController());
+        const timeout = setTimeout(() => controllers.forEach(c => c.abort()), 5000);
+        const promises = OEMBED_PROVIDERS.map(async (provider, i) => {
             try {
-                const apiUrl = provider(url);
-                const resp = await fetch(apiUrl, { signal: controller.signal });
-                if (!resp.ok) continue;
-                const data = await resp.json();
-                clearTimeout(timeout);
+                const r = await fetch(provider(url), { signal: controllers[i].signal });
+                if (!r.ok) return null;
+                const data = await r.json();
                 if (data) {
+                    if (data.contents) {
+                        const html = data.contents;
+                        const title = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                        const image = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                        const video = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                        return { title, thumbnail_url: image, url: video };
+                    }
                     return {
                         title: data.title,
-                        thumbnail_url: data.thumbnail_url || data.image || data.thumbnail,
+                        thumbnail_url: data.thumbnail_url || data.image,
                         url: data.url,
                         html: data.html
                     };
                 }
             } catch {}
-        }
-        clearTimeout(timeout);
-        return null;
+            return null;
+        });
+        try { const res = await Promise.any(promises); clearTimeout(timeout); return res; }
+        catch { clearTimeout(timeout); return null; }
     }
 
     const VIDEO_SERVICES = [
         {
             name: 'Cobalt',
-            fetch: async (url) => {
-                const resp = await fetch('https://co.wuk.sh/api/json', {
+            fetch: async url => {
+                const r = await fetch('https://co.wuk.sh/api/json', {
                     method: 'POST',
                     headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url, aFormat: 'best', vCodec: 'h264' })
                 });
-                if (!resp.ok) return null;
-                const data = await resp.json();
-                return data.status === 'success' ? data.url : null;
+                if (!r.ok) return null;
+                const d = await r.json();
+                return d.status === 'success' ? d.url : null;
             }
         },
         {
             name: 'YtDlpAPI',
-            fetch: async (url) => {
-                const resp = await fetch(`https://yt-dlp-api.vercel.app/api/extract?url=${encodeURIComponent(url)}`);
-                if (!resp.ok) return null;
-                const data = await resp.json();
-                return data.formats?.find(f => f.vcodec !== 'none' && f.acodec !== 'none')?.url || data.url;
-            }
-        },
-        {
-            name: 'Vimeo',
-            fetch: async (url) => {
-                if (!url.includes('vimeo.com')) return null;
-                const oembed = await fetchOEmbedData(url);
-                if (oembed?.html) {
-                    const src = oembed.html.match(/src=["']([^"']+)["']/i)?.[1];
-                    if (src) {
-                        const resp = await fetch(src);
-                        const text = await resp.text();
-                        const match = text.match(/"progressive":\[{"url":"([^"]+\.mp4)"/);
-                        if (match) return match[1];
-                    }
-                }
-                return null;
+            fetch: async url => {
+                const r = await fetch(`https://yt-dlp-api.vercel.app/api/extract?url=${encodeURIComponent(url)}`);
+                if (!r.ok) return null;
+                const d = await r.json();
+                return d.formats?.find(f => f.vcodec !== 'none' && f.acodec !== 'none')?.url || d.url;
             }
         }
     ];
@@ -304,96 +273,7 @@
         try { return await Promise.any(promises); } catch { return null; }
     }
 
-    // ==================== ФУНКЦИИ ОБОГАЩЕНИЯ ЗАКЛАДКИ ====================
-    async function fetchMetadata(url) {
-        let embedUrl = null, downloadUrl = null, thumbnail = null, title = null, postType = null;
-
-        if (UrlUtils.isSitePost(url)) {
-            postType = 'site-post';
-        } else if (UrlUtils.isEmbed(url)) {
-            embedUrl = url;
-        } else {
-            const guessed = UrlUtils.guessEmbed(url);
-            if (guessed) embedUrl = guessed;
-
-            const [oembed, direct] = await Promise.allSettled([
-                fetchOEmbedData(url),
-                fetchDirectVideoUrl(url)
-            ]);
-
-            if (oembed.status === 'fulfilled' && oembed.value) {
-                const data = oembed.value;
-                if (data.html) {
-                    const iframeSrc = data.html.match(/<iframe[^>]+src=["']([^"']+)["']/i)?.[1];
-                    if (iframeSrc) embedUrl = iframeSrc;
-                }
-                if (data.url && /\.(mp4|webm|mov)/i.test(data.url)) downloadUrl = data.url;
-                if (data.thumbnail_url) thumbnail = data.thumbnail_url;
-                if (data.title) title = data.title;
-            }
-
-            if (direct.status === 'fulfilled' && direct.value) {
-                downloadUrl = direct.value;
-            }
-
-            if (!thumbnail && embedUrl?.includes('youtube.com/embed/')) {
-                const vid = embedUrl.split('/embed/')[1]?.split('?')[0];
-                if (vid) thumbnail = `https://img.youtube.com/vi/${vid}/mqdefault.jpg`;
-            }
-        }
-
-        return { embedUrl, downloadUrl, thumbnail, title, postType };
-    }
-
-    async function updateBookmarkInStorage(bookmark) {
-        const res = await loadBookmarks(masterPassword);
-        const bookmarks = res.bookmarks || [];
-        const idx = bookmarks.findIndex(b => b.id === bookmark.id);
-        if (idx !== -1) {
-            bookmarks[idx] = bookmark;
-            SessionCache.save(bookmarks, masterPassword);
-            saveBookmarks(bookmarks, masterPassword);
-            if (currentGrid) {
-                // Точечное обновление карточки
-                const cardElement = currentGrid.querySelector(`.bookmark-card[data-id="${bookmark.id}"]`);
-                if (cardElement) {
-                    const onDelete = (id) => {
-                        currentBookmarks = currentBookmarks.filter(b => b.id !== id);
-                        renderBookmarksGrid(currentBookmarks);
-                        removeBookmark(id);
-                    };
-                    const onEditSave = (updated) => {
-                        const idx = currentBookmarks.findIndex(b => b.id === updated.id);
-                        if (idx >= 0) currentBookmarks[idx] = updated;
-                        saveBookmarks(currentBookmarks);
-                        renderBookmarksGrid(currentBookmarks);
-                    };
-                    const newCard = renderBookmarkCard(bookmark, onDelete, onEditSave);
-                    cardElement.replaceWith(newCard);
-                } else {
-                    renderBookmarksGrid(bookmarks);
-                }
-            }
-        }
-    }
-
-    async function enrichBookmarkAsync(bookmark, attempt = 1) {
-        try {
-            const metadata = await fetchMetadata(bookmark.url);
-            Object.assign(bookmark, metadata, { enriched: true });
-            await updateBookmarkInStorage(bookmark);
-        } catch (error) {
-            if (attempt < ENRICH_MAX_ATTEMPTS) {
-                const delay = Math.pow(2, attempt) * 1000;
-                setTimeout(() => enrichBookmarkAsync(bookmark, attempt + 1), delay);
-            } else {
-                bookmark.enrichFailed = true;
-                await updateBookmarkInStorage(bookmark);
-            }
-        }
-    }
-
-    // ==================== ДОБАВЛЕНИЕ ЗАКЛАДКИ ====================
+    // ========== Добавление/удаление ==========
     async function addBookmark(bookmark) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
         if (!masterPassword) {
@@ -402,34 +282,52 @@
         }
         if (!bookmark?.url) { UIUtils.showToast('Некорректная ссылка', 'error'); return; }
 
-        const newBookmark = {
-            id: Date.now() + '-' + Math.random().toString(36),
-            added: new Date().toISOString(),
-            url: bookmark.url,
-            title: bookmark.title || bookmark.url,
-            embedUrl: null,
-            downloadUrl: null,
-            thumbnail: null,
-            postType: null,
-            enriched: false
-        };
+        let finalUrl = bookmark.url, embedUrl = null, downloadUrl = null, thumbnail = null;
+        let finalTitle = bookmark.title, postType = bookmark.postType || null;
+
+        if (bookmark.url) {
+            if (UrlUtils.isSitePost(bookmark.url)) postType = 'site-post';
+            else if (UrlUtils.isEmbed(bookmark.url)) embedUrl = finalUrl = bookmark.url;
+            else {
+                const guessed = UrlUtils.guessEmbed(bookmark.url);
+                if (guessed) { embedUrl = finalUrl = guessed; }
+                const [oembed, direct] = await Promise.all([fetchOEmbedData(bookmark.url), fetchDirectVideoUrl(bookmark.url)]);
+                if (oembed) {
+                    if (oembed.html) {
+                        const iframeSrc = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i)?.[1];
+                        if (iframeSrc) embedUrl = iframeSrc;
+                    }
+                    if (oembed.url && /\.(mp4|webm|mov)/i.test(oembed.url)) downloadUrl = oembed.url;
+                    if (oembed.thumbnail_url) thumbnail = oembed.thumbnail_url;
+                    if (oembed.title && !finalTitle) finalTitle = oembed.title;
+                }
+                if (direct) downloadUrl = direct;
+                if (!thumbnail && embedUrl?.includes('youtube.com/embed/')) {
+                    const vid = embedUrl.split('/embed/')[1]?.split('?')[0];
+                    if (vid) thumbnail = `https://img.youtube.com/vi/${vid}/mqdefault.jpg`;
+                }
+            }
+        }
 
         const res = await loadBookmarks(masterPassword);
         if (res.passwordRequired) throw new Error('Password required');
         const bookmarks = res.bookmarks || [];
-
-        if (bookmarks.some(b => b.url === newBookmark.url)) {
+        if (bookmarks.some(b => b.url === finalUrl)) {
             UIUtils.showToast('Уже в избранном', 'info');
             throw new Error('duplicate');
         }
 
-        const updated = [...bookmarks, newBookmark];
-        SessionCache.save(updated, masterPassword);
-        if (currentGrid) renderBookmarksGrid(updated);
-        saveBookmarks(updated, masterPassword).catch(e => console.warn('Background sync failed', e));
+        const newBookmark = {
+            id: Date.now() + '-' + Math.random().toString(36),
+            added: new Date().toISOString(),
+            url: finalUrl, title: finalTitle || finalUrl,
+            embedUrl, downloadUrl, thumbnail, postType
+        };
 
-        enrichBookmarkAsync(newBookmark).catch(e => console.warn('Enrichment failed', e));
-
+        const optimistic = [...bookmarks, newBookmark];
+        SessionCache.save(optimistic, masterPassword);
+        if (currentGrid) renderBookmarksGrid(optimistic);
+        saveBookmarks(optimistic, masterPassword).catch(e => UIUtils.showToast('Ошибка синхронизации', 'error'));
         return newBookmark;
     }
 
@@ -438,20 +336,32 @@
         const res = await loadBookmarks(masterPassword);
         const filtered = (res.bookmarks || []).filter(b => b.id !== bookmarkId);
         SessionCache.save(filtered, masterPassword);
+        if (currentGrid) renderBookmarksGrid(filtered);
         saveBookmarks(filtered, masterPassword).catch(e => UIUtils.showToast('Ошибка синхронизации', 'error'));
     }
 
-    // ==================== UI КОМПОНЕНТЫ ====================
+    // ========== UI компоненты ==========
     function openVideoFullscreen(iframe, title) {
-        const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;';
-        const close = document.createElement('button');
+        const overlay = createElement('div', '', {
+            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+            background: 'rgba(0,0,0,0.95)', zIndex: 100000, display: 'flex',
+            flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            animation: 'fadeIn 0.2s'
+        });
+        const close = createElement('button', '', {
+            position: 'absolute', top: '20px', right: '20px', background: 'rgba(0,0,0,0.7)',
+            color: '#fff', border: 'none', borderRadius: '50%', width: '40px', height: '40px',
+            fontSize: '20px', cursor: 'pointer', transition: 'transform 0.2s'
+        });
         close.innerHTML = '<i class="fas fa-times"></i>';
-        close.style.cssText = 'position:absolute;top:20px;right:20px;background:rgba(0,0,0,0.7);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;';
-        close.onclick = () => overlay.remove();
-        const titleDiv = document.createElement('div');
+        close.onmouseover = () => close.style.transform = 'scale(1.1)';
+        close.onmouseleave = () => close.style.transform = 'scale(1)';
+        close.onclick = () => { overlay.style.animation = 'fadeOut 0.2s forwards'; setTimeout(() => overlay.remove(), 200); };
+        const titleDiv = createElement('div', '', {
+            position: 'absolute', top: '20px', left: '20px', color: '#fff', fontSize: '18px',
+            background: 'rgba(0,0,0,0.5)', padding: '8px 16px', borderRadius: '30px'
+        });
         titleDiv.textContent = title;
-        titleDiv.style.cssText = 'position:absolute;top:20px;left:20px;color:#fff;font-size:18px;background:rgba(0,0,0,0.5);padding:8px 16px;border-radius:30px;';
         iframe.style.cssText = 'width:90%;height:85%;border-radius:12px;border:none;';
         overlay.append(iframe, close, titleDiv);
         document.body.appendChild(overlay);
@@ -459,71 +369,63 @@
     }
 
     function renderBookmarkCard(bookmark, onDelete, onEditSave) {
-        if (!bookmark) return document.createElement('div');
+        const card = createElement('div', 'bookmark-card tilt-card', {
+            background: 'var(--bg-inner-gradient)', borderRadius: '20px', border: '1px solid var(--border)',
+            cursor: 'pointer', transition: 'transform 0.3s', overflow: 'hidden',
+            display: 'flex', flexDirection: 'column', height: '100%'
+        });
+        card.addEventListener('mousemove', e => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left, y = e.clientY - rect.top;
+            const rotX = (y - rect.height/2) / 15, rotY = (rect.width/2 - x) / 15;
+            card.style.transform = `perspective(1000px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.02)`;
+        });
+        card.addEventListener('mouseleave', () => card.style.transform = '');
 
-        const card = document.createElement('div');
-        card.className = 'bookmark-card project-card tilt-card';
-        card.dataset.id = bookmark.id;
-        card.style.cssText = 'background:var(--bg-inner-gradient);border-radius:20px;border:1px solid var(--border);cursor:pointer;transition:transform 0.3s;overflow:hidden;display:flex;flex-direction:column;height:100%;';
-
-        const mediaContainer = document.createElement('div');
-        mediaContainer.className = 'image-wrapper';
-        mediaContainer.style.cssText = 'margin:-16px -16px 12px -16px;width:calc(100% + 32px);position:relative;padding-bottom:56.25%;background:var(--bg-primary);border-bottom:1px solid var(--border);';
-
+        const mediaContainer = createElement('div', '', {
+            position: 'relative', paddingBottom: '56.25%', background: 'var(--bg-primary)',
+            borderBottom: '1px solid var(--border)'
+        });
         const embedSrc = bookmark.embedUrl || (UrlUtils.isEmbed(bookmark.url) ? bookmark.url : null);
         if (embedSrc) {
-            const iframe = document.createElement('iframe');
+            const iframe = createElement('iframe', '', {
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none'
+            });
             iframe.src = embedSrc;
-            iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
             iframe.setAttribute('allowfullscreen', 'true');
             iframe.loading = 'lazy';
-            const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer;z-index:2;';
+            iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
+            const overlay = createElement('div', '', {
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 2
+            });
             overlay.onclick = e => { e.stopPropagation(); openVideoFullscreen(iframe, bookmark.title); };
             mediaContainer.append(iframe, overlay);
         } else {
-            const img = document.createElement('img');
+            const img = createElement('img', '', {
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover'
+            });
             img.src = bookmark.thumbnail || 'images/default-news.webp';
             img.alt = bookmark.title;
-            img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;';
             img.onerror = () => img.src = 'images/default-news.webp';
             mediaContainer.appendChild(img);
-            if (!bookmark.enriched && !bookmark.enrichFailed) {
-                const loader = document.createElement('div');
-                loader.className = 'loading-spinner';
-                loader.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;';
-                loader.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:24px;color:var(--accent);"></i>';
-                mediaContainer.appendChild(loader);
-            }
         }
 
-        const content = document.createElement('div');
-        content.style.cssText = 'padding:0 0 12px 0;flex:1;display:flex;flex-direction:column;';
-        const titleEl = document.createElement('h4');
+        const content = createElement('div', '', { padding: '12px', flex: 1, display: 'flex', flexDirection: 'column' });
+        const titleEl = createElement('h4', '', { margin: '0 0 6px', fontSize: '16px', color: 'var(--text-primary)' });
         titleEl.textContent = bookmark.title.length > 60 ? bookmark.title.slice(0,60)+'…' : bookmark.title;
-        titleEl.style.cssText = 'margin:0 0 6px;font-size:16px;color:var(--text-primary);';
-        const meta = document.createElement('div');
-        meta.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;font-size:11px;color:var(--text-secondary);';
-        meta.innerHTML = `<span><i class="fas fa-calendar-alt"></i> ${new Date(bookmark.added).toLocaleDateString()}</span>`;
-        if (bookmark.enrichFailed) {
-            meta.innerHTML += '<span style="color:#f44336;"><i class="fas fa-exclamation-triangle"></i> Не удалось загрузить превью</span>';
-        } else if (!bookmark.enriched) {
-            meta.innerHTML += '<span style="color:var(--accent);"><i class="fas fa-spinner fa-pulse"></i> Загрузка...</span>';
-        }
+        const meta = createElement('div', '', { display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '11px', color: 'var(--text-secondary)' });
+        meta.innerHTML = `<span><i class="fas fa-calendar-alt"></i> ${formatDate(bookmark.added)}</span>`;
 
-        const actions = document.createElement('div');
-        actions.style.cssText = 'display:flex;gap:4px;margin-top:auto;justify-content:flex-end;';
+        const actions = createElement('div', '', { display: 'flex', gap: '4px', marginTop: 'auto', justifyContent: 'flex-end' });
         if (bookmark.downloadUrl) {
-            const btn = document.createElement('button');
+            const btn = createElement('button', 'bookmark-action-btn');
             btn.innerHTML = '<i class="fas fa-download"></i>';
-            btn.className = 'bookmark-action-btn';
             btn.title = 'Скачать';
             btn.onclick = e => { e.stopPropagation(); window.open(bookmark.downloadUrl, '_blank'); };
             actions.appendChild(btn);
         }
-        const editBtn = document.createElement('button');
+        const editBtn = createElement('button', 'bookmark-action-btn');
         editBtn.innerHTML = '<i class="fas fa-pen"></i>';
-        editBtn.className = 'bookmark-action-btn';
         editBtn.onclick = e => {
             e.stopPropagation();
             const newTitle = prompt('Новое название:', bookmark.title);
@@ -533,9 +435,8 @@
                 onEditSave(bookmark);
             }
         };
-        const delBtn = document.createElement('button');
+        const delBtn = createElement('button', 'bookmark-action-btn');
         delBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
-        delBtn.className = 'bookmark-action-btn';
         delBtn.style.color = '#f44336';
         delBtn.onclick = e => { e.stopPropagation(); if (confirm('Удалить закладку?')) onDelete(bookmark.id); };
         actions.append(editBtn, delBtn);
@@ -549,7 +450,6 @@
     function renderBookmarksGrid(bookmarks) {
         if (!currentGrid) return;
         let filtered = bookmarks.filter(b => {
-            if (!b) return false;
             if (category === 'video') return b.embedUrl;
             if (category === 'post') return b.postType && ['feedback','news','update','site-post'].includes(b.postType);
             if (category === 'link') return !b.embedUrl && !(b.postType && ['feedback','news','update','site-post'].includes(b.postType));
@@ -562,25 +462,15 @@
         }
         currentGrid.innerHTML = '';
         filtered.forEach(b => {
-            if (!b) return;
             const card = renderBookmarkCard(b,
-                id => {
-                    currentBookmarks = currentBookmarks.filter(bk => bk && bk.id !== id);
-                    renderBookmarksGrid(currentBookmarks);
-                    removeBookmark(id);
-                },
-                updated => {
-                    const idx = currentBookmarks.findIndex(bk => bk && bk.id === updated.id);
-                    if (idx>=0) currentBookmarks[idx] = updated;
-                    saveBookmarks(currentBookmarks);
-                    renderBookmarksGrid(currentBookmarks);
-                }
+                id => { currentBookmarks = currentBookmarks.filter(bk => bk.id !== id); renderBookmarksGrid(currentBookmarks); removeBookmark(id); },
+                updated => { const idx = currentBookmarks.findIndex(bk => bk.id === updated.id); if (idx>=0) currentBookmarks[idx] = updated; saveBookmarks(currentBookmarks); renderBookmarksGrid(currentBookmarks); }
             );
             currentGrid.appendChild(card);
         });
     }
 
-    // ==================== МОДАЛЬНОЕ ОКНО ====================
+    // ========== Модальное окно ==========
     async function openStorageModal() {
         if (!window.GithubAuth) return setTimeout(openStorageModal, 100);
         updateAuthState();
@@ -654,7 +544,7 @@
         `;
         const { modal, closeModal } = UIUtils.createModal('Хранилище', html, { size: 'full' });
         currentModal = modal;
-        const style = document.createElement('style');
+        const style = createElement('style');
         style.textContent = `
             .storage-modal-container{display:flex;flex-direction:column;gap:20px}
             .storage-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px}
@@ -680,10 +570,8 @@
         `;
         modal.appendChild(style);
         currentGrid = modal.querySelector('#bookmarks-grid');
-
         modal.querySelectorAll('.sort-btn').forEach(b => b.addEventListener('click', () => { sortOrder = b.dataset.order; renderBookmarksGrid(currentBookmarks); }));
         modal.querySelectorAll('.cat-btn').forEach(b => b.addEventListener('click', () => { category = b.dataset.cat; renderBookmarksGrid(currentBookmarks); }));
-
         const toggleAdd = modal.querySelector('#toggle-add-btn');
         const addForm = modal.querySelector('#add-form');
         toggleAdd.addEventListener('click', () => {
@@ -692,44 +580,30 @@
             toggleAdd.innerHTML = addFormVisible ? '<i class="fas fa-times"></i> Отмена' : '<i class="fas fa-plus"></i> Добавить';
             if (addFormVisible) modal.querySelector('#new-url').focus();
         });
-
         modal.querySelector('#confirm-add').addEventListener('click', async () => {
             const url = modal.querySelector('#new-url').value.trim();
             if (!url) return UIUtils.showToast('Введите ссылку', 'error');
             const title = modal.querySelector('#new-title').value.trim() || url;
             const btn = modal.querySelector('#confirm-add');
             btn.disabled = true;
-
-            const tempId = 'temp-' + Date.now();
-            const optimistic = { id: tempId, url, title, added: new Date().toISOString(), enriched: false };
+            const tempId = 'temp-'+Date.now();
+            const optimistic = { id: tempId, url, title, added: new Date().toISOString() };
             currentBookmarks.unshift(optimistic);
             renderBookmarksGrid(currentBookmarks);
-            addFormVisible = false;
-            addForm.classList.remove('visible');
-            toggleAdd.innerHTML = '<i class="fas fa-plus"></i> Добавить';
-
             try {
                 const final = await addBookmark({ url, title });
                 const idx = currentBookmarks.findIndex(b => b.id === tempId);
                 if (idx >= 0) currentBookmarks[idx] = final;
                 renderBookmarksGrid(currentBookmarks);
                 UIUtils.showToast('Добавлено', 'success');
+                addFormVisible = false; addForm.classList.remove('visible');
+                toggleAdd.innerHTML = '<i class="fas fa-plus"></i> Добавить';
             } catch (e) {
-                if (e.message === 'duplicate') {
-                    currentBookmarks = currentBookmarks.filter(b => b.id !== tempId);
-                    renderBookmarksGrid(currentBookmarks);
-                    UIUtils.showToast('Уже в избранном', 'info');
-                } else {
-                    console.error('Ошибка добавления закладки:', e);
-                    UIUtils.showToast('Ошибка при добавлении. Закладка сохранена локально, попробуйте позже.', 'warning', 5000);
-                }
-            } finally {
-                btn.disabled = false;
-                modal.querySelector('#new-url').value = '';
-                modal.querySelector('#new-title').value = '';
-            }
+                if (e.message !== 'duplicate') UIUtils.showToast('Ошибка: '+e.message, 'error');
+                currentBookmarks = currentBookmarks.filter(b => b.id !== tempId);
+                renderBookmarksGrid(currentBookmarks);
+            } finally { btn.disabled = false; }
         });
-
         modal.querySelector('#change-password-btn').addEventListener('click', async () => {
             const old = masterPassword || prompt('Текущий пароль:');
             if (!old) return;
@@ -738,7 +612,6 @@
             try { await changeMasterPassword(old, newPwd); UIUtils.showToast('Пароль изменён', 'success'); }
             catch(e) { UIUtils.showToast('Ошибка: '+e.message, 'error'); }
         });
-
         modal.querySelector('#reset-storage-btn').addEventListener('click', async () => {
             if (!confirm('Удалить все закладки?')) return;
             await resetStorage();
@@ -747,26 +620,7 @@
             UIUtils.showToast('Хранилище сброшено', 'success');
             closeModal();
         });
-
         renderBookmarksGrid(currentBookmarks);
-    }
-
-    async function changeMasterPassword(oldPwd, newPwd) {
-        const res = await loadBookmarks(oldPwd);
-        if (res.passwordRequired) throw new Error('Old password required');
-        const bookmarks = res.bookmarks || [];
-        await saveBookmarks(bookmarks, newPwd);
-        masterPassword = newPwd;
-        return true;
-    }
-
-    async function resetStorage() {
-        if (gistId) await GistAPI.delete(gistId, currentToken).catch(()=>{});
-        gistId = null;
-        masterPassword = null;
-        SessionCache.clear();
-        localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);
-        localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
 
     function updateAuthState() {
@@ -777,20 +631,16 @@
             const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
             if (stored) try { gistId = JSON.parse(stored).gistId; } catch {}
         } else {
-            gistId = null; masterPassword = null; SessionCache.clear();
+            gistId = masterPassword = null;
+            SessionCache.clear();
         }
     }
 
     window.addEventListener('github-login-success', updateAuthState);
-    window.addEventListener('github-logout', () => { currentUser = null; currentToken = null; gistId = null; masterPassword = null; SessionCache.clear(); });
+    window.addEventListener('github-logout', () => { currentUser = currentToken = gistId = masterPassword = null; SessionCache.clear(); });
     updateAuthState();
 
     window.BookmarkStorage = {
-        openStorageModal,
-        addBookmark,
-        loadBookmarks,
-        removeBookmark,
-        changeMasterPassword,
-        resetStorage
+        openStorageModal, addBookmark, loadBookmarks, removeBookmark, changeMasterPassword, resetStorage
     };
 })();

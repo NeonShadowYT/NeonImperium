@@ -1,4 +1,4 @@
-// ==================== СЛОВАРИ ====================
+// lang.js — улучшенная локализация с SEO-фразами
 const translations = {
     ru: {
         // Навигация
@@ -31,9 +31,9 @@ const translations = {
         newsRetryVideo: "Повторить загрузку видео",
         
         // Общие для страниц игр
-        starvePageTitle: "Neon Imperium — Starve Neon",
-        alphaPageTitle: "Neon Imperium — Alpha 01",
-        gcPageTitle: "Neon Imperium — ГК Адвенчур",
+        starvePageTitle: "Neon Imperium - Starve Neon",
+        alphaPageTitle: "Neon Imperium - Alpha 01",
+        gcPageTitle: "Neon Imperium - ГК Адвенчур",
         trailerTitle: "Трейлер",
         developerTitle: "Разработчик",
         nextUpdateProgress: "Следующее обновление:",
@@ -78,7 +78,7 @@ const translations = {
         githubStep1: "Перейдите в ",
         githubStep2: "Нажмите \"Generate new token (classic)\".",
         githubStep3: "Дайте имя, выберите срок (например, 30 дней).",
-        githubStep4: "В разделе \"Select scopes\" отметьте только ",
+        githubStep4: "В разделе \"Select scopes\" отметьте:",
         githubStep5: "Скопируйте токен и вставьте сюда.",
         githubWarning: "Classic токен даёт доступ ко всем вашим репозиториям. Это нормально для участия в обсуждениях.",
         githubLoginBtn: "Войти",
@@ -92,6 +92,7 @@ const translations = {
         githubError: "Ошибка",
         githubRetry: "Попробовать снова",
         githubRevoke: "Управление токенами",
+        githubRevokeLink: "Управление токенами GitHub (для отзыва)",
         githubTokenMissing: "Введите токен доступа",
         githubTimeout: "Превышено время ожидания. Проверьте соединение.",
         githubForbidden: "Доступ запрещён (403). Проверьте права токена.",
@@ -99,7 +100,6 @@ const translations = {
         githubServerError: "Ошибка сервера GitHub",
         githubNetworkError: "Ошибка сети. Проверьте подключение.",
 
-        // Фраза про лицензию
         licenseAccept: "Скачивая игру, вы принимаете ",
         licenseLink: "лицензионное соглашение",
         
@@ -188,11 +188,11 @@ const translations = {
         gcUpdateContent: "Первый релиз игры.",
         
         // 404
-        notFoundTitle: "404 — Страница не найдена",
+        notFoundTitle: "404 - Страница не найдена",
         notFoundDesc: "Запрашиваемая страница не существует или была перемещена.",
         backHome: "Вернуться на главную",
         
-        // Лицензионное соглашение
+        // Лицензия
         licenseTitle: "Лицензионное соглашение",
         licenseLastUpdate: "Последнее обновление: 21 февраля 2026 г.",
         licenseAllowedTitle: "Разрешено",
@@ -250,13 +250,10 @@ const translations = {
         donateButton: "Поддержать"
     },
     en: {
-        // Navigation
         navHome: "Neon Imperium",
         navStarve: "Starve Neon",
         navAlpha: "Alpha 01",
         navGc: "GC Adven",
-        
-        // Home
         siteTitle: "Neon Imperium",
         mainProjectsTitle: "Main Projects",
         mainProjectsDesc: "Priority development games",
@@ -278,11 +275,9 @@ const translations = {
         newsLoading: "Loading news...",
         newsNoItems: "No news yet",
         newsRetryVideo: "Retry video loading",
-        
-        // Common for game pages
-        starvePageTitle: "Neon Imperium — Starve Neon",
-        alphaPageTitle: "Neon Imperium — Alpha 01",
-        gcPageTitle: "Neon Imperium — GC Adven",
+        starvePageTitle: "Neon Imperium - Starve Neon",
+        alphaPageTitle: "Neon Imperium - Alpha 01",
+        gcPageTitle: "Neon Imperium - GC Adven",
         trailerTitle: "Trailer",
         developerTitle: "Developer",
         nextUpdateProgress: "Next update:",
@@ -327,7 +322,7 @@ const translations = {
         githubStep1: "Go to ",
         githubStep2: "Click \"Generate new token (classic)\".",
         githubStep3: "Give it a name, choose expiration (e.g., 30 days).",
-        githubStep4: "In \"Select scopes\", check only ",
+        githubStep4: "In \"Select scopes\", check:",
         githubStep5: "Copy the token and paste it here.",
         githubWarning: "Classic token gives access to all your repositories. This is fine for participating in discussions.",
         githubLoginBtn: "Sign in",
@@ -337,21 +332,19 @@ const translations = {
         githubLogout: "Logout",
         githubLoginVia: "Sign in with GitHub",
         githubWhy: "Why is this needed?",
-        githubClearCache: "Clear cache", 
+        githubClearCache: "Clear cache",
         githubError: "Error",
         githubRetry: "Try again",
         githubRevoke: "Manage tokens",
+        githubRevokeLink: "Manage GitHub tokens (revoke)",
         githubTokenMissing: "Enter access token",
         githubTimeout: "Request timeout. Check your connection.",
         githubForbidden: "Access denied (403). Check token permissions.",
         githubNotFound: "Repository not found (404).",
         githubServerError: "GitHub server error",
         githubNetworkError: "Network error. Check your connection.",
-
         licenseAccept: "By downloading the game, you accept the ",
         licenseLink: "license agreement",
-        
-        // Starve Neon
         starveDownloadNote: "Version 0.14.0 · Update 2026-03-08",
         starveVersion: "Union 0.14.0",
         worldTitle: "Game World",
@@ -405,8 +398,6 @@ const translations = {
         balanceContent: "Level rewards\nProgression changes",
         spoilerBugfix: "Bugfix",
         bugfixContent: "Many minor fixes",
-        
-        // Alpha 01
         alphaVersion: "Patch 0.0.5.2",
         alphaDownloadNote: "Version 0.0.5.2 · Update 2024-01-21",
         alphaStoryTitle: "Story",
@@ -423,8 +414,6 @@ const translations = {
         craftContent: "Meteorite bullets can now be crafted in the forest",
         spoilerGraphics: "Graphics",
         graphicsContent: "Menu improvement",
-        
-        // GC Adven
         gcVersion: "Update 0.1.0",
         gcDownloadNote: "Version 0.1.0 · Update 2023-11-01",
         gcAboutTitle: "About",
@@ -434,13 +423,9 @@ const translations = {
         gcUpdateTitle: "Update 0.1.0",
         gcUpdateSummary: "Game released",
         gcUpdateContent: "First release of the game.",
-        
-        // 404
-        notFoundTitle: "404 — Page not found",
+        notFoundTitle: "404 - Page not found",
         notFoundDesc: "The requested page does not exist or has been moved.",
         backHome: "Back to home",
-        
-        // License Agreement
         licenseTitle: "License Agreement",
         licenseLastUpdate: "Last updated: February 21, 2026",
         licenseAllowedTitle: "Allowed",
@@ -462,10 +447,8 @@ const translations = {
         licenseObligation6: "You give your soul to the game authors ;}",
         licenseBack: "← Back to game",
         allRightsReserved: "All rights reserved.",
-        
-        // Detailed license sections
         licenseSection1Title: "1. General Provisions",
-        licenseSection1Text: "This License Agreement (hereinafter — the \"Agreement\") is concluded between you (hereinafter — the \"User\") and the developers of Neon Imperium games (hereinafter — the \"Copyright Holder\") and governs the use of the games: Starve Neon, Alpha 01, GC Adven, as well as all related materials, updates and add-ons.",
+        licenseSection1Text: "This License Agreement (hereinafter - the \"Agreement\") is concluded between you (hereinafter - the \"User\") and the developers of Neon Imperium games (hereinafter - the \"Copyright Holder\") and governs the use of the games: Starve Neon, Alpha 01, GC Adven, as well as all related materials, updates and add-ons.",
         licenseSection1Text2: "By installing, copying or otherwise using the game, the User expresses their full consent to the terms of this Agreement. If the User does not accept the terms of the Agreement, they must immediately delete all copies of the game and not use it.",
         licenseSection2Title: "2. Rights to the Game",
         licenseSection2Text: "All exclusive rights to the game, including but not limited to: source code, graphic and sound materials, scripts, characters, names, trademarks belong to the Copyright Holder. The game is granted to the User under a simple (non-exclusive) license, i.e. the User is permitted to:",
@@ -495,12 +478,10 @@ const translations = {
         licenseSection7Text: "This Agreement is governed and interpreted in accordance with the laws of the Russian Federation. All disputes arising out of or in connection with this Agreement shall be subject to consideration in court at the location of the Copyright Holder.",
         licenseSection7Text2: "If any provision of the Agreement is found to be invalid or unenforceable, this does not affect the validity of the remaining provisions.",
         licenseSection7Text3: "The Copyright Holder reserves the right to unilaterally change the terms of this Agreement. The new version of the Agreement comes into force from the moment it is published on this site. Continued use of the game after the terms have been changed implies acceptance of the new version.",
-        
         donateButton: "Support"
     }
 };
 
-// ==================== ФУНКЦИИ ПЕРЕКЛЮЧЕНИЯ ЯЗЫКА ====================
 function setLanguage(lang) {
     document.querySelectorAll('[data-lang]').forEach(element => {
         const key = element.getAttribute('data-lang');
@@ -517,7 +498,6 @@ function setLanguage(lang) {
     });
     localStorage.setItem('preferredLanguage', lang);
     
-    // Обновление title
     const titleKey = document.title.includes('Starve') ? 'starvePageTitle' : 
                      (document.title.includes('Alpha') ? 'alphaPageTitle' : 
                      (document.title.includes('ГК') || document.title.includes('GC') ? 'gcPageTitle' : 'siteTitle'));

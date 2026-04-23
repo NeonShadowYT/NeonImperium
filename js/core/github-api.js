@@ -1,3 +1,4 @@
+// js/core/github-api.js — работа с GitHub REST API
 (function() {
     const { CONFIG } = GithubCore;
 
@@ -12,15 +13,14 @@
             ...options.headers
         };
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        
+
         const response = await fetch(url, { ...options, headers });
         if (!response.ok) {
             let errorMsg = `HTTP ${response.status}`;
             try {
                 const errorData = await response.json();
                 errorMsg = errorData.message || errorMsg;
-            } catch {
-            }
+            } catch {}
             throw new Error(errorMsg);
         }
         return response;
@@ -105,7 +105,7 @@
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
         const response = await githubFetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.github.v3+json' },
+            headers: { 'Accept': 'application/vnd.github.squirrel-girl-preview+json' },
             body: JSON.stringify({ content })
         });
         return response.json();
@@ -121,17 +121,8 @@
     window.GithubAPI = {
         getToken,
         fetch: githubFetch,
-        loadIssues,
-        loadIssue,
-        createIssue,
-        updateIssue,
-        closeIssue,
-        loadComments,
-        addComment,
-        updateComment,
-        deleteComment,
-        loadReactions,
-        addReaction,
-        removeReaction
+        loadIssues, loadIssue, createIssue, updateIssue, closeIssue,
+        loadComments, addComment, updateComment, deleteComment,
+        loadReactions, addReaction, removeReaction
     };
 })();
