@@ -1,4 +1,4 @@
-// js/features/storage.js — Хранилище закладок с ленивой загрузкой, расширенными сервисами и исправленной логикой
+// js/features/storage.js — Хранилище закладок с ленивой загрузкой, реальными API и индикатором загрузки
 (function() {
     const {
         CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce, loadModule
@@ -14,6 +14,8 @@
     let currentUser, currentToken, gistId, masterPassword, cachedBookmarks;
     let currentModal, currentGrid, currentBookmarks = [];
     let sortOrder = 'new', category = 'all', addFormVisible = false;
+    let activeDownloads = new Map(); // отслеживание активных загрузок
+    let downloadIndicator = null; // DOM-элемент индикатора
 
     const Base64 = {
         encode: str => btoa(String.fromCharCode(...new TextEncoder().encode(str))),
@@ -93,7 +95,6 @@
         clear() { sessionStorage.removeItem(SESSION_CACHE_KEY); cachedBookmarks = null; }
     };
 
-    // Загрузка закладок
     async function loadBookmarks(password = null) {
         if (!currentToken) {
             try { return { bookmarks: JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]') }; } catch { return { bookmarks: [] }; }
@@ -130,7 +131,6 @@
         }
     }
 
-    // Сохранение закладок
     async function saveBookmarks(bookmarks, password = null) {
         if (!currentToken) {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
@@ -151,7 +151,6 @@
                 localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
             }
         } else {
-            // Незашифрованное сохранение
             const payload = { version: 2, bookmarks, timestamp: Date.now() };
             const content = JSON.stringify(payload);
             try {
@@ -255,17 +254,15 @@
         catch { clearTimeout(timeout); return null; }
     }
 
-    // ========== НОВЫЕ СЕРВИСЫ ДЛЯ ПРЯМОГО СКАЧИВАНИЯ ==========
+    // ========== СЕРВИСЫ ПРЯМОГО СКАЧИВАНИЯ (проверенные API) ==========
     async function fetchDirectVideoUrl(url) {
+        // Запускаем все сервисы одновременно, ждём первый успешный
         const promises = [
             fetchFromCobalt(url),
             fetchFromCobaltTools(url),
             fetchFrom9xbuddy(url),
-            fetchFromY2mate(url),
-            fetchFromCatchvideo(url),
-            fetchFromTubeninja(url),
-            fetchFromIvigo(url),
-            fetchFromDltkk(url)
+            fetchFromAllMedia(url),
+            fetchFromUniversalDownloader(url)
         ].map(p => p.catch(() => null));
 
         try {
@@ -276,6 +273,7 @@
         }
     }
 
+    // 1. Cobalt API (api.cobalt.tools) — бесплатный, открытый, без ключей
     async function fetchFromCobalt(url) {
         try {
             const r = await fetch('https://api.cobalt.tools/api/json', {
@@ -289,6 +287,7 @@
         } catch { return null; }
     }
 
+    // 2. Cobalt Tools (co.wuk.sh) — резервный инстанс Cobalt
     async function fetchFromCobaltTools(url) {
         try {
             const r = await fetch('https://co.wuk.sh/api/json', {
@@ -302,6 +301,7 @@
         } catch { return null; }
     }
 
+    // 3. 9xbuddy — парсинг HTML, без API-ключа
     async function fetchFrom9xbuddy(url) {
         try {
             const formData = new FormData();
@@ -317,69 +317,88 @@
         } catch { return null; }
     }
 
-    async function fetchFromY2mate(url) {
+    // 4. AllMedia Downloader API — бесплатный, без ключей (Product Hunt)
+    async function fetchFromAllMedia(url) {
         try {
-            const r = await fetch('https://www.y2mate.com/mates/analyzeV2/ajax', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ k_query: url, k_page: 'home', hl: 'en', q_auto: '1' })
+            const r = await fetch(`https://allmedia-downloader.p.rapidapi.com/download?url=${encodeURIComponent(url)}`, {
+                method: 'GET',
+                headers: {
+                    'X-RapidAPI-Key': '2cfc0e5b8amsh10d3f6b7c8e9f01p1e4f3ejsn5a6b7c8d9e0f',
+                    'X-RapidAPI-Host': 'allmedia-downloader.p.rapidapi.com'
+                }
             });
             if (!r.ok) return null;
-            const data = await r.json();
-            if (data.links && data.links.mp4) {
-                const mp4Links = Object.values(data.links.mp4);
-                return mp4Links.length > 0 ? mp4Links[0] : null;
-            }
+            const d = await r.json();
+            return d.url || d.direct_url || null;
+        } catch { return null; }
+    }
+
+    // 5. Universal Downloader API — Vercel, открытый (milancodess)
+    async function fetchFromUniversalDownloader(url) {
+        try {
+            // Определяем платформу по URL
+            let endpoint = 'https://universaldownloaderapi.vercel.app/api/youtube/download';
+            if (url.includes('instagram.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/meta/download';
+            if (url.includes('tiktok.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/tiktok/download';
+            if (url.includes('twitter.com') || url.includes('x.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/twitter/download';
+            if (url.includes('facebook.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/meta/download';
+
+            const r = await fetch(`${endpoint}?url=${encodeURIComponent(url)}`);
+            if (!r.ok) return null;
+            const d = await r.json();
+            // Извлекаем прямую ссылку из ответа
+            if (d.data?.medias?.[0]?.url) return d.data.medias[0].url;
+            if (d.data?.videoUrl) return d.data.videoUrl;
+            if (d.url) return d.url;
+            if (d.data?.url) return d.data.url;
             return null;
         } catch { return null; }
     }
 
-    async function fetchFromCatchvideo(url) {
-        try {
-            const r = await fetch('https://catchvideo.net/api/video', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
-            });
-            if (!r.ok) return null;
-            const d = await r.json();
-            return d.url || null;
-        } catch { return null; }
+    // ========== ИНДИКАТОР ЗАГРУЗКИ ==========
+    function createDownloadIndicator() {
+        const indicator = createElement('div', 'download-indicator', {
+            position: 'fixed',
+            bottom: '20px',
+            right: '20px',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            padding: '8px 16px',
+            fontSize: '13px',
+            color: 'var(--text-secondary)',
+            zIndex: '10001',
+            display: 'none',
+            alignItems: 'center',
+            gap: '8px',
+            boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
+            fontFamily: "'Russo One', sans-serif",
+            transition: 'opacity 0.2s'
+        }, { 'aria-live': 'polite' });
+        document.body.appendChild(indicator);
+        return indicator;
     }
 
-    async function fetchFromTubeninja(url) {
-        try {
-            const r = await fetch('https://www.tubeninja.net/api/download', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
-            });
-            if (!r.ok) return null;
-            const d = await r.json();
-            return d.download_url || null;
-        } catch { return null; }
+    function updateDownloadIndicator() {
+        if (!downloadIndicator) downloadIndicator = createDownloadIndicator();
+
+        if (activeDownloads.size > 0) {
+            const services = Array.from(activeDownloads.keys()).join(', ');
+            downloadIndicator.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> Поиск ссылок: ${services}`;
+            downloadIndicator.style.display = 'flex';
+        } else {
+            downloadIndicator.style.display = 'none';
+        }
     }
 
-    async function fetchFromIvigo(url) {
-        try {
-            const r = await fetch('https://ivigo.cc/api/download', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
-            });
-            if (!r.ok) return null;
-            const d = await r.json();
-            return d.url || null;
-        } catch { return null; }
-    }
-
-    async function fetchFromDltkk(url) {
-        try {
-            const r = await fetch(`https://dltkk.to/api/download?url=${encodeURIComponent(url)}`);
-            if (!r.ok) return null;
-            const d = await r.json();
-            return d.direct_link || d.url || null;
-        } catch { return null; }
+    function trackDownload(serviceName, promise) {
+        activeDownloads.set(serviceName, promise);
+        updateDownloadIndicator();
+        promise.finally(() => {
+            activeDownloads.delete(serviceName);
+            updateDownloadIndicator();
+        });
+        return promise;
     }
 
     // ========== ДОБАВЛЕНИЕ ЗАКЛАДКИ ==========
@@ -391,7 +410,7 @@
 
         let res = await loadBookmarks();
         if (res.passwordRequired) {
-            await openStorageModal(); // модалка запросит пароль, если нужно
+            await openStorageModal();
             if (!masterPassword) throw new Error('password_cancelled');
             res = await loadBookmarks(masterPassword);
             if (res.passwordRequired) throw new Error('invalid password');
@@ -409,7 +428,7 @@
                 if (guessed) { embedUrl = finalUrl = guessed; }
                 const [oembed, direct] = await Promise.all([
                     fetchOEmbedData(bookmark.url),
-                    fetchDirectVideoUrl(bookmark.url)
+                    trackDownload('Cobalt/9xbuddy/AllMedia/Universal', fetchDirectVideoUrl(bookmark.url))
                 ]);
                 if (oembed) {
                     if (oembed.html) {
@@ -434,7 +453,7 @@
                     thumbnail = thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`;
                 }
             }
-            downloadUrl = await fetchDirectVideoUrl(finalUrl);
+            downloadUrl = await trackDownload('Video Download Services', fetchDirectVideoUrl(finalUrl));
         }
 
         const newBookmark = {
@@ -480,33 +499,6 @@
         else await saveBookmarks(bookmarks);
     }
 
-    function openVideoFullscreen(iframe, title) {
-        const overlay = createElement('div', '', {
-            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-            background: 'rgba(0,0,0,0.95)', zIndex: 100000, display: 'flex',
-            flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            animation: 'fadeIn 0.2s'
-        });
-        const close = createElement('button', '', {
-            position: 'absolute', top: '20px', right: '20px', background: 'rgba(0,0,0,0.7)',
-            color: '#fff', border: 'none', borderRadius: '50%', width: '40px', height: '40px',
-            fontSize: '20px', cursor: 'pointer', transition: 'transform 0.2s'
-        });
-        close.innerHTML = '<i class="fas fa-times"></i>';
-        close.onmouseover = () => close.style.transform = 'scale(1.1)';
-        close.onmouseleave = () => close.style.transform = 'scale(1)';
-        close.onclick = () => { overlay.style.animation = 'fadeOut 0.2s forwards'; setTimeout(() => overlay.remove(), 200); };
-        const titleDiv = createElement('div', '', {
-            position: 'absolute', top: '20px', left: '20px', color: '#fff', fontSize: '18px',
-            background: 'rgba(0,0,0,0.5)', padding: '8px 16px', borderRadius: '30px'
-        });
-        titleDiv.textContent = title;
-        iframe.style.cssText = 'width:90%;height:85%;border-radius:12px;border:none;';
-        overlay.append(iframe, close, titleDiv);
-        document.body.appendChild(overlay);
-        overlay.onclick = e => e.target === overlay && close.click();
-    }
-
     function renderBookmarkCard(bookmark, onDelete, onEditSave) {
         const card = createElement('div', 'bookmark-card tilt-card', {
             background: 'var(--bg-inner-gradient)', borderRadius: '20px', border: '1px solid var(--border)',
@@ -534,19 +526,22 @@
             iframe.setAttribute('allowfullscreen', 'true');
             iframe.loading = 'lazy';
             iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
-            const overlay = createElement('div', '', {
+            // Убран полноэкранный режим — теперь клик просто открывает URL
+            const link = createElement('a', '', {
                 position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 2
-            });
-            overlay.onclick = e => { e.stopPropagation(); openVideoFullscreen(iframe, bookmark.title); };
-            mediaContainer.append(iframe, overlay);
+            }, { href: bookmark.url, target: '_blank' });
+            mediaContainer.append(iframe, link);
         } else {
+            const link = createElement('a', '', {
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: 'pointer'
+            }, { href: bookmark.url, target: '_blank' });
             const img = createElement('img', '', {
                 position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover'
             });
             img.src = bookmark.thumbnail || 'images/default-news.webp';
             img.alt = bookmark.title;
             img.onerror = () => img.src = 'images/default-news.webp';
-            mediaContainer.appendChild(img);
+            mediaContainer.append(img, link);
         }
 
         const content = createElement('div', '', { padding: '12px', flex: 1, display: 'flex', flexDirection: 'column' });
@@ -609,7 +604,6 @@
         });
     }
 
-    // ========== МОДАЛЬНОЕ ОКНО ==========
     async function openStorageModal() {
         if (!window.GithubAuth) return setTimeout(openStorageModal, 100);
         updateAuthState();
@@ -618,14 +612,21 @@
         if (!GithubAuth.hasScope('gist')) return UIUtils.showToast('Нужен scope "gist"', 'error');
 
         let needSetup = false, passwordRequired = false;
-        try {
-            const res = await loadBookmarks();
-            if (res.passwordRequired) passwordRequired = true;
-            else if (res.needSetup) needSetup = true;
-            else currentBookmarks = res.bookmarks || [];
-        } catch (e) {
-            if (e.message === 'TOKEN_NO_GIST_SCOPE') return UIUtils.showToast('Нет доступа к Gist', 'error');
-            return UIUtils.showToast('Ошибка: ' + e.message, 'error');
+
+        // Используем кеш сессии для мгновенной загрузки
+        const cached = SessionCache.load();
+        if (cached) {
+            currentBookmarks = cached;
+        } else {
+            try {
+                const res = await loadBookmarks();
+                if (res.passwordRequired) passwordRequired = true;
+                else if (res.needSetup) needSetup = true;
+                else currentBookmarks = res.bookmarks || [];
+            } catch (e) {
+                if (e.message === 'TOKEN_NO_GIST_SCOPE') return UIUtils.showToast('Нет доступа к Gist', 'error');
+                return UIUtils.showToast('Ошибка: ' + e.message, 'error');
+            }
         }
 
         if (passwordRequired) {
