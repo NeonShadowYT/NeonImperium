@@ -1,6 +1,6 @@
-// js/core/github-auth.js — аутентификация GitHub с динамической загрузкой модулей
+// github-auth.js — аутентификация GitHub с динамической загрузкой модулей
 (function() {
-    const { CONFIG } = GithubCore;
+    const { CONFIG, createElement } = GithubCore;
     const TOKEN_KEY = 'github_token';
     const USER_CACHE_KEY = 'github_user';
     const SCOPES_CACHE_KEY = 'github_scopes';
@@ -33,7 +33,7 @@
         navBar = document.querySelector('.nav-bar');
         if (!navBar) return;
 
-        profileContainer = GithubCore.createElement('div', 'nav-profile', {}, {
+        profileContainer = createElement('div', 'nav-profile', {}, {
             role: 'button', tabindex: '0'
         });
 
@@ -89,7 +89,7 @@
     }
 
     function createModal() {
-        modal = GithubCore.createElement('div', 'modal', {}, {
+        modal = createElement('div', 'modal', {}, {
             role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'github-modal-title'
         });
         modal.innerHTML = `
@@ -238,14 +238,20 @@
             sessionStorage.removeItem(USER_CACHE_KEY);
             sessionStorage.removeItem(SCOPES_CACHE_KEY);
 
-            if (error.name === 'AbortError') showModalError('githubTimeout');
-            else if (error.message === 'unauthorized') showModalError('githubAuthError', 'Токен недействителен или истёк');
-            else if (error.message.startsWith('http_')) {
+            if (error.name === 'AbortError') {
+                showModalError('githubTimeout');
+            } else if (error.message === 'unauthorized') {
+                showModalError('githubAuthError', 'Токен недействителен или истёк');
+            } else if (error.message.startsWith('http_')) {
                 const status = error.message.split('_')[1];
                 if (status === '403') showModalError('githubForbidden', 'Проверьте права токена');
                 else if (status === '404') showModalError('githubNotFound', 'Репозиторий не найден');
                 else showModalError('githubServerError', `HTTP ${status}`);
-            } else showModalError('githubNetworkError', error.message);
+            } else if (error instanceof TypeError && error.message.includes('NetworkError')) {
+                showModalError('githubNetworkError', 'Проверьте подключение к интернету');
+            } else {
+                showModalError('githubNetworkError', error.message);
+            }
 
             setTimeout(() => {
                 modal.classList.add('active');
@@ -330,7 +336,17 @@
                 break;
             case 'storage':
                 if (!scopes.includes('gist')) return UIUtils.showToast('Нужен scope "gist"', 'error');
-                ModuleLoader.load('js/features/storage.js').then(() => window.BookmarkStorage?.openStorageModal());
+                // Загружаем хранилище вручную, так как динамический import может не работать
+                if (window.BookmarkStorage) {
+                    window.BookmarkStorage.openStorageModal();
+                } else {
+                    ModuleLoader.load('js/features/storage.js').then(() => {
+                        setTimeout(() => {
+                            if (window.BookmarkStorage) window.BookmarkStorage.openStorageModal();
+                            else UIUtils.showToast('Ошибка загрузки хранилища', 'error');
+                        }, 100);
+                    }).catch(() => UIUtils.showToast('Ошибка загрузки хранилища', 'error'));
+                }
                 break;
             case 'revoke-token':
                 window.open('https://github.com/settings/tokens', '_blank');

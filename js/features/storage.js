@@ -334,9 +334,8 @@
     async function removeBookmark(bookmarkId) {
         if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
         if (!masterPassword) {
-            // Открываем хранилище для ввода пароля
             await openStorageModal();
-            if (!masterPassword) return; // пользователь не ввёл пароль
+            if (!masterPassword) return;
         }
         const res = await loadBookmarks(masterPassword);
         const filtered = (res.bookmarks || []).filter(b => b.id !== bookmarkId);
