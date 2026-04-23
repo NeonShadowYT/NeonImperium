@@ -1,4 +1,4 @@
-// js/pages/news-feed.js — лента новостей с кнопкой избранного и ленивой загрузкой хранилища
+// js/pages/news-feed.js — лента новостей без 3D, раздельный клик, кнопка избранного, скачивание
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
@@ -183,11 +183,13 @@
         }
     }
 
+    // Универсальная функция добавления закладки (асинхронно, без всплывающих ошибок отмены)
     async function handleBookmark(item) {
         if (!window.BookmarkStorage) {
             try { await loadModule('js/features/storage.js'); }
             catch (e) { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
         }
+
         const bookmark = {
             url: item.type === 'video'
                 ? `https://www.youtube.com/watch?v=${item.id}`
@@ -198,6 +200,7 @@
             author: item.author,
             date: item.date
         };
+
         try {
             await BookmarkStorage.addBookmark(bookmark);
             UIUtils.showToast('Добавлено в избранное', 'success');
@@ -207,19 +210,33 @@
         }
     }
 
+    // Карточка видео: превью не кликабельно, только заголовок
     function createVideoCard(video) {
-        const card = GithubCore.createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
-        card.setAttribute('aria-label', `Смотреть видео: ${video.title}`);
+        const card = GithubCore.createElement('div', 'project-card-link', { cursor: 'default' });
         const inner = GithubCore.createElement('div', 'project-card');
+
+        // Обёртка для превью (не кликабельна)
         const imgW = GithubCore.createElement('div', 'image-wrapper');
         const img = GithubCore.createElement('img', 'project-image', {}, { src: video.thumbnail, alt: video.title, loading: 'lazy' });
         imgW.appendChild(img);
+        inner.appendChild(imgW);
+
+        // Заголовок – кликабельная ссылка
+        const titleLink = GithubCore.createElement('a', '', {
+            color: 'inherit', textDecoration: 'none', cursor: 'pointer'
+        }, { href: `https://www.youtube.com/watch?v=${video.id}`, target: '_blank', 'aria-label': `Смотреть видео ${video.title}` });
         const title = GithubCore.createElement('h3');
         title.textContent = video.title.length > 70 ? video.title.slice(0,70)+'…' : video.title;
+        titleLink.appendChild(title);
+        inner.appendChild(titleLink);
+
+        // Мета
         const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
+        inner.appendChild(meta);
 
-        const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'Добавить в избранное' });
+        // Кнопка избранного в правом верхнем углу
+        const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
         favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
         favBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -227,35 +244,51 @@
         });
         inner.appendChild(favBtn);
 
-        inner.append(imgW, title, meta);
         card.appendChild(inner);
-        card.addEventListener('click', () => window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank'));
         return card;
     }
 
+    // Карточка поста: превью не кликабельно, заголовок открывает модалку
     function createPostCard(post) {
         let previewBody = post.body;
         const allowed = extractAllowed(post.body);
         if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
             try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
         }
-        const card = GithubCore.createElement('div', 'project-card-link no-tilt tilt-card', { cursor: 'pointer' });
-        card.setAttribute('aria-label', `Читать пост: ${post.title}`);
+        const card = GithubCore.createElement('div', 'project-card-link', { cursor: 'default' });
         const inner = GithubCore.createElement('div', 'project-card');
+
+        // Превью
         const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
         const imgW = GithubCore.createElement('div', 'image-wrapper');
         const img = GithubCore.createElement('img', 'project-image', {}, { src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy' });
         img.onerror = () => img.src = DEFAULT_IMAGE;
         imgW.appendChild(img);
+        inner.appendChild(imgW);
+
+        // Заголовок – кликабельный
+        const titleLink = GithubCore.createElement('a', '', {
+            cursor: 'pointer', color: 'inherit', textDecoration: 'none'
+        });
         const title = GithubCore.createElement('h3');
         title.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
+        titleLink.appendChild(title);
+        titleLink.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels });
+        });
+        inner.appendChild(titleLink);
+
+        // Мета и превью текста
         const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
         const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
         const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
         preview.textContent = summary;
+        inner.append(meta, preview);
 
-        const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'Добавить в избранное' });
+        // Кнопка избранного
+        const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
         favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
         favBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -263,9 +296,7 @@
         });
         inner.appendChild(favBtn);
 
-        inner.append(imgW, title, meta, preview);
         card.appendChild(inner);
-        card.addEventListener('click', () => openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }));
         return card;
     }
 })();

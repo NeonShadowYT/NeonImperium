@@ -1,8 +1,6 @@
-// js/features/storage.js — Хранилище закладок с ленивой загрузкой, реальными API и индикатором загрузки
+// js/features/storage.js — Хранилище закладок с гарантированным сохранением и прямой загрузкой
 (function() {
-    const {
-        CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce, loadModule
-    } = GithubCore;
+    const { CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce, loadModule } = GithubCore;
 
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -14,8 +12,8 @@
     let currentUser, currentToken, gistId, masterPassword, cachedBookmarks;
     let currentModal, currentGrid, currentBookmarks = [];
     let sortOrder = 'new', category = 'all', addFormVisible = false;
-    let activeDownloads = new Map(); // отслеживание активных загрузок
-    let downloadIndicator = null; // DOM-элемент индикатора
+    let activeDownloads = new Map();
+    let downloadIndicator = null;
 
     const Base64 = {
         encode: str => btoa(String.fromCharCode(...new TextEncoder().encode(str))),
@@ -254,14 +252,12 @@
         catch { clearTimeout(timeout); return null; }
     }
 
-    // ========== СЕРВИСЫ ПРЯМОГО СКАЧИВАНИЯ (проверенные API) ==========
+    // Проверенные сервисы прямого скачивания (без ключей, без редиректов)
     async function fetchDirectVideoUrl(url) {
-        // Запускаем все сервисы одновременно, ждём первый успешный
         const promises = [
             fetchFromCobalt(url),
             fetchFromCobaltTools(url),
             fetchFrom9xbuddy(url),
-            fetchFromAllMedia(url),
             fetchFromUniversalDownloader(url)
         ].map(p => p.catch(() => null));
 
@@ -273,7 +269,6 @@
         }
     }
 
-    // 1. Cobalt API (api.cobalt.tools) — бесплатный, открытый, без ключей
     async function fetchFromCobalt(url) {
         try {
             const r = await fetch('https://api.cobalt.tools/api/json', {
@@ -287,7 +282,6 @@
         } catch { return null; }
     }
 
-    // 2. Cobalt Tools (co.wuk.sh) — резервный инстанс Cobalt
     async function fetchFromCobaltTools(url) {
         try {
             const r = await fetch('https://co.wuk.sh/api/json', {
@@ -301,7 +295,6 @@
         } catch { return null; }
     }
 
-    // 3. 9xbuddy — парсинг HTML, без API-ключа
     async function fetchFrom9xbuddy(url) {
         try {
             const formData = new FormData();
@@ -317,26 +310,8 @@
         } catch { return null; }
     }
 
-    // 4. AllMedia Downloader API — бесплатный, без ключей (Product Hunt)
-    async function fetchFromAllMedia(url) {
-        try {
-            const r = await fetch(`https://allmedia-downloader.p.rapidapi.com/download?url=${encodeURIComponent(url)}`, {
-                method: 'GET',
-                headers: {
-                    'X-RapidAPI-Key': '2cfc0e5b8amsh10d3f6b7c8e9f01p1e4f3ejsn5a6b7c8d9e0f',
-                    'X-RapidAPI-Host': 'allmedia-downloader.p.rapidapi.com'
-                }
-            });
-            if (!r.ok) return null;
-            const d = await r.json();
-            return d.url || d.direct_url || null;
-        } catch { return null; }
-    }
-
-    // 5. Universal Downloader API — Vercel, открытый (milancodess)
     async function fetchFromUniversalDownloader(url) {
         try {
-            // Определяем платформу по URL
             let endpoint = 'https://universaldownloaderapi.vercel.app/api/youtube/download';
             if (url.includes('instagram.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/meta/download';
             if (url.includes('tiktok.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/tiktok/download';
@@ -346,7 +321,6 @@
             const r = await fetch(`${endpoint}?url=${encodeURIComponent(url)}`);
             if (!r.ok) return null;
             const d = await r.json();
-            // Извлекаем прямую ссылку из ответа
             if (d.data?.medias?.[0]?.url) return d.data.medias[0].url;
             if (d.data?.videoUrl) return d.data.videoUrl;
             if (d.url) return d.url;
@@ -355,25 +329,15 @@
         } catch { return null; }
     }
 
-    // ========== ИНДИКАТОР ЗАГРУЗКИ ==========
     function createDownloadIndicator() {
         const indicator = createElement('div', 'download-indicator', {
-            position: 'fixed',
-            bottom: '20px',
-            right: '20px',
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '8px 16px',
-            fontSize: '13px',
-            color: 'var(--text-secondary)',
-            zIndex: '10001',
-            display: 'none',
-            alignItems: 'center',
-            gap: '8px',
+            position: 'fixed', bottom: '20px', right: '20px',
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: '12px', padding: '8px 16px', fontSize: '13px',
+            color: 'var(--text-secondary)', zIndex: '10001', display: 'none',
+            alignItems: 'center', gap: '8px',
             boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
-            fontFamily: "'Russo One', sans-serif",
-            transition: 'opacity 0.2s'
+            fontFamily: "'Russo One', sans-serif"
         }, { 'aria-live': 'polite' });
         document.body.appendChild(indicator);
         return indicator;
@@ -381,7 +345,6 @@
 
     function updateDownloadIndicator() {
         if (!downloadIndicator) downloadIndicator = createDownloadIndicator();
-
         if (activeDownloads.size > 0) {
             const services = Array.from(activeDownloads.keys()).join(', ');
             downloadIndicator.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> Поиск ссылок: ${services}`;
@@ -401,7 +364,7 @@
         return promise;
     }
 
-    // ========== ДОБАВЛЕНИЕ ЗАКЛАДКИ ==========
+    // Главная функция добавления закладки
     async function addBookmark(bookmark) {
         if (!currentUser) {
             UIUtils.showToast('Войдите в аккаунт', 'error');
@@ -410,7 +373,7 @@
 
         let res = await loadBookmarks();
         if (res.passwordRequired) {
-            await openStorageModal();
+            await openStorageModal();   // откроет модалку, запросит пароль
             if (!masterPassword) throw new Error('password_cancelled');
             res = await loadBookmarks(masterPassword);
             if (res.passwordRequired) throw new Error('invalid password');
@@ -453,7 +416,8 @@
                     thumbnail = thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`;
                 }
             }
-            downloadUrl = await trackDownload('Video Download Services', fetchDirectVideoUrl(finalUrl));
+            // Запрашиваем прямую ссылку в фоне
+            downloadUrl = await trackDownload('Video Downloaders', fetchDirectVideoUrl(finalUrl));
         }
 
         const newBookmark = {
