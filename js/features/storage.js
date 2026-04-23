@@ -1,7 +1,7 @@
-// js/features/storage.js — хранилище с ленивой загрузкой и улучшенной производительностью
+// js/features/storage.js — хранилище с ленивой загрузкой, исправленными кнопками и надёжным добавлением
 (function() {
     const {
-        CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce
+        CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce, loadModule
     } = GithubCore;
 
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
@@ -273,14 +273,21 @@
         try { return await Promise.any(promises); } catch { return null; }
     }
 
-    // ========== Добавление/удаление ==========
+    // ========== Добавление/удаление (исправлено) ==========
     async function addBookmark(bookmark) {
-        if (!currentUser) { UIUtils.showToast('Войдите в аккаунт', 'error'); return; }
+        if (!currentUser) {
+            UIUtils.showToast('Войдите в аккаунт', 'error');
+            throw new Error('not logged in');
+        }
+        // Открываем модальное окно, если нет пароля
         if (!masterPassword) {
             await openStorageModal();
-            if (!masterPassword) return;
+            if (!masterPassword) throw new Error('password_cancelled');
         }
-        if (!bookmark?.url) { UIUtils.showToast('Некорректная ссылка', 'error'); return; }
+        if (!bookmark?.url) {
+            UIUtils.showToast('Некорректная ссылка', 'error');
+            throw new Error('invalid url');
+        }
 
         let finalUrl = bookmark.url, embedUrl = null, downloadUrl = null, thumbnail = null;
         let finalTitle = bookmark.title, postType = bookmark.postType || null;
@@ -310,7 +317,10 @@
         }
 
         const res = await loadBookmarks(masterPassword);
-        if (res.passwordRequired) throw new Error('Password required');
+        if (res.passwordRequired) {
+            UIUtils.showToast('Требуется пароль', 'error');
+            throw new Error('password required');
+        }
         const bookmarks = res.bookmarks || [];
         if (bookmarks.some(b => b.url === finalUrl)) {
             UIUtils.showToast('Уже в избранном', 'info');
@@ -325,10 +335,23 @@
         };
 
         const optimistic = [...bookmarks, newBookmark];
+        // Оптимистичное обновление UI
         SessionCache.save(optimistic, masterPassword);
         if (currentGrid) renderBookmarksGrid(optimistic);
-        saveBookmarks(optimistic, masterPassword).catch(e => UIUtils.showToast('Ошибка синхронизации', 'error'));
-        return newBookmark;
+        currentBookmarks = optimistic;
+
+        try {
+            await saveBookmarks(optimistic, masterPassword);
+            return newBookmark;
+        } catch (e) {
+            // Откат
+            const idx = currentBookmarks.findIndex(b => b.id === newBookmark.id);
+            if (idx >= 0) currentBookmarks.splice(idx, 1);
+            SessionCache.save(currentBookmarks, masterPassword);
+            if (currentGrid) renderBookmarksGrid(currentBookmarks);
+            UIUtils.showToast('Ошибка синхронизации', 'error');
+            throw e;
+        }
     }
 
     async function removeBookmark(bookmarkId) {
@@ -337,7 +360,13 @@
         const filtered = (res.bookmarks || []).filter(b => b.id !== bookmarkId);
         SessionCache.save(filtered, masterPassword);
         if (currentGrid) renderBookmarksGrid(filtered);
-        saveBookmarks(filtered, masterPassword).catch(e => UIUtils.showToast('Ошибка синхронизации', 'error'));
+        currentBookmarks = filtered;
+        try {
+            await saveBookmarks(filtered, masterPassword);
+        } catch (e) {
+            UIUtils.showToast('Ошибка синхронизации', 'error');
+            throw e;
+        }
     }
 
     // ========== UI компоненты ==========
@@ -464,13 +493,13 @@
         filtered.forEach(b => {
             const card = renderBookmarkCard(b,
                 id => { currentBookmarks = currentBookmarks.filter(bk => bk.id !== id); renderBookmarksGrid(currentBookmarks); removeBookmark(id); },
-                updated => { const idx = currentBookmarks.findIndex(bk => bk.id === updated.id); if (idx>=0) currentBookmarks[idx] = updated; saveBookmarks(currentBookmarks); renderBookmarksGrid(currentBookmarks); }
+                updated => { const idx = currentBookmarks.findIndex(bk => bk.id === updated.id); if (idx>=0) currentBookmarks[idx] = updated; saveBookmarks(currentBookmarks).then(() => renderBookmarksGrid(currentBookmarks)); }
             );
             currentGrid.appendChild(card);
         });
     }
 
-    // ========== Модальное окно ==========
+    // ========== Модальное окно (исправлены кнопки и шрифт) ==========
     async function openStorageModal() {
         if (!window.GithubAuth) return setTimeout(openStorageModal, 100);
         updateAuthState();
@@ -513,6 +542,7 @@
             UIUtils.showToast('Хранилище создано!', 'success');
         }
 
+        // Формируем HTML с корректными классами active на основе текущих sortOrder/category
         const html = `
             <div class="storage-modal-container">
                 <div class="storage-header">
@@ -549,20 +579,17 @@
             .storage-modal-container{display:flex;flex-direction:column;gap:20px}
             .storage-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px}
             .storage-controls{display:flex;gap:15px;flex-wrap:wrap}
-            .storage-sort{display:flex;background:var(--bg-primary);border-radius:40px;padding:4px;border:1px solid var(--border)}
-            .sort-btn{background:0;border:0;color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s}
-            .sort-btn.active{background:var(--accent);color:#fff}
-            .storage-categories{display:flex;gap:6px;flex-wrap:wrap}
-            .cat-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:8px 14px;border-radius:40px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px;transition:0.2s}
-            .cat-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+            .storage-sort,.storage-categories{display:flex;background:var(--bg-primary);border-radius:40px;padding:4px;border:1px solid var(--border)}
+            .sort-btn,.cat-btn{background:0;border:0;color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
+            .sort-btn.active,.cat-btn.active{background:var(--accent);color:#fff}
             .storage-actions{display:flex;gap:8px}
-            .storage-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s}
+            .storage-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
             .storage-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
             .storage-btn.danger{color:#f44336}
             .storage-btn:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.2)}
             .storage-add-form{display:none;grid-template-columns:1fr 1fr auto;gap:10px;background:var(--bg-inner-gradient);padding:16px;border-radius:20px;border:1px solid var(--border);opacity:0;transform:translateY(-10px);transition:0.3s;align-items:center}
             .storage-add-form.visible{display:grid;opacity:1;transform:translateY(0)}
-            .storage-add-form input{padding:12px 16px;background:var(--bg-primary);border:1px solid var(--border);border-radius:40px;color:var(--text-primary)}
+            .storage-add-form input{padding:12px 16px;background:var(--bg-primary);border:1px solid var(--border);border-radius:40px;color:var(--text-primary);font-family:'Russo One',sans-serif}
             .bookmarks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
             .bookmark-action-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:0.2s;font-size:12px}
             .bookmark-action-btn:hover{background:var(--accent);color:#fff;transform:scale(1.1)}
@@ -570,8 +597,25 @@
         `;
         modal.appendChild(style);
         currentGrid = modal.querySelector('#bookmarks-grid');
-        modal.querySelectorAll('.sort-btn').forEach(b => b.addEventListener('click', () => { sortOrder = b.dataset.order; renderBookmarksGrid(currentBookmarks); }));
-        modal.querySelectorAll('.cat-btn').forEach(b => b.addEventListener('click', () => { category = b.dataset.cat; renderBookmarksGrid(currentBookmarks); }));
+
+        // Обработчики сортировки и категорий с переключением active
+        modal.querySelectorAll('.sort-btn').forEach(b => {
+            b.addEventListener('click', () => {
+                sortOrder = b.dataset.order;
+                modal.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
+                b.classList.add('active');
+                renderBookmarksGrid(currentBookmarks);
+            });
+        });
+        modal.querySelectorAll('.cat-btn').forEach(b => {
+            b.addEventListener('click', () => {
+                category = b.dataset.cat;
+                modal.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
+                b.classList.add('active');
+                renderBookmarksGrid(currentBookmarks);
+            });
+        });
+
         const toggleAdd = modal.querySelector('#toggle-add-btn');
         const addForm = modal.querySelector('#add-form');
         toggleAdd.addEventListener('click', () => {
@@ -586,22 +630,13 @@
             const title = modal.querySelector('#new-title').value.trim() || url;
             const btn = modal.querySelector('#confirm-add');
             btn.disabled = true;
-            const tempId = 'temp-'+Date.now();
-            const optimistic = { id: tempId, url, title, added: new Date().toISOString() };
-            currentBookmarks.unshift(optimistic);
-            renderBookmarksGrid(currentBookmarks);
             try {
-                const final = await addBookmark({ url, title });
-                const idx = currentBookmarks.findIndex(b => b.id === tempId);
-                if (idx >= 0) currentBookmarks[idx] = final;
-                renderBookmarksGrid(currentBookmarks);
+                await addBookmark({ url, title });
                 UIUtils.showToast('Добавлено', 'success');
                 addFormVisible = false; addForm.classList.remove('visible');
                 toggleAdd.innerHTML = '<i class="fas fa-plus"></i> Добавить';
             } catch (e) {
                 if (e.message !== 'duplicate') UIUtils.showToast('Ошибка: '+e.message, 'error');
-                currentBookmarks = currentBookmarks.filter(b => b.id !== tempId);
-                renderBookmarksGrid(currentBookmarks);
             } finally { btn.disabled = false; }
         });
         modal.querySelector('#change-password-btn').addEventListener('click', async () => {
@@ -621,6 +656,7 @@
             closeModal();
         });
         renderBookmarksGrid(currentBookmarks);
+        return { modal, closeModal };
     }
 
     function updateAuthState() {
