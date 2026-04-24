@@ -286,7 +286,7 @@
             });
             if (!r.ok) return null;
             const d = await r.json();
-            return d.status === 'success' ? d.url : null;
+            return d.status === 'stream' ? d.url : null;
         } catch { return null; }
     }
 
@@ -297,7 +297,7 @@
             const r = await fetch('https://9xbuddy.com/process', { method: 'POST', body: formData });
             if (!r.ok) return null;
             const html = await r.text();
-            const match = html.match(/href="(https?:\/\/[^"]+\.(?:mp4|webm|mkv)[^"]*)"/i);
+            const match = html.match(/(?:href|data-url)="(https?:\/\/[^"]+\.(?:mp4|webm|mkv)[^"]*)"/i);
             return match ? match[1] : null;
         } catch { return null; }
     }
@@ -478,6 +478,7 @@
                     iframe.loading = 'lazy';
                     iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
                     mediaContainer.appendChild(iframe);
+                    mediaContainer.dataset.iframeLoaded = '1';
                 }
             });
         }

@@ -191,14 +191,14 @@
         const bookmark = {
             url: item.type === 'video'
                 ? `https://www.youtube.com/watch?v=${item.id}`
-                : `${location.origin}${location.pathname}?post=${item.id}`,
+                : `${location.origin}${location.pathname}?post=${item.number}`,
             title: item.title,
             type: item.type === 'video' ? 'video' : 'post',
             thumbnail: item.thumbnail || DEFAULT_IMAGE,
             author: item.author,
             date: item.date,
             postData: item.type === 'post' ? {
-                id: item.id,
+                id: item.number,
                 title: item.title,
                 body: item.body,
                 author: item.author,
