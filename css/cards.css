@@ -80,9 +80,11 @@
 .project-card p { flex-grow: 1; margin-bottom: 16px; }
 .project-card .button { margin-top: auto; align-self: flex-start; }
 
-.project-card.square-card .image-wrapper { padding-bottom: 100%; }
+/* Квадратные карточки */
+.project-card.square-card .image-wrapper,
+.small-projects-container .project-card.square-card .image-wrapper { padding-bottom: 100%; }
 
-/* остальные стили без изменений */
+/* Остальные стили */
 .profile-card-link { flex: 1 1 150px; color: inherit; transition: transform var(--transition-default); }
 .profile-card-link:hover { transform: translateY(-3px); }
 .profile-card {
@@ -168,6 +170,7 @@
 .small-projects-container .project-card h3 { margin: 4px 0; font-size: 16px; }
 .small-projects-container .project-card .button { margin-top: 8px; }
 
+/* Прежние стили фокуса и прочего */
 .project-card-link:focus-visible,
 .profile-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--border-radius-inner); }
 .project-card-link:focus-visible .project-card,

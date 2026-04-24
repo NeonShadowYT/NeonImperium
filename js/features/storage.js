@@ -1,4 +1,4 @@
-// js/features/storage.js — оптимизированное хранилище с ленивыми iframe и без кликабельных ссылок
+// js/features/storage.js — хранилище закладок с мастер-паролем, умным кешем DOM и исправлениями
 (function() {
     const { CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce, loadModule } = GithubCore;
 
@@ -16,8 +16,18 @@
     let modalAddFormVisible = false;
 
     const Base64 = {
-        encode: str => btoa(String.fromCharCode(...new TextEncoder().encode(str))),
-        decode: b64 => new TextDecoder().decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)))
+        encode: arrayBuffer => {
+            const bytes = new Uint8Array(arrayBuffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            return btoa(binary);
+        },
+        decode: b64 => {
+            const binary = atob(b64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+        }
     };
     const Crypto = {
         async deriveKey(pwd, salt) {
@@ -32,15 +42,17 @@
             const key = await this.deriveKey(pwd, RECOVERY_SALT);
             const enc = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(data)));
             const combined = new Uint8Array(iv.length + enc.byteLength);
-            combined.set(iv); combined.set(new Uint8Array(enc), iv.length);
-            return Base64.encode(String.fromCharCode(...combined));
+            combined.set(iv);
+            combined.set(new Uint8Array(enc), iv.length);
+            return Base64.encode(combined.buffer);
         },
         async decrypt(b64, pwd) {
             try {
-                const combined = Uint8Array.from(Base64.decode(b64), c => c.charCodeAt(0));
-                const iv = combined.slice(0, 12), data = combined.slice(12);
+                const combined = Base64.decode(b64);
+                const iv = combined.slice(0, 12);
+                const data = combined.slice(12);
                 const key = await this.deriveKey(pwd, RECOVERY_SALT);
-                const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+                const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data.buffer);
                 return JSON.parse(new TextDecoder().decode(dec));
             } catch { return null; }
         }
@@ -119,7 +131,6 @@
             if (payload.bookmarks) return { bookmarks: payload.bookmarks };
             return { bookmarks: [] };
         } catch (e) {
-            if (e.message.includes('403')) throw new Error('TOKEN_NO_GIST_SCOPE');
             if (e.message === 'Invalid password') throw e;
             try { return { bookmarks: JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]') }; } catch { return { bookmarks: [] }; }
         }
