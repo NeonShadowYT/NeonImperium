@@ -423,7 +423,6 @@
         });
         actions.querySelector('.bookmark-post')?.addEventListener('click', async (e) => {
             e.stopPropagation();
-            // Проверяем наличие модуля хранилища, подгружаем при необходимости
             if (!window.BookmarkStorage) {
                 try {
                     await loadModule('js/features/storage.js');
@@ -437,8 +436,15 @@
                 title: item.title,
                 type: 'post',
                 thumbnail: extractFirstImage(issue.body) || 'images/default-news.webp',
-                author: item.author,
-                date: item.date
+                postData: {
+                    id: item.id,
+                    title: item.title,
+                    body: issue.body,
+                    author: item.author,
+                    date: item.date instanceof Date ? item.date.toISOString() : item.date,
+                    labels: item.labels,
+                    game: item.game
+                }
             }).then(() => UIUtils.showToast('Добавлено в избранное', 'success'))
               .catch(err => UIUtils.showToast('Ошибка: ' + err.message, 'error'));
         });

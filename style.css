@@ -303,3 +303,55 @@
         font-size: 16px;
     }
 }
+
+.bookmark-card-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    height: 100%;
+}
+.bookmark-card-link:hover .bookmark-card {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-hover);
+}
+.bookmark-card-link.clickable-post {
+    cursor: pointer;
+}
+.bookmark-card-link .bookmark-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+.bookmark-card-link .bookmark-card .bookmark-media {
+    flex-shrink: 0;
+}
+.bookmark-card-link .bookmark-card .bookmark-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+}
+.bookmark-card-link .bookmark-card .bookmark-actions {
+    margin-top: auto;
+}
+
+.small-projects-container .project-card.square-card {
+    min-width: 0;
+}
+.small-projects-container .project-card.square-card .image-wrapper {
+    padding-bottom: 100%;
+    overflow: hidden;
+}
+.small-projects-container .project-card.square-card .image-wrapper img {
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+.small-projects-container .project-card.square-card h3 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

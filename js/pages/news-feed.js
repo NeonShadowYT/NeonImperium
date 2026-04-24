@@ -196,7 +196,16 @@
             type: item.type === 'video' ? 'video' : 'post',
             thumbnail: item.thumbnail || DEFAULT_IMAGE,
             author: item.author,
-            date: item.date
+            date: item.date,
+            postData: item.type === 'post' ? {
+                id: item.id,
+                title: item.title,
+                body: item.body,
+                author: item.author,
+                date: item.date instanceof Date ? item.date.toISOString() : item.date,
+                labels: item.labels,
+                game: item.game
+            } : undefined
         };
         try {
             await BookmarkStorage.addBookmark(bookmark);

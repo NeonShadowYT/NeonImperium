@@ -337,7 +337,8 @@
     function updateCardMedia(card, bookmark, visible) {
         const mediaContainer = card.querySelector('.bookmark-media');
         if (!mediaContainer) return;
-        const embedSrc = bookmark.embedUrl || (UrlUtils.isEmbed(bookmark.url) ? bookmark.url : null);
+        const isPost = bookmark.postType && bookmark.postData;
+        const embedSrc = !isPost ? (bookmark.embedUrl || (UrlUtils.isEmbed(bookmark.url) ? bookmark.url : null)) : null;
         if (visible && embedSrc) {
             if (!mediaContainer.dataset.iframeLoaded) {
                 mediaContainer.innerHTML = '';
@@ -357,44 +358,77 @@
                 mediaContainer.appendChild(createPlaceholder());
                 mediaContainer.dataset.iframeLoaded = '';
             } else if (!mediaContainer.querySelector('.bookmark-placeholder')) {
-                mediaContainer.innerHTML = '';
-                mediaContainer.appendChild(createPlaceholder());
+                if (!isPost) {
+                    mediaContainer.innerHTML = '';
+                    mediaContainer.appendChild(createPlaceholder());
+                }
+            }
+            if (isPost && bookmark.thumbnail) {
+                if (!mediaContainer.querySelector('img')) {
+                    mediaContainer.innerHTML = '';
+                    const img = createElement('img', '', {
+                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                        objectFit: 'cover'
+                    });
+                    img.src = bookmark.thumbnail;
+                    mediaContainer.appendChild(img);
+                }
             }
         }
     }
 
     function createBookmarkCard(bookmark, onDelete, onEditSave) {
+        const isPost = bookmark.postType && bookmark.postData;
+        const isLink = !isPost && !bookmark.embedUrl;
+        let cardWrapper;
+
+        if (isLink) {
+            cardWrapper = createElement('a', 'bookmark-card-link', {
+                display: 'block', textDecoration: 'none', color: 'inherit', height: '100%'
+            });
+            cardWrapper.href = bookmark.url;
+            cardWrapper.target = '_blank';
+        } else {
+            cardWrapper = createElement('div', `bookmark-card-link ${isPost ? 'clickable-post' : ''}`, {
+                display: 'block', height: '100%', cursor: isPost ? 'pointer' : 'default'
+            });
+        }
+
         const card = createElement('div', 'bookmark-card tilt-card', {
             background: 'var(--bg-inner-gradient)', borderRadius: '20px', border: '1px solid var(--border)',
-            cursor: 'default', transition: 'transform 0.3s', overflow: 'hidden',
-            display: 'flex', flexDirection: 'column', height: '100%'
+            overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%'
         });
         card.dataset.bookmarkId = bookmark.id;
 
         const mediaContainer = createElement('div', 'bookmark-media', {
             position: 'relative', paddingBottom: '56.25%', background: 'var(--bg-primary)',
-            borderBottom: '1px solid var(--border)', userSelect: 'none'
+            borderBottom: '1px solid var(--border)', userSelect: 'none', flexShrink: '0'
         });
-        mediaContainer.appendChild(createPlaceholder());
+        if (!isLink) mediaContainer.appendChild(createPlaceholder());
+        else {
+            const placeholder = createPlaceholder();
+            placeholder.textContent = '🔗';
+            mediaContainer.appendChild(placeholder);
+        }
 
-        const content = createElement('div', '', { padding: '12px', flex: 1, display: 'flex', flexDirection: 'column' });
+        const content = createElement('div', 'bookmark-content', { flex: '1', display: 'flex', flexDirection: 'column', padding: '12px' });
         const titleEl = createElement('h4', '', { margin: '0 0 6px', fontSize: '16px', color: 'var(--text-primary)' });
         titleEl.textContent = bookmark.title.length > 60 ? bookmark.title.slice(0,60)+'…' : bookmark.title;
 
         const meta = createElement('div', '', { display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '11px', color: 'var(--text-secondary)' });
         meta.innerHTML = `<span><i class="fas fa-calendar-alt"></i> ${formatDate(bookmark.added)}</span>`;
 
-        const actions = createElement('div', '', { display: 'flex', gap: '4px', marginTop: 'auto', justifyContent: 'flex-end' });
+        const actions = createElement('div', 'bookmark-actions', { display: 'flex', gap: '4px', marginTop: 'auto', justifyContent: 'flex-end' });
         if (bookmark.downloadUrl) {
             const btn = createElement('button', 'bookmark-action-btn');
             btn.innerHTML = '<i class="fas fa-download"></i>'; btn.title = 'Скачать';
-            btn.onclick = e => { e.stopPropagation(); window.open(bookmark.downloadUrl, '_blank'); };
+            btn.onclick = e => { e.stopPropagation(); e.preventDefault(); window.open(bookmark.downloadUrl, '_blank'); };
             actions.appendChild(btn);
         }
         const editBtn = createElement('button', 'bookmark-action-btn');
         editBtn.innerHTML = '<i class="fas fa-pen"></i>';
         editBtn.onclick = e => {
-            e.stopPropagation();
+            e.stopPropagation(); e.preventDefault();
             const newTitle = prompt('Новое название:', bookmark.title);
             if (newTitle && newTitle !== bookmark.title) {
                 bookmark.title = newTitle;
@@ -404,13 +438,51 @@
         };
         const delBtn = createElement('button', 'bookmark-action-btn');
         delBtn.innerHTML = '<i class="fas fa-trash-alt"></i>'; delBtn.style.color = '#f44336';
-        delBtn.onclick = e => { e.stopPropagation(); if (confirm('Удалить закладку?')) onDelete(bookmark.id); };
+        delBtn.onclick = e => { e.stopPropagation(); e.preventDefault(); if (confirm('Удалить закладку?')) onDelete(bookmark.id); };
         actions.append(editBtn, delBtn);
 
         content.append(titleEl, meta, actions);
         card.append(mediaContainer, content);
-        card.addEventListener('click', (e) => { e.stopPropagation(); });
-        return card;
+        cardWrapper.appendChild(card);
+
+        if (isPost && window.UIFeedback) {
+            cardWrapper.addEventListener('click', (e) => {
+                if (e.target.closest('button')) return;
+                const post = bookmark.postData;
+                if (post) {
+                    const item = {
+                        id: post.id,
+                        title: post.title,
+                        body: post.body,
+                        author: post.author,
+                        date: new Date(post.date),
+                        game: post.game,
+                        labels: post.labels
+                    };
+                    UIFeedback.openFullModal(item);
+                }
+            });
+        } else if (!isLink && !isPost) {
+            cardWrapper.addEventListener('click', (e) => {
+                if (e.target.closest('button')) return;
+                const mediaContainer = card.querySelector('.bookmark-media');
+                if (!mediaContainer || mediaContainer.querySelector('iframe')) return;
+                const embedSrc = bookmark.embedUrl;
+                if (embedSrc) {
+                    mediaContainer.innerHTML = '';
+                    const iframe = createElement('iframe', '', {
+                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none'
+                    });
+                    iframe.src = embedSrc;
+                    iframe.setAttribute('allowfullscreen', 'true');
+                    iframe.loading = 'lazy';
+                    iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
+                    mediaContainer.appendChild(iframe);
+                }
+            });
+        }
+
+        return cardWrapper;
     }
 
     function applyFilterAndSort() {
@@ -439,7 +511,7 @@
             const visible = filtered.includes(id);
             card.style.display = visible ? '' : 'none';
             const bm = currentBookmarks.find(b => b.id === id);
-            if (bm) updateCardMedia(card, bm, visible);
+            if (bm) updateCardMedia(card.querySelector('.bookmark-card'), bm, visible);
         });
         const empty = gridContainer.querySelector('.empty-placeholder');
         if (filtered.length === 0) {
@@ -516,9 +588,9 @@
         }
         const bookmarks = res.bookmarks || [];
         let finalUrl = bookmark.url, embedUrl = null, downloadUrl = null, thumbnail = bookmark.thumbnail || null;
-        let finalTitle = bookmark.title, postType = bookmark.postType || null;
+        let finalTitle = bookmark.title, postType = bookmark.postType || null, postData = bookmark.postData || null;
 
-        if (bookmark.url && !bookmark.type) {
+        if (bookmark.url && !bookmark.type && !postType) {
             if (UrlUtils.isSitePost(bookmark.url)) postType = 'site-post';
             else if (UrlUtils.isEmbed(bookmark.url)) embedUrl = finalUrl = bookmark.url;
             else {
@@ -558,7 +630,7 @@
             id: Date.now() + '-' + Math.random().toString(36),
             added: new Date().toISOString(),
             url: finalUrl, title: finalTitle || finalUrl,
-            embedUrl, downloadUrl, thumbnail, postType
+            embedUrl, downloadUrl, thumbnail, postType, postData
         };
 
         if (bookmarks.some(b => b.url === finalUrl)) {

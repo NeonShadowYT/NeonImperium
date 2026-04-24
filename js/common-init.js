@@ -74,10 +74,26 @@
     }
   }, { capture: true });
 
+  // Предзагрузка критических скриптов
+  const preloadScripts = [
+    'js/core/github-core.js',
+    'js/features/ui-utils.js',
+    'js/core/github-api.js',
+    'js/core/github-auth.js',
+    'js/features/ui-feedback.js'
+  ];
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       initLazyYT();
       initDonateBtn();
+      // Ленивая предзагрузка неблокирующих скриптов
+      preloadScripts.forEach(src => {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'script';
+        link.href = src;
+        document.head.appendChild(link);
+      });
     });
   } else {
     initLazyYT();
