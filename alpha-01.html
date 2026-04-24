@@ -34,6 +34,7 @@
     <script src="js/pages/game-updates.js" defer></script>
     <script src="js/lang.js" defer></script>
     <script src="js/effects.js" defer></script>
+    <script src="js/common-init.js" defer></script>
     <style>
         .lazy-yt {
             position: relative;
@@ -168,78 +169,5 @@
             </button>
         </main>
     </div>
-
-    <script>
-        (function() {
-            if ('IntersectionObserver' in window) {
-                const lazyVids = document.querySelectorAll('.lazy-yt');
-                const observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            const el = entry.target;
-                            const src = el.dataset.src;
-                            if (src) {
-                                const iframe = document.createElement('iframe');
-                                iframe.src = src;
-                                iframe.setAttribute('frameborder', '0');
-                                iframe.setAttribute('allowfullscreen', '');
-                                iframe.setAttribute('loading', 'lazy');
-                                el.appendChild(iframe);
-                                el.classList.add('loaded');
-                            }
-                            observer.unobserve(el);
-                        }
-                    });
-                }, { rootMargin: '200px' });
-                lazyVids.forEach(el => observer.observe(el));
-            } else {
-                document.querySelectorAll('.lazy-yt').forEach(el => {
-                    const src = el.dataset.src;
-                    if (src) {
-                        const iframe = document.createElement('iframe');
-                        iframe.src = src;
-                        iframe.setAttribute('frameborder', '0');
-                        iframe.setAttribute('allowfullscreen', '');
-                        el.appendChild(iframe);
-                    }
-                });
-            }
-        })();
-    </script>
-
-    <script>
-        (function() {
-            const donateBtn = document.getElementById('donate-button');
-            if (!donateBtn) return;
-            let itchLoaded = false;
-            function loadItch() {
-                if (itchLoaded) return;
-                itchLoaded = true;
-                const script = document.createElement('script');
-                script.src = 'https://static.itch.io/api.js';
-                script.onload = function() {
-                    if (typeof Itch !== 'undefined') {
-                        Itch.attachBuyButton(donateBtn, {
-                            user: 'neon-imperium',
-                            game: 'starve-neon',
-                            width: 700,
-                            height: 500
-                        });
-                    }
-                };
-                document.head.appendChild(script);
-            }
-            donateBtn.addEventListener('click', loadItch, { once: true });
-            function updateDonateText() {
-                const span = donateBtn.querySelector('span[data-lang="donateButton"]');
-                if (!span) return;
-                const lang = localStorage.getItem('preferredLanguage') || 'ru';
-                span.textContent = (window.translations && translations[lang] && translations[lang].donateButton)
-                    ? translations[lang].donateButton : (lang === 'en' ? 'Support' : 'Поддержать');
-            }
-            window.addEventListener('languageChanged', updateDonateText);
-            updateDonateText();
-        })();
-    </script>
 </body>
 </html>

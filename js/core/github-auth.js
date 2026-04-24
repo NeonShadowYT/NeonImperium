@@ -11,7 +11,6 @@
     let currentScopes = [];
     let currentUserLogin = null;
 
-    // Динамический загрузчик модулей
     const ModuleLoader = {
         loaded: new Set(),
         async load(path) {
@@ -83,7 +82,6 @@
     }
 
     async function preloadAdminModules() {
-        // Предзагружаем админские модули в фоне
         ModuleLoader.load('js/features/editor.js').catch(()=>{});
         ModuleLoader.load('js/features/ui-feedback.js').catch(()=>{});
     }
@@ -93,42 +91,42 @@
             role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'github-modal-title'
         });
         modal.innerHTML = `
-            <div class="modal-content">
-                <h3 id="github-modal-title"><i class="fab fa-github"></i> <span data-lang="githubLoginTitle">Вход через GitHub</span></h3>
-                <div class="modal-instructions" style="max-height:350px;overflow-y:auto;padding-right:10px;">
-                    <p><strong>🔒 <span data-lang="githubSecure">Безопасно и прозрачно:</span></strong> <span data-lang="githubTokenNote">токен хранится в вашем браузере и передаётся только в GitHub API.</span></p>
-                    <p><strong>📝 <span data-lang="githubHowTo">Как получить токен (простой способ):</span></strong></p>
-                    <ol style="text-align:left;margin:10px 0 20px 20px;">
-                        <li><span data-lang="githubStep1">Перейдите в </span><a href="https://github.com/settings/tokens" target="_blank">Personal access tokens (classic)</a>.</li>
-                        <li><span data-lang="githubStep2">Нажмите "Generate new token (classic)".</span></li>
-                        <li><span data-lang="githubStep3">Дайте имя, выберите срок (например, 30 дней).</span></li>
-                        <li><span data-lang="githubStep4">В разделе "Select scopes" отметьте:</span>
-                            <ul style="margin-top:5px;">
-                                <li><strong>repo</strong> — для публикации постов, идей, комментариев.</li>
-                                <li><strong>gist</strong> — для работы хранилища закладок.</li>
-                            </ul>
-                        </li>
-                        <li><span data-lang="githubStep5">Скопируйте токен и вставьте сюда.</span></li>
-                    </ol>
-                    <p class="text-secondary" style="font-size:12px;background:var(--bg-primary);padding:8px;border-radius:8px;">
+            <div class="modal-content" style="max-width:480px; border-radius:24px; border:1px solid var(--accent); background:var(--bg-card-gradient); box-shadow:0 20px 40px rgba(0,0,0,0.8);">
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
+                    <i class="fab fa-github" style="font-size:32px; color:var(--accent);"></i>
+                    <h3 id="github-modal-title" style="margin:0; color:var(--accent);" data-lang="githubLoginTitle">Вход через GitHub</h3>
+                </div>
+                <div class="modal-instructions" style="max-height:320px; overflow-y:auto; padding-right:8px; font-size:14px; line-height:1.6; color:var(--text-secondary);">
+                    <div style="background:var(--bg-inner-gradient); border-radius:16px; padding:16px; margin-bottom:16px; border:1px solid var(--border);">
+                        <p style="margin:0 0 8px;"><strong>🔒 <span data-lang="githubSecure">Безопасно и прозрачно:</span></strong> <span data-lang="githubTokenNote">токен хранится в вашем браузере и передаётся только в GitHub API.</span></p>
+                        <p style="margin:0;"><strong>📝 <span data-lang="githubHowTo">Как получить токен (простой способ):</span></strong></p>
+                        <ol style="padding-left:20px; margin:8px 0 0;">
+                            <li><span data-lang="githubStep1">Перейдите в </span><a href="https://github.com/settings/tokens" target="_blank" style="color:var(--accent);">Personal access tokens (classic)</a>.</li>
+                            <li><span data-lang="githubStep2">Нажмите «Generate new token (classic)».</span></li>
+                            <li><span data-lang="githubStep3">Дайте имя, выберите срок (например, 30 дней).</span></li>
+                            <li><span data-lang="githubStep4">В разделе «Select scopes» отметьте:</span>
+                                <ul style="padding-left:20px; margin:4px 0;">
+                                    <li><strong>repo</strong> — для постов, идей, комментариев.</li>
+                                    <li><strong>gist</strong> — для хранилища закладок.</li>
+                                </ul>
+                            </li>
+                            <li><span data-lang="githubStep5">Скопируйте токен и вставьте сюда.</span></li>
+                        </ol>
+                    </div>
+                    <p style="font-size:12px; opacity:0.8; background:var(--bg-primary); padding:10px; border-radius:10px;">
                         ⚠️ <span data-lang="githubWarning">Classic токен даёт доступ ко всем вашим репозиториям. Это нормально для участия в обсуждениях.</span>
                     </p>
-                    <p style="margin-top:15px;text-align:center;">
-                        <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--accent);">
-                            <i class="fas fa-external-link-alt"></i> <span data-lang="githubRevokeLink">Управление токенами GitHub (для отзыва)</span>
-                        </a>
-                    </p>
                 </div>
-                <div style="position:relative;margin-bottom:16px;">
-                    <input type="password" id="github-token-input" placeholder="github_pat_xxx..." autocomplete="off" style="width:100%;padding:12px;padding-right:40px;background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;color:var(--text-primary);">
-                    <button type="button" id="token-toggle" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--text-secondary);cursor:pointer;" aria-label="Показать/скрыть токен">
+                <div style="position:relative; margin:20px 0;">
+                    <input type="password" id="github-token-input" placeholder="github_pat_xxx..." autocomplete="off" style="width:100%; padding:14px 16px; padding-right:44px; background:var(--bg-primary); border:1px solid var(--border); border-radius:16px; color:var(--text-primary); font-family:monospace;">
+                    <button type="button" id="token-toggle" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:var(--text-secondary); cursor:pointer; font-size:18px;" aria-label="Показать/скрыть токен">
                         <i class="fas fa-eye"></i>
                     </button>
                 </div>
                 <div id="modal-error-container"></div>
-                <div class="modal-buttons">
-                    <button class="button" id="modal-cancel" data-lang="feedbackCancel">Отмена</button>
-                    <button class="button" id="modal-submit" data-lang="githubLoginBtn">Войти</button>
+                <div style="display:flex; gap:12px; justify-content:flex-end;">
+                    <button class="button" id="modal-cancel" style="background:var(--bg-inner-gradient); color:var(--text-secondary); border:1px solid var(--border);">Отмена</button>
+                    <button class="button" id="modal-submit" style="background:var(--accent); color:#fff;">Войти</button>
                 </div>
             </div>
         `;
@@ -169,7 +167,7 @@
         const lang = localStorage.getItem('preferredLanguage') || 'ru';
         const errorMsg = window.translations?.[lang]?.[messageKey] || messageKey;
         container.innerHTML = `
-            <div class="error-message" style="margin-bottom:15px;padding:10px;background:rgba(244,67,54,0.1);color:#f44336;border-radius:8px;text-align:center;">
+            <div style="margin-bottom:15px; padding:10px; background:rgba(244,67,54,0.1); color:#f44336; border-radius:12px; text-align:center; font-size:14px;">
                 <i class="fas fa-exclamation-triangle"></i> ${errorMsg}
                 ${details ? `<br><small>${details}</small>` : ''}
             </div>
@@ -227,13 +225,11 @@
                 preloadAdminModules();
             }
 
-            // Обновляем страницу при необходимости
             if (window.refreshNewsFeed) window.refreshNewsFeed();
             if (window.refreshGameUpdates && window.currentGame) window.refreshGameUpdates(window.currentGame);
 
         } catch (error) {
             clearTimeout(timeoutId);
-            console.error('Auth error:', error);
             localStorage.removeItem(TOKEN_KEY);
             sessionStorage.removeItem(USER_CACHE_KEY);
             sessionStorage.removeItem(SCOPES_CACHE_KEY);

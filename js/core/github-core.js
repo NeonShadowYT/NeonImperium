@@ -7,24 +7,37 @@ const GithubCore = (function() {
         ALLOWED_AUTHORS: ['NeonShadowYT', 'GoldenCreeper567']
     };
 
-    // Кэширование в sessionStorage
     function cacheGet(key) {
         const cached = sessionStorage.getItem(key);
         const time = sessionStorage.getItem(`${key}_time`);
         if (cached && time && (Date.now() - parseInt(time) < CONFIG.CACHE_TTL)) {
             return JSON.parse(cached);
         }
+        try {
+            const localCached = localStorage.getItem(key);
+            const localTime = localStorage.getItem(`${key}_time`);
+            if (localCached && localTime && (Date.now() - parseInt(localTime) < CONFIG.CACHE_TTL)) {
+                sessionStorage.setItem(key, localCached);
+                sessionStorage.setItem(`${key}_time`, localTime);
+                return JSON.parse(localCached);
+            }
+        } catch (e) { /* quota or disabled */ }
         return null;
     }
 
     function cacheSet(key, data) {
         sessionStorage.setItem(key, JSON.stringify(data));
         sessionStorage.setItem(`${key}_time`, Date.now().toString());
+        try {
+            localStorage.setItem(key, JSON.stringify(data));
+            localStorage.setItem(`${key}_time`, Date.now().toString());
+        } catch (e) { /* ignore quota */ }
     }
 
     function cacheRemove(key) {
         sessionStorage.removeItem(key);
         sessionStorage.removeItem(`${key}_time`);
+        try { localStorage.removeItem(key); localStorage.removeItem(`${key}_time`); } catch (e) {}
     }
 
     function cacheRemoveByPrefix(prefix) {
@@ -37,9 +50,17 @@ const GithubCore = (function() {
             sessionStorage.removeItem(k);
             sessionStorage.removeItem(k + '_time');
         });
+        try {
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith(prefix)) {
+                    localStorage.removeItem(key);
+                    localStorage.removeItem(key + '_time');
+                }
+            }
+        } catch (e) {}
     }
 
-    // Безопасный HTML
     function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -47,7 +68,6 @@ const GithubCore = (function() {
         return div.innerHTML;
     }
 
-    // Markdown (использует глобальный marked)
     function renderMarkdown(text) {
         if (!text) return '';
         if (window.marked) {
@@ -57,7 +77,6 @@ const GithubCore = (function() {
         return text.replace(/\n/g, '<br>');
     }
 
-    // Дедупликация по номеру issue
     function deduplicateByNumber(items) {
         const seen = new Set();
         return items.filter(item => {
@@ -67,21 +86,18 @@ const GithubCore = (function() {
         });
     }
 
-    // Создание AbortController с таймаутом
     function createAbortable(timeout = 10000) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
         return { controller, timeoutId };
     }
 
-    // Очистка HTML
     function stripHtml(html) {
         const tmp = document.createElement('div');
         tmp.innerHTML = html;
         return tmp.textContent || tmp.innerText || '';
     }
 
-    // Извлечение мета-комментариев <!-- tag: value -->
     function extractMeta(body, tag) {
         const regex = new RegExp(`<!--\\s*${tag}:\\s*(.*?)\\s*-->`, 'i');
         const match = body?.match(regex);
@@ -91,7 +107,6 @@ const GithubCore = (function() {
     function extractAllowed(body) { return extractMeta(body, 'allowed'); }
     function extractSummary(body) { return extractMeta(body, 'summary'); }
 
-    // Лёгкое шифрование приватных постов (по списку allowed)
     function deriveKeyFromAllowedList(allowedStr) {
         if (!allowedStr) return 'default-key';
         let hash = 0;
@@ -130,7 +145,6 @@ const GithubCore = (function() {
         }
     }
 
-    // Утилиты для DOM
     function createElement(tag, className, styles = {}, attributes = {}) {
         const el = document.createElement(tag);
         if (className) el.className = className;
@@ -139,7 +153,6 @@ const GithubCore = (function() {
         return el;
     }
 
-    // Дебаунс
     function debounce(fn, delay) {
         let timer;
         return (...args) => {
@@ -148,12 +161,10 @@ const GithubCore = (function() {
         };
     }
 
-    // Форматирование даты
     function formatDate(date) {
         return new Date(date).toLocaleDateString();
     }
 
-    // Динамический загрузчик модулей (кэширует загруженные скрипты)
     const loadedScripts = new Set();
     function loadModule(path) {
         if (loadedScripts.has(path)) return Promise.resolve();
