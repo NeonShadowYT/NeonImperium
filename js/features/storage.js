@@ -337,7 +337,7 @@
     function updateCardMedia(card, bookmark, visible) {
         const mediaContainer = card.querySelector('.bookmark-media');
         if (!mediaContainer) return;
-        const isPost = bookmark.postType && bookmark.postData;
+        const isPost = bookmark.postType;
         const embedSrc = !isPost ? (bookmark.embedUrl || (UrlUtils.isEmbed(bookmark.url) ? bookmark.url : null)) : null;
         if (visible && embedSrc) {
             if (!mediaContainer.dataset.iframeLoaded) {
@@ -377,8 +377,27 @@
         }
     }
 
+    function openPostFromBookmark(url) {
+        const postId = new URL(url).searchParams.get('post');
+        if (!postId || postId === 'undefined') return;
+        if (window.UIFeedback) {
+            GithubAPI.loadIssue(parseInt(postId, 10)).then(issue => {
+                if (issue.state === 'closed') return;
+                UIFeedback.openFullModal({
+                    id: issue.number,
+                    title: issue.title,
+                    body: issue.body,
+                    author: issue.user.login,
+                    date: new Date(issue.created_at),
+                    game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
+                    labels: issue.labels.map(l => l.name)
+                });
+            }).catch(() => {});
+        }
+    }
+
     function createBookmarkCard(bookmark, onDelete, onEditSave) {
-        const isPost = bookmark.postType && bookmark.postData;
+        const isPost = bookmark.postType;
         const isLink = !isPost && !bookmark.embedUrl;
         let cardWrapper;
 
@@ -445,12 +464,12 @@
         card.append(mediaContainer, content);
         cardWrapper.appendChild(card);
 
-        if (isPost && window.UIFeedback) {
+        if (isPost) {
             cardWrapper.addEventListener('click', (e) => {
                 if (e.target.closest('button')) return;
-                const post = bookmark.postData;
-                if (post) {
-                    const item = {
+                if (bookmark.postData) {
+                    const post = bookmark.postData;
+                    UIFeedback.openFullModal({
                         id: post.id,
                         title: post.title,
                         body: post.body,
@@ -458,11 +477,12 @@
                         date: new Date(post.date),
                         game: post.game,
                         labels: post.labels
-                    };
-                    UIFeedback.openFullModal(item);
+                    });
+                } else if (UrlUtils.isSitePost(bookmark.url)) {
+                    openPostFromBookmark(bookmark.url);
                 }
             });
-        } else if (!isLink && !isPost) {
+        } else if (!isLink) {
             cardWrapper.addEventListener('click', (e) => {
                 if (e.target.closest('button')) return;
                 const mediaContainer = card.querySelector('.bookmark-media');
