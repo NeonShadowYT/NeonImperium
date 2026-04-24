@@ -1,4 +1,4 @@
-// js/features/storage.js — хранилище закладок с мастер-паролем, умным кешем DOM и исправлениями
+// js/features/storage.js — оптимизированное хранилище с ленивыми iframe и без кликабельных ссылок
 (function() {
     const { CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce, loadModule } = GithubCore;
 
@@ -206,13 +206,20 @@
         }
     };
 
+    const OEMBED_PROVIDERS = [
+        url => `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
+        url => `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`,
+        url => `https://api.microlink.io/?url=${encodeURIComponent(url)}`,
+        url => `https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`
+    ];
+
     async function fetchOEmbedData(url) {
         const controllers = OEMBED_PROVIDERS.map(() => new AbortController());
         const timeout = setTimeout(() => controllers.forEach(c => c.abort()), 5000);
         const promises = OEMBED_PROVIDERS.map(async (provider, i) => {
             try {
-                const r = await fetch(provider(url), { signal: controllers[i].signal, mode: 'no-cors' });
-                if (!r.ok && r.type !== 'opaque') return null;
+                const r = await fetch(provider(url), { signal: controllers[i].signal });
+                if (!r.ok) return null;
                 const data = await r.json();
                 if (data) {
                     if (data.contents) {
@@ -237,14 +244,13 @@
     }
 
     async function fetchDirectVideoUrl(url) {
-        // Игнорируем ошибки CORS для фоновых запросов
         const promises = [
             fetchFromCobalt(url).catch(() => null),
             fetchFromCobaltTools(url).catch(() => null),
             fetchFrom9xbuddy(url).catch(() => null),
             fetchFromUniversalDownloader(url).catch(() => null)
         ];
-        try { return await Promise.any(promises.filter(p => p !== null)); } catch { return null; }
+        try { return await Promise.any(promises); } catch { return null; }
     }
 
     async function fetchFromCobalt(url) {
@@ -252,8 +258,7 @@
             const r = await fetch('https://api.cobalt.tools/api/json', {
                 method: 'POST',
                 headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
-                mode: 'no-cors'
+                body: JSON.stringify({ url })
             });
             if (!r.ok) return null;
             const d = await r.json();
@@ -266,8 +271,7 @@
             const r = await fetch('https://co.wuk.sh/api/json', {
                 method: 'POST',
                 headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, aFormat: 'best', vCodec: 'h264' }),
-                mode: 'no-cors'
+                body: JSON.stringify({ url, aFormat: 'best', vCodec: 'h264' })
             });
             if (!r.ok) return null;
             const d = await r.json();
@@ -279,7 +283,7 @@
         try {
             const formData = new FormData();
             formData.append('url', url);
-            const r = await fetch('https://9xbuddy.com/process', { method: 'POST', body: formData, mode: 'no-cors' });
+            const r = await fetch('https://9xbuddy.com/process', { method: 'POST', body: formData });
             if (!r.ok) return null;
             const html = await r.text();
             const match = html.match(/href="(https?:\/\/[^"]+\.(?:mp4|webm|mkv)[^"]*)"/i);
@@ -295,7 +299,7 @@
             if (url.includes('twitter.com') || url.includes('x.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/twitter/download';
             if (url.includes('facebook.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/meta/download';
 
-            const r = await fetch(`${endpoint}?url=${encodeURIComponent(url)}`, { mode: 'no-cors' });
+            const r = await fetch(`${endpoint}?url=${encodeURIComponent(url)}`);
             if (!r.ok) return null;
             const d = await r.json();
             if (d.data?.medias?.[0]?.url) return d.data.medias[0].url;
@@ -309,6 +313,45 @@
     let cardMap = new Map();
     let gridContainer = null;
 
+    function createPlaceholder() {
+        const div = createElement('div', 'bookmark-placeholder', {
+            position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+            background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--text-secondary)', fontSize: '14px'
+        });
+        div.textContent = '🎬';
+        return div;
+    }
+
+    function updateCardMedia(card, bookmark, visible) {
+        const mediaContainer = card.querySelector('.bookmark-media');
+        if (!mediaContainer) return;
+        const embedSrc = bookmark.embedUrl || (UrlUtils.isEmbed(bookmark.url) ? bookmark.url : null);
+        if (visible && embedSrc) {
+            if (!mediaContainer.dataset.iframeLoaded) {
+                mediaContainer.innerHTML = '';
+                const iframe = createElement('iframe', '', {
+                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none'
+                });
+                iframe.src = embedSrc;
+                iframe.setAttribute('allowfullscreen', 'true');
+                iframe.loading = 'lazy';
+                iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
+                mediaContainer.appendChild(iframe);
+                mediaContainer.dataset.iframeLoaded = '1';
+            }
+        } else {
+            if (mediaContainer.dataset.iframeLoaded) {
+                mediaContainer.innerHTML = '';
+                mediaContainer.appendChild(createPlaceholder());
+                mediaContainer.dataset.iframeLoaded = '';
+            } else if (!mediaContainer.querySelector('.bookmark-placeholder')) {
+                mediaContainer.innerHTML = '';
+                mediaContainer.appendChild(createPlaceholder());
+            }
+        }
+    }
+
     function createBookmarkCard(bookmark, onDelete, onEditSave) {
         const card = createElement('div', 'bookmark-card tilt-card', {
             background: 'var(--bg-inner-gradient)', borderRadius: '20px', border: '1px solid var(--border)',
@@ -319,32 +362,13 @@
 
         const mediaContainer = createElement('div', 'bookmark-media', {
             position: 'relative', paddingBottom: '56.25%', background: 'var(--bg-primary)',
-            borderBottom: '1px solid var(--border)', pointerEvents: 'none', userSelect: 'none'
+            borderBottom: '1px solid var(--border)', userSelect: 'none'
         });
-        const embedSrc = bookmark.embedUrl || (UrlUtils.isEmbed(bookmark.url) ? bookmark.url : null);
-        if (embedSrc) {
-            const iframe = createElement('iframe', '', {
-                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none'
-            });
-            iframe.src = embedSrc;
-            iframe.setAttribute('allowfullscreen', 'true');
-            iframe.loading = 'lazy';
-            iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
-            mediaContainer.appendChild(iframe);
-        } else {
-            const img = createElement('img', '', {
-                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover'
-            });
-            img.src = bookmark.thumbnail || 'images/default-news.webp';
-            img.alt = bookmark.title;
-            img.onerror = () => img.src = 'images/default-news.webp';
-            mediaContainer.appendChild(img);
-        }
+        mediaContainer.appendChild(createPlaceholder());
 
         const content = createElement('div', '', { padding: '12px', flex: 1, display: 'flex', flexDirection: 'column' });
-        const titleEl = createElement('h4', '', { margin: '0 0 6px', fontSize: '16px', color: 'var(--text-primary)', cursor: 'pointer' });
+        const titleEl = createElement('h4', '', { margin: '0 0 6px', fontSize: '16px', color: 'var(--text-primary)' });
         titleEl.textContent = bookmark.title.length > 60 ? bookmark.title.slice(0,60)+'…' : bookmark.title;
-        titleEl.addEventListener('click', (e) => { e.stopPropagation(); window.open(bookmark.url, '_blank'); });
 
         const meta = createElement('div', '', { display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '11px', color: 'var(--text-secondary)' });
         meta.innerHTML = `<span><i class="fas fa-calendar-alt"></i> ${formatDate(bookmark.added)}</span>`;
@@ -374,11 +398,7 @@
 
         content.append(titleEl, meta, actions);
         card.append(mediaContainer, content);
-
-        card.addEventListener('click', (e) => {
-            if (e.target.closest('.bookmark-media') || e.target.closest('button')) return;
-            window.open(bookmark.url, '_blank');
-        });
+        card.addEventListener('click', (e) => { e.stopPropagation(); });
         return card;
     }
 
@@ -405,7 +425,10 @@
             if (card) gridContainer.appendChild(card);
         }
         cardMap.forEach((card, id) => {
-            card.style.display = filtered.includes(id) ? '' : 'none';
+            const visible = filtered.includes(id);
+            card.style.display = visible ? '' : 'none';
+            const bm = currentBookmarks.find(b => b.id === id);
+            if (bm) updateCardMedia(card, bm, visible);
         });
         const empty = gridContainer.querySelector('.empty-placeholder');
         if (filtered.length === 0) {

@@ -80,6 +80,9 @@
 .project-card p { flex-grow: 1; margin-bottom: 16px; }
 .project-card .button { margin-top: auto; align-self: flex-start; }
 
+.project-card.square-card .image-wrapper { padding-bottom: 100%; }
+
+/* остальные стили без изменений */
 .profile-card-link { flex: 1 1 150px; color: inherit; transition: transform var(--transition-default); }
 .profile-card-link:hover { transform: translateY(-3px); }
 .profile-card {
