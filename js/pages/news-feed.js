@@ -188,7 +188,6 @@
             try { await loadModule('js/features/storage.js'); }
             catch (e) { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
         }
-
         const bookmark = {
             url: item.type === 'video'
                 ? `https://www.youtube.com/watch?v=${item.id}`
@@ -199,13 +198,15 @@
             author: item.author,
             date: item.date
         };
-
         try {
             await BookmarkStorage.addBookmark(bookmark);
             UIUtils.showToast('Добавлено в избранное', 'success');
         } catch (err) {
-            if (err.message === 'password_cancelled') return;
-            if (err.message !== 'duplicate') UIUtils.showToast('Ошибка: ' + err.message, 'error');
+            if (err.message === 'password_required') {
+                UIUtils.showToast('Для сохранения нужен мастер-пароль. Откройте хранилище.', 'error');
+            } else if (err.message !== 'duplicate') {
+                UIUtils.showToast('Ошибка: ' + err.message, 'error');
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-// js/features/storage.js — хранилище закладок с умным кешем DOM и без лишних перезагрузок
+// js/features/storage.js — хранилище закладок с мастер-паролем, умным кешем DOM и исправлениями
 (function() {
     const { CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce, loadModule } = GithubCore;
 
@@ -13,8 +13,7 @@
     let cachedBookmarks = null;
     let currentBookmarks = [];
     let sortOrder = 'new', category = 'all';
-    let activeDownloads = new Map();
-    let downloadIndicator = null;
+    let modalAddFormVisible = false;
 
     const Base64 = {
         encode: str => btoa(String.fromCharCode(...new TextEncoder().encode(str))),
@@ -251,7 +250,6 @@
             fetchFrom9xbuddy(url),
             fetchFromUniversalDownloader(url)
         ].map(p => p.catch(() => null));
-
         try { return await Promise.any(promises); } catch { return null; }
     }
 
@@ -311,6 +309,9 @@
             return null;
         } catch { return null; }
     }
+
+    let cardMap = new Map();
+    let gridContainer = null;
 
     function createBookmarkCard(bookmark, onDelete, onEditSave) {
         const card = createElement('div', 'bookmark-card tilt-card', {
@@ -382,14 +383,11 @@
             if (e.target.closest('.bookmark-media') || e.target.closest('button')) return;
             window.open(bookmark.url, '_blank');
         });
-
         return card;
     }
 
-    let cardMap = new Map();
-    let gridContainer = null;
-
     function applyFilterAndSort() {
+        if (!gridContainer) return;
         const allIds = Array.from(cardMap.keys());
         const filtered = allIds.filter(id => {
             const bm = currentBookmarks.find(b => b.id === id);
@@ -424,6 +422,7 @@
     }
 
     function syncCardsFromBookmarks() {
+        if (!gridContainer) return;
         const currentIds = new Set(currentBookmarks.map(b => b.id));
         for (const [id, card] of cardMap) {
             if (!currentIds.has(id)) {
@@ -457,14 +456,33 @@
     async function addBookmark(bookmark) {
         if (!currentUser) {
             UIUtils.showToast('Войдите в аккаунт', 'error');
-            throw new Error('not logged in');
+            throw new Error('not_logged_in');
         }
         let res = await loadBookmarks();
-        if (res.passwordRequired) {
-            await openStorageModal();
-            if (!masterPassword) throw new Error('password_cancelled');
-            res = await loadBookmarks(masterPassword);
-            if (res.passwordRequired) throw new Error('invalid password');
+        if (res.needSetup) {
+            const pwd = prompt('Создайте мастер-пароль для хранилища (мин. 4 символа) или оставьте пустым:');
+            if (pwd && pwd.length >= 4) {
+                masterPassword = pwd;
+                currentBookmarks = [];
+                await saveBookmarks([], pwd);
+                res = { bookmarks: [] };
+            } else if (pwd && pwd.length < 4) {
+                UIUtils.showToast('Пароль слишком короткий', 'error');
+                throw new Error('invalid_password');
+            } else {
+                currentBookmarks = [];
+                await saveBookmarks([]);
+                res = { bookmarks: [] };
+            }
+        } else if (res.passwordRequired) {
+            if (masterPassword) {
+                try { res = await loadBookmarks(masterPassword); }
+                catch { masterPassword = null; }
+            }
+            if (!masterPassword || res.passwordRequired) {
+                UIUtils.showToast('Требуется мастер-пароль. Откройте хранилище.', 'error');
+                throw new Error('password_required');
+            }
         }
         const bookmarks = res.bookmarks || [];
         let finalUrl = bookmark.url, embedUrl = null, downloadUrl = null, thumbnail = bookmark.thumbnail || null;
@@ -565,12 +583,11 @@
                 else if (res.needSetup) needSetup = true;
                 else currentBookmarks = res.bookmarks || [];
             } catch (e) {
-                if (e.message === 'TOKEN_NO_GIST_SCOPE') return UIUtils.showToast('Нет доступа к Gist', 'error');
                 return UIUtils.showToast('Ошибка: ' + e.message, 'error');
             }
         }
 
-        if (passwordRequired) {
+        if (passwordRequired && !masterPassword) {
             const pwd = prompt('Введите мастер-пароль:');
             if (!pwd) return UIUtils.showToast('Отменено', 'info');
             try {
@@ -610,9 +627,15 @@
                         </div>
                     </div>
                     <div class="storage-actions">
+                        <button class="storage-btn primary" id="toggle-add-btn"><i class="fas fa-plus"></i> Добавить</button>
                         <button class="storage-btn" id="change-password-btn"><i class="fas fa-key"></i></button>
                         <button class="storage-btn danger" id="reset-storage-btn"><i class="fas fa-trash-alt"></i></button>
                     </div>
+                </div>
+                <div id="add-form" class="storage-add-form ${modalAddFormVisible?'visible':''}">
+                    <input type="url" id="new-url" placeholder="Ссылка..." autocomplete="off">
+                    <input type="text" id="new-title" placeholder="Название">
+                    <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> Добавить</button>
                 </div>
                 <div class="bookmarks-grid" id="bookmarks-grid"></div>
             </div>
@@ -626,31 +649,60 @@
             .storage-sort,.storage-categories{display:flex;background:var(--bg-primary);border-radius:40px;padding:4px;border:1px solid var(--border)}
             .sort-btn,.cat-btn{background:0;border:0;color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
             .sort-btn.active,.cat-btn.active{background:var(--accent);color:#fff}
-            .storage-actions{display:flex;gap:8px}
-            .storage-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
+            .storage-actions{display:flex;gap:8px;align-items:center}
+            .storage-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
+            .storage-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
             .storage-btn:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.2)}
             .bookmarks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+            .bookmark-action-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:0.2s;font-size:12px}
+            .bookmark-action-btn:hover{background:var(--accent);color:#fff;transform:scale(1.1)}
+            .storage-add-form{display:none;grid-template-columns:1fr 1fr auto;gap:10px;background:var(--bg-inner-gradient);padding:16px;border-radius:20px;border:1px solid var(--border);opacity:0;transform:translateY(-10px);transition:0.3s;align-items:center}
+            .storage-add-form.visible{display:grid;opacity:1;transform:translateY(0)}
+            .storage-add-form input{padding:12px 16px;background:var(--bg-primary);border:1px solid var(--border);border-radius:40px;color:var(--text-primary);font-family:'Russo One',sans-serif}
+            @media (max-width:700px){.storage-add-form{grid-template-columns:1fr}}
         `;
         modal.appendChild(style);
         gridContainer = modal.querySelector('#bookmarks-grid');
         cardMap = new Map();
         syncCardsFromBookmarks();
 
-        modal.querySelectorAll('.sort-btn').forEach(b => {
-            b.addEventListener('click', () => {
-                sortOrder = b.dataset.order;
-                modal.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
-                b.classList.add('active');
-                applyFilterAndSort();
-            });
+        modal.querySelectorAll('.sort-btn').forEach(b => b.addEventListener('click', () => {
+            sortOrder = b.dataset.order;
+            modal.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
+            b.classList.add('active');
+            applyFilterAndSort();
+        }));
+        modal.querySelectorAll('.cat-btn').forEach(b => b.addEventListener('click', () => {
+            category = b.dataset.cat;
+            modal.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
+            b.classList.add('active');
+            applyFilterAndSort();
+        }));
+
+        const toggleAdd = modal.querySelector('#toggle-add-btn');
+        const addForm = modal.querySelector('#add-form');
+        toggleAdd.addEventListener('click', () => {
+            modalAddFormVisible = !modalAddFormVisible;
+            addForm.classList.toggle('visible', modalAddFormVisible);
+            toggleAdd.innerHTML = modalAddFormVisible ? '<i class="fas fa-times"></i> Отмена' : '<i class="fas fa-plus"></i> Добавить';
+            if (modalAddFormVisible) modal.querySelector('#new-url').focus();
         });
-        modal.querySelectorAll('.cat-btn').forEach(b => {
-            b.addEventListener('click', () => {
-                category = b.dataset.cat;
-                modal.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
-                b.classList.add('active');
-                applyFilterAndSort();
-            });
+        modal.querySelector('#confirm-add').addEventListener('click', async () => {
+            const url = modal.querySelector('#new-url').value.trim();
+            if (!url) return UIUtils.showToast('Введите ссылку', 'error');
+            const title = modal.querySelector('#new-title').value.trim() || url;
+            const btn = modal.querySelector('#confirm-add');
+            btn.disabled = true;
+            try {
+                await addBookmark({ url, title });
+                UIUtils.showToast('Добавлено', 'success');
+                modalAddFormVisible = false; addForm.classList.remove('visible');
+                toggleAdd.innerHTML = '<i class="fas fa-plus"></i> Добавить';
+                modal.querySelector('#new-url').value = '';
+                modal.querySelector('#new-title').value = '';
+            } catch (e) {
+                if (e.message !== 'duplicate') UIUtils.showToast('Ошибка: '+e.message, 'error');
+            } finally { btn.disabled = false; }
         });
 
         modal.querySelector('#change-password-btn').addEventListener('click', async () => {
