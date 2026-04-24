@@ -1,4 +1,4 @@
-// js/pages/news-feed.js — лента новостей без 3D, раздельный клик, кнопка избранного, скачивание
+// js/pages/news-feed.js – лента новостей, видео проигрываются в карточке, посты в модалке, оптимизировано
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
@@ -219,13 +219,9 @@
         imgW.appendChild(img);
         inner.appendChild(imgW);
 
-        const titleLink = GithubCore.createElement('a', '', {
-            color: 'inherit', textDecoration: 'none', cursor: 'pointer'
-        }, { href: `https://www.youtube.com/watch?v=${video.id}`, target: '_blank', 'aria-label': `Смотреть видео ${video.title}` });
-        const title = GithubCore.createElement('h3');
-        title.textContent = video.title.length > 70 ? video.title.slice(0,70)+'…' : video.title;
-        titleLink.appendChild(title);
-        inner.appendChild(titleLink);
+        const titleEl = GithubCore.createElement('h3', '', { cursor: 'default' });
+        titleEl.textContent = video.title.length > 70 ? video.title.slice(0,70)+'…' : video.title;
+        inner.appendChild(titleEl);
 
         const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
@@ -240,11 +236,25 @@
         inner.appendChild(favBtn);
 
         card.appendChild(inner);
+
         card.addEventListener('click', (e) => {
-            if (!e.target.closest('button') && !e.target.closest('.news-bookmark-btn')) {
-                window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank');
-            }
+            if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
+            const mediaContainer = card.querySelector('.image-wrapper');
+            if (!mediaContainer || mediaContainer.querySelector('iframe')) return;
+            const src = `https://www.youtube.com/embed/${video.id}`;
+            const iframe = GithubCore.createElement('iframe', '', {
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', borderRadius: '12px'
+            });
+            iframe.src = src;
+            iframe.setAttribute('allowfullscreen', 'true');
+            iframe.loading = 'lazy';
+            iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
+            iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
+            mediaContainer.innerHTML = '';
+            mediaContainer.style.background = '#000';
+            mediaContainer.appendChild(iframe);
         });
+
         return card;
     }
 
@@ -264,11 +274,9 @@
         imgW.appendChild(img);
         inner.appendChild(imgW);
 
-        const titleLink = GithubCore.createElement('a', '', { cursor: 'pointer', color: 'inherit', textDecoration: 'none' });
-        const title = GithubCore.createElement('h3');
-        title.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
-        titleLink.appendChild(title);
-        inner.appendChild(titleLink);
+        const titleEl = GithubCore.createElement('h3', '', { cursor: 'pointer' });
+        titleEl.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
+        inner.appendChild(titleEl);
 
         const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;

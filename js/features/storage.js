@@ -206,20 +206,13 @@
         }
     };
 
-    const OEMBED_PROVIDERS = [
-        url => `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
-        url => `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`,
-        url => `https://api.microlink.io/?url=${encodeURIComponent(url)}`,
-        url => `https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`
-    ];
-
     async function fetchOEmbedData(url) {
         const controllers = OEMBED_PROVIDERS.map(() => new AbortController());
         const timeout = setTimeout(() => controllers.forEach(c => c.abort()), 5000);
         const promises = OEMBED_PROVIDERS.map(async (provider, i) => {
             try {
-                const r = await fetch(provider(url), { signal: controllers[i].signal });
-                if (!r.ok) return null;
+                const r = await fetch(provider(url), { signal: controllers[i].signal, mode: 'no-cors' });
+                if (!r.ok && r.type !== 'opaque') return null;
                 const data = await r.json();
                 if (data) {
                     if (data.contents) {
@@ -244,13 +237,14 @@
     }
 
     async function fetchDirectVideoUrl(url) {
+        // Игнорируем ошибки CORS для фоновых запросов
         const promises = [
-            fetchFromCobalt(url),
-            fetchFromCobaltTools(url),
-            fetchFrom9xbuddy(url),
-            fetchFromUniversalDownloader(url)
-        ].map(p => p.catch(() => null));
-        try { return await Promise.any(promises); } catch { return null; }
+            fetchFromCobalt(url).catch(() => null),
+            fetchFromCobaltTools(url).catch(() => null),
+            fetchFrom9xbuddy(url).catch(() => null),
+            fetchFromUniversalDownloader(url).catch(() => null)
+        ];
+        try { return await Promise.any(promises.filter(p => p !== null)); } catch { return null; }
     }
 
     async function fetchFromCobalt(url) {
@@ -258,7 +252,8 @@
             const r = await fetch('https://api.cobalt.tools/api/json', {
                 method: 'POST',
                 headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
+                body: JSON.stringify({ url }),
+                mode: 'no-cors'
             });
             if (!r.ok) return null;
             const d = await r.json();
@@ -271,7 +266,8 @@
             const r = await fetch('https://co.wuk.sh/api/json', {
                 method: 'POST',
                 headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, aFormat: 'best', vCodec: 'h264' })
+                body: JSON.stringify({ url, aFormat: 'best', vCodec: 'h264' }),
+                mode: 'no-cors'
             });
             if (!r.ok) return null;
             const d = await r.json();
@@ -283,7 +279,7 @@
         try {
             const formData = new FormData();
             formData.append('url', url);
-            const r = await fetch('https://9xbuddy.com/process', { method: 'POST', body: formData });
+            const r = await fetch('https://9xbuddy.com/process', { method: 'POST', body: formData, mode: 'no-cors' });
             if (!r.ok) return null;
             const html = await r.text();
             const match = html.match(/href="(https?:\/\/[^"]+\.(?:mp4|webm|mkv)[^"]*)"/i);
@@ -299,7 +295,7 @@
             if (url.includes('twitter.com') || url.includes('x.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/twitter/download';
             if (url.includes('facebook.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/meta/download';
 
-            const r = await fetch(`${endpoint}?url=${encodeURIComponent(url)}`);
+            const r = await fetch(`${endpoint}?url=${encodeURIComponent(url)}`, { mode: 'no-cors' });
             if (!r.ok) return null;
             const d = await r.json();
             if (d.data?.medias?.[0]?.url) return d.data.medias[0].url;

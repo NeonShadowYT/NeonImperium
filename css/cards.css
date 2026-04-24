@@ -1,4 +1,4 @@
-/* cards.css – полный набор стилей карточек, сохранены все оригинальные классы */
+/* cards.css – полный набор стилей карточек, оптимизация памяти */
 :root {
     --border-radius-card: 20px;
     --border-radius-inner: 16px;
@@ -58,7 +58,7 @@
     border: 1px solid var(--border);
     transition: border-color 0.2s, transform 0.25s cubic-bezier(0.2,0.9,0.4,1), box-shadow 0.25s;
     display: flex; flex-direction: column; height: 100%; overflow: hidden;
-    will-change: transform; contain: layout style;
+    contain: layout style;
 }
 .project-card-link:hover .project-card {
     border-color: var(--accent);
@@ -182,7 +182,7 @@
 .empty-state i { font-size: 48px; color: var(--accent); margin-bottom: 16px; opacity: 0.6; }
 .project-card .button { width: 100%; text-align: center; margin-top: 12px; padding: 10px 0; box-sizing: border-box; display: block; }
 
-.tilt-card { transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.2s ease; will-change: transform; }
+.tilt-card { transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.2s ease; }
 .tilt-card:hover { transform: translateY(-5px) scale(1.02); box-shadow: var(--shadow-hover); }
 @media (hover: none) and (pointer: coarse) {
     .tilt-card { transform: none !important; }

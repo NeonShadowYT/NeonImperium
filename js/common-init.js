@@ -1,4 +1,4 @@
-// js/common-init.js – shared lazy‑loading & donation button
+// js/common-init.js – shared lazy‑loading & donation button with error suppression
 (function () {
   function initLazyYT() {
     if ('IntersectionObserver' in window) {
@@ -66,6 +66,13 @@
     window.addEventListener('languageChanged', updateText);
     updateText();
   }
+
+  // Подавляем ошибки CORS в консоли для фоновых запросов хранилища
+  window.addEventListener('unhandledrejection', function(event) {
+    if (event.reason && event.reason.message && event.reason.message.includes('Failed to fetch')) {
+      event.preventDefault();
+    }
+  }, { capture: true });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
