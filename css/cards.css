@@ -50,6 +50,7 @@
 .project-card-link { display: block; color: inherit; transition: transform var(--transition-default); height: 100%; }
 .project-card-link:hover { transform: translateY(-5px); }
 .project-card-link.disabled { pointer-events: none; opacity: 0.7; }
+.project-card-link.card-interactive { cursor: pointer; }
 .project-card {
     background: var(--bg-inner-gradient);
     border-radius: var(--border-radius-inner);
@@ -79,7 +80,6 @@
 .project-card p { flex-grow: 1; margin-bottom: 16px; }
 .project-card .button { margin-top: auto; align-self: flex-start; }
 
-/* Профили */
 .profile-card-link { flex: 1 1 150px; color: inherit; transition: transform var(--transition-default); }
 .profile-card-link:hover { transform: translateY(-3px); }
 .profile-card {
@@ -149,7 +149,6 @@
 .download-card { text-align: center; background: linear-gradient(145deg, var(--bg-card-solid), #2a2a35); }
 .download-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin: 24px 0; }
 
-/* Небольшие проекты */
 .small-projects-container { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 20px; margin-top: 20px; align-items: stretch; }
 .trailer-small,
 .small-projects-container .project-card-link { height: 100%; display: flex; }
@@ -189,7 +188,6 @@
     .tilt-card { transform: none !important; }
     .tilt-card:hover { transform: translateY(-5px) !important; }
 }
-/* Кнопка избранного на карточках новостей */
 .news-bookmark-btn {
     position: absolute;
     top: 12px;

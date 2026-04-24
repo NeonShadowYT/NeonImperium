@@ -20,6 +20,9 @@
   .card { margin-bottom:16px; }
   .game-header { background-size:cover!important; }
   .features-grid { grid-template-columns:1fr; }
+  .bookmarks-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important; }
+  .storage-header { flex-direction:column; align-items:stretch; }
+  .storage-controls { flex-direction:column; gap:10px; }
 }
 @media (max-width:600px){
   body { padding:10px; }
@@ -30,6 +33,11 @@
   .progress-row { flex-direction:column; align-items:stretch; gap:8px; }
   .progress-label, .progress-percent { text-align:center; }
   .progress-bar { min-width:auto; }
+  .bookmarks-grid { grid-template-columns: 1fr !important; }
+  .modal-content-full { max-height: 95vh; border-radius: 16px; }
+  .modal-header { padding: 15px 20px; }
+  .modal-header h2 { font-size: 20px; }
+  .modal-body { padding: 20px; }
 }
 @media (max-width:500px){
   .nav-links { flex-wrap:nowrap; }
@@ -48,10 +56,8 @@
   .project-card h3 { font-size:18px; }
 }
 
-/* Сохраняем анимации только для устройств без предпочтения уменьшенного движения */
 @media (prefers-reduced-motion:reduce){
   *, *::before, *::after { animation-duration:0.01ms!important; transition-duration:0.01ms!important; }
 }
-/* Фокус для доступности */
 :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
 .reaction-button:focus-visible, .feedback-tab:focus-visible, .nav-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }

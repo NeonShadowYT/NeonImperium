@@ -16,7 +16,6 @@
     let activeDownloads = new Map();
     let downloadIndicator = null;
 
-    /* ---------- вспомогательные утилиты ---------- */
     const Base64 = {
         encode: str => btoa(String.fromCharCode(...new TextEncoder().encode(str))),
         decode: b64 => new TextDecoder().decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)))
@@ -91,7 +90,6 @@
         clear() { sessionStorage.removeItem(SESSION_CACHE_KEY); cachedBookmarks = null; }
     };
 
-    /* ---------- управление закладками (чтение/запись) ---------- */
     async function loadBookmarks(password = null) {
         if (!currentToken) {
             try { return { bookmarks: JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]') }; } catch { return { bookmarks: [] }; }
@@ -175,7 +173,6 @@
         localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
 
-    /* ---------- определение URL / embed ---------- */
     const UrlUtils = {
         isEmbed: url => url && /\/embed\/|\/player\/|\?embed|\/v\//i.test(url),
         isSitePost: url => {
@@ -210,22 +207,122 @@
         }
     };
 
-    const OEMBED_PROVIDERS = [/* остаются без изменений ... */];
-    async function fetchOEmbedData(url) { /* ... */ }
-    async function fetchDirectVideoUrl(url) { /* ... */ }
+    const OEMBED_PROVIDERS = [
+        url => `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
+        url => `https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`,
+        url => `https://api.microlink.io/?url=${encodeURIComponent(url)}`,
+        url => `https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`
+    ];
 
-    /* ---------- DOM‑карточка ---------- */
+    async function fetchOEmbedData(url) {
+        const controllers = OEMBED_PROVIDERS.map(() => new AbortController());
+        const timeout = setTimeout(() => controllers.forEach(c => c.abort()), 5000);
+        const promises = OEMBED_PROVIDERS.map(async (provider, i) => {
+            try {
+                const r = await fetch(provider(url), { signal: controllers[i].signal });
+                if (!r.ok) return null;
+                const data = await r.json();
+                if (data) {
+                    if (data.contents) {
+                        const html = data.contents;
+                        const title = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                        const image = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                        const video = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                        return { title, thumbnail_url: image, url: video };
+                    }
+                    return {
+                        title: data.title,
+                        thumbnail_url: data.thumbnail_url || data.image,
+                        url: data.url,
+                        html: data.html
+                    };
+                }
+            } catch {}
+            return null;
+        });
+        try { const res = await Promise.any(promises); clearTimeout(timeout); return res; }
+        catch { clearTimeout(timeout); return null; }
+    }
+
+    async function fetchDirectVideoUrl(url) {
+        const promises = [
+            fetchFromCobalt(url),
+            fetchFromCobaltTools(url),
+            fetchFrom9xbuddy(url),
+            fetchFromUniversalDownloader(url)
+        ].map(p => p.catch(() => null));
+
+        try { return await Promise.any(promises); } catch { return null; }
+    }
+
+    async function fetchFromCobalt(url) {
+        try {
+            const r = await fetch('https://api.cobalt.tools/api/json', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            if (!r.ok) return null;
+            const d = await r.json();
+            return d.url || null;
+        } catch { return null; }
+    }
+
+    async function fetchFromCobaltTools(url) {
+        try {
+            const r = await fetch('https://co.wuk.sh/api/json', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, aFormat: 'best', vCodec: 'h264' })
+            });
+            if (!r.ok) return null;
+            const d = await r.json();
+            return d.status === 'success' ? d.url : null;
+        } catch { return null; }
+    }
+
+    async function fetchFrom9xbuddy(url) {
+        try {
+            const formData = new FormData();
+            formData.append('url', url);
+            const r = await fetch('https://9xbuddy.com/process', { method: 'POST', body: formData });
+            if (!r.ok) return null;
+            const html = await r.text();
+            const match = html.match(/href="(https?:\/\/[^"]+\.(?:mp4|webm|mkv)[^"]*)"/i);
+            return match ? match[1] : null;
+        } catch { return null; }
+    }
+
+    async function fetchFromUniversalDownloader(url) {
+        try {
+            let endpoint = 'https://universaldownloaderapi.vercel.app/api/youtube/download';
+            if (url.includes('instagram.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/meta/download';
+            if (url.includes('tiktok.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/tiktok/download';
+            if (url.includes('twitter.com') || url.includes('x.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/twitter/download';
+            if (url.includes('facebook.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/meta/download';
+
+            const r = await fetch(`${endpoint}?url=${encodeURIComponent(url)}`);
+            if (!r.ok) return null;
+            const d = await r.json();
+            if (d.data?.medias?.[0]?.url) return d.data.medias[0].url;
+            if (d.data?.videoUrl) return d.data.videoUrl;
+            if (d.url) return d.url;
+            if (d.data?.url) return d.data.url;
+            return null;
+        } catch { return null; }
+    }
+
     function createBookmarkCard(bookmark, onDelete, onEditSave) {
         const card = createElement('div', 'bookmark-card tilt-card', {
             background: 'var(--bg-inner-gradient)', borderRadius: '20px', border: '1px solid var(--border)',
-            cursor: 'pointer', transition: 'transform 0.3s', overflow: 'hidden',
+            cursor: 'default', transition: 'transform 0.3s', overflow: 'hidden',
             display: 'flex', flexDirection: 'column', height: '100%'
         });
         card.dataset.bookmarkId = bookmark.id;
 
-        const mediaContainer = createElement('div', '', {
+        const mediaContainer = createElement('div', 'bookmark-media', {
             position: 'relative', paddingBottom: '56.25%', background: 'var(--bg-primary)',
-            borderBottom: '1px solid var(--border)'
+            borderBottom: '1px solid var(--border)', pointerEvents: 'none', userSelect: 'none'
         });
         const embedSrc = bookmark.embedUrl || (UrlUtils.isEmbed(bookmark.url) ? bookmark.url : null);
         if (embedSrc) {
@@ -236,26 +333,22 @@
             iframe.setAttribute('allowfullscreen', 'true');
             iframe.loading = 'lazy';
             iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
-            const link = createElement('a', '', {
-                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 2
-            }, { href: bookmark.url, target: '_blank' });
-            mediaContainer.append(iframe, link);
+            mediaContainer.appendChild(iframe);
         } else {
-            const link = createElement('a', '', {
-                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: 'pointer'
-            }, { href: bookmark.url, target: '_blank' });
             const img = createElement('img', '', {
                 position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover'
             });
             img.src = bookmark.thumbnail || 'images/default-news.webp';
             img.alt = bookmark.title;
             img.onerror = () => img.src = 'images/default-news.webp';
-            mediaContainer.append(img, link);
+            mediaContainer.appendChild(img);
         }
 
         const content = createElement('div', '', { padding: '12px', flex: 1, display: 'flex', flexDirection: 'column' });
-        const titleEl = createElement('h4', '', { margin: '0 0 6px', fontSize: '16px', color: 'var(--text-primary)' });
+        const titleEl = createElement('h4', '', { margin: '0 0 6px', fontSize: '16px', color: 'var(--text-primary)', cursor: 'pointer' });
         titleEl.textContent = bookmark.title.length > 60 ? bookmark.title.slice(0,60)+'…' : bookmark.title;
+        titleEl.addEventListener('click', (e) => { e.stopPropagation(); window.open(bookmark.url, '_blank'); });
+
         const meta = createElement('div', '', { display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '11px', color: 'var(--text-secondary)' });
         meta.innerHTML = `<span><i class="fas fa-calendar-alt"></i> ${formatDate(bookmark.added)}</span>`;
 
@@ -284,21 +377,16 @@
 
         content.append(titleEl, meta, actions);
         card.append(mediaContainer, content);
-        card.addEventListener('mousemove', e => {
-            const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left, y = e.clientY - rect.top;
-            const rotX = (y - rect.height/2) / 15, rotY = (rect.width/2 - x) / 15;
-            card.style.transform = `perspective(1000px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.02)`;
+
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.bookmark-media') || e.target.closest('button')) return;
+            window.open(bookmark.url, '_blank');
         });
-        card.addEventListener('mouseleave', () => card.style.transform = '');
-        card.addEventListener('click', e => {
-            if (!e.target.closest('button')) window.open(bookmark.url, '_blank');
-        });
+
         return card;
     }
 
-    /* ---------- рендеринг с кешем DOM ---------- */
-    let cardMap = new Map();   // bookmark.id -> DOM-элемент
+    let cardMap = new Map();
     let gridContainer = null;
 
     function applyFilterAndSort() {
@@ -311,7 +399,6 @@
             if (category === 'link') return !bm.embedUrl && !(bm.postType && ['feedback','news','update','site-post'].includes(bm.postType));
             return true;
         });
-        // сортировка
         const sorted = filtered.sort((a, b) => {
             const bmA = currentBookmarks.find(bm => bm.id === a);
             const bmB = currentBookmarks.find(bm => bm.id === b);
@@ -319,30 +406,24 @@
             if (sortOrder === 'new') return new Date(bmB.added) - new Date(bmA.added);
             return new Date(bmA.added) - new Date(bmB.added);
         });
-
-        // переставляем элементы в DOM
         for (let i = 0; i < sorted.length; i++) {
             const card = cardMap.get(sorted[i]);
             if (card) gridContainer.appendChild(card);
         }
-        // управляем видимостью
         cardMap.forEach((card, id) => {
             card.style.display = filtered.includes(id) ? '' : 'none';
         });
-        // если нет видимых — показываем заглушку
+        const empty = gridContainer.querySelector('.empty-placeholder');
         if (filtered.length === 0) {
-            const empty = gridContainer.querySelector('.empty-placeholder') || createElement('div', 'empty-state', {}, { class: 'empty-placeholder' });
-            empty.innerHTML = '<i class="fas fa-bookmark" style="font-size:48px;color:var(--accent);opacity:0.6;"></i><p>Нет закладок</p>';
-            empty.style.display = '';
-            if (!gridContainer.contains(empty)) gridContainer.appendChild(empty);
-        } else {
-            const empty = gridContainer.querySelector('.empty-placeholder');
-            if (empty) empty.style.display = 'none';
-        }
+            if (!empty) {
+                const e = createElement('div', 'empty-state', {}, { class: 'empty-placeholder' });
+                e.innerHTML = '<i class="fas fa-bookmark" style="font-size:48px;color:var(--accent);opacity:0.6;"></i><p>Нет закладок</p>';
+                gridContainer.appendChild(e);
+            } else empty.style.display = '';
+        } else if (empty) empty.style.display = 'none';
     }
 
     function syncCardsFromBookmarks() {
-        // удаляем из DOM карточки, которых больше нет в currentBookmarks
         const currentIds = new Set(currentBookmarks.map(b => b.id));
         for (const [id, card] of cardMap) {
             if (!currentIds.has(id)) {
@@ -350,7 +431,6 @@
                 cardMap.delete(id);
             }
         }
-        // добавляем новые
         currentBookmarks.forEach(bm => {
             if (!cardMap.has(bm.id)) {
                 const card = createBookmarkCard(bm,
@@ -374,7 +454,6 @@
         applyFilterAndSort();
     }
 
-    /* ---------- добавление закладки ---------- */
     async function addBookmark(bookmark) {
         if (!currentUser) {
             UIUtils.showToast('Войдите в аккаунт', 'error');
@@ -468,7 +547,6 @@
         else await saveBookmarks(bookmarks);
     }
 
-    /* ---------- открытие модального окна хранилища ---------- */
     async function openStorageModal() {
         if (!window.GithubAuth) return setTimeout(openStorageModal, 100);
         updateAuthState();
@@ -555,7 +633,6 @@
         `;
         modal.appendChild(style);
         gridContainer = modal.querySelector('#bookmarks-grid');
-        // очищаем старый кеш карточек при открытии новой модалки
         cardMap = new Map();
         syncCardsFromBookmarks();
 
