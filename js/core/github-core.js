@@ -1,12 +1,31 @@
-// js/core/github-core.js — расширенное ядро с утилитами, конфигурацией и динамической загрузкой модулей
+// js/core/github-core.js — расширенное ядро с утилитами, конфигурацией и умным кешированием
 const GithubCore = (function() {
     const CONFIG = {
         REPO_OWNER: 'NeonShadowYT',
         REPO_NAME: 'NeonImperium',
-        CACHE_TTL: 10 * 60 * 1000,
+        CACHE_TTL: 10 * 60 * 1000,        // общий TTL для старых методов (минуты)
+        DEFAULT_FETCH_TTL: 60000,         // TTL для fetch‑кеша (1 минута)
         ALLOWED_AUTHORS: ['NeonShadowYT', 'GoldenCreeper567']
     };
 
+    // ---------- кеширование метаданных запросов ----------
+    const META_PREFIX = 'gh_meta_';
+    const DATA_PREFIX = 'gh_data_';
+
+    function getCacheMeta(key) {
+        try { return JSON.parse(sessionStorage.getItem(META_PREFIX + key)); } catch { return null; }
+    }
+    function setCacheMeta(key, meta) {
+        try { sessionStorage.setItem(META_PREFIX + key, JSON.stringify(meta)); } catch {}
+    }
+    function getCachedData(key) {
+        try { return JSON.parse(sessionStorage.getItem(DATA_PREFIX + key)); } catch { return null; }
+    }
+    function setCachedData(key, data) {
+        try { sessionStorage.setItem(DATA_PREFIX + key, JSON.stringify(data)); } catch {}
+    }
+
+    // ---------- старый слой кеша (совместимость) ----------
     function cacheGet(key) {
         const cached = sessionStorage.getItem(key);
         const time = sessionStorage.getItem(`${key}_time`);
@@ -21,7 +40,7 @@ const GithubCore = (function() {
                 sessionStorage.setItem(`${key}_time`, localTime);
                 return JSON.parse(localCached);
             }
-        } catch (e) { /* quota or disabled */ }
+        } catch (e) {}
         return null;
     }
 
@@ -31,7 +50,7 @@ const GithubCore = (function() {
         try {
             localStorage.setItem(key, JSON.stringify(data));
             localStorage.setItem(`${key}_time`, Date.now().toString());
-        } catch (e) { /* ignore quota */ }
+        } catch (e) {}
     }
 
     function cacheRemove(key) {
@@ -61,6 +80,70 @@ const GithubCore = (function() {
         } catch (e) {}
     }
 
+    // ---------- умный кеширующий fetch ----------
+    class CachedResponse {
+        constructor(data, status = 200, headers = {}) {
+            this._data = data;
+            this.ok = true;
+            this.status = status;
+            this._headers = new Map(Object.entries(headers));
+        }
+        json() { return Promise.resolve(this._data); }
+        text() { return Promise.resolve(JSON.stringify(this._data)); }
+        clone() { return new CachedResponse(this._data, this.status, Object.fromEntries(this._headers)); }
+        get headers() { return { get: (name) => this._headers.get(name) }; } // эмуляция
+    }
+
+    async function fetchCached(url, options = {}, cacheOpts = {}) {
+        const cacheKey = cacheOpts.cacheKey || url;
+        const ttl = cacheOpts.ttl ?? CONFIG.DEFAULT_FETCH_TTL;
+
+        // проверяем свежий кеш
+        const meta = getCacheMeta(cacheKey);
+        const cachedData = getCachedData(cacheKey);
+        if (meta && cachedData && Date.now() - meta.timestamp < ttl) {
+            return new CachedResponse(cachedData, 200, meta.headers);
+        }
+
+        // готовим условные заголовки
+        const fetchOptions = { ...options };
+        fetchOptions.headers = new Headers(fetchOptions.headers || {});
+        if (meta) {
+            if (meta.etag) fetchOptions.headers.set('If-None-Match', meta.etag);
+            if (meta.lastModified) fetchOptions.headers.set('If-Modified-Since', meta.lastModified);
+        }
+
+        const response = await fetch(url, fetchOptions);
+
+        if (response.status === 304 && cachedData) {
+            // используем кеш, обновляем timestamp
+            setCacheMeta(cacheKey, { ...meta, timestamp: Date.now() });
+            return new CachedResponse(cachedData, 304, meta.headers);
+        }
+
+        if (!response.ok) {
+            let errorMsg = `HTTP ${response.status}`;
+            try {
+                const errData = await response.json();
+                errorMsg = errData.message || errorMsg;
+            } catch {}
+            throw new Error(errorMsg);
+        }
+
+        const data = await response.json();
+        const resHeaders = {
+            etag: response.headers.get('ETag'),
+            lastModified: response.headers.get('Last-Modified')
+        };
+        // кешируем только успешные GET
+        if (!fetchOptions.method || fetchOptions.method.toUpperCase() === 'GET') {
+            setCachedData(cacheKey, data);
+            setCacheMeta(cacheKey, { ...resHeaders, timestamp: Date.now(), headers: resHeaders });
+        }
+        return new CachedResponse(data, response.status, resHeaders);
+    }
+
+    // ---------- остальные утилиты ----------
     function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -181,6 +264,7 @@ const GithubCore = (function() {
     return {
         CONFIG,
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
+        fetchCached,
         escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable,
         stripHtml, extractMeta, extractAllowed, extractSummary,
         encryptPrivateBody, decryptPrivateBody,

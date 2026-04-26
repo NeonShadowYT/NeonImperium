@@ -1,40 +1,48 @@
-// js/core/github-api.js — работа с GitHub REST API
+// js/core/github-api.js — работа с GitHub REST API (с кешированием)
 (function() {
-    const { CONFIG } = GithubCore;
+    const { CONFIG, fetchCached } = GithubCore;
 
     function getToken() {
         return localStorage.getItem('github_token');
     }
 
-    async function githubFetch(url, options = {}) {
+    // обёртка для запросов, не кешируем мутирующие методы
+    async function githubFetch(url, options = {}, cacheOpts = {}) {
         const token = getToken();
         const headers = {
             'Accept': 'application/vnd.github.v3+json',
             ...options.headers
         };
         if (token) headers['Authorization'] = `Bearer ${token}`;
+        const fetchOptions = { ...options, headers };
 
-        const response = await fetch(url, { ...options, headers });
-        if (!response.ok) {
-            let errorMsg = `HTTP ${response.status}`;
-            try {
-                const errorData = await response.json();
-                errorMsg = errorData.message || errorMsg;
-            } catch {}
-            throw new Error(errorMsg);
+        // для мутирующих методов (POST/PATCH/DELETE) кеш не используем
+        if (fetchOptions.method && fetchOptions.method.toUpperCase() !== 'GET') {
+            const response = await fetch(url, fetchOptions);
+            if (!response.ok) {
+                let errorMsg = `HTTP ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.message || errorMsg;
+                } catch {}
+                throw new Error(errorMsg);
+            }
+            return response;
         }
-        return response;
+
+        // GET‑запросы обслуживаются через fetchCached (TTL по умолчанию 60с)
+        return fetchCached(url, fetchOptions, { cacheKey: url, ttl: cacheOpts.ttl });
     }
 
     async function loadIssues({ labels = '', state = 'open', per_page = 20, page = 1, signal } = {}) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=${state}&per_page=${per_page}&page=${page}&labels=${encodeURIComponent(labels)}`;
-        const response = await githubFetch(url, { signal });
+        const response = await githubFetch(url, { signal }, { ttl: 30000 }); // 30 сек
         return response.json();
     }
 
     async function loadIssue(issueNumber, signal) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`;
-        const response = await githubFetch(url, { signal });
+        const response = await githubFetch(url, { signal }, { ttl: 30000 });
         return response.json();
     }
 
@@ -66,7 +74,7 @@
 
     async function loadComments(issueNumber, signal) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`;
-        const response = await githubFetch(url, { signal });
+        const response = await githubFetch(url, { signal }, { ttl: 30000 });
         return response.json();
     }
 
@@ -97,7 +105,7 @@
 
     async function loadReactions(issueNumber, signal) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
-        const response = await githubFetch(url, { signal });
+        const response = await githubFetch(url, { signal }, { ttl: 15000 }); // реакции меняются чаще
         return response.json();
     }
 

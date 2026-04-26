@@ -1,4 +1,4 @@
-/* style.css — оптимизированный основной файл */
+/* style.css — основной файл стилей, с исправленными пустыми правилами и свечением */
 @import url('css/variables.css');
 @import url('css/base.css');
 @import url('css/typography.css');
@@ -8,6 +8,32 @@
 @import url('css/layout.css');
 @import url('css/responsive.css');
 @import url('css/feedback.css');
+
+/* === ОБЩИЕ КЛАССЫ СВЕЧЕНИЯ === */
+.glow {
+    box-shadow: var(--glow);
+}
+.glow-hover {
+    transition: box-shadow 0.3s ease;
+}
+.glow-hover:hover {
+    box-shadow: var(--glow-hover);
+}
+
+/* Применяем свечение к основным элементам при наведении */
+.card:hover {
+    box-shadow: var(--shadow-hover), var(--glow-hover);
+}
+.button:hover,
+.download-button:hover,
+.project-card-link:hover .project-card,
+.profile-card-link:hover .profile-card,
+.feedback-item:hover,
+.reaction-button:hover,
+.poll:hover,
+.donate-button-fixed:hover {
+    box-shadow: var(--glow-hover);
+}
 
 /* === ДОПОЛНИТЕЛЬНЫЕ СТИЛИ И ИСПРАВЛЕНИЯ === */
 
@@ -268,7 +294,7 @@
     align-items: center;
     gap: 8px;
     z-index: 1000;
-    transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s, background-color 0.2s, box-shadow 0.3s;
     border: 1px solid rgba(255, 255, 255, 0.2);
     font-family: 'Russo One', sans-serif;
 }
@@ -278,7 +304,7 @@
 .donate-button-fixed:hover {
     background: var(--accent-light);
     transform: scale(1.03);
-    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.6);
+    box-shadow: var(--glow-hover), 0 10px 22px rgba(0, 0, 0, 0.6);
 }
 .donate-button-fixed:active {
     transform: scale(0.98);

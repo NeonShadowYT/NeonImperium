@@ -11,6 +11,13 @@
     --border: #3a3a55;
     --shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
     --shadow-hover: 0 18px 35px rgba(0,0,0,0.9);
+    
+    /* неоновое свечение */
+    --glow-color: var(--accent);
+    --glow-spread: 10px;
+    --glow: 0 0 var(--glow-spread) var(--glow-color), 0 0 calc(var(--glow-spread) * 2) var(--glow-color);
+    --glow-hover: 0 0 20px var(--glow-color), 0 0 40px var(--glow-color), 0 0 60px var(--glow-color);
+    
     --radius-sm: 12px;
     --radius-md: 20px;
     --radius-lg: 24px;

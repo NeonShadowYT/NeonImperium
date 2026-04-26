@@ -67,14 +67,12 @@
     updateText();
   }
 
-  // Подавляем ошибки CORS в консоли для фоновых запросов хранилища
   window.addEventListener('unhandledrejection', function(event) {
-    if (event.reason && event.reason.message && event.reason.message.includes('Failed to fetch')) {
+    if (event.reason?.message?.includes('Failed to fetch')) {
       event.preventDefault();
     }
   }, { capture: true });
 
-  // Предзагрузка критических скриптов
   const preloadScripts = [
     'js/core/github-core.js',
     'js/features/ui-utils.js',
@@ -86,7 +84,6 @@
     document.addEventListener('DOMContentLoaded', () => {
       initLazyYT();
       initDonateBtn();
-      // Ленивая предзагрузка неблокирующих скриптов
       preloadScripts.forEach(src => {
         const link = document.createElement('link');
         link.rel = 'preload';
