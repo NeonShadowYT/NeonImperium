@@ -1,8 +1,8 @@
-// js/pages/feedback.js — обратная связь на страницах игр (оптимизировано)
+// feedback.js — обратная связь на страницах игр
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody, invalidateFetchCache, CONFIG } = GithubCore;
-    const { loadIssues, loadReactions, addReaction, removeReaction, loadIssue } = GithubAPI;
-    const { renderReactions, openFullModal, openEditorModal, canViewPost, getDisplayBody, REACTION_TYPES } = UIFeedback;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
+    const { loadIssues, loadReactions, addReaction, removeReaction } = GithubAPI;
+    const { renderReactions, openFullModal, openEditorModal, canViewPost } = UIFeedback;
     const { getCurrentUser, isAdmin } = GithubAuth;
 
     const ITEMS_PER_PAGE = 10, MAX_DISPLAY = 30, CACHE_TTL = 5*60*1000;
@@ -24,7 +24,6 @@
             const issue = e.detail;
             if (!issue.labels.some(l => l.name === `game:${currentGame}`)) return;
             cacheRemoveByPrefix(`issues_${currentGame}_page_`);
-            invalidateFetchCache(`/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues`);
             allIssues = [issue, ...allIssues];
             filterAndDisplay(true);
         });
@@ -38,7 +37,7 @@
 
     async function openPostFromUrl(id) {
         try {
-            const issue = await loadIssue(id);
+            const issue = await GithubAPI.loadIssue(id);
             const gameLabel = issue.labels.find(l => l.name.startsWith('game:'));
             if (!gameLabel || gameLabel.name.split(':')[1] !== currentGame) return;
             const item = { id: issue.number, title: issue.title, body: issue.body, author: issue.user.login, date: new Date(issue.created_at), game: currentGame, labels: issue.labels.map(l=>l.name) };
@@ -104,7 +103,10 @@
     function filterAndDisplay(reset) {
         let filtered = allIssues.filter(i => i.state === 'open').filter(i => {
             const labels = i.labels.map(l=>l.name);
-            return canViewPost(i.body, labels, currentUser);
+            if (!labels.includes('private')) return true;
+            if (isAdmin()) return true;
+            const allowed = extractAllowed(i.body);
+            return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
         });
         if (currentTab !== 'all') filtered = filtered.filter(i => i.labels.some(l => l.name === `type:${currentTab}`));
         if (reset) grid.innerHTML = '';
@@ -116,8 +118,11 @@
     function createCard(issue) {
         const type = issue.labels.find(l=>l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
         const icon = type === 'idea' ? '💡' : type === 'bug' ? '🐛' : '⭐';
-        const body = getDisplayBody(issue.body, issue.labels.map(l=>l.name), currentUser);
-        let summary = extractSummary(body) || (body||'').substring(0,120)+'…';
+        let summary = extractSummary(issue.body) || (issue.body||'').substring(0,120)+'…';
+        const allowed = extractAllowed(issue.body);
+        if (issue.labels.some(l=>l.name==='private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
+            try { summary = extractSummary(decryptPrivateBody(issue.body, allowed)) || ''; } catch {}
+        }
         const card = GithubCore.createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
         card.dataset.issueNumber = issue.number;
         const inner = GithubCore.createElement('div', 'project-card');

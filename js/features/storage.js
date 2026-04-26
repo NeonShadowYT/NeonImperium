@@ -1,6 +1,6 @@
-// js/features/storage.js — хранилище закладок с мастер-паролем, умным кешем DOM и очередью сохранения
+// js/features/storage.js — хранилище закладок с мастер-паролем, умным кешем DOM и исправлениями
 (function() {
-    const { CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce, loadModule, fetchCached } = GithubCore;
+    const { CONFIG, cacheGet, cacheSet, createElement, formatDate, debounce, loadModule } = GithubCore;
 
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
@@ -15,31 +15,6 @@
     let sortOrder = 'new', category = 'all';
     let modalAddFormVisible = false;
 
-    // Очередь сохранения
-    let saveTimer = null;
-    let pendingSave = null;
-
-    async function flushSave() {
-        if (pendingSave) {
-            const { bookmarks, password } = pendingSave;
-            pendingSave = null;
-            await saveBookmarksImmediate(bookmarks, password);
-        }
-    }
-
-    function enqueueSave(bookmarks, password) {
-        pendingSave = { bookmarks, password };
-        if (saveTimer) clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => flushSave(), 300);
-    }
-
-    window.addEventListener('beforeunload', () => {
-        if (pendingSave) {
-            try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(pendingSave.bookmarks)); } catch {}
-        }
-    });
-
-    // Base64 и Crypto
     const Base64 = {
         encode: arrayBuffer => {
             const bytes = new Uint8Array(arrayBuffer);
@@ -82,14 +57,10 @@
             } catch { return null; }
         }
     };
-
-    // Gist API
     const GistAPI = {
         async fetch(id, token) {
-            const r = await fetchCached(`https://api.github.com/gists/${id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            }, { cacheKey: `gist_${id}`, ttl: 30000 });
-            return r.status === 200 ? r.json() : (r.status === 404 ? null : Promise.reject(new Error(`Gist fetch: ${r.status}`)));
+            const r = await fetch(`https://api.github.com/gists/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+            return r.ok ? r.json() : (r.status === 404 ? null : Promise.reject(new Error(`Gist fetch: ${r.status}`)));
         },
         async update(id, content, token) {
             const r = await fetch(`https://api.github.com/gists/${id}`, {
@@ -98,7 +69,6 @@
                 body: JSON.stringify({ files: { [GIST_FILENAME]: { content } } })
             });
             if (!r.ok) throw new Error(`Gist update: ${r.status}`);
-            try { sessionStorage.removeItem('gh_data_gist_' + id); sessionStorage.removeItem('gh_meta_gist_' + id); } catch {}
             return r.json();
         },
         async create(content, token) {
@@ -111,10 +81,7 @@
             const gist = await r.json();
             return gist.id;
         },
-        async delete(id, token) {
-            try { await fetch(`https://api.github.com/gists/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); } catch {}
-            try { sessionStorage.removeItem('gh_data_gist_' + id); sessionStorage.removeItem('gh_meta_gist_' + id); } catch {}
-        }
+        async delete(id, token) { try { await fetch(`https://api.github.com/gists/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); } catch {} }
     };
 
     const SessionCache = {
@@ -169,7 +136,7 @@
         }
     }
 
-    async function saveBookmarksImmediate(bookmarks, password = null) {
+    async function saveBookmarks(bookmarks, password = null) {
         if (!currentToken) {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(bookmarks));
             return;
@@ -199,16 +166,11 @@
         }
     }
 
-    function saveBookmarks(bookmarks, password) {
-        enqueueSave(bookmarks, password);
-    }
-
     async function changeMasterPassword(oldPwd, newPwd) {
         const res = await loadBookmarks(oldPwd);
         if (res.passwordRequired) throw new Error('Old password required');
         const bookmarks = res.bookmarks || [];
-        await flushSave();
-        await saveBookmarksImmediate(bookmarks, newPwd);
+        await saveBookmarks(bookmarks, newPwd);
         masterPassword = newPwd;
         return true;
     }
@@ -221,7 +183,6 @@
         localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
 
-    // URL утилиты
     const UrlUtils = {
         isEmbed: url => url && /\/embed\/|\/player\/|\?embed|\/v\//i.test(url),
         isSitePost: url => {
@@ -243,7 +204,10 @@
                     if (v) return `https://www.youtube.com/embed/${v}`;
                 }
                 if (path.includes('/embed/')) return url;
-                if (path.includes('/v/')) return url;
+                if (path.includes('/v/')) {
+                    const id = path.split('/v/')[1]?.split('?')[0];
+                    if (id) return `${origin}/embed/${id}`;
+                }
                 const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
                 if (viewMatch) return `${origin}/embed/${viewMatch[2]}`;
                 const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
@@ -265,16 +229,17 @@
         const timeout = setTimeout(() => controllers.forEach(c => c.abort()), 5000);
         const promises = OEMBED_PROVIDERS.map(async (provider, i) => {
             try {
-                const r = await fetchCached(provider(url), { signal: controllers[i].signal }, { cacheKey: `oembed_${url}`, ttl: 600000 });
+                const r = await fetch(provider(url), { signal: controllers[i].signal });
                 if (!r.ok) return null;
                 const data = await r.json();
-                if (data && data.contents) {
-                    const html = data.contents;
-                    const title = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
-                    const image = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
-                    const video = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
-                    return { title, thumbnail_url: image, url: video };
-                } else if (data) {
+                if (data) {
+                    if (data.contents) {
+                        const html = data.contents;
+                        const title = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                        const image = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                        const video = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                        return { title, thumbnail_url: image, url: video };
+                    }
                     return {
                         title: data.title,
                         thumbnail_url: data.thumbnail_url || data.image,
@@ -285,12 +250,77 @@
             } catch {}
             return null;
         });
-        try { const res = await Promise.any(promises); clearTimeout(timeout); return res; } catch { clearTimeout(timeout); return null; }
+        try { const res = await Promise.any(promises); clearTimeout(timeout); return res; }
+        catch { clearTimeout(timeout); return null; }
     }
 
-    async function fetchDirectVideoUrl(url) { return null; }
+    async function fetchDirectVideoUrl(url) {
+        const promises = [
+            fetchFromCobalt(url).catch(() => null),
+            fetchFromCobaltTools(url).catch(() => null),
+            fetchFrom9xbuddy(url).catch(() => null),
+            fetchFromUniversalDownloader(url).catch(() => null)
+        ];
+        try { return await Promise.any(promises); } catch { return null; }
+    }
 
-    // Управление карточками
+    async function fetchFromCobalt(url) {
+        try {
+            const r = await fetch('https://api.cobalt.tools/api/json', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            if (!r.ok) return null;
+            const d = await r.json();
+            return d.url || null;
+        } catch { return null; }
+    }
+
+    async function fetchFromCobaltTools(url) {
+        try {
+            const r = await fetch('https://co.wuk.sh/api/json', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, aFormat: 'best', vCodec: 'h264' })
+            });
+            if (!r.ok) return null;
+            const d = await r.json();
+            return d.status === 'stream' ? d.url : null;
+        } catch { return null; }
+    }
+
+    async function fetchFrom9xbuddy(url) {
+        try {
+            const formData = new FormData();
+            formData.append('url', url);
+            const r = await fetch('https://9xbuddy.com/process', { method: 'POST', body: formData });
+            if (!r.ok) return null;
+            const html = await r.text();
+            const match = html.match(/(?:href|data-url)="(https?:\/\/[^"]+\.(?:mp4|webm|mkv)[^"]*)"/i);
+            return match ? match[1] : null;
+        } catch { return null; }
+    }
+
+    async function fetchFromUniversalDownloader(url) {
+        try {
+            let endpoint = 'https://universaldownloaderapi.vercel.app/api/youtube/download';
+            if (url.includes('instagram.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/meta/download';
+            if (url.includes('tiktok.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/tiktok/download';
+            if (url.includes('twitter.com') || url.includes('x.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/twitter/download';
+            if (url.includes('facebook.com')) endpoint = 'https://universaldownloaderapi.vercel.app/api/meta/download';
+
+            const r = await fetch(`${endpoint}?url=${encodeURIComponent(url)}`);
+            if (!r.ok) return null;
+            const d = await r.json();
+            if (d.data?.medias?.[0]?.url) return d.data.medias[0].url;
+            if (d.data?.videoUrl) return d.data.videoUrl;
+            if (d.url) return d.url;
+            if (d.data?.url) return d.data.url;
+            return null;
+        } catch { return null; }
+    }
+
     let cardMap = new Map();
     let gridContainer = null;
 
@@ -312,7 +342,9 @@
         if (visible && embedSrc) {
             if (!mediaContainer.dataset.iframeLoaded) {
                 mediaContainer.innerHTML = '';
-                const iframe = createElement('iframe', '', { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' });
+                const iframe = createElement('iframe', '', {
+                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none'
+                });
                 iframe.src = embedSrc;
                 iframe.setAttribute('allowfullscreen', 'true');
                 iframe.loading = 'lazy';
@@ -334,7 +366,10 @@
             if (isPost && bookmark.thumbnail) {
                 if (!mediaContainer.querySelector('img')) {
                     mediaContainer.innerHTML = '';
-                    const img = createElement('img', '', { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' });
+                    const img = createElement('img', '', {
+                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                        objectFit: 'cover'
+                    });
                     img.src = bookmark.thumbnail;
                     mediaContainer.appendChild(img);
                 }
@@ -367,11 +402,15 @@
         let cardWrapper;
 
         if (isLink) {
-            cardWrapper = createElement('a', 'bookmark-card-link', { display: 'block', textDecoration: 'none', color: 'inherit', height: '100%' });
+            cardWrapper = createElement('a', 'bookmark-card-link', {
+                display: 'block', textDecoration: 'none', color: 'inherit', height: '100%'
+            });
             cardWrapper.href = bookmark.url;
             cardWrapper.target = '_blank';
         } else {
-            cardWrapper = createElement('div', `bookmark-card-link ${isPost ? 'clickable-post' : ''}`, { display: 'block', height: '100%', cursor: isPost ? 'pointer' : 'default' });
+            cardWrapper = createElement('div', `bookmark-card-link ${isPost ? 'clickable-post' : ''}`, {
+                display: 'block', height: '100%', cursor: isPost ? 'pointer' : 'default'
+            });
         }
 
         const card = createElement('div', 'bookmark-card tilt-card', {
@@ -451,7 +490,9 @@
                 const embedSrc = bookmark.embedUrl;
                 if (embedSrc) {
                     mediaContainer.innerHTML = '';
-                    const iframe = createElement('iframe', '', { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' });
+                    const iframe = createElement('iframe', '', {
+                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none'
+                    });
                     iframe.src = embedSrc;
                     iframe.setAttribute('allowfullscreen', 'true');
                     iframe.loading = 'lazy';
@@ -520,12 +561,12 @@
                         cardMap.get(id)?.remove();
                         cardMap.delete(id);
                         applyFilterAndSort();
-                        saveBookmarks(currentBookmarks, masterPassword);
+                        saveBookmarks(currentBookmarks, masterPassword).catch(()=>{});
                     },
                     updated => {
                         const idx = currentBookmarks.findIndex(b => b.id === updated.id);
                         if (idx >= 0) currentBookmarks[idx] = updated;
-                        saveBookmarks(currentBookmarks, masterPassword);
+                        saveBookmarks(currentBookmarks, masterPassword).catch(()=>{});
                     }
                 );
                 cardMap.set(bm.id, card);
@@ -576,7 +617,10 @@
             else {
                 const guessed = UrlUtils.guessEmbed(bookmark.url);
                 if (guessed) { embedUrl = finalUrl = guessed; }
-                const [oembed, direct] = await Promise.all([fetchOEmbedData(bookmark.url), fetchDirectVideoUrl(bookmark.url)]);
+                const [oembed, direct] = await Promise.all([
+                    fetchOEmbedData(bookmark.url),
+                    fetchDirectVideoUrl(bookmark.url)
+                ]);
                 if (oembed) {
                     if (oembed.html) {
                         const iframeSrc = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i)?.[1];
@@ -617,8 +661,14 @@
         const updated = [...bookmarks, newBookmark];
         currentBookmarks = updated;
         syncCardsFromBookmarks();
-        saveBookmarks(updated, masterPassword);
-        return newBookmark;
+        try {
+            if (masterPassword) await saveBookmarks(updated, masterPassword);
+            else await saveBookmarks(updated);
+            return newBookmark;
+        } catch (e) {
+            UIUtils.showToast('Ошибка синхронизации', 'error');
+            throw e;
+        }
     }
 
     async function removeBookmark(bookmarkId) {
@@ -634,7 +684,8 @@
         const bookmarks = (res.bookmarks || []).filter(b => b.id !== bookmarkId);
         currentBookmarks = bookmarks;
         syncCardsFromBookmarks();
-        saveBookmarks(bookmarks, masterPassword);
+        if (masterPassword) await saveBookmarks(bookmarks, masterPassword);
+        else await saveBookmarks(bookmarks);
     }
 
     async function openStorageModal() {
@@ -643,8 +694,6 @@
         if (!currentUser) return UIUtils.showToast('Войдите в аккаунт GitHub', 'error');
         if (!currentToken) return UIUtils.showToast('Токен не найден', 'error');
         if (!GithubAuth.hasScope('gist')) return UIUtils.showToast('Нужен scope "gist"', 'error');
-
-        await flushSave();
 
         let needSetup = false, passwordRequired = false;
         const cached = SessionCache.load();
@@ -816,7 +865,6 @@
     updateAuthState();
 
     window.BookmarkStorage = {
-        openStorageModal, addBookmark, loadBookmarks, removeBookmark, changeMasterPassword, resetStorage,
-        flushSave
+        openStorageModal, addBookmark, loadBookmarks, removeBookmark, changeMasterPassword, resetStorage
     };
 })();
