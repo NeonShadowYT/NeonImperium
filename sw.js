@@ -1,5 +1,5 @@
-// sw.js — кеширование shell для оффлайн-доступа
-const CACHE_NAME = 'neon-imperium-v3';
+// sw.js – кеширование shell с автоматическим обновлением
+const CACHE_NAME = 'neon-imperium-v4';
 const STATIC_ASSETS = [
   '/NeonImperium/',
   '/NeonImperium/index.html',
@@ -38,8 +38,9 @@ const STATIC_ASSETS = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS).catch(err => console.warn('SW cache preload error:', err)))
   );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
@@ -48,12 +49,25 @@ self.addEventListener('activate', event => {
       keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
     ))
   );
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', event => {
-  // не кешируем запросы к GitHub API (они обрабатываются динамически)
-  if (event.request.url.includes('api.github.com')) return;
+  if (event.request.url.includes('api.github.com')) return; // не кешируем API
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.match(event.request).then(cached => {
+        const fetchPromise = fetch(event.request).then(networkResponse => {
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(() => {
+          // если сеть недоступна, отдаём кеш, если есть
+          return cached;
+        });
+        return cached || fetchPromise;
+      });
+    })
   );
 });

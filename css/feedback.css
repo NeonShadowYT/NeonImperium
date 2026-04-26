@@ -1,4 +1,4 @@
-/* feedback.css — обратная связь, реакции, опросы, уникальные стили */
+/* feedback.css — обратная связь, реакции, опросы (без лишних свечений) */
 .feedback-container{margin-top:24px}
 .feedback-container .text-secondary{margin-bottom:20px}
 .feedback-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}
@@ -48,11 +48,11 @@
 .reactions-container{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;padding:8px 0;min-height:36px}
 .reactions-container:empty{display:none}
 .reaction-button{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--bg-primary);border:1px solid var(--border);border-radius:30px;font-size:13px;color:var(--text-secondary);cursor:pointer;transition:all .2s}
-.reaction-button:hover{background:var(--accent);color:#fff;border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--glow-hover)}
+.reaction-button:hover{background:var(--accent);color:#fff;border-color:var(--accent);transform:translateY(-2px)}
 .reaction-button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .reaction-emoji{font-size:16px}.reaction-count{font-weight:700;min-width:18px;text-align:center}
 .reaction-add-btn{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;background:var(--bg-primary);border:1px solid var(--border);border-radius:50%;color:var(--text-secondary);font-size:16px;cursor:pointer;transition:all .2s;padding:0 8px}
-.reaction-add-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--glow-hover)}.reaction-add-btn span{line-height:1}
+.reaction-add-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);transform:translateY(-2px)}.reaction-add-btn span{line-height:1}
 .reaction-menu{position:absolute;background:var(--bg-card);border:1px solid var(--border);border-radius:30px;padding:5px;display:flex;gap:5px;box-shadow:var(--shadow);z-index:10010}
 .reaction-menu-btn{background:transparent;border:none;font-size:20px;cursor:pointer;padding:5px 10px;border-radius:20px;transition:background .2s}.reaction-menu-btn:hover{background:var(--bg-inner-gradient)}
 

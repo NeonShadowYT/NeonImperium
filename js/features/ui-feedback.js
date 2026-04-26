@@ -354,7 +354,7 @@
     // ========== Отображение тела поста (рендер с опросами) ==========
     async function renderPostBody(container, body, issueNumber) {
         const html = renderMarkdown(body);
-        container.innerHTML = `<div class="markdown-body">${html}</div>`;
+        container.innerHTML = `<div class="markdown-content">${html}</div>`;
         const pollData = extractPollFromBody(body);
         if (pollData) {
             const pollContainer = createElement('div', 'poll-container');
