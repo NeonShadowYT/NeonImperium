@@ -1,8 +1,8 @@
-// js/pages/news-feed.js – лента новостей, видео проигрываются в карточке, посты в модалке, оптимизировано
+// js/pages/news-feed.js – лента новостей (исправлена)
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule, invalidateFetchCache } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
-    const { openFullModal, canViewPost } = UIFeedback;
+    const { openFullModal, canViewPost, getDisplayBody } = UIFeedback;
     const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
 
     const YT_CHANNELS = [
@@ -16,6 +16,7 @@
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
     let currentUser = null, currentAbort = null;
     let videoLoading = false, videoError = false;
+    let loading = false;
 
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('news-section');
@@ -41,6 +42,7 @@
             const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
             if (!typeLabel || !CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
             cacheRemoveByPrefix('posts_news+update_v3');
+            invalidateFetchCache(`/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues`);
             const newPost = {
                 type: 'post', number: issue.number, title: issue.title, body: issue.body,
                 author: issue.user.login, date: new Date(issue.created_at),
@@ -50,7 +52,6 @@
             posts = [newPost, ...posts];
             renderMixed();
         });
-
         const postId = new URLSearchParams(location.search).get('post');
         if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
     });
@@ -75,13 +76,17 @@
         if (currentAbort) currentAbort.controller.abort();
         posts = []; videos = []; postsLoaded = videosLoaded = false;
         videoLoading = videoError = false;
+        loading = false;
         loadNewsFeed();
     };
 
     async function loadNewsFeed() {
+        if (loading) return;
+        loading = true;
         container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>';
         try { posts = await loadPosts(); postsLoaded = true; } catch { posts = []; postsLoaded = true; }
         loadVideosAsync();
+        loading = false;
     }
 
     async function loadVideosAsync() {
@@ -143,12 +148,7 @@
 
     function renderMixed() {
         if (!postsLoaded) return;
-        const filteredPosts = posts.filter(p => {
-            if (!p.labels.includes('private')) return true;
-            if (isAdmin()) return true;
-            const allowed = extractAllowed(p.body);
-            return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
-        });
+        const filteredPosts = posts.filter(p => canViewPost(p.body, p.labels, currentUser));
         let items = [...filteredPosts];
         if (videosLoaded) items = items.concat(videos);
         items.sort((a,b) => b.date - a.date);
@@ -186,74 +186,54 @@
     async function handleBookmark(item) {
         if (!window.BookmarkStorage) {
             try { await loadModule('js/features/storage.js'); }
-            catch (e) { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
+            catch { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
         }
         const bookmark = {
-            url: item.type === 'video'
-                ? `https://www.youtube.com/watch?v=${item.id}`
-                : `${location.origin}${location.pathname}?post=${item.number}`,
+            url: item.type === 'video' ? `https://www.youtube.com/watch?v=${item.id}` : `${location.origin}${location.pathname}?post=${item.number}`,
             title: item.title,
             type: item.type === 'video' ? 'video' : 'post',
             thumbnail: item.thumbnail || DEFAULT_IMAGE,
             author: item.author,
             date: item.date,
             postData: item.type === 'post' ? {
-                id: item.number,
-                title: item.title,
-                body: item.body,
-                author: item.author,
+                id: item.number, title: item.title, body: item.body, author: item.author,
                 date: item.date instanceof Date ? item.date.toISOString() : item.date,
-                labels: item.labels,
-                game: item.game
+                labels: item.labels, game: item.game
             } : undefined
         };
         try {
             await BookmarkStorage.addBookmark(bookmark);
             UIUtils.showToast('Добавлено в избранное', 'success');
         } catch (err) {
-            if (err.message === 'password_required') {
-                UIUtils.showToast('Для сохранения нужен мастер-пароль. Откройте хранилище.', 'error');
-            } else if (err.message !== 'duplicate') {
-                UIUtils.showToast('Ошибка: ' + err.message, 'error');
-            }
+            if (err.message === 'password_required') UIUtils.showToast('Требуется мастер-пароль', 'error');
+            else if (err.message !== 'duplicate') UIUtils.showToast('Ошибка: ' + err.message, 'error');
         }
     }
 
     function createVideoCard(video) {
         const card = GithubCore.createElement('div', 'project-card-link card-interactive');
         const inner = GithubCore.createElement('div', 'project-card');
-
         const imgW = GithubCore.createElement('div', 'image-wrapper');
         const img = GithubCore.createElement('img', 'project-image', {}, { src: video.thumbnail, alt: video.title, loading: 'lazy' });
         imgW.appendChild(img);
         inner.appendChild(imgW);
-
         const titleEl = GithubCore.createElement('h3', '', { cursor: 'default' });
         titleEl.textContent = video.title.length > 70 ? video.title.slice(0,70)+'…' : video.title;
         inner.appendChild(titleEl);
-
         const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
         inner.appendChild(meta);
-
         const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
         favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
-        favBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            handleBookmark(video);
-        });
+        favBtn.addEventListener('click', (e) => { e.stopPropagation(); handleBookmark(video); });
         inner.appendChild(favBtn);
-
         card.appendChild(inner);
-
         card.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
             const mediaContainer = card.querySelector('.image-wrapper');
             if (!mediaContainer || mediaContainer.querySelector('iframe')) return;
             const src = `https://www.youtube.com/embed/${video.id}`;
-            const iframe = GithubCore.createElement('iframe', '', {
-                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', borderRadius: '12px'
-            });
+            const iframe = GithubCore.createElement('iframe', '', { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', borderRadius: '12px' });
             iframe.src = src;
             iframe.setAttribute('allowfullscreen', 'true');
             iframe.loading = 'lazy';
@@ -263,45 +243,32 @@
             mediaContainer.style.background = '#000';
             mediaContainer.appendChild(iframe);
         });
-
         return card;
     }
 
     function createPostCard(post) {
-        let previewBody = post.body;
-        const allowed = extractAllowed(post.body);
-        if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-            try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
-        }
+        const body = getDisplayBody(post.body, post.labels, currentUser);
         const card = GithubCore.createElement('div', 'project-card-link card-interactive');
         const inner = GithubCore.createElement('div', 'project-card');
-
-        const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
+        const imgMatch = body.match(/!\[.*?\]\((.*?)\)/);
         const imgW = GithubCore.createElement('div', 'image-wrapper');
         const img = GithubCore.createElement('img', 'project-image', {}, { src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy' });
         img.onerror = () => img.src = DEFAULT_IMAGE;
         imgW.appendChild(img);
         inner.appendChild(imgW);
-
         const titleEl = GithubCore.createElement('h3', '', { cursor: 'pointer' });
         titleEl.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
         inner.appendChild(titleEl);
-
         const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
-        const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
+        const summary = extractSummary(body) || stripHtml(body).substring(0,120)+'…';
         const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
         preview.textContent = summary;
         inner.append(meta, preview);
-
         const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
         favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
-        favBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            handleBookmark({ type: 'post', ...post, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE });
-        });
+        favBtn.addEventListener('click', (e) => { e.stopPropagation(); handleBookmark({ type: 'post', ...post, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE }); });
         inner.appendChild(favBtn);
-
         card.appendChild(inner);
         card.addEventListener('click', (e) => {
             if (!e.target.closest('button') && !e.target.closest('.news-bookmark-btn')) {

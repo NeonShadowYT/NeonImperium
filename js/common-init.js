@@ -1,5 +1,27 @@
-// js/common-init.js – shared lazy‑loading & donation button with error suppression
+// js/common-init.js – shared lazy‑loading, donation button, service worker
 (function () {
+  // Регистрация Service Worker с автообновлением
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/NeonImperium/sw.js').then(reg => {
+      reg.onupdatefound = () => {
+        const installingWorker = reg.installing;
+        installingWorker.onstatechange = () => {
+          if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            UIUtils?.showToast('Доступно обновление. Перезагрузите страницу.', 'info', 5000);
+          }
+        };
+      };
+    });
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
+  }
+
   function initLazyYT() {
     if ('IntersectionObserver' in window) {
       const obs = new IntersectionObserver((entries) => {
@@ -67,14 +89,12 @@
     updateText();
   }
 
-  // Подавляем ошибки CORS в консоли для фоновых запросов хранилища
   window.addEventListener('unhandledrejection', function(event) {
     if (event.reason && event.reason.message && event.reason.message.includes('Failed to fetch')) {
       event.preventDefault();
     }
   }, { capture: true });
 
-  // Предзагрузка критических скриптов
   const preloadScripts = [
     'js/core/github-core.js',
     'js/features/ui-utils.js',
@@ -86,7 +106,6 @@
     document.addEventListener('DOMContentLoaded', () => {
       initLazyYT();
       initDonateBtn();
-      // Ленивая предзагрузка неблокирующих скриптов
       preloadScripts.forEach(src => {
         const link = document.createElement('link');
         link.rel = 'preload';
