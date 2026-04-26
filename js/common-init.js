@@ -1,5 +1,12 @@
-// js/common-init.js – shared lazy‑loading & donation button with error suppression
+// js/common-init.js – shared lazy‑loading, donation button, service worker
 (function () {
+  // Регистрация Service Worker для офлайн-кеширования
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/NeonImperium/sw.js').catch(function(err) {
+      console.warn('SW registration failed:', err);
+    });
+  }
+
   function initLazyYT() {
     if ('IntersectionObserver' in window) {
       const obs = new IntersectionObserver((entries) => {
@@ -67,12 +74,14 @@
     updateText();
   }
 
+  // Подавляем ошибки CORS в консоли для фоновых запросов хранилища
   window.addEventListener('unhandledrejection', function(event) {
-    if (event.reason?.message?.includes('Failed to fetch')) {
+    if (event.reason && event.reason.message && event.reason.message.includes('Failed to fetch')) {
       event.preventDefault();
     }
   }, { capture: true });
 
+  // Предзагрузка критических скриптов
   const preloadScripts = [
     'js/core/github-core.js',
     'js/features/ui-utils.js',

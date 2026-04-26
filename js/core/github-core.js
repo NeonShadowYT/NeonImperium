@@ -1,10 +1,10 @@
-// js/core/github-core.js — расширенное ядро с утилитами, конфигурацией и умным кешированием
+// js/core/github-core.js — расширенное ядро с утилитами, конфигурацией, умным кешированием и дедупликацией запросов
 const GithubCore = (function() {
     const CONFIG = {
         REPO_OWNER: 'NeonShadowYT',
         REPO_NAME: 'NeonImperium',
-        CACHE_TTL: 10 * 60 * 1000,        // общий TTL для старых методов (минуты)
-        DEFAULT_FETCH_TTL: 60000,         // TTL для fetch‑кеша (1 минута)
+        CACHE_TTL: 10 * 60 * 1000,
+        DEFAULT_FETCH_TTL: 60000,
         ALLOWED_AUTHORS: ['NeonShadowYT', 'GoldenCreeper567']
     };
 
@@ -18,11 +18,113 @@ const GithubCore = (function() {
     function setCacheMeta(key, meta) {
         try { sessionStorage.setItem(META_PREFIX + key, JSON.stringify(meta)); } catch {}
     }
+    function removeCacheMeta(key) {
+        try { sessionStorage.removeItem(META_PREFIX + key); } catch {}
+    }
     function getCachedData(key) {
         try { return JSON.parse(sessionStorage.getItem(DATA_PREFIX + key)); } catch { return null; }
     }
     function setCachedData(key, data) {
         try { sessionStorage.setItem(DATA_PREFIX + key, JSON.stringify(data)); } catch {}
+    }
+    function removeCachedData(key) {
+        try { sessionStorage.removeItem(DATA_PREFIX + key); } catch {}
+    }
+
+    // ---------- дедупликация запросов ----------
+    const inFlight = new Map(); // key -> Promise<CachedResponse>
+
+    // ---------- умный кеширующий fetch ----------
+    class CachedResponse {
+        constructor(data, status = 200, headers = {}) {
+            this._data = data;
+            this.ok = true;
+            this.status = status;
+            this._headers = new Map(Object.entries(headers));
+        }
+        json() { return Promise.resolve(this._data); }
+        text() { return Promise.resolve(JSON.stringify(this._data)); }
+        clone() { return new CachedResponse(this._data, this.status, Object.fromEntries(this._headers)); }
+        get headers() { return { get: (name) => this._headers.get(name) }; }
+    }
+
+    async function fetchCached(url, options = {}, cacheOpts = {}) {
+        const cacheKey = cacheOpts.cacheKey || url;
+        const ttl = cacheOpts.ttl ?? CONFIG.DEFAULT_FETCH_TTL;
+
+        // Проверяем, нет ли уже выполняющегося запроса
+        if (inFlight.has(cacheKey)) {
+            return inFlight.get(cacheKey);
+        }
+
+        const fetchPromise = (async () => {
+            // Проверяем свежий кеш
+            const meta = getCacheMeta(cacheKey);
+            const cachedData = getCachedData(cacheKey);
+            if (meta && cachedData && Date.now() - meta.timestamp < ttl) {
+                return new CachedResponse(cachedData, 200, meta.headers);
+            }
+
+            // Готовим условные заголовки
+            const fetchOptions = { ...options };
+            fetchOptions.headers = new Headers(fetchOptions.headers || {});
+            if (meta) {
+                if (meta.etag) fetchOptions.headers.set('If-None-Match', meta.etag);
+                if (meta.lastModified) fetchOptions.headers.set('If-Modified-Since', meta.lastModified);
+            }
+
+            const response = await fetch(url, fetchOptions);
+
+            if (response.status === 304 && cachedData) {
+                // Обновляем timestamp, но используем кеш
+                setCacheMeta(cacheKey, { ...meta, timestamp: Date.now() });
+                return new CachedResponse(cachedData, 304, meta.headers);
+            }
+
+            if (!response.ok) {
+                let errorMsg = `HTTP ${response.status}`;
+                try {
+                    const errData = await response.json();
+                    errorMsg = errData.message || errorMsg;
+                } catch {}
+                throw new Error(errorMsg);
+            }
+
+            const data = await response.json();
+            const resHeaders = {
+                etag: response.headers.get('ETag'),
+                lastModified: response.headers.get('Last-Modified')
+            };
+            // Кешируем только успешные GET
+            if (!fetchOptions.method || fetchOptions.method.toUpperCase() === 'GET') {
+                setCachedData(cacheKey, data);
+                setCacheMeta(cacheKey, { ...resHeaders, timestamp: Date.now(), headers: resHeaders });
+            }
+            return new CachedResponse(data, response.status, resHeaders);
+        })();
+
+        inFlight.set(cacheKey, fetchPromise);
+        try {
+            return await fetchPromise;
+        } finally {
+            inFlight.delete(cacheKey);
+        }
+    }
+
+    // ---------- Инвалидация кеша fetchCached ----------
+    function invalidateFetchCache(urlPattern) {
+        // удаляем все ключи, которые содержат urlPattern (или все, если не указан)
+        const prefixes = [META_PREFIX, DATA_PREFIX];
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+            const key = sessionStorage.key(i);
+            if (!key) continue;
+            const prefix = prefixes.find(p => key.startsWith(p));
+            if (prefix) {
+                if (!urlPattern || key.includes(urlPattern)) {
+                    sessionStorage.removeItem(key);
+                }
+            }
+        }
     }
 
     // ---------- старый слой кеша (совместимость) ----------
@@ -78,72 +180,10 @@ const GithubCore = (function() {
                 }
             }
         } catch (e) {}
+        // также чистим новый fetch-кеш, если он пересекается
+        invalidateFetchCache(prefix);
     }
 
-    // ---------- умный кеширующий fetch ----------
-    class CachedResponse {
-        constructor(data, status = 200, headers = {}) {
-            this._data = data;
-            this.ok = true;
-            this.status = status;
-            this._headers = new Map(Object.entries(headers));
-        }
-        json() { return Promise.resolve(this._data); }
-        text() { return Promise.resolve(JSON.stringify(this._data)); }
-        clone() { return new CachedResponse(this._data, this.status, Object.fromEntries(this._headers)); }
-        get headers() { return { get: (name) => this._headers.get(name) }; } // эмуляция
-    }
-
-    async function fetchCached(url, options = {}, cacheOpts = {}) {
-        const cacheKey = cacheOpts.cacheKey || url;
-        const ttl = cacheOpts.ttl ?? CONFIG.DEFAULT_FETCH_TTL;
-
-        // проверяем свежий кеш
-        const meta = getCacheMeta(cacheKey);
-        const cachedData = getCachedData(cacheKey);
-        if (meta && cachedData && Date.now() - meta.timestamp < ttl) {
-            return new CachedResponse(cachedData, 200, meta.headers);
-        }
-
-        // готовим условные заголовки
-        const fetchOptions = { ...options };
-        fetchOptions.headers = new Headers(fetchOptions.headers || {});
-        if (meta) {
-            if (meta.etag) fetchOptions.headers.set('If-None-Match', meta.etag);
-            if (meta.lastModified) fetchOptions.headers.set('If-Modified-Since', meta.lastModified);
-        }
-
-        const response = await fetch(url, fetchOptions);
-
-        if (response.status === 304 && cachedData) {
-            // используем кеш, обновляем timestamp
-            setCacheMeta(cacheKey, { ...meta, timestamp: Date.now() });
-            return new CachedResponse(cachedData, 304, meta.headers);
-        }
-
-        if (!response.ok) {
-            let errorMsg = `HTTP ${response.status}`;
-            try {
-                const errData = await response.json();
-                errorMsg = errData.message || errorMsg;
-            } catch {}
-            throw new Error(errorMsg);
-        }
-
-        const data = await response.json();
-        const resHeaders = {
-            etag: response.headers.get('ETag'),
-            lastModified: response.headers.get('Last-Modified')
-        };
-        // кешируем только успешные GET
-        if (!fetchOptions.method || fetchOptions.method.toUpperCase() === 'GET') {
-            setCachedData(cacheKey, data);
-            setCacheMeta(cacheKey, { ...resHeaders, timestamp: Date.now(), headers: resHeaders });
-        }
-        return new CachedResponse(data, response.status, resHeaders);
-    }
-
-    // ---------- остальные утилиты ----------
     function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -264,7 +304,7 @@ const GithubCore = (function() {
     return {
         CONFIG,
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
-        fetchCached,
+        fetchCached, invalidateFetchCache,
         escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable,
         stripHtml, extractMeta, extractAllowed, extractSummary,
         encryptPrivateBody, decryptPrivateBody,
