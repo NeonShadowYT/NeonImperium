@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – лента новостей (оптимизировано)
+// js/pages/news-feed.js – лента новостей (исправлена)
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule, invalidateFetchCache } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
@@ -16,6 +16,7 @@
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
     let currentUser = null, currentAbort = null;
     let videoLoading = false, videoError = false;
+    let loading = false;
 
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('news-section');
@@ -41,8 +42,7 @@
             const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
             if (!typeLabel || !CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
             cacheRemoveByPrefix('posts_news+update_v3');
-            invalidateFetchCache(`/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?labels=type:news`);
-            invalidateFetchCache(`/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?labels=type:update`);
+            invalidateFetchCache(`/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues`);
             const newPost = {
                 type: 'post', number: issue.number, title: issue.title, body: issue.body,
                 author: issue.user.login, date: new Date(issue.created_at),
@@ -52,7 +52,6 @@
             posts = [newPost, ...posts];
             renderMixed();
         });
-
         const postId = new URLSearchParams(location.search).get('post');
         if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
     });
@@ -77,13 +76,17 @@
         if (currentAbort) currentAbort.controller.abort();
         posts = []; videos = []; postsLoaded = videosLoaded = false;
         videoLoading = videoError = false;
+        loading = false;
         loadNewsFeed();
     };
 
     async function loadNewsFeed() {
+        if (loading) return;
+        loading = true;
         container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>';
         try { posts = await loadPosts(); postsLoaded = true; } catch { posts = []; postsLoaded = true; }
         loadVideosAsync();
+        loading = false;
     }
 
     async function loadVideosAsync() {
@@ -183,36 +186,27 @@
     async function handleBookmark(item) {
         if (!window.BookmarkStorage) {
             try { await loadModule('js/features/storage.js'); }
-            catch (e) { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
+            catch { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
         }
         const bookmark = {
-            url: item.type === 'video'
-                ? `https://www.youtube.com/watch?v=${item.id}`
-                : `${location.origin}${location.pathname}?post=${item.number}`,
+            url: item.type === 'video' ? `https://www.youtube.com/watch?v=${item.id}` : `${location.origin}${location.pathname}?post=${item.number}`,
             title: item.title,
             type: item.type === 'video' ? 'video' : 'post',
             thumbnail: item.thumbnail || DEFAULT_IMAGE,
             author: item.author,
             date: item.date,
             postData: item.type === 'post' ? {
-                id: item.number,
-                title: item.title,
-                body: item.body,
-                author: item.author,
+                id: item.number, title: item.title, body: item.body, author: item.author,
                 date: item.date instanceof Date ? item.date.toISOString() : item.date,
-                labels: item.labels,
-                game: item.game
+                labels: item.labels, game: item.game
             } : undefined
         };
         try {
             await BookmarkStorage.addBookmark(bookmark);
             UIUtils.showToast('Добавлено в избранное', 'success');
         } catch (err) {
-            if (err.message === 'password_required') {
-                UIUtils.showToast('Для сохранения нужен мастер-пароль. Откройте хранилище.', 'error');
-            } else if (err.message !== 'duplicate') {
-                UIUtils.showToast('Ошибка: ' + err.message, 'error');
-            }
+            if (err.message === 'password_required') UIUtils.showToast('Требуется мастер-пароль', 'error');
+            else if (err.message !== 'duplicate') UIUtils.showToast('Ошибка: ' + err.message, 'error');
         }
     }
 

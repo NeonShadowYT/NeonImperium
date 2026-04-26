@@ -15,9 +15,9 @@
     let sortOrder = 'new', category = 'all';
     let modalAddFormVisible = false;
 
-    // Сохранение с дебаунсом (очередь)
+    // Очередь сохранения
     let saveTimer = null;
-    let pendingSave = null; // { bookmarks, password }
+    let pendingSave = null;
 
     async function flushSave() {
         if (pendingSave) {
@@ -33,14 +33,13 @@
         saveTimer = setTimeout(() => flushSave(), 300);
     }
 
-    // Принудительный сброс при уходе со страницы (сохраняем в localStorage как резерв)
     window.addEventListener('beforeunload', () => {
         if (pendingSave) {
             try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(pendingSave.bookmarks)); } catch {}
         }
     });
 
-    // ---------- Base64 / Crypto ----------
+    // Base64 и Crypto
     const Base64 = {
         encode: arrayBuffer => {
             const bytes = new Uint8Array(arrayBuffer);
@@ -84,7 +83,7 @@
         }
     };
 
-    // ---------- Gist API с кешированием через fetchCached ----------
+    // Gist API
     const GistAPI = {
         async fetch(id, token) {
             const r = await fetchCached(`https://api.github.com/gists/${id}`, {
@@ -99,7 +98,6 @@
                 body: JSON.stringify({ files: { [GIST_FILENAME]: { content } } })
             });
             if (!r.ok) throw new Error(`Gist update: ${r.status}`);
-            // сбрасываем кеш гиса после изменения
             try { sessionStorage.removeItem('gh_data_gist_' + id); sessionStorage.removeItem('gh_meta_gist_' + id); } catch {}
             return r.json();
         },
@@ -136,7 +134,6 @@
         clear() { sessionStorage.removeItem(SESSION_CACHE_KEY); cachedBookmarks = null; }
     };
 
-    // ---------- Загрузка / сохранение ----------
     async function loadBookmarks(password = null) {
         if (!currentToken) {
             try { return { bookmarks: JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]') }; } catch { return { bookmarks: [] }; }
@@ -202,7 +199,6 @@
         }
     }
 
-    // saveBookmarks использует очередь
     function saveBookmarks(bookmarks, password) {
         enqueueSave(bookmarks, password);
     }
@@ -211,7 +207,7 @@
         const res = await loadBookmarks(oldPwd);
         if (res.passwordRequired) throw new Error('Old password required');
         const bookmarks = res.bookmarks || [];
-        await flushSave(); // сбросить очередь перед сменой пароля
+        await flushSave();
         await saveBookmarksImmediate(bookmarks, newPwd);
         masterPassword = newPwd;
         return true;
@@ -225,7 +221,7 @@
         localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
 
-    // ---------- URL / OEMBED (без изменений) ----------
+    // URL утилиты
     const UrlUtils = {
         isEmbed: url => url && /\/embed\/|\/player\/|\?embed|\/v\//i.test(url),
         isSitePost: url => {
@@ -247,10 +243,7 @@
                     if (v) return `https://www.youtube.com/embed/${v}`;
                 }
                 if (path.includes('/embed/')) return url;
-                if (path.includes('/v/')) {
-                    const id = path.split('/v/')[1]?.split('?')[0];
-                    if (id) return `${origin}/embed/${id}`;
-                }
+                if (path.includes('/v/')) return url;
                 const viewMatch = path.match(/\/(view|watch)\/([a-zA-Z0-9_-]+)/);
                 if (viewMatch) return `${origin}/embed/${viewMatch[2]}`;
                 const videoMatch = path.match(/\/video\/([a-zA-Z0-9_-]+)/);
@@ -275,14 +268,13 @@
                 const r = await fetchCached(provider(url), { signal: controllers[i].signal }, { cacheKey: `oembed_${url}`, ttl: 600000 });
                 if (!r.ok) return null;
                 const data = await r.json();
-                if (data) {
-                    if (data.contents) {
-                        const html = data.contents;
-                        const title = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
-                        const image = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
-                        const video = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
-                        return { title, thumbnail_url: image, url: video };
-                    }
+                if (data && data.contents) {
+                    const html = data.contents;
+                    const title = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                    const image = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                    const video = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"[^>]*>/i)?.[1];
+                    return { title, thumbnail_url: image, url: video };
+                } else if (data) {
                     return {
                         title: data.title,
                         thumbnail_url: data.thumbnail_url || data.image,
@@ -293,13 +285,12 @@
             } catch {}
             return null;
         });
-        try { const res = await Promise.any(promises); clearTimeout(timeout); return res; }
-        catch { clearTimeout(timeout); return null; }
+        try { const res = await Promise.any(promises); clearTimeout(timeout); return res; } catch { clearTimeout(timeout); return null; }
     }
 
-    async function fetchDirectVideoUrl(url) { /* без изменений, просто заглушка */ return null; }
+    async function fetchDirectVideoUrl(url) { return null; }
 
-    // ---------- DOM‑карточки и управление ----------
+    // Управление карточками
     let cardMap = new Map();
     let gridContainer = null;
 
@@ -321,9 +312,7 @@
         if (visible && embedSrc) {
             if (!mediaContainer.dataset.iframeLoaded) {
                 mediaContainer.innerHTML = '';
-                const iframe = createElement('iframe', '', {
-                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none'
-                });
+                const iframe = createElement('iframe', '', { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' });
                 iframe.src = embedSrc;
                 iframe.setAttribute('allowfullscreen', 'true');
                 iframe.loading = 'lazy';
@@ -345,10 +334,7 @@
             if (isPost && bookmark.thumbnail) {
                 if (!mediaContainer.querySelector('img')) {
                     mediaContainer.innerHTML = '';
-                    const img = createElement('img', '', {
-                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-                        objectFit: 'cover'
-                    });
+                    const img = createElement('img', '', { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' });
                     img.src = bookmark.thumbnail;
                     mediaContainer.appendChild(img);
                 }
@@ -381,15 +367,11 @@
         let cardWrapper;
 
         if (isLink) {
-            cardWrapper = createElement('a', 'bookmark-card-link', {
-                display: 'block', textDecoration: 'none', color: 'inherit', height: '100%'
-            });
+            cardWrapper = createElement('a', 'bookmark-card-link', { display: 'block', textDecoration: 'none', color: 'inherit', height: '100%' });
             cardWrapper.href = bookmark.url;
             cardWrapper.target = '_blank';
         } else {
-            cardWrapper = createElement('div', `bookmark-card-link ${isPost ? 'clickable-post' : ''}`, {
-                display: 'block', height: '100%', cursor: isPost ? 'pointer' : 'default'
-            });
+            cardWrapper = createElement('div', `bookmark-card-link ${isPost ? 'clickable-post' : ''}`, { display: 'block', height: '100%', cursor: isPost ? 'pointer' : 'default' });
         }
 
         const card = createElement('div', 'bookmark-card tilt-card', {
@@ -469,9 +451,7 @@
                 const embedSrc = bookmark.embedUrl;
                 if (embedSrc) {
                     mediaContainer.innerHTML = '';
-                    const iframe = createElement('iframe', '', {
-                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none'
-                    });
+                    const iframe = createElement('iframe', '', { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' });
                     iframe.src = embedSrc;
                     iframe.setAttribute('allowfullscreen', 'true');
                     iframe.loading = 'lazy';
@@ -596,10 +576,7 @@
             else {
                 const guessed = UrlUtils.guessEmbed(bookmark.url);
                 if (guessed) { embedUrl = finalUrl = guessed; }
-                const [oembed, direct] = await Promise.all([
-                    fetchOEmbedData(bookmark.url),
-                    fetchDirectVideoUrl(bookmark.url)
-                ]);
+                const [oembed, direct] = await Promise.all([fetchOEmbedData(bookmark.url), fetchDirectVideoUrl(bookmark.url)]);
                 if (oembed) {
                     if (oembed.html) {
                         const iframeSrc = oembed.html.match(/<iframe[^>]+src=["']([^"']+)["']/i)?.[1];
@@ -640,13 +617,8 @@
         const updated = [...bookmarks, newBookmark];
         currentBookmarks = updated;
         syncCardsFromBookmarks();
-        try {
-            saveBookmarks(updated, masterPassword);
-            return newBookmark;
-        } catch (e) {
-            UIUtils.showToast('Ошибка синхронизации', 'error');
-            throw e;
-        }
+        saveBookmarks(updated, masterPassword);
+        return newBookmark;
     }
 
     async function removeBookmark(bookmarkId) {
@@ -671,6 +643,8 @@
         if (!currentUser) return UIUtils.showToast('Войдите в аккаунт GitHub', 'error');
         if (!currentToken) return UIUtils.showToast('Токен не найден', 'error');
         if (!GithubAuth.hasScope('gist')) return UIUtils.showToast('Нужен scope "gist"', 'error');
+
+        await flushSave();
 
         let needSetup = false, passwordRequired = false;
         const cached = SessionCache.load();
@@ -711,16 +685,60 @@
             UIUtils.showToast('Хранилище создано!', 'success');
         }
 
-        const html = `...`; // (HTML такой же, как в исходном файле)
+        const html = `
+            <div class="storage-modal-container">
+                <div class="storage-header">
+                    <div class="storage-controls">
+                        <div class="storage-sort">
+                            <button class="sort-btn ${sortOrder==='new'?'active':''}" data-order="new"><i class="fas fa-arrow-down"></i> Новые</button>
+                            <button class="sort-btn ${sortOrder==='old'?'active':''}" data-order="old"><i class="fas fa-arrow-up"></i> Старые</button>
+                        </div>
+                        <div class="storage-categories">
+                            <button class="cat-btn ${category==='all'?'active':''}" data-cat="all"><i class="fas fa-globe"></i> Все</button>
+                            <button class="cat-btn ${category==='video'?'active':''}" data-cat="video"><i class="fas fa-video"></i> Видео</button>
+                            <button class="cat-btn ${category==='post'?'active':''}" data-cat="post"><i class="fas fa-newspaper"></i> Посты</button>
+                            <button class="cat-btn ${category==='link'?'active':''}" data-cat="link"><i class="fas fa-link"></i> Ссылки</button>
+                        </div>
+                    </div>
+                    <div class="storage-actions">
+                        <button class="storage-btn primary" id="toggle-add-btn"><i class="fas fa-plus"></i> Добавить</button>
+                        <button class="storage-btn" id="change-password-btn"><i class="fas fa-key"></i></button>
+                        <button class="storage-btn danger" id="reset-storage-btn"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </div>
+                <div id="add-form" class="storage-add-form ${modalAddFormVisible?'visible':''}">
+                    <input type="url" id="new-url" placeholder="Ссылка..." autocomplete="off">
+                    <input type="text" id="new-title" placeholder="Название">
+                    <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> Добавить</button>
+                </div>
+                <div class="bookmarks-grid" id="bookmarks-grid"></div>
+            </div>
+        `;
         const { modal, closeModal } = UIUtils.createModal('Хранилище', html, { size: 'full' });
         const style = createElement('style');
-        style.textContent = `...`; // (стили из исходного файла)
+        style.textContent = `
+            .storage-modal-container{display:flex;flex-direction:column;gap:20px}
+            .storage-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px}
+            .storage-controls{display:flex;gap:15px;flex-wrap:wrap}
+            .storage-sort,.storage-categories{display:flex;background:var(--bg-primary);border-radius:40px;padding:4px;border:1px solid var(--border)}
+            .sort-btn,.cat-btn{background:0;border:0;color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
+            .sort-btn.active,.cat-btn.active{background:var(--accent);color:#fff}
+            .storage-actions{display:flex;gap:8px;align-items:center}
+            .storage-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
+            .storage-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+            .storage-btn:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.2)}
+            .bookmarks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+            .bookmark-action-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:0.2s;font-size:12px}
+            .bookmark-action-btn:hover{background:var(--accent);color:#fff;transform:scale(1.1)}
+            .storage-add-form{display:none;grid-template-columns:1fr 1fr auto;gap:10px;background:var(--bg-inner-gradient);padding:16px;border-radius:20px;border:1px solid var(--border);opacity:0;transform:translateY(-10px);transition:0.3s;align-items:center}
+            .storage-add-form.visible{display:grid;opacity:1;transform:translateY(0)}
+            .storage-add-form input{padding:12px 16px;background:var(--bg-primary);border:1px solid var(--border);border-radius:40px;color:var(--text-primary);font-family:'Russo One',sans-serif}
+            @media (max-width:700px){.storage-add-form{grid-template-columns:1fr}}
+        `;
         modal.appendChild(style);
         gridContainer = modal.querySelector('#bookmarks-grid');
         cardMap = new Map();
         syncCardsFromBookmarks();
-
-        // ... привязка обработчиков (без изменений)
 
         modal.querySelectorAll('.sort-btn').forEach(b => b.addEventListener('click', () => {
             sortOrder = b.dataset.order;

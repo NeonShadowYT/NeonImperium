@@ -26,13 +26,6 @@
 
     // ========== Универсальные функции, используемые несколькими модулями ==========
 
-    /**
-     * Проверяет, может ли пользователь видеть пост (приватный/публичный)
-     * @param {string} body - тело поста
-     * @param {string[]} labels - массив имён меток
-     * @param {string} currentUser - логин пользователя
-     * @returns {boolean}
-     */
     function canViewPost(body, labels, currentUser) {
         if (!labels.includes('private')) return true;
         if (GithubAuth.isAdmin()) return true;
@@ -41,13 +34,6 @@
         return allowed.split(',').map(s => s.trim()).includes(currentUser);
     }
 
-    /**
-     * Безопасно извлекает отображаемое тело поста (расшифровка, если нужно)
-     * @param {string} body - исходное тело
-     * @param {string[]} labels - метки
-     * @param {string} currentUser - пользователь
-     * @returns {string} готовое для показа тело
-     */
     function getDisplayBody(body, labels, currentUser) {
         const allowed = extractAllowed(body);
         if (labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
@@ -56,9 +42,6 @@
         return body;
     }
 
-    /**
-     * Извлекает URL первого изображения из тела поста
-     */
     function extractFirstImage(body) {
         const m = body?.match(/!\[.*?\]\((.*?)\)/);
         return m ? m[1] : null;
@@ -351,10 +334,10 @@
         }
     }
 
-    // ========== Отображение тела поста (рендер с опросами) ==========
+    // ========== Отображение тела поста ==========
     async function renderPostBody(container, body, issueNumber) {
         const html = renderMarkdown(body);
-        container.innerHTML = `<div class="markdown-content">${html}</div>`;
+        container.innerHTML = `<div class="markdown-body">${html}</div>`;
         const pollData = extractPollFromBody(body);
         if (pollData) {
             const pollContainer = createElement('div', 'poll-container');

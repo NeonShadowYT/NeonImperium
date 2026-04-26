@@ -289,3 +289,15 @@
 .news-bookmark-btn.bookmarked i {
     font-weight: 900;
 }
+.edge-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 1;
+}

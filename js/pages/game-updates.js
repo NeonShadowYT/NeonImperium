@@ -1,12 +1,12 @@
-// js/pages/game-updates.js — обновления игры с админ-кнопкой (оптимизировано)
+// js/pages/game-updates.js — обновления игры с админ-кнопкой (исправлено)
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, invalidateFetchCache } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, extractSummary, invalidateFetchCache } = GithubCore;
     const { loadIssues } = GithubAPI;
     const { openFullModal, canViewPost, getDisplayBody } = UIFeedback;
     const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
     const DEFAULT_IMAGE = 'images/default-news.webp';
 
-    let currentAbort = null, currentGame = null;
+    let currentAbort = null, currentGame = null, loading = false;
 
     document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('game-updates');
@@ -21,7 +21,7 @@
             if (!issue.labels.some(l => l.name === 'type:update' && l.name === `game:${currentGame}`)) return;
             if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
             cacheRemoveByPrefix(`game_updates_${currentGame}`);
-            invalidateFetchCache(`/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?labels=type:update,game:${currentGame}`);
+            invalidateFetchCache(`/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues`);
             const cont = document.getElementById('game-updates');
             if (!cont) return;
             const newPost = { number: issue.number, title: issue.title, body: issue.body, date: new Date(issue.created_at), author: issue.user.login, game: currentGame, labels: issue.labels.map(l=>l.name) };
@@ -39,6 +39,8 @@
     };
 
     async function loadGameUpdates(container, game) {
+        if (loading) return;
+        loading = true;
         container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>';
         if (currentAbort) currentAbort.controller.abort();
         const { controller, timeoutId } = createAbortable(10000);
@@ -54,7 +56,7 @@
             } else posts = posts.map(p => ({ ...p, date: new Date(p.date) }));
             const currentUser = getCurrentUser();
             posts = posts.filter(p => canViewPost(p.body, p.labels, currentUser));
-            if (posts.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; return; }
+            if (posts.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; loading = false; return; }
             container.innerHTML = '';
             const grid = GithubCore.createElement('div', 'projects-grid');
             container.appendChild(grid);
@@ -76,8 +78,14 @@
                     header.appendChild(btn);
                 }
             } else if (existing) existing.remove();
-        } catch { container.innerHTML = '<p class="error-message">Ошибка загрузки</p>'; }
-        finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+            container.innerHTML = '<p class="error-message">Ошибка загрузки</p>';
+        } finally {
+            clearTimeout(timeoutId);
+            if (currentAbort?.controller === controller) currentAbort = null;
+            loading = false;
+        }
     }
 
     function createUpdateCard(post) {

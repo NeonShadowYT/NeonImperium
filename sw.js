@@ -1,5 +1,5 @@
-// sw.js – кеширование shell с автоматическим обновлением
-const CACHE_NAME = 'neon-imperium-v4';
+// sw.js — сервис-воркер с сетевой стратегией и динамическим кешированием
+const CACHE_NAME = 'neon-imperium-v6';
 const STATIC_ASSETS = [
   '/NeonImperium/',
   '/NeonImperium/index.html',
@@ -38,7 +38,7 @@ const STATIC_ASSETS = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS).catch(err => console.warn('SW cache preload error:', err)))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
   );
   self.skipWaiting();
 });
@@ -53,19 +53,21 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.url.includes('api.github.com')) return; // не кешируем API
+  const url = new URL(event.request.url);
+  // Пропускаем запросы к GitHub API и внешним ресурсам, которые не должны кешироваться
+  if (url.hostname === 'api.github.com') return;
+  if (url.hostname === 'files.catbox.moe' || url.hostname === 'avatars.githubusercontent.com') return;
+  if (url.hostname === 'i.ytimg.com' || url.hostname === 'img.youtube.com') return;
+
   event.respondWith(
     caches.open(CACHE_NAME).then(cache => {
       return cache.match(event.request).then(cached => {
         const fetchPromise = fetch(event.request).then(networkResponse => {
-          if (networkResponse && networkResponse.status === 200) {
+          if (networkResponse.ok && (url.hostname === self.location.hostname || url.hostname === 'cdnjs.cloudflare.com' || url.hostname === 'fonts.googleapis.com' || url.hostname === 'cdn.jsdelivr.net')) {
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
-        }).catch(() => {
-          // если сеть недоступна, отдаём кеш, если есть
-          return cached;
-        });
+        }).catch(() => cached);
         return cached || fetchPromise;
       });
     })
