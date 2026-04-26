@@ -1,12 +1,12 @@
-// game-updates.js — обновления игры с админ-кнопкой
+// js/pages/game-updates.js — обновления игры с админ-кнопкой (исправлено)
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, extractSummary, invalidateFetchCache } = GithubCore;
     const { loadIssues } = GithubAPI;
-    const { openFullModal } = UIFeedback;
+    const { openFullModal, canViewPost, getDisplayBody } = UIFeedback;
     const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
     const DEFAULT_IMAGE = 'images/default-news.webp';
 
-    let currentAbort = null, currentGame = null;
+    let currentAbort = null, currentGame = null, loading = false;
 
     document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('game-updates');
@@ -21,6 +21,7 @@
             if (!issue.labels.some(l => l.name === 'type:update' && l.name === `game:${currentGame}`)) return;
             if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
             cacheRemoveByPrefix(`game_updates_${currentGame}`);
+            invalidateFetchCache(`/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues`);
             const cont = document.getElementById('game-updates');
             if (!cont) return;
             const newPost = { number: issue.number, title: issue.title, body: issue.body, date: new Date(issue.created_at), author: issue.user.login, game: currentGame, labels: issue.labels.map(l=>l.name) };
@@ -38,6 +39,8 @@
     };
 
     async function loadGameUpdates(container, game) {
+        if (loading) return;
+        loading = true;
         container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>';
         if (currentAbort) currentAbort.controller.abort();
         const { controller, timeoutId } = createAbortable(10000);
@@ -52,13 +55,8 @@
                 cacheSet(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
             } else posts = posts.map(p => ({ ...p, date: new Date(p.date) }));
             const currentUser = getCurrentUser();
-            posts = posts.filter(p => {
-                if (!p.labels.includes('private')) return true;
-                if (isAdmin()) return true;
-                const allowed = extractAllowed(p.body);
-                return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
-            });
-            if (posts.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; return; }
+            posts = posts.filter(p => canViewPost(p.body, p.labels, currentUser));
+            if (posts.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; loading = false; return; }
             container.innerHTML = '';
             const grid = GithubCore.createElement('div', 'projects-grid');
             container.appendChild(grid);
@@ -80,20 +78,21 @@
                     header.appendChild(btn);
                 }
             } else if (existing) existing.remove();
-        } catch { container.innerHTML = '<p class="error-message">Ошибка загрузки</p>'; }
-        finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+            container.innerHTML = '<p class="error-message">Ошибка загрузки</p>';
+        } finally {
+            clearTimeout(timeoutId);
+            if (currentAbort?.controller === controller) currentAbort = null;
+            loading = false;
+        }
     }
 
     function createUpdateCard(post) {
-        let previewBody = post.body;
-        const allowed = extractAllowed(post.body);
-        const currentUser = getCurrentUser();
-        if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-            try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
-        }
+        const body = getDisplayBody(post.body, post.labels, getCurrentUser());
         const card = GithubCore.createElement('div', 'project-card-link no-tilt tilt-card', { cursor: 'pointer' });
         const inner = GithubCore.createElement('div', 'project-card');
-        const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
+        const imgMatch = body.match(/!\[.*?\]\((.*?)\)/);
         const imgW = GithubCore.createElement('div', 'image-wrapper');
         const img = GithubCore.createElement('img', 'project-image', {}, { src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy' });
         img.onerror = () => img.src = DEFAULT_IMAGE;
@@ -102,7 +101,7 @@
         title.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
         const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
-        const summary = extractSummary(previewBody) || GithubCore.stripHtml(previewBody).substring(0,120)+'…';
+        const summary = extractSummary(body) || GithubCore.stripHtml(body).substring(0,120)+'…';
         const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
         preview.textContent = summary;
         inner.append(imgW, title, meta, preview);

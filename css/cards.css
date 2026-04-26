@@ -1,4 +1,4 @@
-/* cards.css – полный набор стилей карточек, оптимизация памяти */
+/* cards.css – полный набор стилей карточек, свечение от курсора */
 :root {
     --border-radius-card: 20px;
     --border-radius-inner: 16px;
@@ -13,9 +13,31 @@
     margin-bottom: 24px;
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
-    transition: box-shadow var(--transition-default);
+    transition: box-shadow var(--transition-default), border-color var(--transition-default);
+    position: relative;          /* для дочернего ::after */
+    overflow: hidden;           /* обрезаем свечение внутри */
 }
-.card:hover { box-shadow: var(--shadow-hover); }
+.card:hover {
+    box-shadow: var(--shadow-hover);
+    border-color: var(--accent);
+}
+
+/* псевдоэлемент свечения от курсора */
+.card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at var(--glow-x, 50%) var(--glow-y, 50%), transparent 50%, var(--accent) 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 0;
+}
+.card:hover::after {
+    opacity: 0.3;
+}
+
 .game-header {
     background-size: 110%;
     background-position: center;
@@ -59,11 +81,26 @@
     transition: border-color 0.2s, transform 0.25s cubic-bezier(0.2,0.9,0.4,1), box-shadow 0.25s;
     display: flex; flex-direction: column; height: 100%; overflow: hidden;
     contain: layout style;
+    position: relative;        /* для псевдоэлемента свечения */
+}
+.project-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at var(--glow-x, 50%) var(--glow-y, 50%), transparent 40%, var(--accent) 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 0;
 }
 .project-card-link:hover .project-card {
     border-color: var(--accent);
     transform: translateY(-6px) scale(1.01);
     box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+}
+.project-card-link:hover .project-card::after {
+    opacity: 0.4;
 }
 .project-card .image-wrapper {
     margin: -16px -16px 12px -16px;
@@ -81,10 +118,8 @@
 .project-card .button { margin-top: auto; align-self: flex-start; }
 
 /* Квадратные карточки */
-.project-card.square-card .image-wrapper,
-.small-projects-container .project-card.square-card .image-wrapper { padding-bottom: 100%; }
+.project-card.square-card .image-wrapper { padding-bottom: 100%; }
 
-/* Остальные стили */
 .profile-card-link { flex: 1 1 150px; color: inherit; transition: transform var(--transition-default); }
 .profile-card-link:hover { transform: translateY(-3px); }
 .profile-card {
@@ -94,8 +129,21 @@
     border: 1px solid var(--border);
     display: flex; flex-direction: column; align-items: center; text-align: center;
     transition: border-color var(--transition-default), transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94);
+    position: relative; overflow: hidden;
+}
+.profile-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at var(--glow-x, 50%) var(--glow-y, 50%), transparent 50%, var(--accent) 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 0;
 }
 .profile-card-link:hover .profile-card { border-color: var(--accent); }
+.profile-card-link:hover .profile-card::after { opacity: 0.4; }
 .avatar-wrapper {
     width: 80px; height: 80px; border-radius: 50%; overflow: hidden; margin-bottom: 12px;
     border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0;
@@ -108,7 +156,6 @@
 .developer-info { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; }
 .developer-details { display: flex; flex-direction: column; align-items: center; width: 100%; }
 .developer-actions { margin-top: 16px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-.developer-actions .button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(58,168,201,0.4); }
 .developer-details h3 { margin: 0 0 4px; }
 
 .feature-item {
@@ -117,7 +164,20 @@
     padding: 20px;
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94);
+    position: relative; overflow: hidden;
 }
+.feature-item::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at var(--glow-x, 50%) var(--glow-y, 50%), transparent 50%, var(--accent) 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 0;
+}
+.feature-item:hover::after { opacity: 0.4; }
 .feature-icon { font-size: 32px; display: block; margin-bottom: 10px; transition: transform 0.2s; }
 .feature-item h3 { margin: 0 0 8px; color: var(--accent); }
 .features-extra {
@@ -125,7 +185,9 @@
     background: var(--bg-inner-gradient); border-radius: var(--border-radius-inner);
     border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94);
+    position: relative; overflow: hidden;
 }
+.features-extra::after { /* аналогично */ }
 .features-extra h3 { margin: 0 0 15px; color: var(--accent); }
 .features-list { list-style: none; padding-left: 0; }
 .features-list li { padding: 4px 0 4px 20px; position: relative; }
@@ -137,13 +199,17 @@
     background: var(--bg-inner-gradient); padding: 16px;
     border-radius: var(--border-radius-inner); border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94);
+    position: relative; overflow: hidden;
 }
+.req-item::after { /* свечение */ }
 .req-label { display: block; color: var(--accent); margin-bottom: 8px; font-size: 16px; }
 .consumption-card {
     background: var(--bg-inner-gradient); border-radius: var(--border-radius-inner);
     padding: 20px; margin-top: 24px; border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94);
+    position: relative; overflow: hidden;
 }
+.consumption-card::after { /* свечение */ }
 .consumption-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
 .consumption-table td { padding: 12px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
 .consumption-table td:first-child { color: var(--text-primary); width: 40%; }
@@ -170,13 +236,12 @@
 .small-projects-container .project-card h3 { margin: 4px 0; font-size: 16px; }
 .small-projects-container .project-card .button { margin-top: 8px; }
 
-/* Прежние стили фокуса и прочего */
 .project-card-link:focus-visible,
 .profile-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--border-radius-inner); }
 .project-card-link:focus-visible .project-card,
 .profile-card-link:focus-visible .profile-card { border-color: var(--accent); }
 
-.project-card-link:hover .button { box-shadow: 0 0 15px var(--accent), 0 4px 8px rgba(0,0,0,0.3); transform: scale(1.02); transition: box-shadow var(--transition-default), transform var(--transition-default); }
+.project-card-link:hover .button { box-shadow: 0 0 8px var(--accent), 0 4px 8px rgba(0,0,0,0.3); transform: scale(1.02); transition: box-shadow var(--transition-default), transform var(--transition-default); }
 
 .progress-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
 .progress-label { font-size: 14px; color: var(--text-secondary); white-space: nowrap; }
@@ -223,4 +288,16 @@
 }
 .news-bookmark-btn.bookmarked i {
     font-weight: 900;
+}
+.edge-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 1;
 }

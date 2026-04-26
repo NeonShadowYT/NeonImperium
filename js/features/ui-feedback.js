@@ -1,4 +1,4 @@
-// js/features/ui-feedback.js — интерфейс обратной связи с динамической подгрузкой хранилища
+// js/features/ui-feedback.js — интерфейс обратной связи с универсальными помощниками
 (function() {
     const REACTION_TYPES = [
         { content: '+1', emoji: '👍' }, { content: '-1', emoji: '👎' }, { content: 'laugh', emoji: '😄' },
@@ -10,7 +10,7 @@
     const commentsCache = new Map();
     const reactionLocks = new Map();
 
-    const { escapeHtml, renderMarkdown, extractAllowed, decryptPrivateBody, createElement, loadModule } = GithubCore;
+    const { escapeHtml, renderMarkdown, extractAllowed, decryptPrivateBody, createElement, loadModule, invalidateFetchCache } = GithubCore;
 
     function getCached(key, cacheMap) {
         const cached = cacheMap.get(key);
@@ -21,8 +21,33 @@
         reactionsCache.delete(`reactions_${issueNumber}`);
         commentsCache.delete(`comments_${issueNumber}`);
         if (window.reactionsListCache) window.reactionsListCache.delete(`list_reactions_${issueNumber}`);
+        invalidateFetchCache(`/issues/${issueNumber}`);
     }
 
+    // ========== Универсальные функции, используемые несколькими модулями ==========
+
+    function canViewPost(body, labels, currentUser) {
+        if (!labels.includes('private')) return true;
+        if (GithubAuth.isAdmin()) return true;
+        const allowed = extractAllowed(body);
+        if (!allowed) return false;
+        return allowed.split(',').map(s => s.trim()).includes(currentUser);
+    }
+
+    function getDisplayBody(body, labels, currentUser) {
+        const allowed = extractAllowed(body);
+        if (labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
+            try { return decryptPrivateBody(body, allowed); } catch (e) { console.warn('Decryption failed', e); }
+        }
+        return body;
+    }
+
+    function extractFirstImage(body) {
+        const m = body?.match(/!\[.*?\]\((.*?)\)/);
+        return m ? m[1] : null;
+    }
+
+    // ========== Группировка реакций ==========
     function groupReactions(reactions, currentUser) {
         const grouped = {};
         REACTION_TYPES.forEach(t => grouped[t.content] = { ...t, count: 0, userReacted: false, userReactionId: null });
@@ -39,6 +64,7 @@
         return Object.values(grouped).filter(g => g.count > 0).sort((a,b) => b.count - a.count);
     }
 
+    // ========== Рендер реакций ==========
     function renderReactions(container, issueNumber, reactions, currentUser, onAdd, onRemove) {
         if (!container) return;
         const hasRepo = GithubAuth.hasScope('repo');
@@ -130,10 +156,7 @@
                             existing.dataset.reactionId = '';
                         } finally { reactionLocks.delete(lockKey); }
                     } else {
-                        const tempBtn = createElement('button', 'reaction-button active', {}, {
-                            'data-content': selected,
-                            'data-reaction-id': 'temp'
-                        });
+                        const tempBtn = createElement('button', 'reaction-button active', {}, { 'data-content': selected, 'data-reaction-id': 'temp' });
                         const emoji = REACTION_TYPES.find(t => t.content === selected).emoji;
                         tempBtn.innerHTML = `<span class="reaction-emoji">${emoji}</span><span class="reaction-count">1</span>`;
                         container.insertBefore(tempBtn, addBtn);
@@ -166,6 +189,7 @@
         setTimeout(() => document.addEventListener('click', close), 100);
     }
 
+    // ========== Рендер комментариев ==========
     function renderComments(container, comments, currentUser, issueNumber) {
         const hasRepo = GithubAuth.hasScope('repo');
         const regular = comments.filter(c => !c.body.trim().startsWith('!vote'));
@@ -234,6 +258,7 @@
         modal.querySelector('#edit-comment-cancel').addEventListener('click', closeModal);
     }
 
+    // ========== Кешированная загрузка реакций и комментариев ==========
     async function loadReactionsWithCache(issueNumber) {
         const key = `reactions_${issueNumber}`;
         const cached = getCached(key, reactionsCache);
@@ -252,22 +277,11 @@
         return comments;
     }
 
+    // ========== Опросы ==========
     function extractPollFromBody(body) {
         const match = /<!-- poll: (.*?) -->/.exec(body);
         if (match) try { return JSON.parse(match[1]); } catch { return null; }
         return null;
-    }
-
-    async function renderPostBody(container, body, issueNumber) {
-        const html = renderMarkdown(body);
-        container.innerHTML = `<div class="markdown-body">${html}</div>`;
-        const pollData = extractPollFromBody(body);
-        if (pollData) {
-            const pollContainer = createElement('div', 'poll-container');
-            container.appendChild(pollContainer);
-            if (issueNumber) await renderPoll(pollContainer, issueNumber, pollData);
-            else renderStaticPoll(pollContainer, pollData);
-        }
     }
 
     function renderStaticPoll(container, pollData) {
@@ -320,6 +334,20 @@
         }
     }
 
+    // ========== Отображение тела поста ==========
+    async function renderPostBody(container, body, issueNumber) {
+        const html = renderMarkdown(body);
+        container.innerHTML = `<div class="markdown-body">${html}</div>`;
+        const pollData = extractPollFromBody(body);
+        if (pollData) {
+            const pollContainer = createElement('div', 'poll-container');
+            container.appendChild(pollContainer);
+            if (issueNumber) await renderPoll(pollContainer, issueNumber, pollData);
+            else renderStaticPoll(pollContainer, pollData);
+        }
+    }
+
+    // ========== Загрузка реакций и комментариев для модального окна ==========
     async function loadReactionsAndComments(container, item, currentUser) {
         const reactionsDiv = createElement('div', 'reactions-container');
         const commentsDiv = createElement('div', 'feedback-comments');
@@ -334,6 +362,7 @@
         renderComments(commentsDiv, comments, currentUser, item.id);
     }
 
+    // ========== Форма комментария ==========
     function setupCommentForm(container, item, currentUser) {
         if (!GithubAuth.hasScope('repo')) return;
         const form = createElement('div', 'comment-form', { display: 'flex', gap: '8px', marginTop: '16px' });
@@ -381,6 +410,7 @@
         });
     }
 
+    // ========== Действия в шапке модального окна ==========
     function addHeaderActions(modalHeader, item, issue, currentUser, closeModal, escHandler) {
         const isAdmin = GithubAuth.isAdmin();
         const hasRepo = GithubAuth.hasScope('repo');
@@ -424,11 +454,7 @@
         actions.querySelector('.bookmark-post')?.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (!window.BookmarkStorage) {
-                try {
-                    await loadModule('js/features/storage.js');
-                } catch (err) {
-                    return UIUtils.showToast('Не удалось загрузить хранилище', 'error');
-                }
+                try { await loadModule('js/features/storage.js'); } catch (err) { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
             }
             if (!window.BookmarkStorage) return UIUtils.showToast('Хранилище не загружено', 'error');
             BookmarkStorage.addBookmark({
@@ -450,11 +476,7 @@
         });
     }
 
-    function extractFirstImage(body) {
-        const m = body?.match(/!\[.*?\]\((.*?)\)/);
-        return m ? m[1] : null;
-    }
-
+    // ========== Открытие полного модального окна поста ==========
     async function openFullModal(item) {
         const currentUser = GithubAuth.getCurrentUser();
         const { modal, closeModal } = UIUtils.createModal(item.title, '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>', { size: 'full' });
@@ -474,11 +496,7 @@
             container.appendChild(header);
             addHeaderActions(modal.querySelector('.modal-header'), item, issue, currentUser, closeModal, escHandler);
 
-            let finalBody = issue.body;
-            const allowed = extractAllowed(issue.body);
-            if (item.labels?.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-                try { finalBody = decryptPrivateBody(finalBody, allowed); } catch {}
-            }
+            const finalBody = getDisplayBody(issue.body, item.labels, currentUser);
             await renderPostBody(container, finalBody, item.id);
             await loadReactionsAndComments(container, item, currentUser);
             if (currentUser) setupCommentForm(container, item, currentUser);
@@ -488,14 +506,7 @@
         }
     }
 
-    function canViewPost(body, labels, currentUser) {
-        if (!labels.includes('private')) return true;
-        if (GithubAuth.isAdmin()) return true;
-        const allowed = extractAllowed(body);
-        if (!allowed) return false;
-        return allowed.split(',').map(s=>s.trim()).includes(currentUser);
-    }
-
+    // ========== Открытие редактора (общий для всех типов) ==========
     function openEditorModal(mode, data, postType = 'feedback') {
         if (!GithubAuth.hasScope('repo')) return UIUtils.showToast('Нужен scope "repo"', 'error');
         const currentUser = GithubAuth.getCurrentUser();
@@ -613,8 +624,10 @@
 
     window.addEventListener('open-comment-editor', (e) => openEditorModal('new', { issueNumber: e.detail.issueNumber }, 'comment'));
 
+    // Экспорт
     window.UIFeedback = {
         renderReactions, renderComments, openFullModal, openEditorModal,
-        renderPostBody, canViewPost, REACTION_TYPES, invalidateCache
+        renderPostBody, canViewPost, getDisplayBody, extractFirstImage,
+        REACTION_TYPES, invalidateCache
     };
 })();
