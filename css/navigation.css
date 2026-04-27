@@ -1,7 +1,6 @@
-/* Навигация */
 .nav-bar {
     background: var(--bg-card);
-    border-radius: 50px;
+    border-radius: var(--radius-pill);
     padding: 6px 20px;
     margin-bottom: 24px;
     border: 1px solid var(--border);
@@ -15,56 +14,52 @@
     top: 0;
     z-index: 100;
 }
+
 .nav-links {
     display: flex;
     flex-wrap: wrap;
     gap: 5px;
 }
+
 .nav-link {
     color: var(--text-secondary);
     padding: 10px 20px;
-    border-radius: 40px;
+    border-radius: var(--radius-pill);
     font-size: 16px;
-    transition: background 0.2s, color 0.2s;
+    transition: background var(--transition), color var(--transition);
     white-space: nowrap;
+    text-decoration: none;
 }
+
 .nav-link:hover {
     background: #4a4a55;
     color: var(--text-primary);
 }
+
 .nav-link.active {
     background: var(--accent);
     color: white;
 }
-/* Фокус для навигации */
-.nav-link:focus-visible,
-.lang-btn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-radius: 40px; /* для nav-link */
-}
-.lang-btn:focus-visible {
-    border-radius: 20px;
-}
 
-/* Переключатель языка */
 .lang-switcher {
     display: flex;
     gap: 5px;
-    flex-wrap: nowrap; /* гарантируем одну строку */
+    flex-wrap: nowrap;
 }
+
 .lang-btn {
     background: transparent;
     border: 1px solid var(--accent);
     color: var(--text-secondary);
     padding: 6px 12px;
-    border-radius: 20px;
+    border-radius: var(--radius-pill);
     cursor: pointer;
     font-size: 14px;
-    transition: all 0.2s;
+    transition: all var(--transition);
     white-space: nowrap;
-    font-family: 'Russo One', sans-serif; /* добавлено */
+    font-family: var(--font-family);
 }
+
 .lang-btn:hover {
     background: var(--accent);
     color: white;
@@ -72,28 +67,31 @@
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(58,168,201,0.4);
 }
+
 .lang-btn.active {
     background: var(--accent);
     color: white;
     border-color: var(--accent);
 }
 
-/* Profile in navigation */
+/* Профиль */
 .nav-profile {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 4px 8px 4px 12px;
-    border-radius: 40px;
+    border-radius: var(--radius-pill);
     background: var(--bg-inner-gradient);
     border: 1px solid var(--border);
     cursor: pointer;
-    transition: border-color 0.2s;
+    transition: border-color var(--transition);
     position: relative;
 }
+
 .nav-profile:hover {
     border-color: var(--accent);
 }
+
 .nav-profile-avatar {
     width: 32px;
     height: 32px;
@@ -101,6 +99,7 @@
     object-fit: cover;
     border: 2px solid var(--accent);
 }
+
 .nav-profile-login {
     font-size: 14px;
     color: var(--text-primary);
@@ -109,62 +108,69 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
 .nav-profile-login.placeholder {
     color: var(--text-secondary);
-    font-weight: normal;
 }
+
 .nav-profile-chevron {
     color: var(--text-secondary);
     font-size: 12px;
     transition: transform 0.2s;
 }
+
 .nav-profile:hover .nav-profile-chevron {
     transform: rotate(90deg);
 }
 
-/* Profile dropdown menu */
+/* Выпадающее меню профиля */
 .profile-dropdown {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     padding: 8px 0;
-    min-width: 200px;
+    min-width: 220px;
     box-shadow: var(--shadow);
     display: none;
     z-index: 1000;
 }
+
 .nav-profile.active .profile-dropdown {
     display: block;
 }
+
 .profile-dropdown-item {
     padding: 10px 16px;
     color: var(--text-secondary);
     font-size: 14px;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background var(--transition);
     white-space: nowrap;
     display: flex;
     align-items: center;
     gap: 8px;
 }
+
 .profile-dropdown-item:hover {
     background: var(--bg-inner-gradient);
     color: var(--text-primary);
 }
+
 .profile-dropdown-item i {
     width: 16px;
     color: var(--accent);
 }
+
 .profile-dropdown-divider {
     height: 1px;
     background: var(--border);
     margin: 8px 0;
 }
 
-/* Token modal (если пользователь не вошёл) */
+/* Модальное окно входа (создаётся динамически) */
 .modal {
     display: none;
     position: fixed;
@@ -177,44 +183,48 @@
     align-items: center;
     justify-content: center;
 }
+
 .modal.active {
     display: flex;
 }
+
 .modal-content {
-    background: var(--bg-card);
-    border-radius: 20px;
+    background: var(--bg-card-gradient);
+    border-radius: var(--radius-lg);
     padding: 28px;
     max-width: 400px;
     width: 90%;
     border: 1px solid var(--accent);
 }
+
 .modal-content h3 {
     margin-top: 0;
     color: var(--accent);
 }
+
 .modal-content p {
     margin-bottom: 20px;
     font-size: 14px;
 }
+
 .modal-content input {
     width: 100%;
     padding: 12px;
     background: var(--bg-primary);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     color: var(--text-primary);
     margin-bottom: 16px;
     font-family: monospace;
 }
+
 .modal-content input:focus {
     outline: none;
     border-color: var(--accent);
 }
+
 .modal-buttons {
     display: flex;
     gap: 10px;
     justify-content: flex-end;
-}
-.modal-buttons .button {
-    min-width: 80px;
 }

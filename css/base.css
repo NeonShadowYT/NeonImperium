@@ -1,6 +1,11 @@
-* { margin:0; padding:0; box-sizing:border-box; }
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
 body {
-    font-family: 'Russo One', sans-serif;
+    font-family: var(--font-family);
     background: var(--bg-primary);
     color: var(--text-secondary);
     line-height: 1.5;
@@ -10,7 +15,48 @@ body {
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
 }
-.page { max-width: 1200px; margin:0 auto; width:100%; }
-a { color:var(--accent); text-decoration:none; }
-a:hover { text-decoration:none; }
-img { max-width:100%; height:auto; display:block; }
+
+.page {
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: none;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* Базовый класс карточки */
+.card {
+    background: var(--bg-card-gradient);
+    border-radius: var(--radius-md);
+    padding: 28px;
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    transition: box-shadow var(--transition);
+}
+
+.card:hover {
+    box-shadow: var(--shadow-hover);
+}
+
+/* Утилиты для hover-эффекта подъёма */
+.hover-lift {
+    transition: transform var(--transition), box-shadow var(--transition);
+}
+.hover-lift:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-hover);
+}

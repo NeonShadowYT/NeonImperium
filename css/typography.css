@@ -1,31 +1,39 @@
-/* Типографика */
 h1, h2, h3, h4, .game-title {
     color: var(--text-primary);
     font-weight: 400;
 }
+
 .game-title {
     font-size: 48px;
     letter-spacing: -0.5px;
     margin-bottom: 8px;
 }
+
 h2 {
     font-size: 24px;
     margin-bottom: 16px;
 }
+
 h3 {
     font-size: 20px;
     margin: 16px 0 8px;
 }
-.text-secondary, p, li, .small-note {
-    font-size: 14px;
+
+.text-secondary {
     color: var(--text-secondary);
+    font-size: 14px;
 }
+
+.small-note {
+    font-size: 14px;
+}
+
 .version-badge {
     background: var(--accent);
     color: white;
     display: inline-block;
     padding: 6px 16px;
-    border-radius: 20px;
+    border-radius: var(--radius-pill);
     font-size: 14px;
 }
 
@@ -34,4 +42,13 @@ h3 {
 .update-card h3,
 .req-label {
     color: var(--accent);
+}
+
+/* Многострочное усечение текста */
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
