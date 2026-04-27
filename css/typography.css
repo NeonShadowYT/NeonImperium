@@ -37,6 +37,7 @@ h3 {
     font-size: 14px;
 }
 
+/* Цветовые акценты для заголовков специфичных блоков */
 .feature-item h3,
 .developer-details h3,
 .update-card h3,

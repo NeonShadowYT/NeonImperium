@@ -1,3 +1,4 @@
+/* Базовая кнопка */
 .button {
     display: inline-block;
     background: var(--accent);
@@ -63,7 +64,6 @@
     box-shadow: 0 5px 15px rgba(64,116,140,0.4);
 }
 
-/* Иконки для платформ */
 .download-button.gamejolt::before {
     content: "\f0e7";
     font-family: "Font Awesome 6 Free";
@@ -81,6 +81,7 @@
     outline-offset: 2px;
     border-radius: 4px;
 }
+
 .button:focus-visible,
 .download-button:focus-visible,
 .social-icon:focus-visible {
