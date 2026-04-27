@@ -1,4 +1,4 @@
-// feedback.js — обратная связь на страницах игр с оптимистичным UI и кэшированием
+// js/pages/feedback.js — обратная связь с поддержкой background sync
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody, createElement } = GithubCore;
     const { loadIssues, loadReactions, addReaction, removeReaction, createIssue } = GithubAPI;
@@ -8,6 +8,60 @@
     const ITEMS_PER_PAGE = 10, MAX_DISPLAY = 30, CACHE_TTL = 5*60*1000;
     let currentGame, currentTab = 'all', currentPage = 1, hasMore = true, isLoading = false;
     let allIssues = [], container, grid, sentinel, observer, currentAbort, currentUser;
+
+    // ================== Background Sync: IndexedDB ==================
+    function openSyncDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('NeonImperiumSync', 1);
+            request.onupgradeneeded = event => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('mutations')) {
+                    db.createObjectStore('mutations', { keyPath: 'id', autoIncrement: true });
+                }
+                if (!db.objectStoreNames.contains('credentials')) {
+                    db.createObjectStore('credentials', { keyPath: 'key' });
+                }
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async function queueMutation(mutation) {
+        const db = await openSyncDB();
+        const tx = db.transaction('mutations', 'readwrite');
+        const store = tx.objectStore('mutations');
+        await store.add(mutation);
+        await tx.done;
+    }
+
+    async function registerSync() {
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            await registration.sync.register('github-mutations');
+            console.log('Background sync registered');
+        } catch (e) {
+            console.warn('Background sync not supported', e);
+        }
+    }
+
+    async function sendTokenToSW(token) {
+        if (!navigator.serviceWorker?.controller) return;
+        navigator.serviceWorker.controller.postMessage({ type: 'SAVE_TOKEN', token });
+    }
+
+    // Сохраняем токен при логине
+    window.addEventListener('github-login-success', () => {
+        const token = GithubAuth.getToken();
+        if (token) sendTokenToSW(token);
+    });
+
+    // При загрузке, если токен есть, тоже отправляем
+    if (GithubAuth.getToken()) {
+        sendTokenToSW(GithubAuth.getToken());
+    }
+
+    // =================================================================
 
     document.addEventListener('DOMContentLoaded', init);
 
@@ -178,6 +232,60 @@
             cached = await loadReactions(num);
             cacheSet(key, cached);
         }
-        if (cached) renderReactions(container, num, cached, currentUser, addReaction, removeReaction);
+        if (cached) renderReactions(container, num, cached, currentUser, addReactionWithSync, removeReactionWithSync);
     }
+
+    // Обёртки для реакций с поддержкой offline-очереди
+    async function addReactionWithSync(issueNumber, content) {
+        try {
+            await addReaction(issueNumber, content);
+            invalidateCache(issueNumber);
+        } catch (err) {
+            if (isNetworkError(err)) {
+                await queueMutation({
+                    type: 'addReaction',
+                    issueNumber,
+                    content,
+                    timestamp: Date.now()
+                });
+                await registerSync();
+                UIUtils.showToast('Реакция будет отправлена при восстановлении связи', 'info');
+            } else {
+                throw err;
+            }
+        }
+    }
+
+    async function removeReactionWithSync(issueNumber, reactionId) {
+        try {
+            await removeReaction(issueNumber, reactionId);
+            invalidateCache(issueNumber);
+        } catch (err) {
+            if (isNetworkError(err)) {
+                await queueMutation({
+                    type: 'removeReaction',
+                    issueNumber,
+                    reactionId,
+                    timestamp: Date.now()
+                });
+                await registerSync();
+                UIUtils.showToast('Реакция будет удалена при восстановлении связи', 'info');
+            } else {
+                throw err;
+            }
+        }
+    }
+
+    function isNetworkError(err) {
+        return err instanceof TypeError || err.name === 'AbortError' || err.message === 'Failed to fetch';
+    }
+
+    // Экспортируем функции, чтобы можно было использовать в других частях (например, в ui-feedback.js)
+    window.FeedbackSync = {
+        addReactionWithSync,
+        removeReactionWithSync,
+        queueMutation,
+        registerSync,
+        isNetworkError
+    };
 })();
