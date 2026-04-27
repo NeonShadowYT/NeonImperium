@@ -1,6 +1,6 @@
-// js/pages/news-feed.js – лента новостей с оптимистичным UI, закладками, кешированием
+// js/pages/news-feed.js – лента новостей, видео проигрываются в карточке, посты в модалке, оптимизировано
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, createElement, loadModule, formatDate } = GithubCore;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
     const { openFullModal, canViewPost } = UIFeedback;
     const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
@@ -12,8 +12,6 @@
         { id: 'UCcuqf3fNtZ2UP5MO89kVKLw', name: 'Mitmi' }
     ];
     const DEFAULT_IMAGE = 'images/default-news.webp';
-    const CACHE_KEY_POSTS = 'posts_news+update_v3';
-    const CACHE_KEY_VIDEOS = 'youtube_videos_rss2json_v3';
 
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
     let currentUser = null, currentAbort = null;
@@ -24,11 +22,11 @@
         if (!section) return;
         let header = section.querySelector('.news-header');
         if (!header) {
-            header = createElement('div', 'news-header', {
+            header = GithubCore.createElement('div', 'news-header', {
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 marginBottom: '20px', flexWrap: 'wrap', gap: '15px'
             });
-            header.innerHTML = `<div><h2 data-lang="newsTitle">📰 ${I18n.translate('newsTitle')}</h2><p class="text-secondary" data-lang="newsDesc">${I18n.translate('newsDesc')}</p></div>`;
+            header.innerHTML = '<div><h2 data-lang="newsTitle">📰 Последние новости</h2><p class="text-secondary" data-lang="newsDesc">Свежие видео и обновления</p></div>';
             section.prepend(header);
         }
         container = document.getElementById('news-feed');
@@ -36,14 +34,13 @@
             currentUser = getCurrentUser();
             loadNewsFeed();
         }
-
         window.addEventListener('github-login-success', e => { currentUser = e.detail.login; refreshNewsFeed(); });
         window.addEventListener('github-logout', () => { currentUser = null; refreshNewsFeed(); });
         window.addEventListener('github-issue-created', e => {
             const issue = e.detail;
             const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
             if (!typeLabel || !CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
-            cacheRemoveByPrefix(CACHE_KEY_POSTS);
+            cacheRemoveByPrefix('posts_news+update_v3');
             const newPost = {
                 type: 'post', number: issue.number, title: issue.title, body: issue.body,
                 author: issue.user.login, date: new Date(issue.created_at),
@@ -61,16 +58,16 @@
     async function openPostFromUrl(postId) {
         try {
             const issue = await loadIssue(postId);
-            if (issue.state === 'closed') return UIUtils.showToast(I18n.translate('githubError'), 'error');
+            if (issue.state === 'closed') return UIUtils.showToast('Пост закрыт', 'error');
             const item = {
                 type: 'post', id: issue.number, title: issue.title, body: issue.body,
                 author: issue.user.login, date: new Date(issue.created_at),
                 game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
                 labels: issue.labels.map(l => l.name)
             };
-            if (!canViewPost(issue.body, item.labels, currentUser)) return UIUtils.showToast(I18n.translate('githubForbidden'), 'error');
+            if (!canViewPost(issue.body, item.labels, currentUser)) return UIUtils.showToast('Нет доступа', 'error');
             openFullModal(item);
-        } catch { UIUtils.showToast(I18n.translate('githubError'), 'error'); }
+        } catch { UIUtils.showToast('Ошибка загрузки', 'error'); }
     }
 
     window.refreshNewsFeed = () => {
@@ -82,7 +79,7 @@
     };
 
     async function loadNewsFeed() {
-        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>${I18n.translate('newsLoading')}</p></div>`;
+        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>';
         try { posts = await loadPosts(); postsLoaded = true; } catch { posts = []; postsLoaded = true; }
         loadVideosAsync();
     }
@@ -95,9 +92,9 @@
     }
 
     async function loadVideosFromRSS2JSON() {
-        const cached = cacheGet(CACHE_KEY_VIDEOS);
+        const cacheKey = 'youtube_videos_rss2json_v3';
+        const cached = cacheGet(cacheKey);
         if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
-
         const { controller, timeoutId } = createAbortable(15000);
         currentAbort = { controller };
         try {
@@ -111,30 +108,20 @@
                 const items = data.items.slice(0,9).map(item => {
                     const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
                     if (!vid) return null;
-                    return {
-                        type: 'video',
-                        id: vid,
-                        title: item.title,
-                        author: ch.name,
-                        date: new Date(item.pubDate),
-                        thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`
-                    };
+                    return { type: 'video', id: vid, title: item.title, author: ch.name, date: new Date(item.pubDate), thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg` };
                 }).filter(v => v);
                 all.push(...items);
             }
             const sorted = all.sort((a,b) => b.date - a.date).slice(0,20);
-            cacheSet(CACHE_KEY_VIDEOS, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
+            cacheSet(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
             return sorted;
-        } finally {
-            clearTimeout(timeoutId);
-            if (currentAbort?.controller === controller) currentAbort = null;
-        }
+        } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
     }
 
     async function loadPosts() {
-        const cached = cacheGet(CACHE_KEY_POSTS);
+        const cacheKey = 'posts_news+update_v3';
+        const cached = cacheGet(cacheKey);
         if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
-
         const { controller, timeoutId } = createAbortable(10000);
         currentAbort = { controller };
         try {
@@ -142,103 +129,74 @@
                 loadIssues({ labels: 'type:news', per_page: 15, signal: controller.signal }),
                 loadIssues({ labels: 'type:update', per_page: 15, signal: controller.signal })
             ]);
-            const all = deduplicateByNumber([...news, ...updates])
-                .filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
+            const all = deduplicateByNumber([...news, ...updates]).filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
             const posts = all.map(i => ({
-                type: 'post',
-                number: i.number,
-                title: i.title,
-                body: i.body,
-                author: i.user.login,
-                date: new Date(i.created_at),
+                type: 'post', number: i.number, title: i.title, body: i.body,
+                author: i.user.login, date: new Date(i.created_at),
                 labels: i.labels.map(l => l.name),
                 game: i.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
             }));
-            cacheSet(CACHE_KEY_POSTS, posts.map(p => ({ ...p, date: p.date.toISOString() })));
+            cacheSet(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
             return posts;
-        } finally {
-            clearTimeout(timeoutId);
-            if (currentAbort?.controller === controller) currentAbort = null;
-        }
+        } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
     }
 
     function renderMixed() {
         if (!postsLoaded) return;
-
         const filteredPosts = posts.filter(p => {
             if (!p.labels.includes('private')) return true;
             if (isAdmin()) return true;
             const allowed = extractAllowed(p.body);
             return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
         });
-
         let items = [...filteredPosts];
         if (videosLoaded) items = items.concat(videos);
         items.sort((a,b) => b.date - a.date);
         const showItems = items.slice(0,6);
 
-        const grid = createElement('div', 'projects-grid');
+        const grid = GithubCore.createElement('div', 'projects-grid');
         if (showItems.length === 0) {
-            grid.innerHTML = `<div class="empty-state"><i class="fas fa-newspaper"></i><p>${I18n.translate('newsNoItems')}</p></div>`;
+            grid.innerHTML = '<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">Пока нет новостей</p></div>';
         } else {
-            showItems.forEach(item => {
-                grid.appendChild(item.type === 'video' ? createVideoCard(item) : createPostCard(item));
-            });
+            showItems.forEach(item => grid.appendChild(item.type === 'video' ? createVideoCard(item) : createPostCard(item)));
         }
-
         if (videoError) {
-            const retryBtn = createElement('button', 'button small', { marginTop: '20px' });
-            retryBtn.innerHTML = `<i class="fas fa-sync-alt"></i> ${I18n.translate('newsRetryVideo')}`;
-            retryBtn.addEventListener('click', () => {
-                videoError = false;
-                videosLoaded = false;
-                loadVideosAsync();
-                retryBtn.remove();
-            });
-            grid.appendChild(retryBtn);
+            const retry = GithubCore.createElement('button', 'button small', { marginTop: '20px' });
+            retry.innerHTML = '<i class="fas fa-sync-alt"></i> Повторить загрузку видео';
+            retry.addEventListener('click', () => { videoError = false; videosLoaded = false; loadVideosAsync(); retry.remove(); });
+            grid.appendChild(retry);
         }
-
         container.innerHTML = '';
         container.appendChild(grid);
 
-        // Кнопка "Добавить новость" для админа
         const header = document.querySelector('.news-header');
         if (header) {
             const existing = header.querySelector('.admin-news-btn');
             if (isAdmin() && hasScope('repo')) {
                 if (!existing) {
-                    const adminBtn = createElement('button', 'button admin-news-btn');
-                    adminBtn.innerHTML = '<i class="fas fa-plus"></i> Добавить новость';
-                    adminBtn.addEventListener('click', () => UIFeedback.openEditorModal('new', { game: null }, 'news'));
-                    header.appendChild(adminBtn);
+                    const btn = GithubCore.createElement('button', 'button admin-news-btn');
+                    btn.innerHTML = '<i class="fas fa-plus"></i> Добавить новость';
+                    btn.addEventListener('click', () => UIFeedback.openEditorModal('new', { game: null }, 'news'));
+                    header.appendChild(btn);
                 }
             } else if (existing) existing.remove();
         }
-
-        // Поддержка I18n для динамически созданных элементов
-        I18n.updateElements?.();
     }
 
-    function handleBookmark(item, iconElement) {
+    async function handleBookmark(item) {
         if (!window.BookmarkStorage) {
-            loadModule('js/features/storage.js').then(() => handleBookmark(item, iconElement));
-            return;
+            try { await loadModule('js/features/storage.js'); }
+            catch (e) { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
         }
-        // Оптимистично: сразу меняем иконку
-        iconElement.classList.toggle('far');
-        iconElement.classList.toggle('fas');
-        iconElement.parentElement.classList.toggle('bookmarked');
-
-        const bookmarkData = {
+        const bookmark = {
             url: item.type === 'video'
                 ? `https://www.youtube.com/watch?v=${item.id}`
                 : `${location.origin}${location.pathname}?post=${item.number}`,
             title: item.title,
-            postType: item.type === 'post' ? 'site-post' : undefined,
+            type: item.type === 'video' ? 'video' : 'post',
             thumbnail: item.thumbnail || DEFAULT_IMAGE,
             author: item.author,
             date: item.date,
-            embedUrl: item.type === 'video' ? `https://www.youtube.com/embed/${item.id}` : undefined,
             postData: item.type === 'post' ? {
                 id: item.number,
                 title: item.title,
@@ -249,44 +207,42 @@
                 game: item.game
             } : undefined
         };
-
-        BookmarkStorage.addBookmark(bookmarkData).catch(() => {
-            // Откат
-            iconElement.classList.toggle('far');
-            iconElement.classList.toggle('fas');
-            iconElement.parentElement.classList.toggle('bookmarked');
-            UIUtils.showToast(I18n.translate('githubError'), 'error');
-        });
+        try {
+            await BookmarkStorage.addBookmark(bookmark);
+            UIUtils.showToast('Добавлено в избранное', 'success');
+        } catch (err) {
+            if (err.message === 'password_required') {
+                UIUtils.showToast('Для сохранения нужен мастер-пароль. Откройте хранилище.', 'error');
+            } else if (err.message !== 'duplicate') {
+                UIUtils.showToast('Ошибка: ' + err.message, 'error');
+            }
+        }
     }
 
     function createVideoCard(video) {
-        const card = createElement('div', 'project-card-link card-interactive');
-        const inner = createElement('div', 'project-card');
+        const card = GithubCore.createElement('div', 'project-card-link card-interactive');
+        const inner = GithubCore.createElement('div', 'project-card');
 
-        const imgW = createElement('div', 'image-wrapper');
-        const img = createElement('img', 'project-image', {}, {
-            src: video.thumbnail, alt: video.title, loading: 'lazy'
-        });
+        const imgW = GithubCore.createElement('div', 'image-wrapper');
+        const img = GithubCore.createElement('img', 'project-image', {}, { src: video.thumbnail, alt: video.title, loading: 'lazy' });
         imgW.appendChild(img);
         inner.appendChild(imgW);
 
-        const titleEl = createElement('h3', '', { cursor: 'default' });
+        const titleEl = GithubCore.createElement('h3', '', { cursor: 'default' });
         titleEl.textContent = video.title.length > 70 ? video.title.slice(0,70)+'…' : video.title;
         inner.appendChild(titleEl);
 
-        const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
-        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${formatDate(video.date)}`;
+        const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
+        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
         inner.appendChild(meta);
 
-        // Кнопка закладки
-        const bookmarkBtn = createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
-        const bookmarkIcon = createElement('i', 'far fa-bookmark');
-        bookmarkBtn.appendChild(bookmarkIcon);
-        bookmarkBtn.addEventListener('click', (e) => {
+        const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+        favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
+        favBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            handleBookmark(video, bookmarkIcon);
+            handleBookmark(video);
         });
-        inner.appendChild(bookmarkBtn);
+        inner.appendChild(favBtn);
 
         card.appendChild(inner);
 
@@ -295,9 +251,8 @@
             const mediaContainer = card.querySelector('.image-wrapper');
             if (!mediaContainer || mediaContainer.querySelector('iframe')) return;
             const src = `https://www.youtube.com/embed/${video.id}`;
-            const iframe = createElement('iframe', '', {
-                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-                border: 'none', borderRadius: '12px'
+            const iframe = GithubCore.createElement('iframe', '', {
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', borderRadius: '12px'
             });
             iframe.src = src;
             iframe.setAttribute('allowfullscreen', 'true');
@@ -318,53 +273,39 @@
         if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
             try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
         }
-
-        const card = createElement('div', 'project-card-link card-interactive');
-        const inner = createElement('div', 'project-card');
+        const card = GithubCore.createElement('div', 'project-card-link card-interactive');
+        const inner = GithubCore.createElement('div', 'project-card');
 
         const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
-        const imgW = createElement('div', 'image-wrapper');
-        const img = createElement('img', 'project-image', {}, {
-            src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy'
-        });
+        const imgW = GithubCore.createElement('div', 'image-wrapper');
+        const img = GithubCore.createElement('img', 'project-image', {}, { src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy' });
         img.onerror = () => img.src = DEFAULT_IMAGE;
         imgW.appendChild(img);
         inner.appendChild(imgW);
 
-        const titleEl = createElement('h3', '', { cursor: 'pointer' });
+        const titleEl = GithubCore.createElement('h3', '', { cursor: 'pointer' });
         titleEl.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
         inner.appendChild(titleEl);
 
-        const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
-        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${formatDate(post.date)}`;
+        const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
+        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
         const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
-        const preview = createElement('p', 'text-secondary line-clamp-2');
+        const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
         preview.textContent = summary;
         inner.append(meta, preview);
 
-        // Кнопка закладки
-        const bookmarkBtn = createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
-        const bookmarkIcon = createElement('i', 'far fa-bookmark');
-        bookmarkBtn.appendChild(bookmarkIcon);
-        bookmarkBtn.addEventListener('click', (e) => {
+        const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+        favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
+        favBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            handleBookmark({ type: 'post', ...post, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE }, bookmarkIcon);
+            handleBookmark({ type: 'post', ...post, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE });
         });
-        inner.appendChild(bookmarkBtn);
+        inner.appendChild(favBtn);
 
         card.appendChild(inner);
         card.addEventListener('click', (e) => {
             if (!e.target.closest('button') && !e.target.closest('.news-bookmark-btn')) {
-                openFullModal({
-                    type: 'post',
-                    id: post.number,
-                    title: post.title,
-                    body: post.body,
-                    author: post.author,
-                    date: post.date,
-                    game: post.game,
-                    labels: post.labels
-                });
+                openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels });
             }
         });
         return card;

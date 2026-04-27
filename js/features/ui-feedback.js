@@ -1,9 +1,5 @@
-// js/features/ui-feedback.js — полный интерфейс обратной связи с I18n и оптимистичным UI
+// js/features/ui-feedback.js — интерфейс обратной связи с динамической подгрузкой хранилища
 (function() {
-    const { escapeHtml, renderMarkdown, extractAllowed, decryptPrivateBody, createElement, loadModule, cacheGet, cacheSet, cacheRemoveByPrefix, stripHtml, extractSummary } = GithubCore;
-    const { createIssue, updateIssue, loadComments, addComment, deleteComment, updateComment, loadReactions, addReaction, removeReaction, loadIssue, closeIssue } = GithubAPI;
-    const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
-
     const REACTION_TYPES = [
         { content: '+1', emoji: '👍' }, { content: '-1', emoji: '👎' }, { content: 'laugh', emoji: '😄' },
         { content: 'confused', emoji: '😕' }, { content: 'heart', emoji: '❤️' }, { content: 'hooray', emoji: '🎉' },
@@ -13,6 +9,8 @@
     const reactionsCache = new Map();
     const commentsCache = new Map();
     const reactionLocks = new Map();
+
+    const { escapeHtml, renderMarkdown, extractAllowed, decryptPrivateBody, createElement, loadModule } = GithubCore;
 
     function getCached(key, cacheMap) {
         const cached = cacheMap.get(key);
@@ -54,21 +52,22 @@
                 'data-reaction-id': g.userReactionId || '',
                 'data-count': g.count,
                 disabled: !currentUser || !hasRepo,
-                title: g.emoji
+                'aria-label': `${g.emoji} (${g.count})`
             });
             btn.innerHTML = `<span class="reaction-emoji">${g.emoji}</span><span class="reaction-count">${g.count}</span>`;
             container.appendChild(btn);
         });
         if (currentUser && hasRepo) {
             const addBtn = createElement('button', 'reaction-add-btn', {}, {
-                'aria-label': hiddenCount > 0 ? I18n.translate('feedbackLoadMore') : I18n.translate('feedbackNewBtn')
+                'data-add': hiddenCount === 0 ? '' : undefined,
+                'data-more': hiddenCount > 0 ? '' : undefined,
+                'aria-label': hiddenCount > 0 ? 'Показать ещё реакции' : 'Добавить реакцию'
             });
             addBtn.innerHTML = `<span>${hiddenCount > 0 ? '+' + hiddenCount : '+'}</span>`;
             container.appendChild(addBtn);
         }
 
         if (!currentUser || !hasRepo) return;
-
         container.querySelectorAll('.reaction-button:not([disabled])').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -87,7 +86,7 @@
                     try {
                         await onRemove(issueNumber, parseInt(reactionId, 10));
                     } catch {
-                        UIUtils.showToast(I18n.translate('githubError'), 'error');
+                        UIUtils.showToast('Ошибка при удалении реакции', 'error');
                         btn.classList.add('active');
                         countSpan.textContent = oldCount;
                     } finally { reactionLocks.delete(lockKey); }
@@ -99,7 +98,7 @@
                     try {
                         await onAdd(issueNumber, content);
                     } catch {
-                        UIUtils.showToast(I18n.translate('githubError'), 'error');
+                        UIUtils.showToast('Ошибка при добавлении реакции', 'error');
                         btn.classList.remove('active');
                         countSpan.textContent = oldCount;
                         btn.dataset.reactionId = '';
@@ -108,7 +107,7 @@
             });
         });
 
-        const addBtn = container.querySelector('.reaction-add-btn');
+        const addBtn = container.querySelector('[data-add],[data-more]');
         if (addBtn) {
             addBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -194,10 +193,11 @@
                     const commentId = btn.dataset.commentId;
                     commentDiv.remove();
                     try {
-                        await deleteComment(commentId);
+                        await GithubAPI.deleteComment(commentId);
                         invalidateCache(issueNumber);
+                        UIUtils.showToast('Комментарий удалён', 'success');
                     } catch {
-                        UIUtils.showToast(I18n.translate('githubError'), 'error');
+                        UIUtils.showToast('Ошибка при удалении', 'error');
                         if (!commentDiv.parentNode) container.appendChild(commentDiv);
                     }
                 });
@@ -211,48 +211,45 @@
                 <div id="modal-editor-toolbar"></div>
                 <textarea id="edit-comment-body" class="feedback-textarea" rows="10">${escapeHtml(currentBody)}</textarea>
                 <div class="button-group" style="margin-top:15px; display:flex; gap:10px; justify-content:flex-end;">
-                    <button class="button" id="edit-comment-save">${I18n.translate('feedbackSubmitBtn')}</button>
-                    <button class="button" id="edit-comment-cancel">${I18n.translate('feedbackCancel')}</button>
+                    <button class="button" id="edit-comment-save">Сохранить</button>
+                    <button class="button" id="edit-comment-cancel">Отмена</button>
                 </div>
             </div>
         `;
-        const { modal, closeModal } = UIUtils.createModal(I18n.translate('feedbackFormTitle'), html, { size: 'full' });
+        const { modal, closeModal } = UIUtils.createModal('Редактировать комментарий', html, { size: 'full' });
         const textarea = modal.querySelector('#edit-comment-body');
-        if (window.Editor) {
-            modal.querySelector('#modal-editor-toolbar').appendChild(Editor.createEditorToolbar(textarea));
-        }
+        const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
+        if (window.Editor) toolbarContainer.appendChild(Editor.createEditorToolbar(textarea));
 
         modal.querySelector('#edit-comment-save').addEventListener('click', async () => {
             const newBody = textarea.value.trim();
-            if (!newBody) return UIUtils.showToast(I18n.translate('feedbackBodyPlaceholder'), 'error');
+            if (!newBody) return UIUtils.showToast('Комментарий не может быть пустым', 'error');
             try {
-                await updateComment(commentId, newBody);
+                await GithubAPI.updateComment(commentId, newBody);
                 invalidateCache(issueNumber);
                 closeModal();
-                UIUtils.showToast(I18n.translate('feedbackSendBtn'), 'success');
-            } catch { UIUtils.showToast(I18n.translate('githubError'), 'error'); }
+                UIUtils.showToast('Комментарий обновлён', 'success');
+            } catch { UIUtils.showToast('Ошибка при сохранении', 'error'); }
         });
         modal.querySelector('#edit-comment-cancel').addEventListener('click', closeModal);
     }
 
     async function loadReactionsWithCache(issueNumber) {
         const key = `reactions_${issueNumber}`;
-        let cached = getCached(key, reactionsCache);
-        if (!cached) {
-            cached = await loadReactions(issueNumber);
-            setCached(key, cached, reactionsCache);
-        }
-        return cached;
+        const cached = getCached(key, reactionsCache);
+        if (cached) return cached;
+        const reactions = await GithubAPI.loadReactions(issueNumber);
+        setCached(key, reactions, reactionsCache);
+        return reactions;
     }
 
     async function loadCommentsWithCache(issueNumber) {
         const key = `comments_${issueNumber}`;
-        let cached = getCached(key, commentsCache);
-        if (!cached) {
-            cached = await loadComments(issueNumber);
-            setCached(key, cached, commentsCache);
-        }
-        return cached;
+        const cached = getCached(key, commentsCache);
+        if (cached) return cached;
+        const comments = await GithubAPI.loadComments(issueNumber);
+        setCached(key, comments, commentsCache);
+        return comments;
     }
 
     function extractPollFromBody(body) {
@@ -282,7 +279,7 @@
     async function renderPoll(container, issueNumber, pollData) {
         const currentUser = GithubAuth.getCurrentUser();
         const hasRepo = GithubAuth.hasScope('repo');
-        const comments = await loadComments(issueNumber);
+        const comments = await GithubAPI.loadComments(issueNumber);
         const votes = comments.filter(c => /^!vote \d+$/.test(c.body.trim()));
         const counts = pollData.options.map((_,i) => votes.filter(c => c.body.trim() === `!vote ${i}`).length);
         const total = counts.reduce((a,b)=>a+b,0);
@@ -296,13 +293,13 @@
             const pct = total ? Math.round((cnt/total)*100) : 0;
             html += `<div class="poll-option"><span>${escapeHtml(opt)}</span>`;
             if (!currentUser || !hasRepo) {}
-            else if (!userVoted) html += `<button class="button poll-vote-btn" data-option="${i}">${I18n.translate('feedbackSubmitBtn')}</button>`;
+            else if (!userVoted) html += `<button class="button poll-vote-btn" data-option="${i}">Голосовать</button>`;
             else html += `<div class="progress-bar"><div style="width:${pct}%;">${pct}% (${cnt})</div></div>`;
             html += '</div>';
         });
         html += '</div>';
-        if (!currentUser || !hasRepo) html += `<p class="text-secondary small"><i class="fas fa-info-circle"></i> ${I18n.translate('feedbackLoginPrompt')}</p>`;
-        else if (!userVoted) html += `<p class="text-secondary small">${I18n.translate('feedbackNoItems')}</p>`;
+        if (!currentUser || !hasRepo) html += '<p class="text-secondary small"><i class="fas fa-info-circle"></i> Войдите с scope "repo" для голосования.</p>';
+        else if (!userVoted) html += '<p class="text-secondary small">Вы ещё не голосовали.</p>';
         pollDiv.innerHTML = html;
         container.innerHTML = '';
         container.appendChild(pollDiv);
@@ -314,10 +311,10 @@
                     const idx = btn.dataset.option;
                     btn.disabled = true;
                     try {
-                        await addComment(issueNumber, `!vote ${idx}`);
-                        UIUtils.showToast(I18n.translate('feedbackSendBtn'), 'success');
+                        await GithubAPI.addComment(issueNumber, `!vote ${idx}`);
+                        UIUtils.showToast('Голос учтён', 'success');
                         await renderPoll(container, issueNumber, pollData);
-                    } catch { UIUtils.showToast(I18n.translate('githubError'), 'error'); }
+                    } catch { UIUtils.showToast('Ошибка', 'error'); }
                 });
             });
         }
@@ -330,8 +327,8 @@
         container.appendChild(commentsDiv);
         const reactions = await loadReactionsWithCache(item.id);
         renderReactions(reactionsDiv, item.id, reactions, currentUser,
-            (num, content) => addReaction(num, content).then(() => invalidateCache(num)),
-            (num, id) => removeReaction(num, id).then(() => invalidateCache(num))
+            (num, content) => GithubAPI.addReaction(num, content).then(() => invalidateCache(num)),
+            (num, id) => GithubAPI.removeReaction(num, id).then(() => invalidateCache(num))
         );
         const comments = await loadCommentsWithCache(item.id);
         renderComments(commentsDiv, comments, currentUser, item.id);
@@ -341,10 +338,10 @@
         if (!GithubAuth.hasScope('repo')) return;
         const form = createElement('div', 'comment-form', { display: 'flex', gap: '8px', marginTop: '16px' });
         form.innerHTML = `
-            <input type="text" class="comment-input" placeholder="${I18n.translate('feedbackAddComment')}" style="flex:1; padding:10px 12px; border-radius:30px; background:var(--bg-primary); border:1px solid var(--border); color:var(--text-primary);">
+            <input type="text" class="comment-input" placeholder="Написать комментарий..." style="flex:1; padding:10px 12px; border-radius:30px; background:var(--bg-primary); border:1px solid var(--border); color:var(--text-primary);">
             <div class="button-group" style="display:flex; gap:8px;">
-                <button class="button comment-submit">${I18n.translate('feedbackSendBtn')}</button>
-                <button class="button comment-editor-btn"><i class="fas fa-pencil-alt"></i> ${I18n.translate('feedbackFormTitle')}</button>
+                <button class="button comment-submit">Отправить</button>
+                <button class="button comment-editor-btn"><i class="fas fa-pencil-alt"></i> Редактор</button>
             </div>
         `;
         container.appendChild(form);
@@ -362,15 +359,15 @@
             container.querySelector('.feedback-comments').appendChild(tempDiv);
             input.disabled = submit.disabled = editorBtn.disabled = true;
             try {
-                const newComment = await addComment(item.id, text);
+                const newComment = await GithubAPI.addComment(item.id, text);
                 tempDiv.dataset.commentId = newComment.id;
                 invalidateCache(item.id);
-                const updated = await loadComments(item.id);
+                const updated = await GithubAPI.loadComments(item.id);
                 setCached(`comments_${item.id}`, updated, commentsCache);
                 renderComments(container.querySelector('.feedback-comments'), updated, currentUser, item.id);
-                UIUtils.showToast(I18n.translate('feedbackSendBtn'), 'success');
+                UIUtils.showToast('Комментарий добавлен', 'success');
             } catch {
-                UIUtils.showToast(I18n.translate('githubError'), 'error');
+                UIUtils.showToast('Ошибка', 'error');
                 tempDiv.remove();
             } finally {
                 input.disabled = submit.disabled = editorBtn.disabled = false;
@@ -393,12 +390,12 @@
 
         let btns = '';
         if (hasRepo && (isAdmin || (currentUser && issue.user.login === currentUser))) {
-            btns += `<button class="action-btn edit-issue" title="${I18n.translate('githubEdit')}"><i class="fas fa-edit"></i></button>`;
-            btns += `<button class="action-btn close-issue" title="${I18n.translate('githubClose')}"><i class="fas fa-trash-alt"></i></button>`;
+            btns += `<button class="action-btn edit-issue" title="Редактировать"><i class="fas fa-edit"></i></button>`;
+            btns += `<button class="action-btn close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>`;
         }
-        btns += `<button class="action-btn share-post" title="${I18n.translate('githubShare')}"><i class="fas fa-share-alt"></i></button>`;
+        btns += `<button class="action-btn share-post" title="Поделиться"><i class="fas fa-share-alt"></i></button>`;
         if (currentUser) {
-            btns += `<button class="action-btn bookmark-post" title="${I18n.translate('githubBookmark')}"><i class="fas fa-bookmark"></i></button>`;
+            btns += `<button class="action-btn bookmark-post" title="В избранное"><i class="fas fa-bookmark"></i></button>`;
         }
         actions.innerHTML = btns;
         modalHeader.querySelector('.modal-close')?.before(actions);
@@ -411,28 +408,33 @@
             openEditorModal('edit', { number: item.id, title: issue.title, body: issue.body, game: item.game }, postType);
         });
         actions.querySelector('.close-issue')?.addEventListener('click', async (e) => {
-            e.stopPropagation(); if (!confirm(I18n.translate('githubConfirmClose'))) return;
+            e.stopPropagation(); if (!confirm('Закрыть?')) return;
             try {
-                await closeIssue(item.id);
+                await GithubAPI.closeIssue(item.id);
                 closeModal(); document.removeEventListener('keydown', escHandler);
-                window.refreshNewsFeed?.();
-                window.refreshGameUpdates?.(item.game);
-                UIUtils.showToast(I18n.translate('githubClosed'), 'success');
-            } catch { UIUtils.showToast(I18n.translate('githubError'), 'error'); }
+                if (window.refreshNewsFeed) window.refreshNewsFeed();
+                if (window.refreshGameUpdates && item.game) window.refreshGameUpdates(item.game);
+                UIUtils.showToast('Закрыто', 'success');
+            } catch { UIUtils.showToast('Ошибка', 'error'); }
         });
         actions.querySelector('.share-post')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            navigator.clipboard.writeText(postUrl).then(() => UIUtils.showToast(I18n.translate('githubLinkCopied'), 'success')).catch(() => UIUtils.showToast(I18n.translate('githubError'), 'error'));
+            navigator.clipboard.writeText(postUrl).then(() => UIUtils.showToast('Ссылка скопирована', 'success')).catch(() => UIUtils.showToast('Ошибка', 'error'));
         });
         actions.querySelector('.bookmark-post')?.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (!window.BookmarkStorage) {
-                try { await loadModule('js/features/storage.js'); } catch { return UIUtils.showToast(I18n.translate('githubError'), 'error'); }
+                try {
+                    await loadModule('js/features/storage.js');
+                } catch (err) {
+                    return UIUtils.showToast('Не удалось загрузить хранилище', 'error');
+                }
             }
+            if (!window.BookmarkStorage) return UIUtils.showToast('Хранилище не загружено', 'error');
             BookmarkStorage.addBookmark({
                 url: postUrl,
                 title: item.title,
-                postType: 'site-post',
+                type: 'post',
                 thumbnail: extractFirstImage(issue.body) || 'images/default-news.webp',
                 postData: {
                     id: item.id,
@@ -443,8 +445,8 @@
                     labels: item.labels,
                     game: item.game
                 }
-            }).then(() => UIUtils.showToast(I18n.translate('githubBookmarked'), 'success'))
-              .catch(err => UIUtils.showToast(err.message, 'error'));
+            }).then(() => UIUtils.showToast('Добавлено в избранное', 'success'))
+              .catch(err => UIUtils.showToast('Ошибка: ' + err.message, 'error'));
         });
     }
 
@@ -460,9 +462,9 @@
         const escHandler = (e) => { if (e.key === 'Escape') closeModal(); };
         document.addEventListener('keydown', escHandler);
         try {
-            const issue = await loadIssue(item.id);
+            const issue = await GithubAPI.loadIssue(item.id);
             if (issue.state === 'closed') {
-                container.innerHTML = `<p class="error-message">${I18n.translate('githubClosed')}</p>`;
+                container.innerHTML = '<p class="error-message">Пост закрыт.</p>';
                 return;
             }
             container.innerHTML = '';
@@ -481,7 +483,7 @@
             await loadReactionsAndComments(container, item, currentUser);
             if (currentUser) setupCommentForm(container, item, currentUser);
         } catch {
-            container.innerHTML = `<p class="error-message">${I18n.translate('feedbackLoadError')}</p>`;
+            container.innerHTML = '<p class="error-message">Ошибка загрузки.</p>';
             setTimeout(() => { closeModal(); document.removeEventListener('keydown', escHandler); }, 3000);
         }
     }
@@ -494,15 +496,10 @@
         return allowed.split(',').map(s=>s.trim()).includes(currentUser);
     }
 
-    // ========== Редактор (полная версия) ==========
     function openEditorModal(mode, data, postType = 'feedback') {
-        if (!GithubAuth.hasScope('repo')) {
-            return UIUtils.showToast(I18n.translate('githubNeedRepo') || 'Нужен scope repo', 'error');
-        }
-
+        if (!GithubAuth.hasScope('repo')) return UIUtils.showToast('Нужен scope "repo"', 'error');
         const currentUser = GithubAuth.getCurrentUser();
-        const title = mode === 'edit' ? I18n.translate('feedbackFormTitle') : I18n.translate('feedbackNewBtn');
-
+        const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
         let previewUrl = '', allowedUsers = '';
         let bodyContent = data.body || '';
         const previewMatch = bodyContent.match(/<!--\s*preview:\s*(https?:\/\/[^\s]+)\s*-->/);
@@ -517,48 +514,28 @@
                 const tl = data.labels.find(l => l.startsWith('type:'));
                 if (tl) curCat = tl.split(':')[1];
             }
-            categoryHtml = `
-                <select id="modal-category" class="feedback-select">
-                    <option value="idea" ${curCat==='idea'?'selected':''}>💡 ${I18n.translate('feedbackCategoryIdea')}</option>
-                    <option value="bug" ${curCat==='bug'?'selected':''}>🐛 ${I18n.translate('feedbackCategoryBug')}</option>
-                    <option value="review" ${curCat==='review'?'selected':''}>⭐ ${I18n.translate('feedbackCategoryReview')}</option>
-                </select>
-            `;
+            categoryHtml = `<select id="modal-category" class="feedback-select"><option value="idea" ${curCat==='idea'?'selected':''}>💡 Идея</option><option value="bug" ${curCat==='bug'?'selected':''}>🐛 Баг</option><option value="review" ${curCat==='review'?'selected':''}>⭐ Отзыв</option></select>`;
         }
 
-        const isPrivate = data.labels?.includes('private') || false;
-        const draftKey = `draft_${postType}_${mode}_${data.game||'global'}_${data.number||'new'}`;
+        const draftKey = postType === 'comment' ? `draft_comment_${data.issueNumber||'new'}` : `draft_${postType}_${mode}_${data.game||'global'}_${data.number||'new'}`;
 
+        const isPrivate = data.labels?.includes('private') || false;
         const html = postType === 'comment' ? `
-            <div class="feedback-form">
-                <div id="modal-editor-toolbar"></div>
-                <textarea id="modal-body" class="feedback-textarea" rows="10">${escapeHtml(bodyContent)}</textarea>
-                <div class="button-group" style="display:flex; justify-content:flex-end; margin-top:15px;">
-                    <button class="button" id="modal-submit">${mode==='edit' ? I18n.translate('feedbackSubmitBtn') : I18n.translate('feedbackSendBtn')}</button>
-                </div>
-            </div>
+            <div class="feedback-form"><div id="modal-editor-toolbar"></div><textarea id="modal-body" class="feedback-textarea" rows="10">${escapeHtml(bodyContent)}</textarea>
+            <div class="button-group" style="display:flex; justify-content:flex-end; margin-top:15px;"><button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Отправить'}</button></div></div>
         ` : `
             <div class="feedback-form">
-                <input type="text" id="modal-input-title" class="feedback-input" placeholder="${I18n.translate('feedbackTitlePlaceholder')}" value="${escapeHtml(data.title||'')}">
-                <div class="preview-url-wrapper">
-                    <input type="url" id="modal-preview-url" class="feedback-input" placeholder="Ссылка на превью" value="${escapeHtml(previewUrl)}">
-                    <div id="preview-services-placeholder"></div>
-                </div>
+                <input type="text" id="modal-input-title" class="feedback-input" placeholder="Заголовок" value="${escapeHtml(data.title||'')}">
+                <div class="preview-url-wrapper"><input type="url" id="modal-preview-url" class="feedback-input" placeholder="Ссылка на превью" value="${escapeHtml(previewUrl)}"><div id="preview-services-placeholder"></div></div>
                 ${categoryHtml}
                 <div id="modal-editor-toolbar"></div>
-                <div class="editor-split">
-                    <div class="editor-split-left"><textarea id="modal-body" class="feedback-textarea" rows="12">${escapeHtml(bodyContent)}</textarea></div>
-                    <div class="editor-split-right" id="modal-preview-area"><p class="text-secondary">Предпросмотр</p></div>
-                </div>
+                <div class="editor-split"><div class="editor-split-left"><textarea id="modal-body" class="feedback-textarea" rows="12">${escapeHtml(bodyContent)}</textarea></div><div class="editor-split-right" id="modal-preview-area"></div></div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;">
                     <div style="display:flex; gap:10px; align-items:center;">
-                        <div class="access-switch">
-                            <button type="button" class="access-switch-btn ${!isPrivate?'active':''}" data-access="public">Публичный</button>
-                            <button type="button" class="access-switch-btn ${isPrivate?'active':''}" data-access="private">Приватный</button>
-                        </div>
+                        <div class="access-switch"><button type="button" class="access-switch-btn ${!isPrivate?'active':''}" data-access="public">Публичный</button><button type="button" class="access-switch-btn ${isPrivate?'active':''}" data-access="private">Приватный</button></div>
                         <input type="text" id="private-users" class="private-users-input" placeholder="Ники через запятую" value="${escapeHtml(allowedUsers)}" style="${isPrivate?'':'display:none;'}">
                     </div>
-                    <button class="button" id="modal-submit">${mode==='edit' ? I18n.translate('feedbackSubmitBtn') : I18n.translate('feedbackSubmitBtn')}</button>
+                    <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                 </div>
             </div>
         `;
@@ -566,85 +543,49 @@
         const { modal, closeModal } = UIUtils.createModal(title, html, { size: 'full' });
         const textarea = modal.querySelector('#modal-body');
         const toolbarDiv = modal.querySelector('#modal-editor-toolbar');
-        if (window.Editor) {
-            toolbarDiv.appendChild(Editor.createEditorToolbar(textarea));
-        }
+        if (window.Editor) toolbarDiv.appendChild(Editor.createEditorToolbar(textarea));
 
         if (postType !== 'comment') {
             const previewArea = modal.querySelector('#modal-preview-area');
-            const updatePreview = () => {
-                previewArea.innerHTML = textarea.value ? renderMarkdown(textarea.value) : '<p class="text-secondary">Предпросмотр</p>';
-            };
+            const updatePreview = () => { previewArea.innerHTML = textarea.value ? renderMarkdown(textarea.value) : '<p class="text-secondary">Предпросмотр</p>'; };
             textarea.addEventListener('input', updatePreview);
             updatePreview();
-
             const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
-            if (servicesPlaceholder && window.Editor) {
-                servicesPlaceholder.appendChild(Editor.createImageServicesMenu());
-            }
+            if (servicesPlaceholder && window.Editor) servicesPlaceholder.appendChild(Editor.createImageServicesMenu());
 
             const publicBtn = modal.querySelector('[data-access="public"]');
             const privateBtn = modal.querySelector('[data-access="private"]');
             const privateInput = modal.querySelector('#private-users');
-            publicBtn?.addEventListener('click', () => {
-                publicBtn.classList.add('active');
-                privateBtn.classList.remove('active');
-                privateInput.style.display = 'none';
-            });
-            privateBtn?.addEventListener('click', () => {
-                privateBtn.classList.add('active');
-                publicBtn.classList.remove('active');
-                privateInput.style.display = 'block';
-            });
+            publicBtn.addEventListener('click', () => { publicBtn.classList.add('active'); privateBtn.classList.remove('active'); privateInput.style.display = 'none'; });
+            privateBtn.addEventListener('click', () => { privateBtn.classList.add('active'); publicBtn.classList.remove('active'); privateInput.style.display = 'block'; });
         }
-
-        // Автозаполнение черновика
-        const savedDraft = UIUtils.loadDraft(draftKey);
-        if (savedDraft && mode === 'new') {
-            const titleInput = modal.querySelector('#modal-input-title');
-            if (titleInput && savedDraft.title) titleInput.value = savedDraft.title;
-            if (textarea && savedDraft.body) textarea.value = savedDraft.body;
-        }
-
-        const autoSaveDraft = () => {
-            if (mode === 'new') {
-                const titleVal = modal.querySelector('#modal-input-title')?.value.trim() || '';
-                const bodyVal = textarea.value.trim();
-                UIUtils.saveDraft(draftKey, { title: titleVal, body: bodyVal });
-            }
-        };
-        textarea.addEventListener('input', autoSaveDraft);
-        modal.querySelector('#modal-input-title')?.addEventListener('input', autoSaveDraft);
 
         modal.querySelector('#modal-submit').addEventListener('click', async (e) => {
             e.preventDefault();
-            if (!GithubAuth.hasScope('repo')) return UIUtils.showToast(I18n.translate('githubNeedRepo'), 'error');
-
+            if (!GithubAuth.hasScope('repo')) return UIUtils.showToast('Недостаточно прав', 'error');
             const body = textarea.value.trim();
-            if (!body) return UIUtils.showToast(I18n.translate('feedbackBodyPlaceholder'), 'error');
+            if (!body) return UIUtils.showToast('Заполните описание', 'error');
 
             if (postType === 'comment') {
                 try {
-                    await addComment(data.issueNumber, body);
+                    await GithubAPI.addComment(data.issueNumber, body);
                     UIUtils.clearDraft(draftKey);
                     closeModal();
                     window.dispatchEvent(new CustomEvent('github-comment-created', { detail: { issueNumber: data.issueNumber } }));
-                    UIUtils.showToast(I18n.translate('feedbackSendBtn'), 'success');
-                } catch (err) { UIUtils.showToast(err.message, 'error'); }
+                    UIUtils.showToast('Комментарий добавлен', 'success');
+                } catch (err) { UIUtils.showToast('Ошибка: ' + err.message, 'error'); }
                 return;
             }
 
-            const titleInput = modal.querySelector('#modal-input-title');
-            const titleVal = titleInput ? titleInput.value.trim() : '';
-            if (!titleVal) return UIUtils.showToast(I18n.translate('feedbackTitlePlaceholder'), 'error');
+            const titleVal = modal.querySelector('#modal-input-title').value.trim();
+            if (!titleVal) return UIUtils.showToast('Заполните заголовок', 'error');
 
             let finalBody = body;
-            const previewUrl = modal.querySelector('#modal-preview-url')?.value.trim();
+            const previewUrl = modal.querySelector('#modal-preview-url').value.trim();
             if (previewUrl) finalBody = `<!-- preview: ${previewUrl} -->\n\n![Preview](${previewUrl})\n\n` + finalBody;
-
-            const isPrivate = modal.querySelector('[data-access="private"]')?.classList.contains('active');
+            const isPrivate = modal.querySelector('[data-access="private"]').classList.contains('active');
             if (isPrivate) {
-                const allowed = modal.querySelector('#private-users')?.value.trim();
+                const allowed = modal.querySelector('#private-users').value.trim();
                 if (allowed) {
                     finalBody = `<!-- allowed: ${allowed} -->\n\n` + finalBody;
                     finalBody = GithubCore.encryptPrivateBody(finalBody, allowed);
@@ -653,43 +594,27 @@
             }
 
             let category = 'idea';
-            if (postType === 'feedback') category = modal.querySelector('#modal-category')?.value || 'idea';
-            const labels = postType === 'feedback'
-                ? [`game:${data.game}`, `type:${category}`]
-                : postType === 'news'
-                ? ['type:news']
-                : ['type:update', `game:${data.game}`];
+            if (postType === 'feedback') category = modal.querySelector('#modal-category').value;
+            const labels = postType === 'feedback' ? [`game:${data.game}`, `type:${category}`] : postType === 'news' ? ['type:news'] : ['type:update', `game:${data.game}`];
             if (isPrivate) labels.push('private');
 
             try {
-                if (mode === 'edit') {
-                    await updateIssue(data.number, { title: titleVal, body: finalBody, labels });
-                } else {
-                    await createIssue(titleVal, finalBody, labels);
-                }
+                if (mode === 'edit') await GithubAPI.updateIssue(data.number, { title: titleVal, body: finalBody, labels });
+                else await GithubAPI.createIssue(titleVal, finalBody, labels);
                 UIUtils.clearDraft(draftKey);
                 closeModal();
+                if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
                 if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
                 if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
-                if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
-                UIUtils.showToast(mode === 'edit' ? I18n.translate('feedbackSubmitBtn') : I18n.translate('feedbackSendBtn'), 'success');
-            } catch (err) {
-                UIUtils.showToast(err.message, 'error');
-            }
+                UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
+            } catch (err) { UIUtils.showToast('Ошибка: ' + err.message, 'error'); }
         });
     }
 
     window.addEventListener('open-comment-editor', (e) => openEditorModal('new', { issueNumber: e.detail.issueNumber }, 'comment'));
 
-    // Экспорт публичного API
     window.UIFeedback = {
-        renderReactions,
-        renderComments,
-        openFullModal,
-        openEditorModal,
-        renderPostBody,
-        canViewPost,
-        invalidateCache,
-        REACTION_TYPES
+        renderReactions, renderComments, openFullModal, openEditorModal,
+        renderPostBody, canViewPost, REACTION_TYPES, invalidateCache
     };
 })();
