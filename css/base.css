@@ -60,9 +60,3 @@ img {
     transform: translateY(-5px);
     box-shadow: var(--shadow-hover);
 }
-
-/* Утилита для отключения tilt */
-.no-tilt {
-    transform: none !important;
-    transition: none !important;
-}
