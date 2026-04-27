@@ -1,14 +1,12 @@
-// sw.js — улучшенный Service Worker: версионирование кеша, стратегии кеширования,
-// фоновая синхронизация, обработка ошибок, уведомление об обновлении.
+// sw.js — расширенный Service Worker: динамический кеш GitHub API, background sync, stale-while-revalidate
 
-const CACHE_VERSION = 'v3';
-const STATIC_CACHE = `static-${CACHE_VERSION}`;
-const DYNAMIC_CACHE = `dynamic-${CACHE_VERSION}`;
-const API_CACHE = `github-api-${CACHE_VERSION}`;
+const STATIC_CACHE = 'static-v2';
+const DYNAMIC_CACHE = 'dynamic-v2';
+const API_CACHE = 'github-api-v2';
 const SYNC_TAG = 'github-mutations';
 const API_CACHE_MAX_AGE = 2 * 60 * 1000; // 2 минуты
 
-// Критические ресурсы для предварительного кеширования
+// Критические ресурсы для предварительного кеширования (обновлённый список)
 const PRECACHE_URLS = [
   // CSS
   'style.css',
@@ -16,12 +14,11 @@ const PRECACHE_URLS = [
   'css/base.css',
   'css/typography.css',
   'css/buttons.css',
+  'css/navigation.css',
   'css/cards.css',
   'css/layout.css',
-  'css/navigation.css',
   'css/responsive.css',
-  'css/feedback.css',
-  // JavaScript (основные)
+  // JavaScript (ядро и критические модули)
   'js/core/github-core.js',
   'js/features/ui-utils.js',
   'js/core/github-api.js',
@@ -29,8 +26,6 @@ const PRECACHE_URLS = [
   'js/features/ui-feedback.js',
   'js/lang.js',
   'js/common-init.js',
-  'js/effects.js',
-  'js/lazy-load.js',
   // HTML-страницы
   'index.html',
   'starve-neon.html',
@@ -41,24 +36,18 @@ const PRECACHE_URLS = [
   // Изображения-заглушки и иконки
   'images/default-news.webp',
   'images/logo-neon-imperium.webp',
-  'images/starve-neon-header.webp',
-  'images/alpha-01-header.webp',
-  'images/gc-adven-header.webp',
-  // Шрифты и иконки подгружаются динамически, но можно добавить основные файлы fa
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css'
 ];
 
-// Установка: предварительное кеширование критических ресурсов
+// Установка: предварительное кеширование
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(cache => cache.addAll(PRECACHE_URLS))
       .then(() => self.skipWaiting())
-      .catch(err => console.error('Precache failed:', err))
   );
 });
 
-// Активация: удаление старых кешей и захват клиентов
+// Активация: удаление старых кешей
 self.addEventListener('activate', event => {
   const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, API_CACHE];
   event.waitUntil(
@@ -68,19 +57,14 @@ self.addEventListener('activate', event => {
           .filter(name => !currentCaches.includes(name))
           .map(name => caches.delete(name))
       );
-    }).then(() => {
-      // Уведомляем все открытые окна о том, что воркер активирован
-      self.clients.matchAll({ type: 'window' }).then(clients => {
-        clients.forEach(client => client.postMessage({ type: 'SW_ACTIVATED' }));
-      });
-      return self.clients.claim();
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
-// Вспомогательная функция: сохранение ответа с меткой времени в кеш API
+// Вспомогательная функция: сохранение в кеш с временной меткой
 async function cacheWithTimestamp(cacheName, request, response) {
   const cache = await caches.open(cacheName);
+  // Клонируем ответ, чтобы добавить заголовок с временем
   const headers = new Headers(response.headers);
   headers.set('sw-cached-time', Date.now().toString());
   const cachedResponse = new Response(response.body, {
@@ -91,105 +75,91 @@ async function cacheWithTimestamp(cacheName, request, response) {
   await cache.put(request, cachedResponse);
 }
 
-// Проверка, не устарел ли кеш API
+// Проверка, не устарел ли кешированный ответ API
 async function isApiCacheValid(cachedResponse) {
   const timestamp = cachedResponse.headers.get('sw-cached-time');
   if (!timestamp) return false;
   return (Date.now() - parseInt(timestamp)) < API_CACHE_MAX_AGE;
 }
 
-// Обработка запросов
+// Основной обработчик fetch
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // 1. GitHub API GET-запросы: network first, затем кеш (если не устарел)
+  // 1. Запросы к GitHub API (GET) – network first, затем кеш с коротким TTL
   if (url.hostname === 'api.github.com' && event.request.method === 'GET') {
     event.respondWith(
       (async () => {
+        const cache = await caches.open(API_CACHE);
         try {
           const networkResponse = await fetch(event.request);
           if (networkResponse.ok) {
-            // Обновляем кеш API
             await cacheWithTimestamp(API_CACHE, event.request, networkResponse.clone());
             return networkResponse;
           }
           throw new Error('Network response was not ok');
         } catch (err) {
-          // Пытаемся взять из кеша
-          const cache = await caches.open(API_CACHE);
           const cachedResponse = await cache.match(event.request);
-          if (cachedResponse && await isApiCacheValid(cachedResponse)) {
-            return cachedResponse;
-          } else if (cachedResponse) {
-            // Устаревший кеш удаляем
-            await cache.delete(event.request);
+          if (cachedResponse) {
+            if (await isApiCacheValid(cachedResponse)) {
+              return cachedResponse;
+            } else {
+              // Кеш устарел, удаляем
+              await cache.delete(event.request);
+            }
           }
-          // Возвращаем пустой массив/объект, чтобы не сломать UI
-          const emptyBody = url.pathname.includes('/reactions') ? '[]' : '{}';
-          return new Response(emptyBody, {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-          });
+          // Возвращаем пустой массив или объект, чтобы не ломать UI
+          if (url.pathname.includes('/reactions')) return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
+          return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
         }
       })()
     );
     return;
   }
 
-  // 2. HTML-страницы (навигация): Network First, при неудаче пытаемся из dynamic-кеша
+  // 2. HTML-страницы (navigate) – stale-while-revalidate
   if (event.request.mode === 'navigate') {
     event.respondWith(
       (async () => {
-        try {
-          const networkResponse = await fetch(event.request);
+        const cache = await caches.open(DYNAMIC_CACHE);
+        const cachedResponse = await cache.match(event.request);
+        const fetchPromise = fetch(event.request).then(networkResponse => {
           if (networkResponse.ok) {
-            const cache = await caches.open(DYNAMIC_CACHE);
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
-        } catch (err) {
-          const cache = await caches.open(DYNAMIC_CACHE);
-          const cachedResponse = await cache.match(event.request);
-          return cachedResponse || new Response('Offline', { status: 503 });
-        }
+        }).catch(() => { /* игнорируем ошибку сети */ });
+
+        return cachedResponse || fetchPromise;
       })()
     );
     return;
   }
 
-  // 3. Статические ресурсы (CSS, JS, изображения, шрифты, CDN): Cache First + фоновое обновление
-  if (event.request.method === 'GET') {
-    const isStatic = 
-      url.pathname.match(/\.(css|js|png|jpg|jpeg|gif|webp|svg|woff2?|eot|ttf|ico)$/) ||
-      url.origin.includes('cdnjs.cloudflare.com') ||
-      url.origin.includes('fonts.googleapis.com') ||
-      url.origin.includes('fonts.gstatic.com') ||
-      url.origin.includes('i.ytimg.com') ||
-      url.origin.includes('img.youtube.com');
-    
-    if (isStatic) {
-      event.respondWith(
-        (async () => {
-          const cache = await caches.open(STATIC_CACHE);
-          const cachedResponse = await cache.match(event.request);
-          
-          // Фоновое обновление кеша (не ждём)
-          const fetchPromise = fetch(event.request).then(networkResponse => {
-            if (networkResponse.ok) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          }).catch(() => {});
+  // 3. Статические ресурсы (CSS, JS, изображения, шрифты) – cache first с обновлением в фоне
+  if (event.request.method === 'GET' &&
+      (url.pathname.match(/\.(css|js|png|jpg|jpeg|gif|webp|svg|woff2?|eot|ttf|ico)$/) ||
+       url.origin.includes('cdnjs.cloudflare.com') ||
+       url.origin.includes('fonts.googleapis.com') ||
+       url.origin.includes('fonts.gstatic.com'))) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(STATIC_CACHE);
+        const cachedResponse = await cache.match(event.request);
+        const fetchPromise = fetch(event.request).then(networkResponse => {
+          if (networkResponse.ok) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(() => cachedResponse);
 
-          // Возвращаем кеш, если есть, иначе дожидаемся сети
-          return cachedResponse || fetchPromise;
-        })()
-      );
-      return;
-    }
+        return cachedResponse || fetchPromise;
+      })()
+    );
+    return;
   }
 
-  // 4. Все остальные запросы: Network First с сохранением в динамический кеш
+  // 4. Все остальные запросы – network first с fallback к кешу
   event.respondWith(
     (async () => {
       try {
@@ -200,67 +170,66 @@ self.addEventListener('fetch', event => {
         }
         return networkResponse;
       } catch (err) {
-        const cache = await caches.open(DYNAMIC_CACHE);
-        const cachedResponse = await cache.match(event.request);
-        return cachedResponse || new Response('Offline', { status: 504 });
+        const cachedResponse = await caches.match(event.request);
+        return cachedResponse || new Response('', { status: 504 });
       }
     })()
   );
 });
 
-// ---------- Background Sync и хранилище ----------
+// Обработка события background sync
 self.addEventListener('sync', event => {
   if (event.tag === SYNC_TAG) {
-    event.waitUntil(processMutations());
+    event.waitUntil(
+      (async () => {
+        // Открываем IndexedDB для получения очереди отложенных запросов
+        const db = await openSyncDB();
+        const tx = db.transaction('mutations', 'readwrite');
+        const store = tx.objectStore('mutations');
+        const mutations = await store.getAll();
+        if (mutations.length === 0) return;
+
+        const token = await getGitHubToken(); // получаем токен из IndexedDB или localStorage (через сообщение клиенту)
+        if (!token) {
+          // Если токена нет, запросить у клиента
+          const client = await self.clients.matchAll({ type: 'window' });
+          if (client.length) {
+            client[0].postMessage({ type: 'REQUEST_TOKEN' });
+            // Ждём ответа? В упрощённой версии просто пропускаем
+            return;
+          }
+          return;
+        }
+
+        for (const mutation of mutations) {
+          try {
+            const response = await fetch(mutation.url, {
+              method: mutation.method,
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/vnd.github.v3+json'
+              },
+              body: mutation.body ? JSON.stringify(mutation.body) : undefined
+            });
+            if (response.ok) {
+              await store.delete(mutation.id);
+            } else if (response.status === 401) {
+              // Токен недействителен, прекращаем
+              console.error('Background sync: invalid token');
+              break;
+            }
+          } catch (err) {
+            console.error('Background sync failed for mutation', mutation.id, err);
+          }
+        }
+        await tx.done;
+      })()
+    );
   }
 });
 
-async function processMutations() {
-  const db = await openSyncDB();
-  const tx = db.transaction('mutations', 'readwrite');
-  const store = tx.objectStore('mutations');
-  const mutations = await store.getAll();
-  if (mutations.length === 0) return;
-
-  const token = await getGitHubToken();
-  if (!token) {
-    // Токен отсутствует – запрашиваем у всех клиентов
-    const clients = await self.clients.matchAll({ type: 'window' });
-    clients.forEach(client => client.postMessage({ type: 'REQUEST_TOKEN' }));
-    return;
-  }
-
-  // Выполняем мутации последовательно
-  for (const mutation of mutations) {
-    try {
-      const response = await fetch(mutation.url, {
-        method: mutation.method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/vnd.github.v3+json'
-        },
-        body: mutation.body ? JSON.stringify(mutation.body) : undefined
-      });
-
-      if (response.ok) {
-        await store.delete(mutation.id);
-      } else if (response.status === 401) {
-        // Токен недействителен – уведомляем клиента и прекращаем обработку
-        const clients = await self.clients.matchAll({ type: 'window' });
-        clients.forEach(client => client.postMessage({ type: 'TOKEN_INVALID' }));
-        break;
-      } else {
-        console.warn(`Mutation ${mutation.id} failed with status ${response.status}`);
-      }
-    } catch (err) {
-      console.error('Background sync failed for mutation', mutation.id, err);
-    }
-  }
-  await tx.done;
-}
-
-// ---------- Работа с IndexedDB ----------
+// Вспомогательные функции для IndexedDB
 function openSyncDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('NeonImperiumSync', 1);
@@ -286,11 +255,9 @@ async function getGitHubToken() {
   return record ? record.value : null;
 }
 
-// Обработка сообщений от клиента (сохранение токена, принудительная синхронизация)
+// Слушаем сообщения от клиента, чтобы сохранить токен
 self.addEventListener('message', event => {
-  if (!event.data) return;
-
-  if (event.data.type === 'SAVE_TOKEN') {
+  if (event.data && event.data.type === 'SAVE_TOKEN') {
     const token = event.data.token;
     openSyncDB().then(db => {
       const tx = db.transaction('credentials', 'readwrite');
@@ -298,9 +265,5 @@ self.addEventListener('message', event => {
       store.put({ key: 'github_token', value: token });
       return tx.done;
     }).catch(console.error);
-  }
-
-  if (event.data.type === 'SYNC_NOW') {
-    event.waitUntil(processMutations()); // по возможности, но waitUntil только в обработчике событий, здесь не совсем корректно, но оставим
   }
 });
