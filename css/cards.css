@@ -1,4 +1,15 @@
-/* Базовая карточка проекта */
+/* Общие стили для внутренних карточек */
+.project-card,
+.profile-card,
+.update-card,
+.req-item,
+.consumption-card {
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+/* Карточка проекта (основная) */
 .project-card-link {
     display: block;
     color: inherit;
@@ -21,10 +32,7 @@
 }
 
 .project-card {
-    background: var(--bg-inner-gradient);
-    border-radius: var(--radius-md);
     padding: 16px;
-    border: 1px solid var(--border);
     transition: border-color 0.2s, transform 0.25s cubic-bezier(0.2,0.9,0.4,1), box-shadow 0.25s;
     display: flex;
     flex-direction: column;
@@ -78,10 +86,9 @@
     align-self: flex-start;
     width: 100%;
     text-align: center;
-    padding: 10px 0;
 }
 
-/* Квадратная карточка для маленьких проектов */
+/* Квадратная карточка (ПНСД) */
 .project-card.square-card {
     padding: 10px;
 }
@@ -128,10 +135,7 @@
 }
 
 .profile-card {
-    background: var(--bg-inner-gradient);
-    border-radius: var(--radius-md);
     padding: 16px;
-    border: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -172,13 +176,7 @@
     color: var(--text-primary);
 }
 
-/* Карточка разработчика (рядом с трейлером) */
-.trailer-card .video-embed {
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-    border: 1px solid var(--border);
-}
-
+/* Карточка разработчика */
 .developer-card {
     display: flex;
     flex-direction: column;
@@ -210,43 +208,33 @@
     flex-wrap: wrap;
 }
 
-/* Обновления и требования */
+/* Обновления */
 .update-card {
-    background: var(--bg-inner-gradient);
-    border-radius: var(--radius-md);
     padding: 20px;
     margin-bottom: 20px;
-    border: 1px solid var(--border);
 }
 
 .update-card h3 {
     margin: 0 0 15px;
-    color: var(--accent);
     font-size: 22px;
 }
 
+/* Требования и потребление */
 .req-item {
     flex: 1 1 200px;
-    background: var(--bg-inner-gradient);
     padding: 16px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border);
     transition: transform var(--transition);
 }
 
 .req-label {
     display: block;
-    color: var(--accent);
     margin-bottom: 8px;
     font-size: 16px;
 }
 
 .consumption-card {
-    background: var(--bg-inner-gradient);
-    border-radius: var(--radius-md);
     padding: 20px;
     margin-top: 24px;
-    border: 1px solid var(--border);
     transition: transform var(--transition);
 }
 
@@ -346,12 +334,12 @@
     opacity: 0.8;
 }
 
-/* Элемент особенностей */
+/* Особенности */
 .feature-item {
     background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 20px;
-    border: 1px solid var(--border);
     transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94);
 }
 
@@ -366,8 +354,8 @@
     margin-top: 30px;
     padding: 20px;
     background: var(--bg-inner-gradient);
-    border-radius: var(--radius-md);
     border: 1px solid var(--border);
+    border-radius: var(--radius-md);
 }
 
 .features-extra h3 {
@@ -429,23 +417,7 @@
     font-weight: 900;
 }
 
-/* Поддержка tilt (только десктоп) */
+/* Tilt-эффект (только десктоп) */
 .tilt-card {
     transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.2s ease;
-}
-
-@media (hover: hover) and (pointer: fine) {
-    .tilt-card:hover {
-        transform: translateY(-5px) scale(1.02);
-        box-shadow: var(--shadow-hover);
-    }
-}
-
-@media (hover: none) and (pointer: coarse) {
-    .tilt-card {
-        transform: none !important;
-    }
-    .tilt-card:hover {
-        transform: translateY(-5px) !important;
-    }
 }

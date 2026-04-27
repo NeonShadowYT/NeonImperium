@@ -253,10 +253,6 @@
         padding: 10px;
     }
 
-    .modal-content-full {
-        max-height: 95vh;
-    }
-
     .preview-url-wrapper {
         flex-wrap: nowrap !important;
     }
@@ -402,5 +398,22 @@
     *::after {
         animation-duration: 0.01ms !important;
         transition-duration: 0.01ms !important;
+    }
+}
+
+/* Tilt только на устройствах с мышью */
+@media (hover: hover) and (pointer: fine) {
+    .tilt-card:hover {
+        transform: translateY(-5px) scale(1.02);
+        box-shadow: var(--shadow-hover);
+    }
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .tilt-card {
+        transform: none !important;
+    }
+    .tilt-card:hover {
+        transform: translateY(-5px) !important;
     }
 }

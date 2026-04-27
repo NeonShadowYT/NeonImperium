@@ -1,3 +1,4 @@
+/* Проектные сетки */
 .projects-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -55,6 +56,7 @@
     flex: 1 1 calc(50% - 12px);
 }
 
+/* Профили */
 .profile-cards {
     display: flex;
     flex-wrap: wrap;
@@ -75,18 +77,6 @@
 .small-projects-container .project-card-link {
     height: 100%;
     display: flex;
-}
-
-.small-projects-container .project-card.square-card .image-wrapper {
-    padding-bottom: 100%;
-}
-
-/* Фикс иконок */
-.small-projects-container .project-card.square-card {
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
 }
 
 .small-projects-container .project-card.square-card .button {
@@ -156,14 +146,18 @@
     text-align: right;
 }
 
-/* Кнопка "Скачать" в карточке */
+/* Кнопки в карточке проекта */
 .project-card .button {
     width: 100%;
     text-align: center;
     margin-top: 12px;
-    padding: 10px 0;
-    box-sizing: border-box;
-    display: block;
+}
+
+/* Сетка для хранилища закладок */
+.bookmarks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
 }
 
 /* Карточка загрузки */
