@@ -1,15 +1,16 @@
-// feedback.js — обратная связь на страницах игр
+// feedback.js — обратная связь на страницах игр с оптимистичным UI и кэшированием
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
-    const { loadIssues, loadReactions, addReaction, removeReaction } = GithubAPI;
-    const { renderReactions, openFullModal, openEditorModal, canViewPost } = UIFeedback;
-    const { getCurrentUser, isAdmin } = GithubAuth;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody, createElement } = GithubCore;
+    const { loadIssues, loadReactions, addReaction, removeReaction, createIssue } = GithubAPI;
+    const { renderReactions, openFullModal, openEditorModal, canViewPost, invalidateCache } = UIFeedback;
+    const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
 
     const ITEMS_PER_PAGE = 10, MAX_DISPLAY = 30, CACHE_TTL = 5*60*1000;
     let currentGame, currentTab = 'all', currentPage = 1, hasMore = true, isLoading = false;
     let allIssues = [], container, grid, sentinel, observer, currentAbort, currentUser;
 
     document.addEventListener('DOMContentLoaded', init);
+
     function init() {
         const section = document.getElementById('feedback-section');
         if (!section) return;
@@ -41,9 +42,9 @@
             const gameLabel = issue.labels.find(l => l.name.startsWith('game:'));
             if (!gameLabel || gameLabel.name.split(':')[1] !== currentGame) return;
             const item = { id: issue.number, title: issue.title, body: issue.body, author: issue.user.login, date: new Date(issue.created_at), game: currentGame, labels: issue.labels.map(l=>l.name) };
-            if (!canViewPost(issue.body, item.labels, currentUser)) return UIUtils.showToast('Нет доступа', 'error');
+            if (!canViewPost(issue.body, item.labels, currentUser)) return UIUtils.showToast(I18n.translate('githubError'), 'error');
             openFullModal(item);
-        } catch { UIUtils.showToast('Ошибка', 'error'); }
+        } catch { UIUtils.showToast(I18n.translate('githubError'), 'error'); }
     }
 
     function checkAuthAndRender() {
@@ -51,16 +52,28 @@
     }
 
     function renderLoginPrompt() {
-        container.innerHTML = `<div class="login-prompt"><i class="fab fa-github"></i><h3 data-lang="feedbackLoginPrompt">Войдите через GitHub</h3><p class="text-secondary" data-lang="feedbackTokenNote">Токен останется в браузере.</p><button class="button" id="feedback-login-btn">Войти</button></div>`;
+        container.innerHTML = `<div class="login-prompt"><i class="fab fa-github"></i><h3>${I18n.translate('feedbackLoginPrompt')}</h3><p class="text-secondary">${I18n.translate('feedbackTokenNote')}</p><button class="button" id="feedback-login-btn">${I18n.translate('feedbackLoginBtn')}</button></div>`;
         container.querySelector('#feedback-login-btn').addEventListener('click', () => window.dispatchEvent(new CustomEvent('github-login-requested')));
     }
 
     function renderInterface() {
         container.innerHTML = `
-            <div class="feedback-header"><div><i class="fab fa-github" style="font-size:28px;color:var(--accent);"></i><h2 data-lang="feedbackTitle">Идеи, баги и отзывы</h2></div><button class="button" id="toggle-form-btn">+ Оставить сообщение</button></div>
-            <p class="text-secondary" data-lang="feedbackDesc">Делитесь мыслями, сообщайте об ошибках.</p>
-            <div class="feedback-tabs"><button class="feedback-tab active" data-tab="all">Все</button><button class="feedback-tab" data-tab="idea">💡 Идеи</button><button class="feedback-tab" data-tab="bug">🐛 Баги</button><button class="feedback-tab" data-tab="review">⭐ Отзывы</button></div>
-            <div class="projects-grid" id="feedback-panel"></div><div id="sentinel" style="height:10px;"></div>
+            <div class="feedback-header">
+                <div>
+                    <i class="fab fa-github" style="font-size:28px;color:var(--accent);"></i>
+                    <h2>${I18n.translate('feedbackTitle')}</h2>
+                </div>
+                <button class="button" id="toggle-form-btn">${I18n.translate('feedbackNewBtn')}</button>
+            </div>
+            <p class="text-secondary">${I18n.translate('feedbackDesc')}</p>
+            <div class="feedback-tabs">
+                <button class="feedback-tab active" data-tab="all">${I18n.translate('feedbackTabAll')}</button>
+                <button class="feedback-tab" data-tab="idea">${I18n.translate('feedbackTabIdea')}</button>
+                <button class="feedback-tab" data-tab="bug">${I18n.translate('feedbackTabBug')}</button>
+                <button class="feedback-tab" data-tab="review">${I18n.translate('feedbackTabReview')}</button>
+            </div>
+            <div class="projects-grid" id="feedback-panel"></div>
+            <div id="sentinel" style="height:10px;"></div>
         `;
         document.getElementById('toggle-form-btn').addEventListener('click', () => openEditorModal('new', { game: currentGame }, 'feedback'));
         grid = document.getElementById('feedback-panel');
@@ -96,8 +109,14 @@
             allIssues = reset ? deduplicateByNumber(issues) : deduplicateByNumber([...allIssues, ...issues]);
             currentPage = page;
             filterAndDisplay(reset);
-        } catch { if (controller.signal.aborted) return; UIUtils.showToast('Ошибка загрузки', 'error'); }
-        finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; isLoading = false; }
+        } catch {
+            if (controller.signal.aborted) return;
+            UIUtils.showToast(I18n.translate('feedbackLoadError'), 'error');
+        } finally {
+            clearTimeout(timeoutId);
+            if (currentAbort?.controller === controller) currentAbort = null;
+            isLoading = false;
+        }
     }
 
     function filterAndDisplay(reset) {
@@ -111,8 +130,15 @@
         if (currentTab !== 'all') filtered = filtered.filter(i => i.labels.some(l => l.name === `type:${currentTab}`));
         if (reset) grid.innerHTML = '';
         const toRender = filtered.slice(0, MAX_DISPLAY);
-        if (toRender.length === 0 && reset) grid.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p data-lang="feedbackNoItems">Пока нет сообщений</p></div>';
-        else toRender.forEach(issue => { if (!grid.querySelector(`[data-issue-number="${issue.number}"]`)) grid.appendChild(createCard(issue)); });
+        if (toRender.length === 0 && reset) {
+            grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>${I18n.translate('feedbackNoItems')}</p></div>`;
+        } else {
+            toRender.forEach(issue => {
+                if (!grid.querySelector(`[data-issue-number="${issue.number}"]`)) {
+                    grid.appendChild(createCard(issue));
+                }
+            });
+        }
     }
 
     function createCard(issue) {
@@ -123,17 +149,17 @@
         if (issue.labels.some(l=>l.name==='private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
             try { summary = extractSummary(decryptPrivateBody(issue.body, allowed)) || ''; } catch {}
         }
-        const card = GithubCore.createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
+        const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
         card.dataset.issueNumber = issue.number;
-        const inner = GithubCore.createElement('div', 'project-card');
-        const imgW = GithubCore.createElement('div', 'image-wrapper', { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', fontSize: '48px' });
+        const inner = createElement('div', 'project-card');
+        const imgW = createElement('div', 'image-wrapper', { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', fontSize: '48px' });
         imgW.textContent = icon;
-        const title = GithubCore.createElement('h3');
+        const title = createElement('h3');
         title.textContent = issue.title.length > 70 ? issue.title.slice(0,70)+'…' : issue.title;
-        const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+        const preview = createElement('p', 'text-secondary line-clamp-2');
         preview.textContent = summary.replace(/\n/g,' ');
-        const reactionsDiv = GithubCore.createElement('div', 'reactions-container');
-        const footer = GithubCore.createElement('div', '', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '10px' });
+        const reactionsDiv = createElement('div', 'reactions-container');
+        const footer = createElement('div', '', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '10px' });
         footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span>`;
         inner.append(imgW, title, preview, reactionsDiv, footer);
         card.appendChild(inner);
@@ -147,16 +173,11 @@
 
     async function loadReactionsForCard(num, container) {
         const key = `list_reactions_${num}`;
-        const cached = window.reactionsListCache?.get(key);
-        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-            renderReactions(container, num, cached.data, currentUser, addReaction, removeReaction);
-            return;
+        let cached = cacheGet(key);
+        if (!cached) {
+            cached = await loadReactions(num);
+            cacheSet(key, cached);
         }
-        try {
-            const reactions = await loadReactions(num);
-            if (!window.reactionsListCache) window.reactionsListCache = new Map();
-            window.reactionsListCache.set(key, { data: reactions, timestamp: Date.now() });
-            renderReactions(container, num, reactions, currentUser, addReaction, removeReaction);
-        } catch {}
+        if (cached) renderReactions(container, num, cached, currentUser, addReaction, removeReaction);
     }
 })();
