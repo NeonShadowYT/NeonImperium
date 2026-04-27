@@ -1,7 +1,9 @@
-// js/features/ui-utils.js — утилиты для интерфейса
+// js/features/ui-utils.js — только UI-функции, используют GithubCore
 (function() {
+    const { createElement, escapeHtml, loadModule } = GithubCore;
+
     function showToast(message, type = 'info', duration = 3000) {
-        const toast = GithubCore.createElement('div', `toast toast-${type}`, {
+        const toast = createElement('div', `toast toast-${type}`, {
             position: 'fixed', bottom: '20px', right: '20px',
             background: type === 'error' ? '#f44336' : type === 'success' ? '#4caf50' : 'var(--accent)',
             color: 'white', padding: '12px 24px', borderRadius: '30px',
@@ -27,14 +29,14 @@
         const { onClose, size = 'full', closeButton = true } = options;
         document.querySelectorAll('.modal-fullscreen, .modal').forEach(m => m.remove());
 
-        const modal = GithubCore.createElement('div', size === 'full' ? 'modal modal-fullscreen' : 'modal', {
+        const modal = createElement('div', size === 'full' ? 'modal modal-fullscreen' : 'modal', {
             backgroundColor: 'rgba(0,0,0,0.7)'
         }, { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'modal-header-title' });
 
         const contentClass = size === 'full' ? 'modal-content modal-content-full' : 'modal-content';
         const headerHtml = `
             <div class="modal-header">
-                <h2 id="modal-header-title">${GithubCore.escapeHtml(title)}</h2>
+                <h2 id="modal-header-title">${escapeHtml(title)}</h2>
                 <div class="modal-header-spacer"></div>
                 ${closeButton ? '<button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>' : ''}
             </div>

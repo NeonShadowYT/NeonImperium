@@ -1,4 +1,4 @@
-// js/core/github-core.js — расширенное ядро с утилитами, конфигурацией и динамической загрузкой модулей
+// js/core/github-core.js — центральное ядро: конфигурация, утилиты, кэширование, модули
 const GithubCore = (function() {
     const CONFIG = {
         REPO_OWNER: 'NeonShadowYT',
@@ -7,6 +7,7 @@ const GithubCore = (function() {
         ALLOWED_AUTHORS: ['NeonShadowYT', 'GoldenCreeper567']
     };
 
+    // ---------- Кэширование ----------
     function cacheGet(key) {
         const cached = sessionStorage.getItem(key);
         const time = sessionStorage.getItem(`${key}_time`);
@@ -21,23 +22,27 @@ const GithubCore = (function() {
                 sessionStorage.setItem(`${key}_time`, localTime);
                 return JSON.parse(localCached);
             }
-        } catch (e) { /* quota or disabled */ }
+        } catch (e) { /* игнорировать ошибки quota */ }
         return null;
     }
 
     function cacheSet(key, data) {
-        sessionStorage.setItem(key, JSON.stringify(data));
+        const serialized = JSON.stringify(data);
+        sessionStorage.setItem(key, serialized);
         sessionStorage.setItem(`${key}_time`, Date.now().toString());
         try {
-            localStorage.setItem(key, JSON.stringify(data));
+            localStorage.setItem(key, serialized);
             localStorage.setItem(`${key}_time`, Date.now().toString());
-        } catch (e) { /* ignore quota */ }
+        } catch (e) { /* quota exceeded */ }
     }
 
     function cacheRemove(key) {
         sessionStorage.removeItem(key);
         sessionStorage.removeItem(`${key}_time`);
-        try { localStorage.removeItem(key); localStorage.removeItem(`${key}_time`); } catch (e) {}
+        try {
+            localStorage.removeItem(key);
+            localStorage.removeItem(`${key}_time`);
+        } catch (e) {}
     }
 
     function cacheRemoveByPrefix(prefix) {
@@ -61,6 +66,7 @@ const GithubCore = (function() {
         } catch (e) {}
     }
 
+    // ---------- HTML и текст ----------
     function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -68,6 +74,13 @@ const GithubCore = (function() {
         return div.innerHTML;
     }
 
+    function stripHtml(html) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        return tmp.textContent || tmp.innerText || '';
+    }
+
+    // ---------- Markdown ----------
     function renderMarkdown(text) {
         if (!text) return '';
         if (window.marked) {
@@ -77,27 +90,7 @@ const GithubCore = (function() {
         return text.replace(/\n/g, '<br>');
     }
 
-    function deduplicateByNumber(items) {
-        const seen = new Set();
-        return items.filter(item => {
-            if (seen.has(item.number)) return false;
-            seen.add(item.number);
-            return true;
-        });
-    }
-
-    function createAbortable(timeout = 10000) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
-        return { controller, timeoutId };
-    }
-
-    function stripHtml(html) {
-        const tmp = document.createElement('div');
-        tmp.innerHTML = html;
-        return tmp.textContent || tmp.innerText || '';
-    }
-
+    // ---------- Мета-комментарии ----------
     function extractMeta(body, tag) {
         const regex = new RegExp(`<!--\\s*${tag}:\\s*(.*?)\\s*-->`, 'i');
         const match = body?.match(regex);
@@ -107,7 +100,8 @@ const GithubCore = (function() {
     function extractAllowed(body) { return extractMeta(body, 'allowed'); }
     function extractSummary(body) { return extractMeta(body, 'summary'); }
 
-    function deriveKeyFromAllowedList(allowedStr) {
+    // ---------- Шифрование (простое XOR) ----------
+    function deriveKey(allowedStr) {
         if (!allowedStr) return 'default-key';
         let hash = 0;
         for (let i = 0; i < allowedStr.length; i++) {
@@ -119,7 +113,7 @@ const GithubCore = (function() {
 
     function encryptPrivateBody(body, allowedStr) {
         if (!allowedStr) return body;
-        const key = deriveKeyFromAllowedList(allowedStr);
+        const key = deriveKey(allowedStr);
         let result = '';
         for (let i = 0; i < body.length; i++) {
             const charCode = body.charCodeAt(i) ^ key.charCodeAt(i % key.length);
@@ -132,7 +126,7 @@ const GithubCore = (function() {
         if (!allowedStr) return encryptedBase64;
         try {
             const encrypted = decodeURIComponent(escape(atob(encryptedBase64)));
-            const key = deriveKeyFromAllowedList(allowedStr);
+            const key = deriveKey(allowedStr);
             let result = '';
             for (let i = 0; i < encrypted.length; i++) {
                 const charCode = encrypted.charCodeAt(i) ^ key.charCodeAt(i % key.length);
@@ -145,6 +139,17 @@ const GithubCore = (function() {
         }
     }
 
+    // ---------- Массивы ----------
+    function deduplicateByNumber(items) {
+        const seen = new Set();
+        return items.filter(item => {
+            if (seen.has(item.number)) return false;
+            seen.add(item.number);
+            return true;
+        });
+    }
+
+    // ---------- DOM-утилиты ----------
     function createElement(tag, className, styles = {}, attributes = {}) {
         const el = document.createElement(tag);
         if (className) el.className = className;
@@ -153,6 +158,20 @@ const GithubCore = (function() {
         return el;
     }
 
+    // ---------- Время и дата ----------
+    function formatDate(date) {
+        const lang = localStorage.getItem('preferredLanguage') || 'ru';
+        const locale = lang === 'en' ? 'en-US' : 'ru-RU';
+        try {
+            return new Intl.DateTimeFormat(locale, {
+                year: 'numeric', month: 'long', day: 'numeric'
+            }).format(new Date(date));
+        } catch {
+            return new Date(date).toLocaleDateString();
+        }
+    }
+
+    // ---------- Планирование ----------
     function debounce(fn, delay) {
         let timer;
         return (...args) => {
@@ -161,10 +180,25 @@ const GithubCore = (function() {
         };
     }
 
-    function formatDate(date) {
-        return new Date(date).toLocaleDateString();
+    function throttle(fn, delay) {
+        let last = 0;
+        return (...args) => {
+            const now = Date.now();
+            if (now - last >= delay) {
+                last = now;
+                fn(...args);
+            }
+        };
     }
 
+    // ---------- Прерывание fetch ----------
+    function createAbortable(timeout = 10000) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        return { controller, timeoutId };
+    }
+
+    // ---------- Динамическая загрузка модулей ----------
     const loadedScripts = new Set();
     function loadModule(path) {
         if (loadedScripts.has(path)) return Promise.resolve();
@@ -178,13 +212,27 @@ const GithubCore = (function() {
         });
     }
 
+    // ---------- Публичное API ----------
     return {
         CONFIG,
-        cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
-        escapeHtml, renderMarkdown, deduplicateByNumber, createAbortable,
-        stripHtml, extractMeta, extractAllowed, extractSummary,
-        encryptPrivateBody, decryptPrivateBody,
-        createElement, debounce, formatDate,
+        cacheGet,
+        cacheSet,
+        cacheRemove,
+        cacheRemoveByPrefix,
+        escapeHtml,
+        stripHtml,
+        renderMarkdown,
+        extractMeta,
+        extractAllowed,
+        extractSummary,
+        encryptPrivateBody,
+        decryptPrivateBody,
+        deduplicateByNumber,
+        createElement,
+        formatDate,
+        debounce,
+        throttle,
+        createAbortable,
         loadModule
     };
 })();
