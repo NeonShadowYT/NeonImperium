@@ -41,7 +41,6 @@
     color: white;
 }
 
-/* Переключатель языков */
 .lang-switcher {
     display: flex;
     gap: 5px;
@@ -75,7 +74,7 @@
     border-color: var(--accent);
 }
 
-/* Профиль в навигации */
+/* Профиль */
 .nav-profile {
     display: flex;
     align-items: center;
@@ -171,7 +170,7 @@
     margin: 8px 0;
 }
 
-/* Модальное окно входа */
+/* Модальное окно входа (создаётся динамически) */
 .modal {
     display: none;
     position: fixed;
