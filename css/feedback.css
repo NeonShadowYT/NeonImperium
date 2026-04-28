@@ -129,7 +129,7 @@ blockquote.color-red{border-left-color:#f44336}blockquote.color-green{border-lef
 .modal-header-actions .action-btn i.fa-bookmark{color:var(--accent)}
 .bookmark-delete{transition:opacity var(--transition)}.project-card:hover .bookmark-delete{opacity:1}
 
-/* ---------- НОВЫЕ СТИЛИ ДЛЯ РЕДАКТОРА ---------- */
+/* ---------- СТИЛИ РЕДАКТОРА ---------- */
 .access-switch {
     display: inline-flex;
     background: var(--bg-primary);
@@ -174,7 +174,6 @@ blockquote.color-red{border-left-color:#f44336}blockquote.color-green{border-lef
     outline: none;
 }
 
-/* Сплит редактора */
 .editor-split {
     display: flex;
     gap: 16px;

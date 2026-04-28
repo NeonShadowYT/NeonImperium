@@ -9,8 +9,8 @@
     const reactionsCache = new Map();
     const commentsCache = new Map();
     const reactionLocks = new Map();
-    // кэш загруженных превью‑URL (чтобы не дёргать сеть повторно)
-    const loadedPreviewUrls = new Set();
+    // кэш data‑URL для внешних изображений
+    const previewImageCache = new Map();
 
     const { escapeHtml, renderMarkdown, extractAllowed, decryptPrivateBody, createElement, loadModule } = GithubCore;
 
@@ -506,7 +506,42 @@
         return allowed.split(',').map(s=>s.trim()).includes(currentUser);
     }
 
-    // ---------- openEditorModal (без превью-картинки) ----------
+    // ---------- Кэширование внешнего изображения в data URL ----------
+    async function getCachedPreviewImage(url) {
+        if (previewImageCache.has(url)) return previewImageCache.get(url);
+        try {
+            const response = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(5000) });
+            if (!response.ok) throw new Error('Failed to fetch');
+            const blob = await response.blob();
+            const dataUrl = URL.createObjectURL(blob);
+            previewImageCache.set(url, dataUrl);
+            return dataUrl;
+        } catch (err) {
+            // fallback – вернём оригинальный URL (браузер всё равно попытается загрузить)
+            previewImageCache.set(url, url);
+            return url;
+        }
+    }
+
+    // Замена всех img на data URL в контейнере предпросмотра
+    async function replaceImagesWithDataUrls(container) {
+        const images = container.querySelectorAll('img');
+        for (const img of images) {
+            const src = img.getAttribute('src');
+            if (!src || src.startsWith('data:') || src.startsWith('blob:')) continue; // уже обработано или локально
+            // Не обрабатываем локальные ресурсы (начинающиеся с '/' или 'images/')
+            if (src.startsWith('/') || src.startsWith('images/') || src.startsWith('.')) continue;
+            // Кэшируем и заменяем
+            try {
+                const dataUrl = await getCachedPreviewImage(src);
+                img.src = dataUrl;
+            } catch (e) {
+                // оставляем как есть
+            }
+        }
+    }
+
+    // ---------- openEditorModal (без превью-блока) ----------
     function openEditorModal(mode, data, postType = 'feedback') {
         if (!GithubAuth.hasScope('repo')) return UIUtils.showToast('Нужен scope "repo"', 'error');
         const currentUser = GithubAuth.getCurrentUser();
@@ -519,7 +554,6 @@
             previewUrl = previewMatch[1];
             bodyContent = bodyContent.replace(previewMatch[0]+'\n', '');
         }
-
         let allowedUsers = '';
         const allowedMatch = bodyContent.match(/<!--\s*allowed:\s*(.*?)\s*-->/);
         if (allowedMatch) {
@@ -537,7 +571,6 @@
             categoryHtml = `<select id="modal-category" class="feedback-select"><option value="idea" ${curCat==='idea'?'selected':''}>💡 Идея</option><option value="bug" ${curCat==='bug'?'selected':''}>🐛 Баг</option><option value="review" ${curCat==='review'?'selected':''}>⭐ Отзыв</option></select>`;
         }
 
-        const draftKey = postType === 'comment' ? `draft_comment_${data.issueNumber||'new'}` : `draft_${postType}_${mode}_${data.game||'global'}_${data.number||'new'}`;
         const isPrivate = data.labels?.includes('private') || false;
 
         const html = postType === 'comment' ? `
@@ -581,10 +614,8 @@
 
         if (postType !== 'comment') {
             const previewArea = modal.querySelector('#modal-preview-area');
-            const previewUrlInput = modal.querySelector('#modal-preview-url');
             const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
 
-            // синхронизация высоты
             const syncHeight = () => {
                 const left = modal.querySelector('.editor-split-left');
                 const right = modal.querySelector('.editor-split-right');
@@ -595,17 +626,17 @@
             textarea.addEventListener('input', syncHeight);
             new ResizeObserver(syncHeight).observe(textarea);
 
-            // предпросмотр Markdown
             const updatePreview = () => {
                 previewArea.innerHTML = textarea.value ? renderMarkdown(textarea.value) : '<p class="text-secondary">Предпросмотр</p>';
                 syncHeight();
+                // лениво заменяем внешние изображения data URL
+                replaceImagesWithDataUrls(previewArea);
             };
             textarea.addEventListener('input', updatePreview);
             updatePreview();
 
             if (servicesPlaceholder && window.Editor) servicesPlaceholder.appendChild(Editor.createImageServicesMenu());
 
-            // переключатель доступа
             const publicBtn = modal.querySelector('[data-access="public"]');
             const privateBtn = modal.querySelector('[data-access="private"]');
             const privateInput = modal.querySelector('#private-users');
@@ -621,7 +652,6 @@
             });
         }
 
-        // отправка формы
         modal.querySelector('#modal-submit').addEventListener('click', async (e) => {
             e.preventDefault();
             if (!GithubAuth.hasScope('repo')) return UIUtils.showToast('Недостаточно прав', 'error');
