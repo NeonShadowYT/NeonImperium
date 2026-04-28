@@ -9,12 +9,11 @@
     const reactionsCache = new Map();
     const commentsCache = new Map();
     const reactionLocks = new Map();
-    // кэш для превью‑изображений (ссылка → data URL)
-    const previewImageCache = new Map();
+    // кэш загруженных превью‑URL (чтобы не дёргать сеть повторно)
+    const loadedPreviewUrls = new Set();
 
     const { escapeHtml, renderMarkdown, extractAllowed, decryptPrivateBody, createElement, loadModule } = GithubCore;
 
-    // локальный debounce, если не доступен извне
     function debounce(fn, delay) {
         let timer;
         return (...args) => {
@@ -507,23 +506,7 @@
         return allowed.split(',').map(s=>s.trim()).includes(currentUser);
     }
 
-    // кэширование превью
-    async function getCachedPreviewImage(url) {
-        if (previewImageCache.has(url)) return previewImageCache.get(url);
-        try {
-            const resp = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(5000) });
-            if (!resp.ok) throw new Error('fail');
-            const blob = await resp.blob();
-            const dataUrl = URL.createObjectURL(blob);
-            previewImageCache.set(url, dataUrl);
-            return dataUrl;
-        } catch {
-            previewImageCache.set(url, url);
-            return url;
-        }
-    }
-
-    // обновлённый openEditorModal
+    // ---------- openEditorModal (исправлен) ----------
     function openEditorModal(mode, data, postType = 'feedback') {
         if (!GithubAuth.hasScope('repo')) return UIUtils.showToast('Нужен scope "repo"', 'error');
         const currentUser = GithubAuth.getCurrentUser();
@@ -589,7 +572,7 @@
                         <button type="button" class="access-switch-btn ${!isPrivate?'active':''}" data-access="public">Публичный</button>
                         <button type="button" class="access-switch-btn ${isPrivate?'active':''}" data-access="private">Приватный</button>
                     </div>
-                    <input type="text" id="private-users" class="private-users-input" placeholder="Ники через запятую" value="${escapeHtml(allowedUsers)}" style="${isPrivate?'':'display:none;'} margin-left:10px; flex:1; min-width:150px;">
+                    <input type="text" id="private-users" class="private-users-input" placeholder="Ники через запятую" value="${escapeHtml(allowedUsers)}" style="${isPrivate?'':'display:none;'}">
                     <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
                 </div>
             </div>
@@ -608,6 +591,7 @@
             const removeBtn = modal.querySelector('#modal-remove-preview');
             const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
 
+            // синхронизация высоты
             const syncHeight = () => {
                 const left = modal.querySelector('.editor-split-left');
                 const right = modal.querySelector('.editor-split-right');
@@ -618,6 +602,7 @@
             textarea.addEventListener('input', syncHeight);
             new ResizeObserver(syncHeight).observe(textarea);
 
+            // предпросмотр Markdown
             const updatePreview = () => {
                 previewArea.innerHTML = textarea.value ? renderMarkdown(textarea.value) : '<p class="text-secondary">Предпросмотр</p>';
                 syncHeight();
@@ -625,25 +610,33 @@
             textarea.addEventListener('input', updatePreview);
             updatePreview();
 
-            const loadPreviewThumb = async (url) => {
+            // превью‑изображение (без fetch, кэшируем URL)
+            let lastPreviewUrl = previewUrl;
+            const loadPreviewThumb = () => {
+                const url = previewUrlInput.value.trim();
                 if (!url) {
                     previewThumb.style.display = 'none';
+                    lastPreviewUrl = '';
                     return;
                 }
-                const src = await getCachedPreviewImage(url);
-                previewImg.src = src;
+                if (url === lastPreviewUrl) return; // уже показано
+                // показываем картинку, браузер закэширует
+                previewImg.src = url;
                 previewThumb.style.display = 'block';
+                lastPreviewUrl = url;
             };
-            previewUrlInput.addEventListener('input', debounce(() => loadPreviewThumb(previewUrlInput.value.trim()), 300));
-            loadPreviewThumb(previewUrl);
+            previewUrlInput.addEventListener('input', debounce(loadPreviewThumb, 300));
+            loadPreviewThumb(); // начальная установка
 
             removeBtn.addEventListener('click', () => {
                 previewUrlInput.value = '';
                 previewThumb.style.display = 'none';
+                lastPreviewUrl = '';
             });
 
             if (servicesPlaceholder && window.Editor) servicesPlaceholder.appendChild(Editor.createImageServicesMenu());
 
+            // переключатель доступа
             const publicBtn = modal.querySelector('[data-access="public"]');
             const privateBtn = modal.querySelector('[data-access="private"]');
             const privateInput = modal.querySelector('#private-users');
@@ -659,6 +652,7 @@
             });
         }
 
+        // отправка формы
         modal.querySelector('#modal-submit').addEventListener('click', async (e) => {
             e.preventDefault();
             if (!GithubAuth.hasScope('repo')) return UIUtils.showToast('Недостаточно прав', 'error');

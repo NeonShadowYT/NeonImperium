@@ -132,3 +132,101 @@ blockquote.color-red{border-left-color:#f44336}blockquote.color-green{border-lef
 .comment-actions button:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
 .modal-header-actions .action-btn i.fa-bookmark{color:var(--accent)}
 .bookmark-delete{transition:opacity var(--transition)}.project-card:hover .bookmark-delete{opacity:1}
+
+/* ---------- НОВЫЕ СТИЛИ ДЛЯ РЕДАКТОРА ---------- */
+.access-switch {
+    display: inline-flex;
+    background: var(--bg-primary);
+    border-radius: 40px;
+    border: 1px solid var(--border);
+    padding: 4px;
+}
+.access-switch-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 8px 20px;
+    border-radius: 40px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    font-family: var(--font-family);
+    white-space: nowrap;
+}
+.access-switch-btn.active {
+    background: var(--accent);
+    color: #fff;
+}
+.access-switch-btn:hover:not(.active) {
+    background: rgba(255,255,255,0.05);
+}
+
+.private-users-input {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 40px;
+    padding: 8px 16px;
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: 14px;
+    transition: border-color 0.2s;
+    flex: 1;
+    min-width: 150px;
+}
+.private-users-input:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+/* Сплит редактора */
+.editor-split {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+    margin-top: 10px;
+}
+.editor-split-left,
+.editor-split-right {
+    flex: 1;
+    min-height: 200px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--bg-primary);
+    overflow: auto;
+}
+.editor-split-left {
+    display: flex;
+    flex-direction: column;
+}
+.editor-split-left textarea {
+    flex: 1;
+    width: 100%;
+    resize: none;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 12px;
+    box-sizing: border-box;
+}
+.editor-split-right {
+    padding: 16px;
+    word-wrap: break-word;
+    overflow-y: auto;
+}
+
+@media (max-width: 700px) {
+    .editor-split {
+        flex-direction: column;
+    }
+    .editor-split-left,
+    .editor-split-right {
+        min-height: 150px;
+    }
+    .private-users-input {
+        flex: none;
+        width: 100%;
+    }
+}
