@@ -6,7 +6,7 @@ const API_CACHE = 'github-api-v2';
 const SYNC_TAG = 'github-mutations';
 const API_CACHE_MAX_AGE = 2 * 60 * 1000; // 2 минуты
 
-// Критические ресурсы для предварительного кеширования (обновлённый список)
+// Критические ресурсы для предварительного кеширования
 const PRECACHE_URLS = [
   // CSS
   'style.css',
@@ -64,7 +64,6 @@ self.addEventListener('activate', event => {
 // Вспомогательная функция: сохранение в кеш с временной меткой
 async function cacheWithTimestamp(cacheName, request, response) {
   const cache = await caches.open(cacheName);
-  // Клонируем ответ, чтобы добавить заголовок с временем
   const headers = new Headers(response.headers);
   headers.set('sw-cached-time', Date.now().toString());
   const cachedResponse = new Response(response.body, {
@@ -80,6 +79,15 @@ async function isApiCacheValid(cachedResponse) {
   const timestamp = cachedResponse.headers.get('sw-cached-time');
   if (!timestamp) return false;
   return (Date.now() - parseInt(timestamp)) < API_CACHE_MAX_AGE;
+}
+
+// Универсальная функция для создания резервного Response (чтобы избежать undefined)
+function fallbackResponse(status = 502, body = '') {
+  return new Response(body, {
+    status,
+    statusText: 'Service Worker Fallback',
+    headers: { 'Content-Type': 'text/plain' }
+  });
 }
 
 // Основной обработчик fetch
@@ -104,11 +112,10 @@ self.addEventListener('fetch', event => {
             if (await isApiCacheValid(cachedResponse)) {
               return cachedResponse;
             } else {
-              // Кеш устарел, удаляем
               await cache.delete(event.request);
             }
           }
-          // Возвращаем пустой массив или объект, чтобы не ломать UI
+          // Возвращаем пустой JSON-ответ, чтобы не ломать UI
           if (url.pathname.includes('/reactions')) return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
           return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
         }
@@ -128,7 +135,10 @@ self.addEventListener('fetch', event => {
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
-        }).catch(() => { /* игнорируем ошибку сети */ });
+        }).catch(() => {
+          // Если сеть недоступна, вернём закешированное или ошибку (но не undefined)
+          return cachedResponse || fallbackResponse(503, 'Offline');
+        });
 
         return cachedResponse || fetchPromise;
       })()
@@ -144,6 +154,17 @@ self.addEventListener('fetch', event => {
        url.origin.includes('fonts.gstatic.com'))) {
     event.respondWith(
       (async () => {
+        // Если это внешний ресурс, стараемся не кешировать (может заблокировать CORS)
+        if (url.origin !== self.location.origin && !url.origin.includes('cdnjs.cloudflare.com') && !url.origin.includes('fonts.g')) {
+          // Для внешних изображений (catbox.moe и т.п.) просто делаем network-only с безопасным fallback
+          try {
+            return await fetch(event.request);
+          } catch {
+            // Возвращаем пустой ответ, чтобы не сломать страницу
+            return fallbackResponse(502, '');
+          }
+        }
+
         const cache = await caches.open(STATIC_CACHE);
         const cachedResponse = await cache.match(event.request);
         const fetchPromise = fetch(event.request).then(networkResponse => {
@@ -151,7 +172,10 @@ self.addEventListener('fetch', event => {
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
-        }).catch(() => cachedResponse);
+        }).catch(err => {
+          // Возвращаем закешированное или ошибку
+          return cachedResponse || fallbackResponse(502, '');
+        });
 
         return cachedResponse || fetchPromise;
       })()
@@ -171,7 +195,7 @@ self.addEventListener('fetch', event => {
         return networkResponse;
       } catch (err) {
         const cachedResponse = await caches.match(event.request);
-        return cachedResponse || new Response('', { status: 504 });
+        return cachedResponse || fallbackResponse(504, 'Gateway Timeout');
       }
     })()
   );
@@ -182,21 +206,17 @@ self.addEventListener('sync', event => {
   if (event.tag === SYNC_TAG) {
     event.waitUntil(
       (async () => {
-        // Открываем IndexedDB для получения очереди отложенных запросов
         const db = await openSyncDB();
         const tx = db.transaction('mutations', 'readwrite');
         const store = tx.objectStore('mutations');
         const mutations = await store.getAll();
         if (mutations.length === 0) return;
 
-        const token = await getGitHubToken(); // получаем токен из IndexedDB или localStorage (через сообщение клиенту)
+        const token = await getGitHubToken();
         if (!token) {
-          // Если токена нет, запросить у клиента
           const client = await self.clients.matchAll({ type: 'window' });
           if (client.length) {
             client[0].postMessage({ type: 'REQUEST_TOKEN' });
-            // Ждём ответа? В упрощённой версии просто пропускаем
-            return;
           }
           return;
         }
@@ -215,7 +235,6 @@ self.addEventListener('sync', event => {
             if (response.ok) {
               await store.delete(mutation.id);
             } else if (response.status === 401) {
-              // Токен недействителен, прекращаем
               console.error('Background sync: invalid token');
               break;
             }
