@@ -506,7 +506,7 @@
         return allowed.split(',').map(s=>s.trim()).includes(currentUser);
     }
 
-    // ---------- openEditorModal (исправлен) ----------
+    // ---------- openEditorModal (без превью-картинки) ----------
     function openEditorModal(mode, data, postType = 'feedback') {
         if (!GithubAuth.hasScope('repo')) return UIUtils.showToast('Нужен scope "repo"', 'error');
         const currentUser = GithubAuth.getCurrentUser();
@@ -555,10 +555,6 @@
                     <input type="url" id="modal-preview-url" class="feedback-input" placeholder="Ссылка на превью" value="${escapeHtml(previewUrl)}">
                     <div id="preview-services-placeholder"></div>
                 </div>
-                <div class="preview-thumbnail" id="modal-preview-thumb" style="display: ${previewUrl ? 'block' : 'none'}; position:relative;">
-                    <img id="modal-preview-img" src="" alt="preview" style="max-width:100%; border-radius:12px;">
-                    <button class="remove-preview" id="modal-remove-preview" type="button">×</button>
-                </div>
                 ${categoryHtml}
                 <div id="modal-editor-toolbar"></div>
                 <div class="editor-split">
@@ -586,9 +582,6 @@
         if (postType !== 'comment') {
             const previewArea = modal.querySelector('#modal-preview-area');
             const previewUrlInput = modal.querySelector('#modal-preview-url');
-            const previewThumb = modal.querySelector('#modal-preview-thumb');
-            const previewImg = modal.querySelector('#modal-preview-img');
-            const removeBtn = modal.querySelector('#modal-remove-preview');
             const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
 
             // синхронизация высоты
@@ -609,30 +602,6 @@
             };
             textarea.addEventListener('input', updatePreview);
             updatePreview();
-
-            // превью‑изображение (без fetch, кэшируем URL)
-            let lastPreviewUrl = previewUrl;
-            const loadPreviewThumb = () => {
-                const url = previewUrlInput.value.trim();
-                if (!url) {
-                    previewThumb.style.display = 'none';
-                    lastPreviewUrl = '';
-                    return;
-                }
-                if (url === lastPreviewUrl) return; // уже показано
-                // показываем картинку, браузер закэширует
-                previewImg.src = url;
-                previewThumb.style.display = 'block';
-                lastPreviewUrl = url;
-            };
-            previewUrlInput.addEventListener('input', debounce(loadPreviewThumb, 300));
-            loadPreviewThumb(); // начальная установка
-
-            removeBtn.addEventListener('click', () => {
-                previewUrlInput.value = '';
-                previewThumb.style.display = 'none';
-                lastPreviewUrl = '';
-            });
 
             if (servicesPlaceholder && window.Editor) servicesPlaceholder.appendChild(Editor.createImageServicesMenu());
 
