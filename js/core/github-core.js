@@ -1,4 +1,4 @@
-// js/core/github-core.js — центральное ядро: конфигурация, утилиты, кэширование, модули
+// js/core/github-core.js
 const GithubCore = (function() {
     const CONFIG = {
         REPO_OWNER: 'NeonShadowYT',
@@ -7,80 +7,63 @@ const GithubCore = (function() {
         ALLOWED_AUTHORS: ['NeonShadowYT', 'GoldenCreeper567']
     };
 
-    // ---------- Кэширование ----------
+    // Кэширование
     function cacheGet(key) {
         const cached = sessionStorage.getItem(key);
         const time = sessionStorage.getItem(`${key}_time`);
-        if (cached && time && (Date.now() - parseInt(time) < CONFIG.CACHE_TTL)) {
-            return JSON.parse(cached);
-        }
+        if (cached && time && (Date.now() - parseInt(time) < CONFIG.CACHE_TTL)) return JSON.parse(cached);
         try {
-            const localCached = localStorage.getItem(key);
-            const localTime = localStorage.getItem(`${key}_time`);
-            if (localCached && localTime && (Date.now() - parseInt(localTime) < CONFIG.CACHE_TTL)) {
-                sessionStorage.setItem(key, localCached);
-                sessionStorage.setItem(`${key}_time`, localTime);
-                return JSON.parse(localCached);
+            const lc = localStorage.getItem(key);
+            const lt = localStorage.getItem(`${key}_time`);
+            if (lc && lt && (Date.now() - parseInt(lt) < CONFIG.CACHE_TTL)) {
+                sessionStorage.setItem(key, lc);
+                sessionStorage.setItem(`${key}_time`, lt);
+                return JSON.parse(lc);
             }
-        } catch (e) { /* игнорировать ошибки quota */ }
+        } catch {}
         return null;
     }
 
     function cacheSet(key, data) {
-        const serialized = JSON.stringify(data);
-        sessionStorage.setItem(key, serialized);
+        const s = JSON.stringify(data);
+        sessionStorage.setItem(key, s);
         sessionStorage.setItem(`${key}_time`, Date.now().toString());
-        try {
-            localStorage.setItem(key, serialized);
-            localStorage.setItem(`${key}_time`, Date.now().toString());
-        } catch (e) { /* quota exceeded */ }
+        try { localStorage.setItem(key, s); localStorage.setItem(`${key}_time`, Date.now().toString()); } catch {}
     }
 
     function cacheRemove(key) {
-        sessionStorage.removeItem(key);
-        sessionStorage.removeItem(`${key}_time`);
-        try {
-            localStorage.removeItem(key);
-            localStorage.removeItem(`${key}_time`);
-        } catch (e) {}
+        sessionStorage.removeItem(key); sessionStorage.removeItem(`${key}_time`);
+        try { localStorage.removeItem(key); localStorage.removeItem(`${key}_time`); } catch {}
     }
 
     function cacheRemoveByPrefix(prefix) {
-        const keys = [];
-        for (let i = 0; i < sessionStorage.length; i++) {
-            const key = sessionStorage.key(i);
-            if (key && key.startsWith(prefix)) keys.push(key);
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+            const k = sessionStorage.key(i);
+            if (k?.startsWith(prefix)) { sessionStorage.removeItem(k); sessionStorage.removeItem(k + '_time'); }
         }
-        keys.forEach(k => {
-            sessionStorage.removeItem(k);
-            sessionStorage.removeItem(k + '_time');
-        });
         try {
             for (let i = localStorage.length - 1; i >= 0; i--) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith(prefix)) {
-                    localStorage.removeItem(key);
-                    localStorage.removeItem(key + '_time');
-                }
+                const k = localStorage.key(i);
+                if (k?.startsWith(prefix)) { localStorage.removeItem(k); localStorage.removeItem(k + '_time'); }
             }
-        } catch (e) {}
+        } catch {}
     }
 
-    // ---------- HTML и текст ----------
+    // HTML и текст
     function escapeHtml(text) {
         if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        const d = document.createElement('div');
+        d.textContent = text;
+        return d.innerHTML;
     }
 
     function stripHtml(html) {
-        const tmp = document.createElement('div');
-        tmp.innerHTML = html;
-        return tmp.textContent || tmp.innerText || '';
+        const d = document.createElement('div');
+        d.innerHTML = html;
+        return d.textContent || d.innerText || '';
     }
 
-    // ---------- Markdown ----------
+    // Markdown
     function renderMarkdown(text) {
         if (!text) return '';
         if (window.marked) {
@@ -90,17 +73,16 @@ const GithubCore = (function() {
         return text.replace(/\n/g, '<br>');
     }
 
-    // ---------- Мета-комментарии ----------
+    // Мета-комментарии
     function extractMeta(body, tag) {
-        const regex = new RegExp(`<!--\\s*${tag}:\\s*(.*?)\\s*-->`, 'i');
-        const match = body?.match(regex);
-        return match ? match[1].trim() : null;
+        const re = new RegExp(`<!--\\s*${tag}:\\s*(.*?)\\s*-->`, 'i');
+        const m = body?.match(re);
+        return m ? m[1].trim() : null;
     }
+    const extractAllowed = body => extractMeta(body, 'allowed');
+    const extractSummary = body => extractMeta(body, 'summary');
 
-    function extractAllowed(body) { return extractMeta(body, 'allowed'); }
-    function extractSummary(body) { return extractMeta(body, 'summary'); }
-
-    // ---------- Шифрование (простое XOR) ----------
+    // Шифрование (XOR)
     function deriveKey(allowedStr) {
         if (!allowedStr) return 'default-key';
         let hash = 0;
@@ -115,126 +97,75 @@ const GithubCore = (function() {
         if (!allowedStr) return body;
         const key = deriveKey(allowedStr);
         let result = '';
-        for (let i = 0; i < body.length; i++) {
-            const charCode = body.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-            result += String.fromCharCode(charCode);
-        }
+        for (let i = 0; i < body.length; i++) result += String.fromCharCode(body.charCodeAt(i) ^ key.charCodeAt(i % key.length));
         return btoa(unescape(encodeURIComponent(result)));
     }
 
-    function decryptPrivateBody(encryptedBase64, allowedStr) {
-        if (!allowedStr) return encryptedBase64;
+    function decryptPrivateBody(encBase64, allowedStr) {
+        if (!allowedStr) return encBase64;
         try {
-            const encrypted = decodeURIComponent(escape(atob(encryptedBase64)));
+            const encrypted = decodeURIComponent(escape(atob(encBase64)));
             const key = deriveKey(allowedStr);
             let result = '';
-            for (let i = 0; i < encrypted.length; i++) {
-                const charCode = encrypted.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-                result += String.fromCharCode(charCode);
-            }
+            for (let i = 0; i < encrypted.length; i++) result += String.fromCharCode(encrypted.charCodeAt(i) ^ key.charCodeAt(i % key.length));
             return result;
-        } catch (e) {
-            console.warn('Decryption failed', e);
-            return encryptedBase64;
-        }
+        } catch (e) { console.warn('Decrypt failed', e); return encBase64; }
     }
 
-    // ---------- Массивы ----------
+    // Массивы
     function deduplicateByNumber(items) {
-        const seen = new Set();
-        return items.filter(item => {
-            if (seen.has(item.number)) return false;
-            seen.add(item.number);
-            return true;
-        });
+        const s = new Set();
+        return items.filter(i => { if (s.has(i.number)) return false; s.add(i.number); return true; });
     }
 
-    // ---------- DOM-утилиты ----------
-    function createElement(tag, className, styles = {}, attributes = {}) {
+    // DOM
+    function createElement(tag, cls, styles = {}, attrs = {}) {
         const el = document.createElement(tag);
-        if (className) el.className = className;
+        if (cls) el.className = cls;
         Object.assign(el.style, styles);
-        Object.entries(attributes).forEach(([k, v]) => el.setAttribute(k, v));
+        Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
         return el;
     }
 
-    // ---------- Время и дата ----------
+    // Дата
     function formatDate(date) {
         const lang = localStorage.getItem('preferredLanguage') || 'ru';
-        const locale = lang === 'en' ? 'en-US' : 'ru-RU';
-        try {
-            return new Intl.DateTimeFormat(locale, {
-                year: 'numeric', month: 'long', day: 'numeric'
-            }).format(new Date(date));
-        } catch {
-            return new Date(date).toLocaleDateString();
-        }
+        return new Date(date).toLocaleDateString(lang === 'en' ? 'en-US' : 'ru-RU', { year: 'numeric', month: 'long', day: 'numeric' });
     }
 
-    // ---------- Планирование ----------
-    function debounce(fn, delay) {
-        let timer;
-        return (...args) => {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn(...args), delay);
-        };
-    }
+    // Планирование
+    const debounce = (fn, d) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), d); }; };
+    const throttle = (fn, d) => { let l = 0; return (...a) => { const n = Date.now(); if (n - l >= d) { l = n; fn(...a); } }; };
 
-    function throttle(fn, delay) {
-        let last = 0;
-        return (...args) => {
-            const now = Date.now();
-            if (now - last >= delay) {
-                last = now;
-                fn(...args);
-            }
-        };
-    }
-
-    // ---------- Прерывание fetch ----------
-    function createAbortable(timeout = 10000) {
+    // Прерывание fetch (таймаут 20 с по умолчанию)
+    function createAbortable(timeout = 20000) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
         return { controller, timeoutId };
     }
 
-    // ---------- Динамическая загрузка модулей ----------
+    // Динамическая загрузка модулей
     const loadedScripts = new Set();
     function loadModule(path) {
         if (loadedScripts.has(path)) return Promise.resolve();
         return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = path;
-            script.async = true;
-            script.onload = () => { loadedScripts.add(path); resolve(); };
-            script.onerror = reject;
-            document.head.appendChild(script);
+            const s = document.createElement('script');
+            s.src = path;
+            s.async = true;
+            s.onload = () => { loadedScripts.add(path); resolve(); };
+            s.onerror = reject;
+            document.head.appendChild(s);
         });
     }
 
-    // ---------- Публичное API ----------
     return {
         CONFIG,
-        cacheGet,
-        cacheSet,
-        cacheRemove,
-        cacheRemoveByPrefix,
-        escapeHtml,
-        stripHtml,
-        renderMarkdown,
-        extractMeta,
-        extractAllowed,
-        extractSummary,
-        encryptPrivateBody,
-        decryptPrivateBody,
-        deduplicateByNumber,
-        createElement,
-        formatDate,
-        debounce,
-        throttle,
-        createAbortable,
-        loadModule
+        cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
+        escapeHtml, stripHtml, renderMarkdown,
+        extractMeta, extractAllowed, extractSummary,
+        encryptPrivateBody, decryptPrivateBody,
+        deduplicateByNumber, createElement, formatDate,
+        debounce, throttle, createAbortable, loadModule
     };
 })();
-
 window.GithubCore = GithubCore;

@@ -1,36 +1,20 @@
-// sw.js — расширенный Service Worker: динамический кеш GitHub API, background sync, stale-while-revalidate
-const STATIC_CACHE = 'static-v4';
-const DYNAMIC_CACHE = 'dynamic-v4';
-const API_CACHE = 'github-api-v4';
+// sw.js — расширенный Service Worker: статический кеш, background sync,
+// для GitHub API и rss2json запросы пропускаются напрямую
+
+const STATIC_CACHE = 'static-v5';
+const DYNAMIC_CACHE = 'dynamic-v5';
+const API_CACHE = 'github-api-v5';
 const SYNC_TAG = 'github-mutations';
-const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 минут
+const API_CACHE_MAX_AGE = 5 * 60 * 1000;
 
 const PRECACHE_URLS = [
-  'style.css',
-  'css/variables.css',
-  'css/base.css',
-  'css/typography.css',
-  'css/buttons.css',
-  'css/navigation.css',
-  'css/cards.css',
-  'css/layout.css',
-  'css/responsive.css',
-  'css/feedback.css',
-  'js/core/github-core.js',
-  'js/features/ui-utils.js',
-  'js/core/github-api.js',
-  'js/core/github-auth.js',
-  'js/features/ui-feedback.js',
-  'js/lang.js',
-  'js/common-init.js',
-  'js/pages/news-feed.js',
-  'index.html',
-  'starve-neon.html',
-  'alpha-01.html',
-  'gc-adven.html',
-  'license.html',
-  '404.html',
-  'images/default-news.webp',
+  'style.css', 'css/variables.css', 'css/base.css', 'css/typography.css',
+  'css/buttons.css', 'css/navigation.css', 'css/cards.css', 'css/layout.css',
+  'css/responsive.css', 'css/feedback.css', 'js/core/github-core.js',
+  'js/features/ui-utils.js', 'js/core/github-api.js', 'js/core/github-auth.js',
+  'js/features/ui-feedback.js', 'js/lang.js', 'js/common-init.js',
+  'js/pages/news-feed.js', 'index.html', 'starve-neon.html', 'alpha-01.html',
+  'gc-adven.html', 'license.html', '404.html', 'images/default-news.webp',
   'images/logo-neon-imperium.webp',
 ];
 
@@ -45,11 +29,9 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, API_CACHE];
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.filter(name => !currentCaches.includes(name)).map(name => caches.delete(name))
-      );
-    }).then(() => self.clients.claim())
+    caches.keys().then(names =>
+      Promise.all(names.filter(n => !currentCaches.includes(n)).map(n => caches.delete(n)))
+    ).then(() => self.clients.claim())
   );
 });
 
@@ -57,154 +39,123 @@ async function cacheWithTimestamp(cacheName, request, response) {
   const cache = await caches.open(cacheName);
   const headers = new Headers(response.headers);
   headers.set('sw-cached-time', Date.now().toString());
-  const cachedResponse = new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: headers
+  const cached = new Response(response.body, {
+    status: response.status, statusText: response.statusText, headers
   });
-  await cache.put(request, cachedResponse);
+  await cache.put(request, cached);
 }
 
 async function isApiCacheValid(cachedResponse) {
-  const timestamp = cachedResponse.headers.get('sw-cached-time');
-  if (!timestamp) return false;
-  return (Date.now() - parseInt(timestamp)) < API_CACHE_MAX_AGE;
+  const ts = cachedResponse.headers.get('sw-cached-time');
+  return ts && (Date.now() - parseInt(ts) < API_CACHE_MAX_AGE);
 }
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // ----- ВСЕ запросы к api.github.com -----
-  if (url.hostname === 'api.github.com') {
-    // Не‑GET запросы (POST, PATCH, DELETE, OPTIONS) отправляем напрямую
-    if (event.request.method !== 'GET') {
-      event.respondWith(fetch(event.request));
-      return;
-    }
-
-    // GET‑запросы – network first + кэш
-    event.respondWith((async () => {
-      const cache = await caches.open(API_CACHE);
-      try {
-        const networkResponse = await fetch(event.request);
-        if (networkResponse.ok) {
-          await cacheWithTimestamp(API_CACHE, event.request, networkResponse.clone());
-          return networkResponse;
-        }
-        throw new Error('Bad response');
-      } catch (err) {
-        const cached = await cache.match(event.request);
-        if (cached && await isApiCacheValid(cached)) return cached;
-        throw err; // Без fallback: страница получит ошибку
-      }
-    })());
+  // Пропускаем проблемные домены (Firefox NS_BINDING_ABORTED)
+  if (url.hostname === 'api.github.com' ||
+      url.hostname === 'api.rss2json.com' ||
+      url.hostname === 'avatars.githubusercontent.com') {
+    // Не вызываем respondWith – запрос выполняется напрямую
     return;
   }
 
-  // ----- HTML navigate -----
+  // HTML – stale-while-revalidate
   if (event.request.mode === 'navigate') {
     event.respondWith((async () => {
       const cache = await caches.open(DYNAMIC_CACHE);
       const cached = await cache.match(event.request);
-      const fetchPromise = fetch(event.request).then(resp => {
+      const network = fetch(event.request).then(resp => {
         if (resp.ok) cache.put(event.request, resp.clone());
         return resp;
       }).catch(() => cached || Response.error());
-      return cached || fetchPromise;
+      return cached || network;
     })());
     return;
   }
 
-  // ----- Статические ресурсы -----
-  if (event.request.method === 'GET' &&
-      (url.pathname.match(/\.(css|js|png|jpg|jpeg|gif|webp|svg|woff2?|eot|ttf|ico)$/) ||
-       url.origin.includes('cdnjs.cloudflare.com') ||
-       url.origin.includes('fonts.googleapis.com') ||
-       url.origin.includes('fonts.gstatic.com'))) {
-    if (url.origin !== self.location.origin && 
-        !url.origin.includes('cdnjs.cloudflare.com') && 
-        !url.origin.includes('fonts.googleapis.com') &&
-        !url.origin.includes('fonts.gstatic.com')) {
-      event.respondWith(fetch(event.request));
-      return;
-    }
+  // Статические ресурсы (включая CDN шрифтов)
+  if (event.request.method === 'GET' && (
+      url.pathname.match(/\.(css|js|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|ico)$/) ||
+      url.origin.includes('cdnjs.cloudflare.com') ||
+      url.origin.includes('fonts.googleapis.com') ||
+      url.origin.includes('fonts.gstatic.com')
+  )) {
     event.respondWith((async () => {
       const cache = await caches.open(STATIC_CACHE);
       const cached = await cache.match(event.request);
-      const fetchPromise = fetch(event.request).then(resp => {
+      const network = fetch(event.request).then(resp => {
         if (resp.ok) cache.put(event.request, resp.clone());
         return resp;
-      }).catch(() => cached);
-      return cached || fetchPromise;
+      }).catch(() => cached || Response.error());
+      return cached || network;
     })());
     return;
   }
 
-  // ----- Остальные запросы (network first) -----
+  // Остальное – network first
   event.respondWith((async () => {
     try {
-      const networkResponse = await fetch(event.request);
-      if (networkResponse.ok) {
+      const network = await fetch(event.request);
+      if (network.ok) {
         const cache = await caches.open(DYNAMIC_CACHE);
-        cache.put(event.request, networkResponse.clone());
+        cache.put(event.request, network.clone());
       }
-      return networkResponse;
-    } catch (err) {
+      return network;
+    } catch {
       const cached = await caches.match(event.request);
       return cached || Response.error();
     }
   })());
 });
 
-// ----- Background sync (без изменений) -----
+// Background sync (без изменений)
 self.addEventListener('sync', event => {
-  if (event.tag === SYNC_TAG) {
-    event.waitUntil((async () => {
-      const db = await openSyncDB();
-      const tx = db.transaction('mutations', 'readwrite');
-      const store = tx.objectStore('mutations');
-      const mutations = await store.getAll();
-      if (mutations.length === 0) return;
-
-      const token = await getGitHubToken();
-      if (!token) {
-        const client = await self.clients.matchAll({ type: 'window' });
-        if (client.length) client[0].postMessage({ type: 'REQUEST_TOKEN' });
-        return;
-      }
-
-      for (const mutation of mutations) {
-        try {
-          const response = await fetch(mutation.url, {
-            method: mutation.method,
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-              'Accept': 'application/vnd.github.v3+json'
-            },
-            body: mutation.body ? JSON.stringify(mutation.body) : undefined
-          });
-          if (response.ok) await store.delete(mutation.id);
-          else if (response.status === 401) break;
-        } catch (err) {
-          console.error('Sync failed for', mutation.id, err);
-        }
-      }
-      await tx.done;
-    })());
-  }
+  if (event.tag !== SYNC_TAG) return;
+  event.waitUntil((async () => {
+    const db = await openSyncDB();
+    const tx = db.transaction('mutations', 'readwrite');
+    const store = tx.objectStore('mutations');
+    const mutations = await store.getAll();
+    if (!mutations.length) return;
+    const token = await getGitHubToken();
+    if (!token) {
+      const clients = await self.clients.matchAll({ type: 'window' });
+      clients[0]?.postMessage({ type: 'REQUEST_TOKEN' });
+      return;
+    }
+    for (const m of mutations) {
+      try {
+        const resp = await fetch(m.url, {
+          method: m.method,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/vnd.github.v3+json'
+          },
+          body: m.body ? JSON.stringify(m.body) : undefined
+        });
+        if (resp.ok) await store.delete(m.id);
+        else if (resp.status === 401) break;
+      } catch (e) { console.error('Sync failed', m.id, e); }
+    }
+    await tx.done;
+  })());
 });
 
 function openSyncDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('NeonImperiumSync', 1);
-    request.onupgradeneeded = event => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains('mutations')) db.createObjectStore('mutations', { keyPath: 'id', autoIncrement: true });
-      if (!db.objectStoreNames.contains('credentials')) db.createObjectStore('credentials', { keyPath: 'key' });
+    const req = indexedDB.open('NeonImperiumSync', 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('mutations'))
+        db.createObjectStore('mutations', { keyPath: 'id', autoIncrement: true });
+      if (!db.objectStoreNames.contains('credentials'))
+        db.createObjectStore('credentials', { keyPath: 'key' });
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
 }
 
@@ -212,16 +163,15 @@ async function getGitHubToken() {
   const db = await openSyncDB();
   const tx = db.transaction('credentials', 'readonly');
   const store = tx.objectStore('credentials');
-  const record = await store.get('github_token');
-  return record ? record.value : null;
+  const rec = await store.get('github_token');
+  return rec?.value;
 }
 
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SAVE_TOKEN') {
+  if (event.data?.type === 'SAVE_TOKEN') {
     openSyncDB().then(db => {
       const tx = db.transaction('credentials', 'readwrite');
-      const store = tx.objectStore('credentials');
-      store.put({ key: 'github_token', value: event.data.token });
+      tx.objectStore('credentials').put({ key: 'github_token', value: event.data.token });
       return tx.done;
     }).catch(console.error);
   }
