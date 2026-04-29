@@ -1,8 +1,7 @@
 // sw.js — расширенный Service Worker: динамический кеш GitHub API, background sync, stale-while-revalidate
-
-const STATIC_CACHE = 'static-v3';
-const DYNAMIC_CACHE = 'dynamic-v3';
-const API_CACHE = 'github-api-v3';
+const STATIC_CACHE = 'static-v4';
+const DYNAMIC_CACHE = 'dynamic-v4';
+const API_CACHE = 'github-api-v4';
 const SYNC_TAG = 'github-mutations';
 const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 минут
 
@@ -75,8 +74,15 @@ async function isApiCacheValid(cachedResponse) {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // 1. GitHub API GET – network first, без fallback на пустой массив
-  if (url.hostname === 'api.github.com' && event.request.method === 'GET') {
+  // ----- ВСЕ запросы к api.github.com -----
+  if (url.hostname === 'api.github.com') {
+    // Не‑GET запросы (POST, PATCH, DELETE, OPTIONS) отправляем напрямую
+    if (event.request.method !== 'GET') {
+      event.respondWith(fetch(event.request));
+      return;
+    }
+
+    // GET‑запросы – network first + кэш
     event.respondWith((async () => {
       const cache = await caches.open(API_CACHE);
       try {
@@ -89,14 +95,13 @@ self.addEventListener('fetch', event => {
       } catch (err) {
         const cached = await cache.match(event.request);
         if (cached && await isApiCacheValid(cached)) return cached;
-        // Не возвращаем искусственный ответ, даём ошибку сети
-        throw err;
+        throw err; // Без fallback: страница получит ошибку
       }
     })());
     return;
   }
 
-  // 2. HTML navigate – stale-while-revalidate
+  // ----- HTML navigate -----
   if (event.request.mode === 'navigate') {
     event.respondWith((async () => {
       const cache = await caches.open(DYNAMIC_CACHE);
@@ -110,13 +115,12 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 3. Статические ресурсы – cache first с обновлением в фоне
+  // ----- Статические ресурсы -----
   if (event.request.method === 'GET' &&
       (url.pathname.match(/\.(css|js|png|jpg|jpeg|gif|webp|svg|woff2?|eot|ttf|ico)$/) ||
        url.origin.includes('cdnjs.cloudflare.com') ||
        url.origin.includes('fonts.googleapis.com') ||
        url.origin.includes('fonts.gstatic.com'))) {
-    // Для сторонних ресурсов не кэшируем, кроме CDN
     if (url.origin !== self.location.origin && 
         !url.origin.includes('cdnjs.cloudflare.com') && 
         !url.origin.includes('fonts.googleapis.com') &&
@@ -124,7 +128,6 @@ self.addEventListener('fetch', event => {
       event.respondWith(fetch(event.request));
       return;
     }
-
     event.respondWith((async () => {
       const cache = await caches.open(STATIC_CACHE);
       const cached = await cache.match(event.request);
@@ -137,7 +140,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 4. Все остальные запросы – network first с fallback к кешу
+  // ----- Остальные запросы (network first) -----
   event.respondWith((async () => {
     try {
       const networkResponse = await fetch(event.request);
@@ -153,7 +156,7 @@ self.addEventListener('fetch', event => {
   })());
 });
 
-// Background sync (без изменений)
+// ----- Background sync (без изменений) -----
 self.addEventListener('sync', event => {
   if (event.tag === SYNC_TAG) {
     event.waitUntil((async () => {
@@ -215,11 +218,10 @@ async function getGitHubToken() {
 
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SAVE_TOKEN') {
-    const token = event.data.token;
     openSyncDB().then(db => {
       const tx = db.transaction('credentials', 'readwrite');
       const store = tx.objectStore('credentials');
-      store.put({ key: 'github_token', value: token });
+      store.put({ key: 'github_token', value: event.data.token });
       return tx.done;
     }).catch(console.error);
   }

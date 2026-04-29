@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – лента новостей, видео проигрываются в карточке, посты в модалке, оптимизировано
+// js/pages/news-feed.js – лента новостей, видео проигрываются в карточке, посты в модалке
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
@@ -79,7 +79,7 @@
     };
 
     async function loadNewsFeed() {
-        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка новостей...</p></div>';
+        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">Загрузка новостей...</p></div>';
         try { posts = await loadPosts(); postsLoaded = true; } catch { posts = []; postsLoaded = true; }
         loadVideosAsync();
     }
@@ -101,16 +101,20 @@
             const all = [];
             for (const ch of YT_CHANNELS) {
                 const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(`https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`)}`;
-                const resp = await fetch(apiUrl, { signal: controller.signal });
-                if (!resp.ok) continue;
-                const data = await resp.json();
-                if (data.status !== 'ok') continue;
-                const items = data.items.slice(0,9).map(item => {
-                    const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
-                    if (!vid) return null;
-                    return { type: 'video', id: vid, title: item.title, author: ch.name, date: new Date(item.pubDate), thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg` };
-                }).filter(v => v);
-                all.push(...items);
+                try {
+                    const resp = await fetch(apiUrl, { signal: controller.signal });
+                    if (!resp.ok) continue;
+                    const data = await resp.json();
+                    if (data.status !== 'ok') continue;
+                    const items = data.items.slice(0,9).map(item => {
+                        const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
+                        if (!vid) return null;
+                        return { type: 'video', id: vid, title: item.title, author: ch.name, date: new Date(item.pubDate), thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg` };
+                    }).filter(v => v);
+                    all.push(...items);
+                } catch (err) {
+                    console.warn(`Ошибка загрузки видео для канала ${ch.name}:`, err);
+                }
             }
             const sorted = all.sort((a,b) => b.date - a.date).slice(0,20);
             cacheSet(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
@@ -122,7 +126,7 @@
         const cacheKey = 'posts_news+update_v3';
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
-        const { controller, timeoutId } = createAbortable(10000);
+        const { controller, timeoutId } = createAbortable(15000);
         currentAbort = { controller };
         try {
             const [news, updates] = await Promise.all([
@@ -138,37 +142,41 @@
             }));
             cacheSet(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
             return posts;
+        } catch (err) {
+            console.warn('Ошибка загрузки новостей:', err);
+            return [];
         } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
     }
 
     function renderMixed() {
-        if (!postsLoaded) return;
+        if (!postsLoaded || !videosLoaded) return;
         const filteredPosts = posts.filter(p => {
             if (!p.labels.includes('private')) return true;
             if (isAdmin()) return true;
             const allowed = extractAllowed(p.body);
             return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
         });
-        let items = [...filteredPosts];
-        if (videosLoaded) items = items.concat(videos);
+        let items = [...filteredPosts, ...videos];
         items.sort((a,b) => b.date - a.date);
         const showItems = items.slice(0,6);
 
         const grid = GithubCore.createElement('div', 'projects-grid');
         if (showItems.length === 0) {
+            // Ничего не загрузилось
             grid.innerHTML = '<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">Пока нет новостей</p></div>';
+            if (videoError) {
+                const retryBtn = GithubCore.createElement('button', 'button small', { marginTop: '20px' });
+                retryBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Повторить загрузку видео';
+                retryBtn.addEventListener('click', () => { videoError = false; videosLoaded = false; loadVideosAsync(); retryBtn.remove(); });
+                grid.appendChild(retryBtn);
+            }
         } else {
             showItems.forEach(item => grid.appendChild(item.type === 'video' ? createVideoCard(item) : createPostCard(item)));
-        }
-        if (videoError) {
-            const retry = GithubCore.createElement('button', 'button small', { marginTop: '20px' });
-            retry.innerHTML = '<i class="fas fa-sync-alt"></i> Повторить загрузку видео';
-            retry.addEventListener('click', () => { videoError = false; videosLoaded = false; loadVideosAsync(); retry.remove(); });
-            grid.appendChild(retry);
         }
         container.innerHTML = '';
         container.appendChild(grid);
 
+        // Обновление админ‑кнопки
         const header = document.querySelector('.news-header');
         if (header) {
             const existing = header.querySelector('.admin-news-btn');
