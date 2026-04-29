@@ -1,4 +1,4 @@
-// js/core/github-auth.js — аутентификация GitHub, улучшенное состояние и UI
+// js/core/github-auth.js — аутентификация GitHub, устойчивая к сетевым сбоям
 (function() {
     const { CONFIG, createElement, cacheGet, cacheSet, cacheRemove } = GithubCore;
     const TOKEN_KEY = 'github_token';
@@ -23,24 +23,90 @@
     });
 
     // ---------- Восстановление сессии ----------
-    function restoreSession() {
+    async function restoreSession() {
         const token = localStorage.getItem(TOKEN_KEY);
+        if (!token) {
+            renderLoggedOutUI();
+            return;
+        }
+
         const cachedUser = sessionStorage.getItem(USER_CACHE_KEY);
         const cachedScopes = sessionStorage.getItem(SCOPES_CACHE_KEY);
-        if (token && cachedUser) {
+
+        // Если есть закэшированный пользователь – сразу входим
+        if (cachedUser) {
             try {
                 const user = JSON.parse(cachedUser);
                 currentUserLogin = user.login;
                 currentScopes = cachedScopes ? JSON.parse(cachedScopes) : [];
                 renderLoggedInUI(user);
                 if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) preloadAdminModules();
+                return;
             } catch {
-                validateAndLogin(token);
+                // кэш повреждён, идём дальше
             }
-        } else if (token) {
-            validateAndLogin(token);
-        } else {
+        }
+
+        // Нет кэша – тихо валидируем токен, НЕ удаляя его при ошибке
+        try {
+            const userData = await silentValidateToken(token);
+            if (userData) {
+                currentUserLogin = userData.login;
+                currentScopes = userData.scopes;
+                sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
+                sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
+                renderLoggedInUI(userData.user);
+                if (CONFIG.ALLOWED_AUTHORS.includes(userData.user.login)) preloadAdminModules();
+                window.dispatchEvent(new CustomEvent('github-login-success', {
+                    detail: { login: userData.user.login, scopes: userData.scopes }
+                }));
+                return;
+            }
+        } catch (err) {
+            // тихо игнорируем сетевые ошибки, отрисовываем UI по наличию токена
+            if (err.message === 'unauthorized') {
+                // только при 401 удаляем токен
+                localStorage.removeItem(TOKEN_KEY);
+                sessionStorage.removeItem(USER_CACHE_KEY);
+                sessionStorage.removeItem(SCOPES_CACHE_KEY);
+                renderLoggedOutUI();
+                window.UIUtils?.showToast('Токен недействителен. Войдите снова.', 'error');
+                return;
+            }
+            // при остальных ошибках показываем минимальный UI без аватарки, но не разлогиниваем
             renderLoggedOutUI();
+            return;
+        }
+        // если ответ пустой – показываем вход
+        renderLoggedOutUI();
+    }
+
+    // ---------- Тихая валидация (не удаляет токен при ошибке) ----------
+    async function silentValidateToken(token) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        try {
+            const resp = await fetch('https://api.github.com/user', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (resp.status === 401) {
+                throw new Error('unauthorized');
+            }
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
+            const scopesHeader = resp.headers.get('X-OAuth-Scopes');
+            const scopes = scopesHeader ? scopesHeader.split(',').map(s => s.trim()) : [];
+            const user = await resp.json();
+            return { user, scopes };
+        } catch (err) {
+            clearTimeout(timeoutId);
+            throw err;
         }
     }
 
@@ -54,7 +120,6 @@
                     <h3 id="github-modal-title" style="margin:0; color:var(--accent);">Вход через GitHub</h3>
                 </div>
                 <div class="modal-instructions" style="max-height:320px; overflow-y:auto; padding-right:8px; font-size:14px; line-height:1.6; color:var(--text-secondary);">
-                    <!-- инструкции (сокращены для краткости, оставлены полные) -->
                     <p>Чтобы получить токен, перейдите в <a href="https://github.com/settings/tokens" target="_blank">Personal access tokens</a>, создайте classic токен с правами repo и gist.</p>
                 </div>
                 <div style="position:relative; margin:20px 0;">
@@ -69,7 +134,6 @@
             </div>
         `;
         document.body.appendChild(modal);
-
         tokenInput = document.getElementById('github-token-input');
         tokenToggle = document.getElementById('token-toggle');
         tokenToggle.addEventListener('click', () => {
@@ -79,7 +143,7 @@
         });
         document.getElementById('modal-submit').addEventListener('click', () => {
             const token = tokenInput.value.trim();
-            if (token) validateAndLogin(token, true);
+            if (token) validateAndLogin(token);
         });
         document.getElementById('modal-cancel').addEventListener('click', closeModal);
         window.addEventListener('click', e => { if (e.target === modal) closeModal(); });
@@ -93,53 +157,45 @@
         tokenToggle.innerHTML = '<i class="fas fa-eye"></i>';
     }
 
-    // ---------- Проверка токена и вход ----------
-    async function validateAndLogin(token, save = false) {
-        if (!token) {
-            return window.UIUtils?.showToast('Введите токен', 'error');
-        }
+    // ---------- Вход с явным токеном ----------
+    async function validateAndLogin(token, save = true) {
+        if (!token) return;
         profileContainer.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color:var(--accent);margin:8px;"></i>';
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
-            const resp = await fetch('https://api.github.com/user', {
-                headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' },
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-            if (!resp.ok) throw new Error(resp.status === 401 ? 'unauthorized' : `HTTP ${resp.status}`);
-            const scopesHeader = resp.headers.get('X-OAuth-Scopes');
-            const scopes = scopesHeader ? scopesHeader.split(',').map(s => s.trim()) : [];
-            const user = await resp.json();
-            currentUserLogin = user.login;
-            currentScopes = scopes;
+            const userData = await silentValidateToken(token);
+            if (!userData) throw new Error('empty');
+            currentUserLogin = userData.user.login;
+            currentScopes = userData.scopes;
             if (save) {
                 localStorage.setItem(TOKEN_KEY, token);
-                sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
-                sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(scopes));
+                sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
+                sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
             }
-            renderLoggedInUI(user);
+            renderLoggedInUI(userData.user);
             closeModal();
-            window.dispatchEvent(new CustomEvent('github-login-success', { detail: { login: user.login, scopes } }));
-            if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) preloadAdminModules();
-            // Проверка скоупов
-            const missing = [];
-            if (!scopes.includes('repo')) missing.push('repo');
-            if (!scopes.includes('gist')) missing.push('gist');
-            if (missing.length) window.UIUtils?.showToast(`Отсутствуют разрешения: ${missing.join(', ')}`, 'warning', 8000);
+            window.dispatchEvent(new CustomEvent('github-login-success', {
+                detail: { login: userData.user.login, scopes: userData.scopes }
+            }));
+            if (CONFIG.ALLOWED_AUTHORS.includes(userData.user.login)) preloadAdminModules();
         } catch (err) {
             clearTimeout(timeoutId);
-            localStorage.removeItem(TOKEN_KEY);
-            sessionStorage.removeItem(USER_CACHE_KEY);
-            sessionStorage.removeItem(SCOPES_CACHE_KEY);
-            if (err.name === 'AbortError') window.UIUtils?.showToast('Таймаут', 'error');
-            else if (err.message === 'unauthorized') window.UIUtils?.showToast('Неверный токен', 'error');
-            else window.UIUtils?.showToast('Ошибка: ' + err.message, 'error');
-            renderLoggedOutUI();
+            if (err.name === 'AbortError') {
+                window.UIUtils?.showToast('Таймаут соединения. Попробуйте снова.', 'error');
+            } else if (err.message === 'unauthorized') {
+                localStorage.removeItem(TOKEN_KEY);
+                sessionStorage.removeItem(USER_CACHE_KEY);
+                sessionStorage.removeItem(SCOPES_CACHE_KEY);
+                renderLoggedOutUI();
+                window.UIUtils?.showToast('Неверный токен', 'error');
+            } else {
+                window.UIUtils?.showToast('Ошибка соединения: ' + err.message, 'error');
+            }
         }
     }
 
-    // ---------- UI: залогинен ----------
+    // ---------- UI ----------
     function renderLoggedInUI(user) {
         const hasRepo = currentScopes.includes('repo');
         const hasGist = currentScopes.includes('gist');
@@ -165,7 +221,6 @@
         bindDropdownEvents();
     }
 
-    // ---------- UI: не залогинен ----------
     function renderLoggedOutUI() {
         profileContainer.innerHTML = `
             <span class="nav-profile-login placeholder">Войти</span>
@@ -232,14 +287,11 @@
         }
     }
 
-    // ---------- Предзагрузка админских модулей ----------
     function preloadAdminModules() {
         GithubCore.loadModule('js/features/editor.js').catch(() => {});
         GithubCore.loadModule('js/features/ui-feedback.js').catch(() => {});
-        // также загрузим game-updates если требуется
     }
 
-    // ---------- Публичное API ----------
     window.GithubAuth = {
         getCurrentUser: () => currentUserLogin,
         getToken: () => localStorage.getItem(TOKEN_KEY),
