@@ -9,7 +9,6 @@
     const reactionsCache = new Map();
     const commentsCache = new Map();
     const reactionLocks = new Map();
-    // кэш data‑URL для внешних изображений
     const previewImageCache = new Map();
 
     const { escapeHtml, renderMarkdown, extractAllowed, decryptPrivateBody, createElement, loadModule } = GithubCore;
@@ -404,7 +403,7 @@
             btns += `<button class="action-btn close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>`;
         }
         btns += `<button class="action-btn share-post" title="Поделиться"><i class="fas fa-share-alt"></i></button>`;
-        if (currentUser && GithubAuth.hasScope('gist')) {
+        if (currentUser && hasGist) {
             btns += `<button class="action-btn bookmark-post" title="В избранное"><i class="fas fa-bookmark"></i></button>`;
         }
         actions.innerHTML = btns;
@@ -434,18 +433,15 @@
         actions.querySelector('.bookmark-post')?.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (!window.BookmarkStorage) {
-                try {
-                    await loadModule('js/features/storage.js');
-                } catch (err) {
-                    return UIUtils.showToast('Не удалось загрузить хранилище', 'error');
-                }
+                try { await loadModule('js/features/storage.js'); } catch { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
             }
             if (!window.BookmarkStorage) return UIUtils.showToast('Хранилище не загружено', 'error');
+            const thumbnail = extractFirstImage(issue.body) || 'images/default-news.webp';
             BookmarkStorage.addBookmark({
                 url: postUrl,
                 title: item.title,
                 type: 'post',
-                thumbnail: extractFirstImage(issue.body) || 'images/default-news.webp',
+                thumbnail: thumbnail,
                 postData: {
                     id: item.id,
                     title: item.title,
@@ -456,7 +452,10 @@
                     game: item.game
                 }
             }).then(() => UIUtils.showToast('Добавлено в избранное', 'success'))
-              .catch(err => UIUtils.showToast('Ошибка: ' + err.message, 'error'));
+              .catch(err => {
+                  if (err.message === 'password_required') UIUtils.showToast('Для сохранения нужен мастер-пароль', 'error');
+                  else UIUtils.showToast('Ошибка: ' + err.message, 'error');
+              });
         });
     }
 
@@ -506,46 +505,15 @@
         return allowed.split(',').map(s=>s.trim()).includes(currentUser);
     }
 
-    // ---------- Кэширование внешнего изображения в data URL ----------
-    async function getCachedPreviewImage(url) {
-        if (previewImageCache.has(url)) return previewImageCache.get(url);
-        try {
-            const response = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(5000) });
-            if (!response.ok) throw new Error('Failed to fetch');
-            const blob = await response.blob();
-            const dataUrl = URL.createObjectURL(blob);
-            previewImageCache.set(url, dataUrl);
-            return dataUrl;
-        } catch (err) {
-            // fallback – вернём оригинальный URL (браузер всё равно попытается загрузить)
-            previewImageCache.set(url, url);
-            return url;
-        }
-    }
-
-    // Замена всех img на data URL в контейнере предпросмотра
-    async function replaceImagesWithDataUrls(container) {
-        const images = container.querySelectorAll('img');
-        for (const img of images) {
-            const src = img.getAttribute('src');
-            if (!src || src.startsWith('data:') || src.startsWith('blob:')) continue; // уже обработано или локально
-            // Не обрабатываем локальные ресурсы (начинающиеся с '/' или 'images/')
-            if (src.startsWith('/') || src.startsWith('images/') || src.startsWith('.')) continue;
-            // Кэшируем и заменяем
-            try {
-                const dataUrl = await getCachedPreviewImage(src);
-                img.src = dataUrl;
-            } catch (e) {
-                // оставляем как есть
-            }
-        }
-    }
-
-    // ---------- openEditorModal (без превью-блока) ----------
+    // ---------- openEditorModal (с исправленным draftKey) ----------
     function openEditorModal(mode, data, postType = 'feedback') {
         if (!GithubAuth.hasScope('repo')) return UIUtils.showToast('Нужен scope "repo"', 'error');
         const currentUser = GithubAuth.getCurrentUser();
         const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
+
+        // 🔧 Определяем draftKey ДО использования
+        const game = data.game || 'site';
+        const draftKey = `editor_draft_${postType}_${game}_${mode}`;
 
         let previewUrl = '';
         let bodyContent = data.body || '';
@@ -629,7 +597,6 @@
             const updatePreview = () => {
                 previewArea.innerHTML = textarea.value ? renderMarkdown(textarea.value) : '<p class="text-secondary">Предпросмотр</p>';
                 syncHeight();
-                // лениво заменяем внешние изображения data URL
                 replaceImagesWithDataUrls(previewArea);
             };
             textarea.addEventListener('input', updatePreview);
@@ -661,7 +628,7 @@
             if (postType === 'comment') {
                 try {
                     await GithubAPI.addComment(data.issueNumber, body);
-                    UIUtils.clearDraft(draftKey);
+                    UIUtils.clearDraft(draftKey); // теперь переменная определена
                     closeModal();
                     window.dispatchEvent(new CustomEvent('github-comment-created', { detail: { issueNumber: data.issueNumber } }));
                     UIUtils.showToast('Комментарий добавлен', 'success');
@@ -673,9 +640,9 @@
             if (!titleVal) return UIUtils.showToast('Заполните заголовок', 'error');
 
             let finalBody = body;
-            const newPreviewUrl = modal.querySelector('#modal-preview-url').value.trim();
-            const isPrivate = modal.querySelector('[data-access="private"]').classList.contains('active');
-            const allowed = isPrivate ? modal.querySelector('#private-users').value.trim() : '';
+            const newPreviewUrl = modal.querySelector('#modal-preview-url')?.value.trim() || '';
+            const isPrivate = modal.querySelector('[data-access="private"]')?.classList.contains('active');
+            const allowed = isPrivate ? modal.querySelector('#private-users')?.value.trim() : '';
 
             const existingPreview = finalBody.match(/<!--\s*preview:\s*(https?:\/\/[^\s]+)\s*-->/);
             if (newPreviewUrl) {
@@ -698,21 +665,59 @@
             }
 
             let category = 'idea';
-            if (postType === 'feedback') category = modal.querySelector('#modal-category').value;
-            const labels = postType === 'feedback' ? [`game:${data.game}`, `type:${category}`] : postType === 'news' ? ['type:news'] : ['type:update', `game:${data.game}`];
+            if (postType === 'feedback') category = modal.querySelector('#modal-category')?.value || 'idea';
+            const labels = postType === 'feedback'
+                ? [`game:${data.game}`, `type:${category}`]
+                : postType === 'news'
+                    ? ['type:news']
+                    : ['type:update', `game:${data.game}`];
             if (isPrivate) labels.push('private');
 
             try {
-                if (mode === 'edit') await GithubAPI.updateIssue(data.number, { title: titleVal, body: finalBody, labels });
-                else await GithubAPI.createIssue(titleVal, finalBody, labels);
+                if (mode === 'edit') {
+                    await GithubAPI.updateIssue(data.number, { title: titleVal, body: finalBody, labels });
+                } else {
+                    await GithubAPI.createIssue(titleVal, finalBody, labels);
+                }
                 UIUtils.clearDraft(draftKey);
                 closeModal();
                 if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
                 if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
                 if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
                 UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
-            } catch (err) { UIUtils.showToast('Ошибка: ' + err.message, 'error'); }
+            } catch (err) {
+                UIUtils.showToast('Ошибка: ' + err.message, 'error');
+            }
         });
+    }
+
+    // Утилита кэширования внешних изображений (не изменялась)
+    async function replaceImagesWithDataUrls(container) {
+        const images = container.querySelectorAll('img');
+        for (const img of images) {
+            const src = img.getAttribute('src');
+            if (!src || src.startsWith('data:') || src.startsWith('blob:')) continue;
+            if (src.startsWith('/') || src.startsWith('images/') || src.startsWith('.')) continue;
+            try {
+                const dataUrl = await getCachedPreviewImage(src);
+                img.src = dataUrl;
+            } catch (e) {}
+        }
+    }
+
+    async function getCachedPreviewImage(url) {
+        if (previewImageCache.has(url)) return previewImageCache.get(url);
+        try {
+            const response = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(5000) });
+            if (!response.ok) throw new Error('Failed to fetch');
+            const blob = await response.blob();
+            const dataUrl = URL.createObjectURL(blob);
+            previewImageCache.set(url, dataUrl);
+            return dataUrl;
+        } catch (err) {
+            previewImageCache.set(url, url);
+            return url;
+        }
     }
 
     window.addEventListener('open-comment-editor', (e) => openEditorModal('new', { issueNumber: e.detail.issueNumber }, 'comment'));
