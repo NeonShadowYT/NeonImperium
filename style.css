@@ -1,5 +1,4 @@
-/* style.css — точка входа, импортирует все модули.
-   Для страниц с обратной связью раскомментируйте строку с feedback.css */
+/* style.css — точка входа, импортирует все модули. */
 
 @import url('css/variables.css');
 @import url('css/base.css');
@@ -9,7 +8,7 @@
 @import url('css/cards.css');
 @import url('css/layout.css');
 @import url('css/responsive.css');
-@import url('css/feedback.css'); /* ← Условная загрузка: подключать только на страницах с #feedback-section */
+@import url('css/feedback.css');
 
 /* ========== Глобальные дополнительные стили ========== */
 
