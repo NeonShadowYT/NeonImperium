@@ -1,3 +1,4 @@
+/* layout.css — сетки, раскладки, карточки небольших проектов */
 .projects-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -63,7 +64,6 @@
     align-items: start;
 }
 
-/* Маленькие проекты на главной */
 .small-projects-container {
     display: grid;
     grid-template-columns: 2fr 1fr 1fr 1fr;
@@ -72,34 +72,18 @@
     align-items: stretch;
 }
 
-.small-projects-container > .project-card-link {
-    min-width: 0;
-}
-
 .small-projects-container .project-card-link {
     height: 100%;
-    display: flex;
+}
+
+.small-projects-container .project-card {
+    width: 100%;
 }
 
 .small-projects-container .project-card.square-card .image-wrapper {
-    margin: -10px -10px 8px -10px;
-    width: calc(100% + 20px);
-    padding-bottom: 100%;
+    padding-bottom: 100%; /* 1:1 */
 }
 
-/* Фикс иконок */
-.small-projects-container .project-card.square-card {
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-
-.small-projects-container .project-card.square-card .button {
-    margin-top: 8px;
-}
-
-/* Загрузчик и пустое состояние */
 .loading-spinner {
     text-align: center;
     padding: 30px;
@@ -121,7 +105,6 @@
     opacity: 0.6;
 }
 
-/* Прогресс-бар */
 .progress-row {
     display: flex;
     align-items: center;
@@ -162,7 +145,6 @@
     text-align: right;
 }
 
-/* Кнопка "Скачать" в карточке */
 .project-card .button {
     width: 100%;
     text-align: center;
@@ -172,7 +154,6 @@
     display: block;
 }
 
-/* Карточка загрузки */
 .download-card {
     text-align: center;
     background: linear-gradient(145deg, var(--bg-card-solid), #2a2a35);
