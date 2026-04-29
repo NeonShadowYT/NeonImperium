@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – лента новостей, видео проигрываются в карточке, посты в модалке
+// js/pages/news-feed.js
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
@@ -14,8 +14,7 @@
     const DEFAULT_IMAGE = 'images/default-news.webp';
 
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
-    let currentUser = null, currentAbort = null;
-    let videoLoading = false, videoError = false;
+    let currentUser = null;
 
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('news-section');
@@ -34,12 +33,18 @@
             currentUser = getCurrentUser();
             loadNewsFeed();
         }
-        window.addEventListener('github-login-success', e => { currentUser = e.detail.login; refreshNewsFeed(); });
-        window.addEventListener('github-logout', () => { currentUser = null; refreshNewsFeed(); });
+        window.addEventListener('github-login-success', e => {
+            currentUser = e.detail.login;
+            setTimeout(refreshNewsFeed, 500);  // даём странице успокоиться
+        });
+        window.addEventListener('github-logout', () => {
+            currentUser = null;
+            setTimeout(refreshNewsFeed, 500);
+        });
         window.addEventListener('github-issue-created', e => {
             const issue = e.detail;
-            const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
-            if (!typeLabel || !CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+            const tl = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
+            if (!tl || !CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
             cacheRemoveByPrefix('posts_news+update_v3');
             const newPost = {
                 type: 'post', number: issue.number, title: issue.title, body: issue.body,
@@ -50,7 +55,6 @@
             posts = [newPost, ...posts];
             renderMixed();
         });
-
         const postId = new URLSearchParams(location.search).get('post');
         if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
     });
@@ -72,80 +76,80 @@
 
     window.refreshNewsFeed = () => {
         if (!container) return;
-        if (currentAbort) currentAbort.controller.abort();
         posts = []; videos = []; postsLoaded = videosLoaded = false;
-        videoLoading = videoError = false;
         loadNewsFeed();
     };
 
     async function loadNewsFeed() {
         container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">Загрузка новостей...</p></div>';
-        try { posts = await loadPosts(); postsLoaded = true; } catch { posts = []; postsLoaded = true; }
+        try { posts = await loadPosts(); } catch { posts = []; }
+        postsLoaded = true;
         loadVideosAsync();
     }
 
     async function loadVideosAsync() {
-        if (videoLoading) return;
-        videoLoading = true;
-        try { videos = await loadVideosFromRSS2JSON(); videosLoaded = true; } catch { videos = []; videosLoaded = true; videoError = true; }
-        finally { videoLoading = false; renderMixed(); }
+        try { videos = await loadVideosFromRSS2JSON(); } catch { videos = []; }
+        videosLoaded = true;
+        renderMixed();
     }
 
     async function loadVideosFromRSS2JSON() {
         const cacheKey = 'youtube_videos_rss2json_v3';
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
-        const { controller, timeoutId } = createAbortable(15000);
-        currentAbort = { controller };
-        try {
-            const all = [];
-            for (const ch of YT_CHANNELS) {
-                const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(`https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`)}`;
-                try {
-                    const resp = await fetch(apiUrl, { signal: controller.signal });
-                    if (!resp.ok) continue;
-                    const data = await resp.json();
-                    if (data.status !== 'ok') continue;
-                    const items = data.items.slice(0,9).map(item => {
-                        const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
-                        if (!vid) return null;
-                        return { type: 'video', id: vid, title: item.title, author: ch.name, date: new Date(item.pubDate), thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg` };
-                    }).filter(v => v);
-                    all.push(...items);
-                } catch (err) {
-                    console.warn(`Ошибка загрузки видео для канала ${ch.name}:`, err);
-                }
+        const all = [];
+        for (const ch of YT_CHANNELS) {
+            const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(`https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`)}`;
+            try {
+                const resp = await fetch(apiUrl);
+                if (!resp.ok) continue;
+                const data = await resp.json();
+                if (data.status !== 'ok') continue;
+                const items = data.items.slice(0, 9).map(item => {
+                    const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
+                    if (!vid) return null;
+                    return {
+                        type: 'video', id: vid, title: item.title, author: ch.name,
+                        date: new Date(item.pubDate),
+                        thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`
+                    };
+                }).filter(v => v);
+                all.push(...items);
+            } catch (err) {
+                console.warn(`Ошибка загрузки видео для канала ${ch.name}:`, err);
             }
-            const sorted = all.sort((a,b) => b.date - a.date).slice(0,20);
-            cacheSet(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
-            return sorted;
-        } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
+        }
+        const sorted = all.sort((a, b) => b.date - a.date).slice(0, 20);
+        cacheSet(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
+        return sorted;
     }
 
     async function loadPosts() {
         const cacheKey = 'posts_news+update_v3';
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
-        const { controller, timeoutId } = createAbortable(15000);
-        currentAbort = { controller };
+        const { controller, timeoutId } = createAbortable(20000);
         try {
             const [news, updates] = await Promise.all([
                 loadIssues({ labels: 'type:news', per_page: 15, signal: controller.signal }),
                 loadIssues({ labels: 'type:update', per_page: 15, signal: controller.signal })
             ]);
-            const all = deduplicateByNumber([...news, ...updates]).filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
-            const posts = all.map(i => ({
+            const all = deduplicateByNumber([...news, ...updates])
+                .filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
+            const result = all.map(i => ({
                 type: 'post', number: i.number, title: i.title, body: i.body,
                 author: i.user.login, date: new Date(i.created_at),
                 labels: i.labels.map(l => l.name),
                 game: i.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
             }));
-            cacheSet(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
-            return posts;
+            cacheSet(cacheKey, result.map(p => ({ ...p, date: p.date.toISOString() })));
+            return result;
         } catch (err) {
             console.warn('Ошибка загрузки новостей:', err);
             return [];
-        } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
+        } finally {
+            clearTimeout(timeoutId);
+        }
     }
 
     function renderMixed() {
@@ -154,29 +158,20 @@
             if (!p.labels.includes('private')) return true;
             if (isAdmin()) return true;
             const allowed = extractAllowed(p.body);
-            return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
+            return allowed && allowed.split(',').map(s => s.trim()).includes(currentUser);
         });
         let items = [...filteredPosts, ...videos];
-        items.sort((a,b) => b.date - a.date);
-        const showItems = items.slice(0,6);
-
+        items.sort((a, b) => b.date - a.date);
+        const showItems = items.slice(0, 6);
         const grid = GithubCore.createElement('div', 'projects-grid');
         if (showItems.length === 0) {
-            // Ничего не загрузилось
             grid.innerHTML = '<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">Пока нет новостей</p></div>';
-            if (videoError) {
-                const retryBtn = GithubCore.createElement('button', 'button small', { marginTop: '20px' });
-                retryBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Повторить загрузку видео';
-                retryBtn.addEventListener('click', () => { videoError = false; videosLoaded = false; loadVideosAsync(); retryBtn.remove(); });
-                grid.appendChild(retryBtn);
-            }
         } else {
             showItems.forEach(item => grid.appendChild(item.type === 'video' ? createVideoCard(item) : createPostCard(item)));
         }
         container.innerHTML = '';
         container.appendChild(grid);
-
-        // Обновление админ‑кнопки
+        // Админ-кнопка
         const header = document.querySelector('.news-header');
         if (header) {
             const existing = header.querySelector('.admin-news-btn');
