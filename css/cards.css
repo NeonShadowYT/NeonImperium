@@ -87,8 +87,8 @@
 }
 
 .project-card.square-card .image-wrapper {
-    margin: 0 0 8px 0;
-    width: 100%;
+    margin: -10px -10px 8px -10px;   /* отрицательные поля тянут обёртку к краям карточки */
+    width: calc(100% + 20px);        /* компенсация отступов */
     padding-bottom: 100%;
     border-radius: var(--radius-sm);
     overflow: hidden;
