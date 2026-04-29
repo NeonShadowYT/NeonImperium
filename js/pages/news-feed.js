@@ -1,4 +1,4 @@
-// js/pages/news-feed.js
+// js/pages/news-feed.js – лента новостей, видео проигрываются в карточке, посты в модалке
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
     const { loadIssues, loadIssue } = GithubAPI;
@@ -15,6 +15,7 @@
 
     let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
     let currentUser = null;
+    let loading = false;
 
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('news-section');
@@ -35,16 +36,16 @@
         }
         window.addEventListener('github-login-success', e => {
             currentUser = e.detail.login;
-            setTimeout(refreshNewsFeed, 500);  // даём странице успокоиться
+            refreshNewsFeed();
         });
         window.addEventListener('github-logout', () => {
             currentUser = null;
-            setTimeout(refreshNewsFeed, 500);
+            refreshNewsFeed();
         });
         window.addEventListener('github-issue-created', e => {
             const issue = e.detail;
-            const tl = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
-            if (!tl || !CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+            const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
+            if (!typeLabel || !CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
             cacheRemoveByPrefix('posts_news+update_v3');
             const newPost = {
                 type: 'post', number: issue.number, title: issue.title, body: issue.body,
@@ -75,22 +76,41 @@
     }
 
     window.refreshNewsFeed = () => {
-        if (!container) return;
+        if (!container || loading) return;
         posts = []; videos = []; postsLoaded = videosLoaded = false;
         loadNewsFeed();
     };
 
-    async function loadNewsFeed() {
+    function loadNewsFeed() {
+        if (loading) return;
+        loading = true;
         container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">Загрузка новостей...</p></div>';
-        try { posts = await loadPosts(); } catch { posts = []; }
-        postsLoaded = true;
-        loadVideosAsync();
+        Promise.all([
+            loadPosts(),
+            loadVideos()
+        ]).then(([loadedPosts, loadedVideos]) => {
+            posts = loadedPosts;
+            videos = loadedVideos;
+            postsLoaded = videosLoaded = true;
+            renderMixed();
+        }).catch(err => {
+            console.error('Ошибка загрузки новостей:', err);
+            postsLoaded = videosLoaded = true;
+            posts = [];
+            videos = [];
+            renderMixed();
+        }).finally(() => {
+            loading = false;
+        });
     }
 
-    async function loadVideosAsync() {
-        try { videos = await loadVideosFromRSS2JSON(); } catch { videos = []; }
-        videosLoaded = true;
-        renderMixed();
+    async function loadVideos() {
+        try {
+            return await loadVideosFromRSS2JSON();
+        } catch (err) {
+            console.warn('Ошибка загрузки видео:', err);
+            return [];
+        }
     }
 
     async function loadVideosFromRSS2JSON() {
@@ -128,28 +148,21 @@
         const cacheKey = 'posts_news+update_v3';
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
-        const { controller, timeoutId } = createAbortable(20000);
-        try {
-            const [news, updates] = await Promise.all([
-                loadIssues({ labels: 'type:news', per_page: 15, signal: controller.signal }),
-                loadIssues({ labels: 'type:update', per_page: 15, signal: controller.signal })
-            ]);
-            const all = deduplicateByNumber([...news, ...updates])
-                .filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
-            const result = all.map(i => ({
-                type: 'post', number: i.number, title: i.title, body: i.body,
-                author: i.user.login, date: new Date(i.created_at),
-                labels: i.labels.map(l => l.name),
-                game: i.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
-            }));
-            cacheSet(cacheKey, result.map(p => ({ ...p, date: p.date.toISOString() })));
-            return result;
-        } catch (err) {
-            console.warn('Ошибка загрузки новостей:', err);
-            return [];
-        } finally {
-            clearTimeout(timeoutId);
-        }
+        const [newsResp, updatesResp] = await Promise.all([
+            fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:news`),
+            fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:update`)
+        ]);
+        const news = newsResp.ok ? await newsResp.json() : [];
+        const updates = updatesResp.ok ? await updatesResp.json() : [];
+        const all = deduplicateByNumber([...news, ...updates]).filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
+        const result = all.map(i => ({
+            type: 'post', number: i.number, title: i.title, body: i.body,
+            author: i.user.login, date: new Date(i.created_at),
+            labels: i.labels.map(l => l.name),
+            game: i.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
+        }));
+        cacheSet(cacheKey, result.map(p => ({ ...p, date: p.date.toISOString() })));
+        return result;
     }
 
     function renderMixed() {
@@ -171,7 +184,6 @@
         }
         container.innerHTML = '';
         container.appendChild(grid);
-        // Админ-кнопка
         const header = document.querySelector('.news-header');
         if (header) {
             const existing = header.querySelector('.admin-news-btn');
