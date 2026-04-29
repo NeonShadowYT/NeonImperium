@@ -11,7 +11,6 @@
     let currentScopes = [];
     let modal, tokenInput, tokenToggle, profileContainer;
 
-    // ---------- Инициализация после DOM ----------
     document.addEventListener('DOMContentLoaded', () => {
         const navBar = document.querySelector('.nav-bar');
         if (!navBar) return;
@@ -22,18 +21,14 @@
         restoreSession();
     });
 
-    // ---------- Восстановление сессии ----------
     async function restoreSession() {
         const token = localStorage.getItem(TOKEN_KEY);
         if (!token) {
             renderLoggedOutUI();
             return;
         }
-
         const cachedUser = sessionStorage.getItem(USER_CACHE_KEY);
         const cachedScopes = sessionStorage.getItem(SCOPES_CACHE_KEY);
-
-        // Если есть закэшированный пользователь – сразу входим
         if (cachedUser) {
             try {
                 const user = JSON.parse(cachedUser);
@@ -42,12 +37,8 @@
                 renderLoggedInUI(user);
                 if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) preloadAdminModules();
                 return;
-            } catch {
-                // кэш повреждён, идём дальше
-            }
+            } catch {}
         }
-
-        // Нет кэша – тихо валидируем токен, НЕ удаляя его при ошибке
         try {
             const userData = await silentValidateToken(token);
             if (userData) {
@@ -63,9 +54,7 @@
                 return;
             }
         } catch (err) {
-            // тихо игнорируем сетевые ошибки, отрисовываем UI по наличию токена
             if (err.message === 'unauthorized') {
-                // только при 401 удаляем токен
                 localStorage.removeItem(TOKEN_KEY);
                 sessionStorage.removeItem(USER_CACHE_KEY);
                 sessionStorage.removeItem(SCOPES_CACHE_KEY);
@@ -73,33 +62,23 @@
                 window.UIUtils?.showToast('Токен недействителен. Войдите снова.', 'error');
                 return;
             }
-            // при остальных ошибках показываем минимальный UI без аватарки, но не разлогиниваем
             renderLoggedOutUI();
             return;
         }
-        // если ответ пустой – показываем вход
         renderLoggedOutUI();
     }
 
-    // ---------- Тихая валидация (не удаляет токен при ошибке) ----------
     async function silentValidateToken(token) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
         try {
             const resp = await fetch('https://api.github.com/user', {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                },
+                headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' },
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
-            if (resp.status === 401) {
-                throw new Error('unauthorized');
-            }
-            if (!resp.ok) {
-                throw new Error(`HTTP ${resp.status}`);
-            }
+            if (resp.status === 401) throw new Error('unauthorized');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const scopesHeader = resp.headers.get('X-OAuth-Scopes');
             const scopes = scopesHeader ? scopesHeader.split(',').map(s => s.trim()) : [];
             const user = await resp.json();
@@ -110,7 +89,6 @@
         }
     }
 
-    // ---------- Модалка входа ----------
     function createLoginModal() {
         modal = createElement('div', 'modal', {}, { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'github-modal-title' });
         modal.innerHTML = `
@@ -157,7 +135,6 @@
         tokenToggle.innerHTML = '<i class="fas fa-eye"></i>';
     }
 
-    // ---------- Вход с явным токеном ----------
     async function validateAndLogin(token, save = true) {
         if (!token) return;
         profileContainer.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color:var(--accent);margin:8px;"></i>';
@@ -195,10 +172,13 @@
         }
     }
 
-    // ---------- UI ----------
     function renderLoggedInUI(user) {
         const hasRepo = currentScopes.includes('repo');
         const hasGist = currentScopes.includes('gist');
+        // Пункт «Хранилище» только при наличии разрешения gist
+        const storageItem = hasGist
+            ? `<div class="profile-dropdown-item" data-action="storage"><i class="fas fa-box-archive"></i> Хранилище</div>`
+            : '';
         profileContainer.innerHTML = `
             <img src="${user.avatar_url || 'images/default-avatar.webp'}" alt="${user.login}" class="nav-profile-avatar" onerror="this.src='images/default-avatar.webp'" width="32" height="32">
             <span class="nav-profile-login">${user.login}</span>
@@ -211,7 +191,7 @@
                         <span style="color:${hasGist?'#4caf50':'#ff9800'}"><i class="fas fa-${hasGist?'check':'exclamation-triangle'}-circle"></i> gist</span>
                     </div>
                 </div>
-                <div class="profile-dropdown-item" data-action="storage"><i class="fas fa-box-archive"></i> Хранилище ${!hasGist ? '<span style="color:#ff9800">⚠️</span>' : ''}</div>
+                ${storageItem}
                 <div class="profile-dropdown-item" data-action="revoke-token"><i class="fas fa-external-link-alt"></i> Управление токенами</div>
                 <div class="profile-dropdown-divider"></div>
                 <div class="profile-dropdown-item" data-action="clear-cache"><i class="fas fa-trash-alt"></i> Очистить кеш</div>

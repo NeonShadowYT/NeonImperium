@@ -404,7 +404,7 @@
             btns += `<button class="action-btn close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>`;
         }
         btns += `<button class="action-btn share-post" title="Поделиться"><i class="fas fa-share-alt"></i></button>`;
-        if (currentUser) {
+        if (currentUser && GithubAuth.hasScope('gist')) {
             btns += `<button class="action-btn bookmark-post" title="В избранное"><i class="fas fa-bookmark"></i></button>`;
         }
         actions.innerHTML = btns;

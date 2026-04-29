@@ -198,10 +198,10 @@
         }
     }
 
+    // Вспомогательная функция для кнопки избранного
     async function handleBookmark(item) {
         if (!window.BookmarkStorage) {
-            try { await loadModule('js/features/storage.js'); }
-            catch (e) { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
+            try { await loadModule('js/features/storage.js'); } catch { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
         }
         const bookmark = {
             url: item.type === 'video'
@@ -251,16 +251,18 @@
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
         inner.appendChild(meta);
 
-        const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
-        favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
-        favBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            handleBookmark(video);
-        });
-        inner.appendChild(favBtn);
+        // Кнопка избранного – только при наличии scope gist
+        if (currentUser && hasScope('gist')) {
+            const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+            favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
+            favBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleBookmark(video);
+            });
+            inner.appendChild(favBtn);
+        }
 
         card.appendChild(inner);
-
         card.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
             const mediaContainer = card.querySelector('.image-wrapper');
@@ -278,7 +280,6 @@
             mediaContainer.style.background = '#000';
             mediaContainer.appendChild(iframe);
         });
-
         return card;
     }
 
@@ -309,13 +310,16 @@
         preview.textContent = summary;
         inner.append(meta, preview);
 
-        const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
-        favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
-        favBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            handleBookmark({ type: 'post', ...post, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE });
-        });
-        inner.appendChild(favBtn);
+        // Кнопка избранного – только при наличии scope gist
+        if (currentUser && hasScope('gist')) {
+            const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+            favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
+            favBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleBookmark({ type: 'post', ...post, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE });
+            });
+            inner.appendChild(favBtn);
+        }
 
         card.appendChild(inner);
         card.addEventListener('click', (e) => {
