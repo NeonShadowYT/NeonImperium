@@ -72,6 +72,10 @@
     align-items: stretch;
 }
 
+.small-projects-container > .project-card-link {
+    min-width: 0;
+}
+
 .small-projects-container .project-card-link {
     height: 100%;
     display: flex;
