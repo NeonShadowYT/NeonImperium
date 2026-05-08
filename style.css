@@ -58,3 +58,8 @@
     70% { transform: translateY(5px); }
     100% { transform: translateY(0); }
 }
+
+/* Мгновенно скрываем кнопки с data-platform до выполнения JS */
+.download-button[data-platform] {
+    display: none !important;
+}

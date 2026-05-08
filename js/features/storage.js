@@ -1,90 +1,41 @@
-// js/features/storage.js — надёжное хранилище закладок с оптимистичным UI, дебаунсом, виртуализацией
+// js/features/storage.js – надёжное хранилище закладок на GitHub Gist (без пароля)
 (function() {
     const { CONFIG, escapeHtml, createElement, formatDate, debounce, cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, loadModule } = GithubCore;
+
     const GIST_FILENAME = 'neon-imperium-bookmarks.json';
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
     const STORAGE_KEY_PREFIX = 'bookmarks_';
     const LOCAL_STORAGE_KEY = 'neon_imperium_bookmarks_local';
     const SESSION_CACHE_KEY = 'bookmarks_session_cache';
-    const RECOVERY_SALT = new TextEncoder().encode('neon-imperium-recovery-salt-v1');
-    const MAX_PASSWORD_ATTEMPTS = 3;
-    const LOCKOUT_DURATION = 60000; // 1 минута
 
     // Состояние модуля
     let currentUser = null;
     let currentToken = null;
     let gistId = null;
-    let masterPassword = null;           // хранится в замыкании только в течение сессии
     let currentBookmarks = [];
     let sortOrder = 'new';
     let category = 'all';
     let modalAddFormVisible = false;
 
-    // Интерфейс синхронизации
     let debouncedSaveBookmarks = null;
-    let lastServerTimestamp = null;      // время последней успешной синхронизации с Gist
-    let lastSyncETag = null;
-
-    // Блокировка мастер‑пароля
-    let passwordAttempts = 0;
-    let lockoutUntil = 0;
+    let lastServerTimestamp = null;
 
     // Виртуализация карточек
     let observer = null;
     let gridContainer = null;
 
-    // ---------- Вспомогательные утилиты ----------
-    const Base64 = {
-        encode: arrayBuffer => {
-            const bytes = new Uint8Array(arrayBuffer);
-            let binary = '';
-            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-            return btoa(binary);
-        },
-        decode: b64 => {
-            const binary = atob(b64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            return bytes;
-        }
-    };
-
-    const Crypto = {
-        async deriveKey(pwd, salt) {
-            const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(pwd), 'PBKDF2', false, ['deriveKey']);
-            return crypto.subtle.deriveKey(
-                { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-                keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
-            );
-        },
-        async encrypt(data, pwd) {
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const key = await this.deriveKey(pwd, RECOVERY_SALT);
-            const enc = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(data)));
-            const combined = new Uint8Array(iv.length + enc.byteLength);
-            combined.set(iv);
-            combined.set(new Uint8Array(enc), iv.length);
-            return Base64.encode(combined.buffer);
-        },
-        async decrypt(b64, pwd) {
-            try {
-                const combined = Base64.decode(b64);
-                const iv = combined.slice(0, 12);
-                const data = combined.slice(12);
-                const key = await this.deriveKey(pwd, RECOVERY_SALT);
-                const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data.buffer);
-                return JSON.parse(new TextDecoder().decode(dec));
-            } catch { return null; }
-        }
-    };
-
-    // ---------- Gist API с использование GithubAPI.fetch ----------
+    // ---------- Gist API с использованием GithubAPI.fetch ----------
     async function gistFetch(gistId, token) {
         const url = `https://api.github.com/gists/${gistId}`;
-        const resp = await GithubAPI.fetch(url);
-        if (resp.status === 404) return null;
-        if (!resp.ok) throw new Error(`Gist fetch error: ${resp.status}`);
-        return resp.json();
+        try {
+            const resp = await GithubAPI.fetch(url);
+            if (resp.status === 404) return null;
+            if (!resp.ok) throw new Error(`Gist fetch error: ${resp.status}`);
+            return resp.json();
+        } catch (e) {
+            console.error('gistFetch failed:', e);
+            return null;
+        }
     }
 
     async function gistUpdate(gistId, content, token) {
@@ -115,7 +66,7 @@
         await GithubAPI.fetch(url, { method: 'DELETE' }).catch(() => {});
     }
 
-    // ---------- Локальное / удалённое сохранение (с дебаунсом) ----------
+    // ---------- Дебаунс сохранения ----------
     function triggerDebouncedSave() {
         if (!debouncedSaveBookmarks) {
             debouncedSaveBookmarks = debounce(doSaveBookmarks, 2000);
@@ -125,40 +76,31 @@
 
     async function doSaveBookmarks() {
         try {
-            if (currentToken) {
-                if (masterPassword) {
-                    const encrypted = await Crypto.encrypt(currentBookmarks, masterPassword);
-                    const payload = { version: 2, user: currentUser, encryptedBookmarks: encrypted, timestamp: Date.now() };
-                    const content = JSON.stringify(payload);
-                    if (gistId) {
-                        await gistUpdate(gistId, content, currentToken);
-                    } else {
-                        gistId = await gistCreate(content, currentToken);
-                        localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
-                    }
-                    lastServerTimestamp = Date.now();
-                } else {
-                    const payload = { version: 2, bookmarks: currentBookmarks, timestamp: Date.now() };
-                    const content = JSON.stringify(payload);
-                    if (gistId) {
-                        await gistUpdate(gistId, content, currentToken);
-                    } else {
-                        gistId = await gistCreate(content, currentToken);
-                        localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
-                    }
-                    lastServerTimestamp = Date.now();
-                }
-            }
-            // Всегда сохраняем локальную копию
+            // Всегда сохраняем локально
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentBookmarks));
+
+            if (currentToken) {
+                const payload = {
+                    version: 2,
+                    bookmarks: currentBookmarks,
+                    timestamp: Date.now()
+                };
+                const content = JSON.stringify(payload);
+                if (gistId) {
+                    await gistUpdate(gistId, content, currentToken);
+                } else {
+                    gistId = await gistCreate(content, currentToken);
+                    localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
+                }
+                lastServerTimestamp = Date.now();
+            }
         } catch (err) {
             console.error('Ошибка синхронизации закладок:', err);
         }
     }
 
     // ---------- Загрузка закладок ----------
-    async function loadBookmarks(password = null) {
-        // Если нет токена – только локально
+    async function loadBookmarks() {
         if (!currentToken) {
             try {
                 return { bookmarks: JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]') };
@@ -167,53 +109,65 @@
             }
         }
 
-        // Если пароль не передан, но данные зашифрованы – потребуется пароль
+        // Пытаемся получить из Gist
         try {
-            if (!gistId) {
-                const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
-                if (stored) gistId = JSON.parse(stored).gistId;
+            const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
+            if (!stored) {
+                // gistId отсутствует – попробуем восстановить из локального хранилища
+                const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+                if (local.length > 0) {
+                    // Создаём новый gist с локальными данными
+                    return await initializeGistWithLocal(local);
+                }
+                return { bookmarks: [], needSetup: true };
             }
-            if (!gistId) return { bookmarks: [], needSetup: true };
 
+            gistId = JSON.parse(stored).gistId;
             const gist = await gistFetch(gistId, currentToken);
-            if (!gist) return { bookmarks: [], needSetup: true };
+            if (!gist) {
+                // Gist не найден – пробуем локальные данные
+                const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+                if (local.length > 0) {
+                    return await initializeGistWithLocal(local);
+                }
+                return { bookmarks: [] };
+            }
+
             const file = gist.files?.[GIST_FILENAME];
-            if (!file) return { bookmarks: [], needSetup: true };
+            if (!file) {
+                // Нет файла – пробуем локальные
+                const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+                if (local.length > 0) {
+                    return await initializeGistWithLocal(local);
+                }
+                return { bookmarks: [] };
+            }
 
             let payload;
             try {
                 payload = JSON.parse(file.content);
             } catch {
-                payload = { encryptedBookmarks: file.content };
-            }
-
-            if (payload.encryptedBookmarks) {
-                if (!password) {
-                    // Проверка попыток и блокировки
-                    if (isLockedOut()) {
-                        return { passwordLocked: true, remaining: getLockoutRemaining() };
-                    }
-                    return { passwordRequired: true, user: payload.user };
+                // Битый json – пробуем локальные
+                const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+                if (local.length > 0) {
+                    return await initializeGistWithLocal(local);
                 }
-                validatePasswordAttempt();
-                const bookmarks = await Crypto.decrypt(payload.encryptedBookmarks, password);
-                if (!bookmarks) {
-                    recordFailedAttempt();
-                    throw new Error('Invalid password');
-                }
-                resetPasswordAttempts();
-                // Сохраняем timestamp сервера
-                lastServerTimestamp = payload.timestamp || 0;
-                return { bookmarks };
+                return { bookmarks: [] };
             }
 
             if (payload.bookmarks) {
                 lastServerTimestamp = payload.timestamp || 0;
                 return { bookmarks: payload.bookmarks };
             }
+
+            // Устаревший формат? пробуем локальные
+            const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+            if (local.length > 0) {
+                return await initializeGistWithLocal(local);
+            }
             return { bookmarks: [] };
-        } catch (e) {
-            if (e.message === 'Invalid password') throw e;
+        } catch (err) {
+            console.error('Ошибка загрузки закладок:', err);
             try {
                 return { bookmarks: JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]') };
             } catch {
@@ -222,78 +176,43 @@
         }
     }
 
-    // ---------- Логика блокировки пароля ----------
-    function isLockedOut() {
-        if (lockoutUntil > Date.now()) return true;
-        return false;
-    }
-
-    function getLockoutRemaining() {
-        return Math.max(0, lockoutUntil - Date.now());
-    }
-
-    function validatePasswordAttempt() {
-        if (isLockedOut()) {
-            const sec = Math.ceil(getLockoutRemaining() / 1000);
-            UIUtils.showToast(`Слишком много попыток. Попробуйте через ${sec} сек.`, 'error');
-            throw new Error('locked');
+    async function initializeGistWithLocal(localBookmarks) {
+        try {
+            currentBookmarks = localBookmarks;
+            await doSaveBookmarks();
+            UIUtils.showToast('Закладки восстановлены из локальной копии', 'info');
+            return { bookmarks: localBookmarks };
+        } catch {
+            return { bookmarks: localBookmarks };
         }
     }
 
-    function recordFailedAttempt() {
-        passwordAttempts++;
-        sessionStorage.setItem('bookmark_pwd_attempts', passwordAttempts);
-        if (passwordAttempts >= MAX_PASSWORD_ATTEMPTS) {
-            lockoutUntil = Date.now() + LOCKOUT_DURATION;
-            sessionStorage.setItem('bookmark_pwd_lockout', lockoutUntil);
-            UIUtils.showToast('Превышено число попыток. Повторите через 1 минуту.', 'error');
-        }
-    }
-
-    function resetPasswordAttempts() {
-        passwordAttempts = 0;
-        sessionStorage.removeItem('bookmark_pwd_attempts');
-        lockoutUntil = 0;
-        sessionStorage.removeItem('bookmark_pwd_lockout');
-    }
-
-    function restorePasswordState() {
-        const attempts = sessionStorage.getItem('bookmark_pwd_attempts');
-        if (attempts) passwordAttempts = parseInt(attempts, 10);
-        const lock = sessionStorage.getItem('bookmark_pwd_lockout');
-        if (lock) lockoutUntil = parseInt(lock, 10);
-    }
-
-    // ---------- Обновление UI после изменения (оптимистичное) ----------
+    // ---------- UI ----------
     function syncUIFromBookmarks() {
         if (!gridContainer) return;
-        // Удаляем карточки, которых больше нет
+
         const currentIds = new Set(currentBookmarks.map(b => b.id));
         const cards = gridContainer.querySelectorAll('.bookmark-card-wrapper');
         cards.forEach(card => {
-            const id = card.dataset.id;
-            if (!currentIds.has(id)) card.remove();
+            if (!currentIds.has(card.dataset.id)) card.remove();
         });
 
-        // Добавляем новые карточки
         currentBookmarks.forEach((bm, index) => {
             let card = gridContainer.querySelector(`.bookmark-card-wrapper[data-id="${bm.id}"]`);
             if (!card) {
                 card = createBookmarkCard(bm);
                 gridContainer.appendChild(card);
             } else {
-                // Обновляем содержимое (на случай изменений)
                 updateBookmarkCard(card, bm);
             }
         });
 
-        // Виртуализация – наблюдение за видимыми карточками
+        // Виртуализация
         if (observer) observer.disconnect();
         if (currentBookmarks.length > 50) {
             observer = new IntersectionObserver(handleIntersection, { rootMargin: '200px' });
             gridContainer.querySelectorAll('.bookmark-card-wrapper').forEach(card => observer.observe(card));
         } else {
-            // Если меньше 50, сразу загружаем все медиа
             gridContainer.querySelectorAll('.bookmark-card-wrapper').forEach(card => {
                 const bm = currentBookmarks.find(b => b.id === card.dataset.id);
                 if (bm) showCardMedia(card, bm);
@@ -316,8 +235,8 @@
         if (card.dataset.mediaLoaded === 'true') return;
         const mediaContainer = card.querySelector('.bookmark-media');
         if (!mediaContainer) return;
+
         if (bookmark.embedUrl) {
-            // Показать превью/кнопку, а не сразу iframe
             if (!mediaContainer.querySelector('.bookmark-preview')) {
                 mediaContainer.innerHTML = `
                     <div class="bookmark-preview" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-primary);cursor:pointer;">
@@ -360,7 +279,6 @@
             position: 'relative', paddingBottom: '56.25%', background: 'var(--bg-primary)',
             borderBottom: '1px solid var(--border)', flexShrink: '0'
         });
-        // Пустой, заполнится позже виртуализацией
         card.appendChild(mediaContainer);
 
         const content = createElement('div', 'bookmark-content', {
@@ -380,21 +298,19 @@
         });
 
         if (bookmark.downloadUrl) {
-            const btn = createActionBtn('download', () => window.open(bookmark.downloadUrl, '_blank'));
-            actions.appendChild(btn);
+            actions.appendChild(createActionBtn('download', () => window.open(bookmark.downloadUrl, '_blank')));
         }
-        const editBtn = createActionBtn('edit', () => {
+        actions.appendChild(createActionBtn('edit', () => {
             const newTitle = prompt('Новое название:', bookmark.title);
             if (newTitle && newTitle !== bookmark.title) {
                 bookmark.title = newTitle;
                 titleEl.textContent = newTitle.length > 60 ? newTitle.slice(0,60)+'…' : newTitle;
                 optimisticallyUpdate(bookmark);
             }
-        });
-        const delBtn = createActionBtn('delete', () => {
+        }));
+        actions.appendChild(createActionBtn('delete', () => {
             if (confirm('Удалить закладку?')) optimisticallyRemove(bookmark.id);
-        });
-        actions.append(editBtn, delBtn);
+        }));
         content.appendChild(actions);
         card.appendChild(content);
         cardWrapper.appendChild(card);
@@ -416,10 +332,9 @@
     function updateBookmarkCard(card, bookmark) {
         const titleEl = card.querySelector('h4');
         if (titleEl) titleEl.textContent = bookmark.title.length > 60 ? bookmark.title.slice(0,60)+'…' : bookmark.title;
-        // обновим дату и т.д., если нужно
     }
 
-    // ---------- Оптимистичное обновление ----------
+    // ---------- Оптимистичное обновление и удаление ----------
     function optimisticallyUpdate(bookmark) {
         const index = currentBookmarks.findIndex(b => b.id === bookmark.id);
         if (index >= 0) currentBookmarks[index] = bookmark;
@@ -430,10 +345,9 @@
     async function optimisticallyRemove(id) {
         const index = currentBookmarks.findIndex(b => b.id === id);
         if (index === -1) return;
-        const removed = currentBookmarks.splice(index, 1)[0];
+        currentBookmarks.splice(index, 1);
         syncUIFromBookmarks();
         triggerDebouncedSave();
-        // нет отката при ошибке (можно добавить)
     }
 
     // ---------- Публичные методы ----------
@@ -442,36 +356,13 @@
             UIUtils.showToast('Войдите в аккаунт', 'error');
             throw new Error('not_logged_in');
         }
-        // Проверка, нужен ли пароль
-        let res = await loadBookmarks();
-        if (res.needSetup) {
-            const pwd = prompt('Создайте мастер-пароль (мин. 4 символа):');
-            if (pwd && pwd.length >= 4) {
-                masterPassword = pwd;
-                currentBookmarks = [];
-                await doSaveBookmarks(); // принудительно сохранить
-                res = { bookmarks: [] };
-            } else {
-                UIUtils.showToast('Пароль слишком короткий', 'error');
-                throw new Error('invalid_password');
-            }
-        } else if (res.passwordRequired) {
-            if (masterPassword) {
-                try { res = await loadBookmarks(masterPassword); }
-                catch { masterPassword = null; }
-            }
-            if (!masterPassword || res.passwordRequired) {
-                UIUtils.showToast('Требуется мастер-пароль. Откройте хранилище.', 'error');
-                throw new Error('password_required');
-            }
-        } else if (res.passwordLocked) {
-            UIUtils.showToast('Хранилище временно заблокировано', 'error');
-            throw new Error('locked');
-        }
 
-        const existing = res.bookmarks || [];
-        // Проверка дубликатов
-        if (existing.some(b => b.url === bookmarkData.url)) {
+        // Гарантированно загружаем последнее состояние
+        const res = await loadBookmarks();
+        currentBookmarks = res.bookmarks || [];
+
+        const existing = currentBookmarks.some(b => b.url === bookmarkData.url);
+        if (existing) {
             UIUtils.showToast('Уже в избранном', 'info');
             throw new Error('duplicate');
         }
@@ -488,22 +379,21 @@
             postData: bookmarkData.postData || null
         };
 
-        currentBookmarks = [newBookmark, ...existing];
+        currentBookmarks = [newBookmark, ...currentBookmarks];
         syncUIFromBookmarks();
         triggerDebouncedSave();
         return newBookmark;
     }
 
     async function removeBookmark(id) {
-        if (!masterPassword && !currentToken) {
+        if (!currentToken) {
             const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
             currentBookmarks = local.filter(b => b.id !== id);
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentBookmarks));
             syncUIFromBookmarks();
             return;
         }
-        const res = await loadBookmarks(masterPassword);
-        if (res.passwordRequired || res.passwordLocked) return;
+        const res = await loadBookmarks();
         currentBookmarks = (res.bookmarks || []).filter(b => b.id !== id);
         syncUIFromBookmarks();
         triggerDebouncedSave();
@@ -515,60 +405,9 @@
         if (!currentToken) return UIUtils.showToast('Токен не найден', 'error');
         if (!GithubAuth.hasScope('gist')) return UIUtils.showToast('Нужен scope "gist"', 'error');
 
-        restorePasswordState();
+        const res = await loadBookmarks();
+        currentBookmarks = res.bookmarks || [];
 
-        let needSetup = false, passwordRequired = false;
-        try {
-            const res = await loadBookmarks(masterPassword);
-            if (res.passwordLocked) {
-                UIUtils.showToast('Хранилище временно заблокировано', 'error');
-                return;
-            }
-            if (res.passwordRequired) {
-                passwordRequired = true;
-            } else if (res.needSetup) {
-                needSetup = true;
-            } else {
-                currentBookmarks = res.bookmarks || [];
-            }
-        } catch (e) {
-            if (e.message === 'locked') return;
-        }
-
-        // Если нужен пароль, запрашиваем (до 3 попыток)
-        while (passwordRequired && !masterPassword) {
-            const pwd = prompt('Введите мастер-пароль:');
-            if (!pwd) return UIUtils.showToast('Отменено', 'info');
-            try {
-                const res = await loadBookmarks(pwd);
-                if (res.passwordLocked) {
-                    UIUtils.showToast('Хранилище временно заблокировано', 'error');
-                    return;
-                }
-                if (res.passwordRequired) {
-                    UIUtils.showToast('Неверный пароль', 'error');
-                    // увеличит счётчик внутри loadBookmarks
-                    continue;
-                }
-                currentBookmarks = res.bookmarks || [];
-                masterPassword = pwd;
-                passwordRequired = false;
-            } catch (err) {
-                UIUtils.showToast('Ошибка', 'error');
-                return;
-            }
-        }
-
-        if (needSetup) {
-            const pwd = prompt('Создайте мастер-пароль (мин. 4 символа):');
-            if (!pwd || pwd.length < 4) return UIUtils.showToast('Пароль короткий', 'error');
-            masterPassword = pwd;
-            currentBookmarks = [];
-            await doSaveBookmarks();
-            UIUtils.showToast('Хранилище создано!', 'success');
-        }
-
-        // Строим модальное окно
         const html = `
             <div class="storage-modal-container">
                 <div class="storage-header">
@@ -586,7 +425,6 @@
                     </div>
                     <div class="storage-actions">
                         <button class="storage-btn primary" id="toggle-add-btn"><i class="fas fa-plus"></i> Добавить</button>
-                        <button class="storage-btn" id="change-password-btn"><i class="fas fa-key"></i></button>
                         <button class="storage-btn danger" id="reset-storage-btn"><i class="fas fa-trash-alt"></i></button>
                     </div>
                 </div>
@@ -600,7 +438,6 @@
         `;
         const { modal, closeModal } = UIUtils.createModal('Хранилище', html, { size: 'full' });
 
-        // Стили для модального окна (можно вынести, но для целостности оставим)
         const style = createElement('style');
         style.textContent = `
             .storage-modal-container{display:flex;flex-direction:column;gap:20px}
@@ -618,13 +455,11 @@
             .storage-add-form{display:none;grid-template-columns:1fr 1fr auto;gap:10px;background:var(--bg-inner-gradient);padding:16px;border-radius:20px;border:1px solid var(--border);opacity:0;transform:translateY(-10px);transition:0.3s;align-items:center}
             .storage-add-form.visible{display:grid;opacity:1;transform:translateY(0)}
             .storage-add-form input{padding:12px 16px;background:var(--bg-primary);border:1px solid var(--border);border-radius:40px;color:var(--text-primary);font-family:'Russo One',sans-serif}
-            @media (max-width:700px){.storage-add-form{grid-template-columns:1fr}}
         `;
         modal.appendChild(style);
         gridContainer = modal.querySelector('#bookmarks-grid');
         syncUIFromBookmarks();
 
-        // Назначаем обработчики
         modal.querySelectorAll('.sort-btn').forEach(b => {
             b.addEventListener('click', () => {
                 sortOrder = b.dataset.order;
@@ -667,23 +502,10 @@
             }
         });
 
-        modal.querySelector('#change-password-btn').addEventListener('click', async () => {
-            const old = masterPassword || prompt('Текущий пароль:');
-            if (!old) return;
-            const newPwd = prompt('Новый пароль (мин. 4):');
-            if (!newPwd || newPwd.length < 4) return UIUtils.showToast('Слишком короткий', 'warning');
-            try {
-                await changeMasterPassword(old, newPwd);
-                UIUtils.showToast('Пароль изменён', 'success');
-            } catch (e) {
-                UIUtils.showToast('Ошибка: '+e.message, 'error');
-            }
-        });
         modal.querySelector('#reset-storage-btn').addEventListener('click', async () => {
             if (!confirm('Удалить все закладки безвозвратно?')) return;
             await resetStorage();
             currentBookmarks = [];
-            masterPassword = null;
             syncUIFromBookmarks();
             UIUtils.showToast('Хранилище сброшено', 'success');
             closeModal();
@@ -693,8 +515,6 @@
     }
 
     function applyFilterAndSort() {
-        // Перерисовываем с учетом фильтра и сортировки
-        // Просто обновим display у карточек
         const cards = gridContainer.querySelectorAll('.bookmark-card-wrapper');
         cards.forEach(card => {
             const id = card.dataset.id;
@@ -706,7 +526,6 @@
             card.style.display = visible ? '' : 'none';
         });
 
-        // Сортировка повлияет на порядок в DOM (перемещение)
         const sortedIds = [...currentBookmarks]
             .filter(b => {
                 if (category === 'video') return !!b.embedUrl;
@@ -726,14 +545,6 @@
         });
     }
 
-    async function changeMasterPassword(oldPwd, newPwd) {
-        const res = await loadBookmarks(oldPwd);
-        if (res.passwordRequired) throw new Error('Старый пароль неверный');
-        masterPassword = newPwd;
-        currentBookmarks = res.bookmarks || [];
-        await doSaveBookmarks();
-    }
-
     async function resetStorage() {
         if (gistId && currentToken) {
             await gistDelete(gistId, currentToken).catch(() => {});
@@ -741,10 +552,7 @@
         gistId = null;
         localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);
         localStorage.removeItem(LOCAL_STORAGE_KEY);
-        sessionStorage.removeItem(USER_CACHE_KEY);
         sessionStorage.removeItem(SESSION_CACHE_KEY);
-        resetPasswordAttempts();
-        masterPassword = null;
     }
 
     function updateAuthState() {
@@ -756,28 +564,21 @@
             if (stored) try { gistId = JSON.parse(stored).gistId; } catch {}
         } else {
             gistId = null;
-            masterPassword = null;
         }
     }
 
-    window.addEventListener('github-login-success', () => {
-        updateAuthState();
-        restorePasswordState();
-    });
+    window.addEventListener('github-login-success', updateAuthState);
     window.addEventListener('github-logout', () => {
         currentUser = null;
         currentToken = null;
         gistId = null;
-        masterPassword = null;
     });
 
-    // Экспорт
     window.BookmarkStorage = {
         openStorageModal,
         addBookmark,
         removeBookmark,
-        changeMasterPassword,
         resetStorage,
-        loadBookmarks   // может пригодиться
+        loadBookmarks
     };
 })();
