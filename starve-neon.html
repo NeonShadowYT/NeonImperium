@@ -40,7 +40,6 @@
     <script src="js/pages/game-updates.js" defer></script>
     <script src="js/platform.js" defer></script>
     <script src="js/features/background-gifs.js" defer></script>
-    <script src="js/features/performance-test.js" defer></script>
     <script src="js/common-init.js" defer></script>
     <style>
         .lazy-yt {
@@ -154,8 +153,36 @@
                 </div>
             </section>
 
-            <section class="card" id="requirements-section-new">
-                <!-- Заменяется performance-test.js -->
+            <section class="card">
+                <h2 data-lang="requirementsTitle">Системные требования</h2>
+                <p class="text-secondary" data-lang="requirementsNote">Примерные значения основанные на стандартных настройках для этих устройств</p>
+                <div class="requirements-grid">
+                    <div class="req-item tilt-card">
+                        <span class="req-label" data-lang="fps60">60+ Фпс</span>
+                        <span data-lang="cpu60">Процессор: Xeon-E2650 v2 3.00 GHz</span>
+                        <span data-lang="gpu60">Видеокарта: GT 730 4GB</span>
+                    </div>
+                    <div class="req-item tilt-card">
+                        <span class="req-label" data-lang="fps180">180+ Фпс</span>
+                        <span data-lang="cpu180">Процессор: AMD Athlon X4 840 3.10 GHz</span>
+                        <span data-lang="gpu180">Видеокарта: GT 1030 2GB</span>
+                    </div>
+                    <div class="req-item tilt-card">
+                        <span class="req-label" data-lang="fps1000">1000+ Фпс</span>
+                        <span data-lang="cpu1000">Процессор: AMD Ryzen 7 7435HS 4.00 GHz</span>
+                        <span data-lang="gpu1000">Видеокарта: RTX 3050 4GB Laptop</span>
+                    </div>
+                </div>
+                <div class="consumption-card tilt-card">
+                    <h3 data-lang="consumptionTitle">Потребление</h3>
+                    <p class="text-secondary" data-lang="consumptionNote">Примерные значения</p>
+                    <table class="consumption-table">
+                        <tr><td data-lang="vram">Видеопамять</td><td data-lang="vramVal">512-1024 Мб</td></tr>
+                        <tr><td data-lang="ram">Оперативка</td><td data-lang="ramVal">512-1024 Мб</td></tr>
+                        <tr><td data-lang="storage">Память</td><td data-lang="storageVal">256 Мб</td></tr>
+                        <tr><td data-lang="os">Система</td><td data-lang="osVal">Win 10+ 32 Бит / Андроид 7+</td></tr>
+                    </table>
+                </div>
             </section>
 
             <section class="card">
