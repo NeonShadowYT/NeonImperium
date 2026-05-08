@@ -1,5 +1,6 @@
-// platform.js – три секции: площадки, облака, GitHub с выбором версии и платформы
-// Использование version‑name из релизов, исправленное «Что нового», лицензия внутри карточки
+// platform.js – три секции: площадки, облака, GitHub с выбором версии и платформы.
+// Используем version-name из релизов, корректное «Что нового», лицензия внутри карточки.
+
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
@@ -82,7 +83,7 @@
         return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
-    // ---------- Основная функция инициализации ----------
+    // ---------- Инициализация ----------
     async function init() {
         const os = getOS();
         let currentPlatform = (os === 'Android') ? 'Android' : 'Windows';
@@ -141,7 +142,7 @@
             </div>
         `;
 
-        // Элементы после вставки
+        // Элементы
         const platformBtns = section.querySelectorAll('.platform-btn');
         const versionSelect = section.querySelector('.version-select');
         const versionDate = section.querySelector('#version-date');
@@ -149,12 +150,10 @@
         const whatsNewBtn = section.querySelector('#whats-new-btn');
         const cloudButtons = section.querySelectorAll('.cloud-buttons .download-button[data-platform]');
 
-        // Функция получения отфильтрованных релизов по платформе
         function getFilteredReleases(platform) {
             return allReleases.filter(release => findAsset(release, platform));
         }
 
-        // Заполнение селектора версий – используем только version-name, если есть, иначе tag_name
         function populateVersionSelect(platform) {
             const filtered = getFilteredReleases(platform);
             versionSelect.innerHTML = '';
@@ -166,7 +165,7 @@
             }
             filtered.forEach(release => {
                 const meta = parseMeta(release.body);
-                // Отображаем только version-name, если присутствует, иначе тег без v
+                // Показываем только version-name, иначе тег (без 'v')
                 const label = meta.versionName || release.tag_name.replace(/^v/, '');
                 const option = document.createElement('option');
                 option.value = release.tag_name;
@@ -187,7 +186,6 @@
             const dateStr = formatDate(release.published_at);
             versionDate.textContent = `Обновление от ${dateStr}`;
 
-            // GitHub кнопка
             const asset = findAsset(release, currentPlatform);
             if (asset) {
                 githubBtn.href = asset.browser_download_url;
@@ -197,7 +195,6 @@
                 githubBtn.classList.add('disabled');
             }
 
-            // Кнопка «Что нового?»
             if (meta.versionPost) {
                 whatsNewBtn.style.display = '';
                 whatsNewBtn.dataset.postId = meta.versionPost;
@@ -205,7 +202,7 @@
                 whatsNewBtn.style.display = 'none';
             }
 
-            // Обновление в шапке – используем version-name (или тег)
+            // Обновляем версию в шапке
             const headerBadge = document.querySelector('[data-version-role="version"]');
             if (headerBadge) {
                 const name = meta.versionName || release.tag_name.replace(/^v/, '');
@@ -221,56 +218,46 @@
                 platformBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
 
-                // Показать/скрыть облачные кнопки
                 cloudButtons.forEach(cb => {
                     cb.style.display = cb.dataset.platform === currentPlatform ? '' : 'none';
                 });
 
-                // Перестроить список версий
                 populateVersionSelect(currentPlatform);
             });
         });
 
-        // Смена версии
         versionSelect.addEventListener('change', updateUIForSelectedRelease);
 
-        // Кнопка «Что нового?» – загружаем пост и открываем модалку с его заголовком
+        // «Что нового» – открываем пост и подставляем настоящий заголовок
         whatsNewBtn.addEventListener('click', async () => {
             const postId = whatsNewBtn.dataset.postId;
             if (!postId || !window.UIFeedback) return;
 
-            // Показываем модалку с плейсхолдером, потом обновим заголовок
             const { openFullModal } = window.UIFeedback;
-            const placeHolderTitle = 'Загрузка...';
-            const item = {
+            openFullModal({
                 type: 'post',
                 id: parseInt(postId, 10),
-                title: placeHolderTitle,
+                title: 'Загрузка...',
                 body: '',
                 author: '',
                 date: new Date().toISOString(),
                 labels: ['type:news'],
                 game: gameTag
-            };
-            openFullModal(item);
+            });
 
-            // Пытаемся загрузить issue и обновить заголовок
             try {
                 if (window.GithubAPI && window.GithubAPI.loadIssue) {
                     const issue = await window.GithubAPI.loadIssue(parseInt(postId, 10));
-                    if (issue) {
-                        const modalTitle = document.getElementById('modal-header-title');
-                        if (modalTitle) {
-                            modalTitle.textContent = issue.title;
-                        }
-                    }
+                    const title = issue.title;
+                    const modalTitle = document.getElementById('modal-header-title');
+                    if (modalTitle) modalTitle.textContent = title;
                 }
             } catch (e) {
-                console.warn('Не удалось получить заголовок поста:', e);
+                console.warn('Не удалось загрузить заголовок:', e);
             }
         });
 
-        // Начальная установка видимости облачных кнопок
+        // Начальная установка облачных кнопок
         cloudButtons.forEach(cb => {
             cb.style.display = cb.dataset.platform === currentPlatform ? '' : 'none';
         });

@@ -24,13 +24,13 @@
     font-size: 15px;
     font-weight: bold;
     cursor: pointer;
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.4);
     display: flex;
     align-items: center;
     gap: 8px;
     z-index: 1000;
     transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255,255,255,0.2);
     font-family: var(--font-family);
 }
 
@@ -39,7 +39,7 @@
 .donate-button-fixed:hover {
     background: var(--accent-light);
     transform: scale(1.03);
-    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 10px 22px rgba(0,0,0,0.6);
 }
 
 .donate-button-fixed:active { transform: scale(0.98); }
@@ -56,15 +56,14 @@
 /* ========== GIF-баннеры в карточках ========== */
 .feature-banner {
     width: 100%;
-    height: 100px;                /* уменьшена высота */
+    height: 100px;
     overflow: hidden;
     border-radius: 12px 12px 0 0;
-    margin: -16px -16px 12px -16px; /* уменьшен нижний отступ */
+    margin: -16px -16px 12px -16px;
     position: relative;
     background: var(--bg-primary);
     opacity: 0;
     transition: opacity 1.2s ease-in-out;
-    pointer-events: none;
 }
 .feature-banner.loaded {
     opacity: 1;
@@ -76,15 +75,27 @@
     object-fit: cover;
     display: block;
 }
-/* Fallback-эмодзи */
+/* Плавный градиент (не выше середины) */
+.feature-banner::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 60%;
+    background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 1;
+}
 .feature-banner .fallback-emoji {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%,-50%);
     font-size: 40px;
     opacity: 0.3;
     pointer-events: none;
+    z-index: 0;
 }
 
 /* ========== Фон с гифками для секции скачивания ========== */
@@ -128,90 +139,92 @@
 .download-sections {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     align-items: center;
 }
 .download-subsection {
     width: 100%;
-    max-width: 480px;
+    max-width: 420px;
     background: var(--bg-inner-gradient);
-    border-radius: 14px;
-    padding: 14px;
+    border-radius: 12px;
+    padding: 10px;
     border: 1px solid var(--border);
     text-align: center;
 }
 .download-subsection h3 {
-    margin: 0 0 8px;
-    font-size: 17px;
+    margin: 0 0 6px;
+    font-size: 16px;
     color: var(--accent);
 }
-.store-buttons, .cloud-buttons {
+.store-buttons,
+.cloud-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     justify-content: center;
 }
 
-/* Убираем жёсткое скрытие – управляется JS */
-.cloud-buttons .download-button[data-platform] {
-    /* display управляется через inline‑стиль platform.js */
-}
+/* Облачные кнопки видны только для текущей платформы (через inline‑style) */
 
 .github-block {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 }
 .platform-selector {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     justify-content: center;
 }
 .platform-btn {
     background: var(--bg-inner-gradient);
     border: 1px solid var(--border);
     color: var(--text-secondary);
-    padding: 5px 12px;
+    padding: 4px 10px;
     border-radius: 16px;
     cursor: pointer;
     font-family: var(--font-family);
     transition: 0.2s;
-    font-size: 13px;
+    font-size: 12px;
 }
-.platform-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.platform-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
 .version-row {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 4px;
 }
-.version-label { color: var(--text-secondary); font-size: 13px; }
+.version-label { color: var(--text-secondary); font-size: 12px; }
 .version-select {
-    padding: 5px 10px;
-    border-radius: 16px;
+    padding: 4px 8px;
+    border-radius: 14px;
     background: var(--bg-primary);
     border: 1px solid var(--border);
     color: var(--text-primary);
     font-family: var(--font-family);
-    font-size: 13px;
-    min-width: 200px;
+    font-size: 12px;
+    min-width: 180px;
     text-align: center;
 }
 .version-date {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary);
     margin: 0;
 }
 #whats-new-btn { margin-top: 2px; }
 #github-download-btn.disabled { opacity: 0.5; pointer-events: none; }
 
-/* Лицензионная строка внутри карточки */
+/* Лицензия внутри карточки */
 .download-license {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-secondary);
     text-align: center;
-    margin-top: 10px;
+    margin-top: 6px;
     padding: 0 8px;
 }
 .download-license a {
@@ -220,11 +233,11 @@
     border-bottom: 1px dotted var(--accent);
 }
 
-/* Улучшение выравнивания карточек описания */
+/* ========== Карточки описания – равная высота ========== */
 .features-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
     align-items: stretch;
 }
 .feature-item {
@@ -233,7 +246,7 @@
     height: 100%;
     background: var(--bg-inner-gradient);
     border-radius: 14px;
-    padding: 16px;
+    padding: 14px;
     border: 1px solid var(--border);
     transition: transform 0.2s;
 }
@@ -241,13 +254,22 @@
     transform: translateY(-2px);
 }
 .feature-item h3 {
-    margin: 0 0 8px;
-    font-size: 17px;
+    margin: 0 0 6px;
+    font-size: 16px;
     color: var(--accent);
 }
 .feature-item p {
     flex: 1;
     margin: 0;
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.5;
+}
+
+/* Иконка Telegram справа от версии в шапке */
+.game-header .version-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
 }

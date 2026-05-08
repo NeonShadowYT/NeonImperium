@@ -1,14 +1,12 @@
 // js/features/background-gifs.js
-// Управление гифками: баннеры в карточках с плавным появлением
-// и переключаемый фон в секции скачивания (без изменений)
+// Управление гифками: баннеры с плавным появлением, переключаемый фон скачивания.
 
 (function() {
-    // ---------- 1. Баннеры с гифками / видео в feature-карточках ----------
+    // ---------- 1. Баннеры с видео / гифками ----------
     function initFeatureBanners() {
         const banners = document.querySelectorAll('.feature-banner[data-gif]');
         if (banners.length === 0) return;
 
-        // Настройка IntersectionObserver для ленивого появления
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
@@ -50,23 +48,12 @@
                     }
                     container.appendChild(mediaElement);
 
-                    // Плавное появление после загрузки метаданных или сразу
                     if (mediaElement.tagName === 'VIDEO') {
-                        mediaElement.addEventListener('loadeddata', () => {
-                            container.classList.add('loaded');
-                        });
-                        // fallback если видео уже загружено
-                        if (mediaElement.readyState >= 2) {
-                            container.classList.add('loaded');
-                        }
+                        mediaElement.addEventListener('loadeddata', () => container.classList.add('loaded'));
+                        if (mediaElement.readyState >= 2) container.classList.add('loaded');
                     } else {
-                        // для картинки
-                        mediaElement.addEventListener('load', () => {
-                            container.classList.add('loaded');
-                        });
-                        if (mediaElement.complete) {
-                            container.classList.add('loaded');
-                        }
+                        mediaElement.addEventListener('load', () => container.classList.add('loaded'));
+                        if (mediaElement.complete) container.classList.add('loaded');
                     }
 
                     container.dataset.loaded = 'true';
@@ -75,12 +62,10 @@
             });
         }, { rootMargin: '200px' });
 
-        banners.forEach(container => {
-            observer.observe(container);
-        });
+        banners.forEach(container => observer.observe(container));
     }
 
-    // ---------- 2. Переключаемый фон в download-card ----------
+    // ---------- 2. Фон скачивания ----------
     function initDownloadBackground() {
         const section = document.getElementById('download-section');
         if (!section) return;
