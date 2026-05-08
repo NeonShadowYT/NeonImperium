@@ -34,9 +34,7 @@
     font-family: var(--font-family);
 }
 
-.donate-button-fixed i {
-    font-size: 18px;
-}
+.donate-button-fixed i { font-size: 18px; }
 
 .donate-button-fixed:hover {
     background: var(--accent-light);
@@ -44,13 +42,9 @@
     box-shadow: 0 10px 22px rgba(0, 0, 0, 0.6);
 }
 
-.donate-button-fixed:active {
-    transform: scale(0.98);
-}
+.donate-button-fixed:active { transform: scale(0.98); }
 
-.donate-button-fixed.error-bounce {
-    animation: bounceUp 0.4s ease;
-}
+.donate-button-fixed.error-bounce { animation: bounceUp 0.4s ease; }
 
 @keyframes bounceUp {
     0% { transform: translateY(0); }
@@ -59,29 +53,24 @@
     100% { transform: translateY(0); }
 }
 
-/* Мгновенно скрываем кнопки с data-platform до выполнения JS */
-.download-button[data-platform] {
-    display: none !important;
-}
-
 /* ========== GIF-баннеры в карточках ========== */
 .feature-banner {
     width: 100%;
-    height: 120px;          /* тонкий баннер, можно подобрать */
+    height: 120px;
     overflow: hidden;
     border-radius: 12px 12px 0 0;
-    margin: -16px -16px 16px -16px;  /* чтобы прилегал к верхним углам карточки */
+    margin: -16px -16px 16px -16px;
     position: relative;
     background: var(--bg-primary);
 }
-.feature-banner img,
-.feature-banner video {
+.feature-banner video,
+.feature-banner img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
 }
-/* Fallback-эмодзи (если гифка не загрузилась) */
+/* Fallback-эмодзи */
 .feature-banner .fallback-emoji {
     position: absolute;
     top: 50%;
@@ -89,32 +78,32 @@
     transform: translate(-50%, -50%);
     font-size: 48px;
     opacity: 0.3;
+    pointer-events: none;
 }
 
 /* ========== Фон с гифками для секции скачивания ========== */
 .download-card {
     position: relative;
-    overflow: hidden; /* чтобы гифки не вылезали */
+    overflow: hidden;
 }
 .download-card .bg-gif-layer {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: 60%;          /* занимает верхнюю половину */
+    height: 60%;
     z-index: 0;
     pointer-events: none;
     transition: opacity 1.5s ease-in-out;
     opacity: 0;
 }
-.download-card .bg-gif-layer.active {
-    opacity: 1;
-}
+.download-card .bg-gif-layer.active { opacity: 1; }
+.download-card .bg-gif-layer video,
 .download-card .bg-gif-layer img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    filter: blur(4px) brightness(0.6);   /* размытие и затемнение */
+    filter: blur(4px) brightness(0.6);
 }
 .download-card .bg-gif-mask {
     position: absolute;
@@ -126,8 +115,82 @@
     z-index: 1;
     pointer-events: none;
 }
-/* Чтобы контент был над фоном */
-.download-card > * {
-    position: relative;
-    z-index: 2;
+/* Контент над фоном */
+.download-card > * { position: relative; z-index: 2; }
+
+/* ========== Новый интерфейс загрузки ========== */
+.download-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+    text-align: center;
+}
+.platform-version-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+}
+.platform-switch {
+    display: flex;
+    gap: 8px;
+}
+.platform-btn {
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: var(--font-family);
+    transition: 0.2s;
+    font-size: 14px;
+}
+.platform-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.version-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.version-label { color: var(--text-secondary); font-size: 14px; }
+.version-select {
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: 14px;
+}
+.release-date {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+.whats-new-wrap { margin-left: 8px; }
+.store-buttons, .cloud-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+.github-download-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 4px;
+}
+#github-download-btn.disabled { opacity: 0.5; pointer-events: none; }
+.platform-cloud-note {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: -4px;
+    margin-bottom: 8px;
+}
+.license-note {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 20px;
 }

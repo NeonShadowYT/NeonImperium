@@ -7,18 +7,35 @@
         document.querySelectorAll('.feature-banner[data-gif]').forEach(container => {
             const gifSrc = container.dataset.gif;
             const fallbackEmoji = container.dataset.fallbackEmoji || '';
-            // Очищаем контейнер
+            const ext = gifSrc.split('.').pop().toLowerCase();
             container.innerHTML = '';
-            // Создаём <img> с гифкой
-            const img = document.createElement('img');
-            img.src = gifSrc;
-            img.alt = '';
-            img.loading = 'lazy';
-            img.onerror = function() {
-                // Если гифка не загрузилась – показываем эмодзи
-                container.innerHTML = `<span class="fallback-emoji">${fallbackEmoji}</span>`;
-            };
-            container.appendChild(img);
+
+            if (ext === 'webm' || ext === 'mp4') {
+                // Используем <video> для WebM
+                const video = document.createElement('video');
+                video.src = gifSrc;
+                video.autoplay = true;
+                video.loop = true;
+                video.muted = true;
+                video.playsInline = true;
+                video.style.width = '100%';
+                video.style.height = '100%';
+                video.style.objectFit = 'cover';
+                video.addEventListener('error', () => {
+                    container.innerHTML = `<span class="fallback-emoji">${fallbackEmoji}</span>`;
+                });
+                container.appendChild(video);
+            } else {
+                // Для gif/webp — img
+                const img = document.createElement('img');
+                img.src = gifSrc;
+                img.alt = '';
+                img.loading = 'lazy';
+                img.onerror = () => {
+                    container.innerHTML = `<span class="fallback-emoji">${fallbackEmoji}</span>`;
+                };
+                container.appendChild(img);
+            }
         });
     }
 
@@ -27,34 +44,43 @@
         const section = document.getElementById('download-section');
         if (!section) return;
 
-        // Массив гифок, которые будут циклически сменяться
         const gifSources = [
-            'images/bg-download-1.webp',   // замените на свои
-            'images/bg-download-2.webp',
-            'images/bg-download-3.webp'
+            'images/bg-download-1.webm',   // замените на свои
+            'images/bg-download-2.webm',
+            'images/bg-download-3.webm'
         ];
 
-        // Если уже есть слои – не дублируем
         if (section.querySelector('.bg-gif-layer')) return;
 
-        // Создаём слои
         gifSources.forEach((src, index) => {
             const layer = document.createElement('div');
             layer.className = 'bg-gif-layer' + (index === 0 ? ' active' : '');
-            const img = document.createElement('img');
-            img.src = src;
-            img.alt = '';
-            img.loading = 'lazy';
-            layer.appendChild(img);
+            const ext = src.split('.').pop().toLowerCase();
+            if (ext === 'webm' || ext === 'mp4') {
+                const video = document.createElement('video');
+                video.src = src;
+                video.autoplay = true;
+                video.loop = true;
+                video.muted = true;
+                video.playsInline = true;
+                video.style.width = '100%';
+                video.style.height = '100%';
+                video.style.objectFit = 'cover';
+                layer.appendChild(video);
+            } else {
+                const img = document.createElement('img');
+                img.src = src;
+                img.alt = '';
+                img.loading = 'lazy';
+                layer.appendChild(img);
+            }
             section.appendChild(layer);
         });
 
-        // Маска с градиентом
         const mask = document.createElement('div');
         mask.className = 'bg-gif-mask';
         section.appendChild(mask);
 
-        // Запускаем циклическую смену каждые 8 секунд
         const layers = section.querySelectorAll('.bg-gif-layer');
         let currentIndex = 0;
         setInterval(() => {
@@ -64,7 +90,6 @@
         }, 8000);
     }
 
-    // ---------- Инициализация после загрузки DOM ----------
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             initFeatureBanners();
