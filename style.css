@@ -56,12 +56,18 @@
 /* ========== GIF-баннеры в карточках ========== */
 .feature-banner {
     width: 100%;
-    height: 120px;
+    height: 100px;                /* уменьшена высота */
     overflow: hidden;
     border-radius: 12px 12px 0 0;
-    margin: -16px -16px 16px -16px;
+    margin: -16px -16px 12px -16px; /* уменьшен нижний отступ */
     position: relative;
     background: var(--bg-primary);
+    opacity: 0;
+    transition: opacity 1.2s ease-in-out;
+    pointer-events: none;
+}
+.feature-banner.loaded {
+    opacity: 1;
 }
 .feature-banner video,
 .feature-banner img {
@@ -76,7 +82,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 48px;
+    font-size: 40px;
     opacity: 0.3;
     pointer-events: none;
 }
@@ -118,58 +124,60 @@
 /* Контент над фоном */
 .download-card > * { position: relative; z-index: 2; }
 
-/* ========== Три секции скачивания ========== */
+/* ========== Три секции скачивания – компактный вид ========== */
 .download-sections {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 12px;
     align-items: center;
 }
 .download-subsection {
     width: 100%;
-    max-width: 500px;
+    max-width: 480px;
     background: var(--bg-inner-gradient);
-    border-radius: 20px;
-    padding: 20px;
+    border-radius: 14px;
+    padding: 14px;
     border: 1px solid var(--border);
     text-align: center;
 }
 .download-subsection h3 {
-    margin: 0 0 12px;
-    font-size: 20px;
+    margin: 0 0 8px;
+    font-size: 17px;
     color: var(--accent);
 }
 .store-buttons, .cloud-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
     justify-content: center;
 }
-.cloud-buttons .download-button { display: inline-flex; }
-/* Скрываем облачные кнопки не под платформу */
-.cloud-buttons .download-button[data-platform] { display: none; }
+
+/* Убираем жёсткое скрытие – управляется JS */
+.cloud-buttons .download-button[data-platform] {
+    /* display управляется через inline‑стиль platform.js */
+}
 
 .github-block {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
 }
 .platform-selector {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     justify-content: center;
 }
 .platform-btn {
     background: var(--bg-inner-gradient);
     border: 1px solid var(--border);
     color: var(--text-secondary);
-    padding: 6px 14px;
-    border-radius: 20px;
+    padding: 5px 12px;
+    border-radius: 16px;
     cursor: pointer;
     font-family: var(--font-family);
     transition: 0.2s;
-    font-size: 14px;
+    font-size: 13px;
 }
 .platform-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .version-row {
@@ -178,31 +186,68 @@
     align-items: center;
     gap: 4px;
 }
-.version-label { color: var(--text-secondary); font-size: 14px; }
+.version-label { color: var(--text-secondary); font-size: 13px; }
 .version-select {
-    padding: 6px 12px;
-    border-radius: 20px;
+    padding: 5px 10px;
+    border-radius: 16px;
     background: var(--bg-primary);
     border: 1px solid var(--border);
     color: var(--text-primary);
     font-family: var(--font-family);
-    font-size: 14px;
-    min-width: 220px;
+    font-size: 13px;
+    min-width: 200px;
     text-align: center;
 }
 .version-date {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-secondary);
     margin: 0;
 }
-#whats-new-btn { margin-top: 4px; }
+#whats-new-btn { margin-top: 2px; }
 #github-download-btn.disabled { opacity: 0.5; pointer-events: none; }
 
-/* Лицензия */
-.license-note {
+/* Лицензионная строка внутри карточки */
+.download-license {
     font-size: 13px;
     color: var(--text-secondary);
     text-align: center;
-    margin-top: 24px;
-    padding: 0 16px;
+    margin-top: 10px;
+    padding: 0 8px;
+}
+.download-license a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--accent);
+}
+
+/* Улучшение выравнивания карточек описания */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+    align-items: stretch;
+}
+.feature-item {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--bg-inner-gradient);
+    border-radius: 14px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    transition: transform 0.2s;
+}
+.feature-item:hover {
+    transform: translateY(-2px);
+}
+.feature-item h3 {
+    margin: 0 0 8px;
+    font-size: 17px;
+    color: var(--accent);
+}
+.feature-item p {
+    flex: 1;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
 }

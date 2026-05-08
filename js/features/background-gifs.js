@@ -1,39 +1,82 @@
 // js/features/background-gifs.js
-// Управление гифками: баннеры в карточках и переключаемый фон в секции скачивания
+// Управление гифками: баннеры в карточках с плавным появлением
+// и переключаемый фон в секции скачивания (без изменений)
 
 (function() {
-    // ---------- 1. Замена эмодзи на гифки в feature-карточках ----------
+    // ---------- 1. Баннеры с гифками / видео в feature-карточках ----------
     function initFeatureBanners() {
-        document.querySelectorAll('.feature-banner[data-gif]').forEach(container => {
-            const gifSrc = container.dataset.gif;
-            const fallbackEmoji = container.dataset.fallbackEmoji || '';
-            const ext = gifSrc.split('.').pop().toLowerCase();
-            container.innerHTML = '';
+        const banners = document.querySelectorAll('.feature-banner[data-gif]');
+        if (banners.length === 0) return;
 
-            if (ext === 'webm' || ext === 'mp4') {
-                const video = document.createElement('video');
-                video.src = gifSrc;
-                video.autoplay = true;
-                video.loop = true;
-                video.muted = true;
-                video.playsInline = true;
-                video.style.width = '100%';
-                video.style.height = '100%';
-                video.style.objectFit = 'cover';
-                video.addEventListener('error', () => {
-                    container.innerHTML = `<span class="fallback-emoji">${fallbackEmoji}</span>`;
-                });
-                container.appendChild(video);
-            } else {
-                const img = document.createElement('img');
-                img.src = gifSrc;
-                img.alt = '';
-                img.loading = 'lazy';
-                img.onerror = () => {
-                    container.innerHTML = `<span class="fallback-emoji">${fallbackEmoji}</span>`;
-                };
-                container.appendChild(img);
-            }
+        // Настройка IntersectionObserver для ленивого появления
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const container = entry.target;
+                    if (container.dataset.loaded === 'true') return;
+
+                    const gifSrc = container.dataset.gif;
+                    const fallbackEmoji = container.dataset.fallbackEmoji || '';
+                    const ext = gifSrc.split('.').pop().toLowerCase();
+
+                    container.innerHTML = '';
+
+                    let mediaElement;
+                    if (ext === 'webm' || ext === 'mp4') {
+                        const video = document.createElement('video');
+                        video.src = gifSrc;
+                        video.autoplay = true;
+                        video.loop = true;
+                        video.muted = true;
+                        video.playsInline = true;
+                        video.style.width = '100%';
+                        video.style.height = '100%';
+                        video.style.objectFit = 'cover';
+                        video.addEventListener('error', () => {
+                            container.innerHTML = `<span class="fallback-emoji">${fallbackEmoji}</span>`;
+                            container.classList.add('loaded');
+                        });
+                        mediaElement = video;
+                    } else {
+                        const img = document.createElement('img');
+                        img.src = gifSrc;
+                        img.alt = '';
+                        img.loading = 'lazy';
+                        img.onerror = () => {
+                            container.innerHTML = `<span class="fallback-emoji">${fallbackEmoji}</span>`;
+                            container.classList.add('loaded');
+                        };
+                        mediaElement = img;
+                    }
+                    container.appendChild(mediaElement);
+
+                    // Плавное появление после загрузки метаданных или сразу
+                    if (mediaElement.tagName === 'VIDEO') {
+                        mediaElement.addEventListener('loadeddata', () => {
+                            container.classList.add('loaded');
+                        });
+                        // fallback если видео уже загружено
+                        if (mediaElement.readyState >= 2) {
+                            container.classList.add('loaded');
+                        }
+                    } else {
+                        // для картинки
+                        mediaElement.addEventListener('load', () => {
+                            container.classList.add('loaded');
+                        });
+                        if (mediaElement.complete) {
+                            container.classList.add('loaded');
+                        }
+                    }
+
+                    container.dataset.loaded = 'true';
+                    observer.unobserve(container);
+                }
+            });
+        }, { rootMargin: '200px' });
+
+        banners.forEach(container => {
+            observer.observe(container);
         });
     }
 
@@ -43,7 +86,7 @@
         if (!section) return;
 
         const gifSources = [
-            'images/bg-download-1.webm',   // замените на свои файлы
+            'images/bg-download-1.webm',
             'images/bg-download-2.webm',
             'images/bg-download-3.webm'
         ];
