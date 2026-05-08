@@ -63,3 +63,71 @@
 .download-button[data-platform] {
     display: none !important;
 }
+
+/* ========== GIF-баннеры в карточках ========== */
+.feature-banner {
+    width: 100%;
+    height: 120px;          /* тонкий баннер, можно подобрать */
+    overflow: hidden;
+    border-radius: 12px 12px 0 0;
+    margin: -16px -16px 16px -16px;  /* чтобы прилегал к верхним углам карточки */
+    position: relative;
+    background: var(--bg-primary);
+}
+.feature-banner img,
+.feature-banner video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+/* Fallback-эмодзи (если гифка не загрузилась) */
+.feature-banner .fallback-emoji {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 48px;
+    opacity: 0.3;
+}
+
+/* ========== Фон с гифками для секции скачивания ========== */
+.download-card {
+    position: relative;
+    overflow: hidden; /* чтобы гифки не вылезали */
+}
+.download-card .bg-gif-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60%;          /* занимает верхнюю половину */
+    z-index: 0;
+    pointer-events: none;
+    transition: opacity 1.5s ease-in-out;
+    opacity: 0;
+}
+.download-card .bg-gif-layer.active {
+    opacity: 1;
+}
+.download-card .bg-gif-layer img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(4px) brightness(0.6);   /* размытие и затемнение */
+}
+.download-card .bg-gif-mask {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, rgba(30,30,48,0.2) 0%, rgba(30,30,48,0.9) 70%, var(--bg-card) 100%);
+    z-index: 1;
+    pointer-events: none;
+}
+/* Чтобы контент был над фоном */
+.download-card > * {
+    position: relative;
+    z-index: 2;
+}

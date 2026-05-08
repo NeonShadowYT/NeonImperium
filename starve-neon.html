@@ -39,6 +39,7 @@
     <script src="js/pages/feedback.js" defer></script>
     <script src="js/pages/game-updates.js" defer></script>
     <script src="js/platform.js" defer></script>
+    <script src="js/features/background-gifs.js" defer></script>
     <script src="js/common-init.js" defer></script>
     <style>
         .lazy-yt {
@@ -133,35 +134,27 @@
                 <h2 data-lang="descriptionTitle">Описание</h2>
                 <div class="features-grid">
                     <div class="feature-item tilt-card">
-                        <span class="feature-icon">🍗</span>
+                        <div class="feature-banner" data-gif="images/banner-world.webp" data-fallback-emoji="🍗">
+                            <!-- пусто, заполнится скриптом, либо можно img с src -->
+                        </div>
                         <h3 data-lang="worldTitle">Игровой мир</h3>
                         <p data-lang="worldDesc">БРУТАЛЬНЫЙ ХАРДКОРНЫЙ МИР. Я не буду держать тебя за руку, приятель. Я оставлю небольшой туториал по базовой механике, а дальше ты сам по себе ;}</p>
                     </div>
                     <div class="feature-item tilt-card">
-                        <span class="feature-icon">⚙️</span>
+                        <div class="feature-banner" data-gif="images/banner-status.webp" data-fallback-emoji="⚙️"></div>
                         <h3 data-lang="statusTitle">Статус</h3>
                         <p data-lang="statusDesc">Starve Neon находится на ранней стадии разработки, но открыт для кроссплатформенного многопользовательского тестирования.</p>
                     </div>
                     <div class="feature-item tilt-card">
-                        <span class="feature-icon">⚡</span>
+                        <div class="feature-banner" data-gif="images/banner-development.webp" data-fallback-emoji="⚡"></div>
                         <h3 data-lang="developmentTitle">Развитие</h3>
                         <p data-lang="developmentDesc">Полная система развития от копий и мечей до ГРЕБАНОГО МИНИГАНА, ЧУВАК! Броня для разных биомов, модули и система генетики, подобная RimWorld.</p>
                     </div>
                     <div class="feature-item tilt-card">
-                        <span class="feature-icon">💚</span>
+                        <div class="feature-banner" data-gif="images/banner-allies.webp" data-fallback-emoji="💚"></div>
                         <h3 data-lang="alliesTitle">Союзники</h3>
                         <p data-lang="alliesDesc">Создавай союзы с фракциями и другими игроками, участвуй в битвах на арене и приручай животных. Отправляйся кланом на рейд подобно Rust.</p>
                     </div>
-                </div>
-                <div class="features-extra tilt-card">
-                    <h3 data-lang="featuresTitle">Особенности</h3>
-                    <ul class="features-list">
-                        <li data-lang="feature1">Интернет необязателен.</li>
-                        <li data-lang="feature2">Частые крупные обновления.</li>
-                        <li data-lang="feature3">Встроенная поддержка модов.</li>
-                        <li data-lang="feature4">Прямое общение с разработчиком.</li>
-                        <li data-lang="feature5">Многоязычная поддержка и простое добавление пользовательских языков и шрифтов.</li>
-                    </ul>
                 </div>
             </section>
 
