@@ -1,4 +1,4 @@
-// platform.js — динамическая версия, выбор платформы/версии, скачивание (исправлено)
+// platform.js – три секции: площадки, облака, GitHub с выбором версии и платформы
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
@@ -7,8 +7,8 @@
 
     function getOS() {
         const ua = navigator.userAgent;
-        if (/android/i.test(ua)) return 'Android';
         const platform = navigator.userAgentData?.platform || navigator.platform || '';
+        if (/android/i.test(ua)) return 'Android';
         if (/windows/i.test(platform) || /windows/i.test(ua)) return 'Windows';
         if (/linux/i.test(platform)) return 'Linux';
         if (/mac/i.test(platform)) return 'Mac';
@@ -81,7 +81,6 @@
         return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
-    // Основная функция построения UI
     async function init() {
         const os = getOS();
         let currentPlatform = (os === 'Android') ? 'Android' : 'Windows';
@@ -93,73 +92,104 @@
         const section = document.getElementById('download-section');
         if (!section) return;
 
-        // Строим структуру
         section.innerHTML = `
-            <div class="download-panel">
-                <div class="platform-version-row">
-                    <div class="platform-switch">
-                        <button class="platform-btn active" data-platform="Windows"><i class="fab fa-windows"></i> Windows</button>
-                        <button class="platform-btn" data-platform="Android"><i class="fab fa-android"></i> Android</button>
-                    </div>
-                    <div class="version-selector">
-                        <label class="version-label">Версия:</label>
-                        <select class="version-select"></select>
-                        <span class="whats-new-wrap">
-                            <button id="whats-new-btn" class="button small" style="display:none;"><i class="fas fa-newspaper"></i> Что нового?</button>
-                        </span>
+            <div class="download-sections">
+                <!-- Площадки -->
+                <div class="download-subsection">
+                    <h3><i class="fas fa-store"></i> Площадки</h3>
+                    <div class="store-buttons">
+                        <a href="https://gamejolt.com/games/Starve-Neon/797491" target="_blank" class="download-button gamejolt">GameJolt</a>
+                        <a href="https://neon-imperium.itch.io/starve-neon" target="_blank" class="download-button itch">Itch.io</a>
+                        <a href="https://t.me/voididea" target="_blank" class="download-button telegram"><i class="fab fa-telegram"></i> Telegram</a>
                     </div>
                 </div>
-                <p class="release-date" id="release-date"></p>
-                <div class="store-buttons">
-                    <a href="https://gamejolt.com/games/Starve-Neon/797491" target="_blank" class="download-button gamejolt">GameJolt</a>
-                    <a href="https://neon-imperium.itch.io/starve-neon" target="_blank" class="download-button itch">Itch.io</a>
-                    <a href="https://t.me/voididea" target="_blank" class="download-button telegram"><i class="fab fa-telegram"></i> Telegram</a>
+                <!-- Облачные хранилища -->
+                <div class="download-subsection">
+                    <h3><i class="fas fa-cloud"></i> Хранилища</h3>
+                    <div class="cloud-buttons">
+                        <a href="https://disk.yandex.ru/d/xx3iUMWhh0HRgA" target="_blank" class="download-button yandex" data-platform="Windows"><i class="fab fa-yandex"></i> Yandex</a>
+                        <a href="https://disk.yandex.ru/d/exGuuim7NjPFww" target="_blank" class="download-button yandex" data-platform="Android"><i class="fab fa-yandex"></i> Yandex</a>
+                        <a href="https://drive.google.com/file/d/1S0DE2mjGXr8eryQTfwz0jjjNCqvJVf-N/view?usp=sharing" target="_blank" class="download-button google" data-platform="Windows"><i class="fab fa-google"></i> Google</a>
+                        <a href="https://drive.google.com/file/d/1NeeQ8uysJIfbEaDQgk7Ts5Y9By7_jzmF/view?usp=sharing" target="_blank" class="download-button google" data-platform="Android"><i class="fab fa-google"></i> Google</a>
+                    </div>
                 </div>
-                <div class="cloud-buttons">
-                    <a href="https://disk.yandex.ru/d/xx3iUMWhh0HRgA" target="_blank" class="download-button yandex" data-platform="Windows"><i class="fab fa-yandex"></i> Yandex</a>
-                    <a href="https://disk.yandex.ru/d/exGuuim7NjPFww" target="_blank" class="download-button yandex" data-platform="Android"><i class="fab fa-yandex"></i> Yandex</a>
-                    <a href="https://drive.google.com/file/d/1S0DE2mjGXr8eryQTfwz0jjjNCqvJVf-N/view?usp=sharing" target="_blank" class="download-button google" data-platform="Windows"><i class="fab fa-google"></i> Google</a>
-                    <a href="https://drive.google.com/file/d/1NeeQ8uysJIfbEaDQgk7Ts5Y9By7_jzmF/view?usp=sharing" target="_blank" class="download-button google" data-platform="Android"><i class="fab fa-google"></i> Google</a>
-                </div>
-                <p class="platform-cloud-note">(отображаются для выбранной платформы)</p>
-                <div class="github-download-wrap">
-                    <a href="#" id="github-download-btn" class="download-button github" target="_blank">
-                        <i class="fab fa-github"></i> <span class="btn-text"></span>
-                    </a>
+                <!-- GitHub -->
+                <div class="download-subsection">
+                    <h3><i class="fab fa-github"></i> GitHub</h3>
+                    <div class="github-block">
+                        <div class="platform-selector">
+                            <button class="platform-btn active" data-platform="Windows"><i class="fab fa-windows"></i> Windows</button>
+                            <button class="platform-btn" data-platform="Android"><i class="fab fa-android"></i> Android</button>
+                        </div>
+                        <div class="version-row">
+                            <select class="version-select"></select>
+                            <p class="version-date" id="version-date"></p>
+                        </div>
+                        <a href="#" id="github-download-btn" class="download-button github" target="_blank">
+                            <i class="fab fa-github"></i> Скачать с GitHub
+                        </a>
+                        <button id="whats-new-btn" class="button small" style="display:none;"><i class="fas fa-newspaper"></i> Что нового?</button>
+                    </div>
                 </div>
             </div>
         `;
 
-        // Заполняем селектор версий
-        const versionSelect = section.querySelector('.version-select');
-        allReleases.forEach(r => {
-            const meta = parseMeta(r.body);
-            const label = meta.versionName 
-                ? `${meta.versionName} ${r.tag_name.replace(/^v/, '')}` 
-                : r.tag_name;
-            const option = document.createElement('option');
-            option.value = r.tag_name;
-            option.textContent = label;
-            versionSelect.appendChild(option);
-        });
-
-        // Сохраняем ссылки на элементы
+        // Элементы
         const platformBtns = section.querySelectorAll('.platform-btn');
-        const whatsNewBtn = section.querySelector('#whats-new-btn');
-        const releaseDateEl = section.querySelector('#release-date');
+        const versionSelect = section.querySelector('.version-select');
+        const versionDate = section.querySelector('#version-date');
         const githubBtn = section.querySelector('#github-download-btn');
-        const btnText = githubBtn.querySelector('.btn-text');
-        const cloudButtons = section.querySelectorAll('.download-button[data-platform]');
+        const whatsNewBtn = section.querySelector('#whats-new-btn');
+        const cloudButtons = section.querySelectorAll('.cloud-buttons .download-button[data-platform]');
 
-        // Функция обновления всего UI при смене версии/платформы
-        function refreshUI() {
+        // Функция фильтрации релизов по платформе
+        function getFilteredReleases(platform) {
+            return allReleases.filter(release => findAsset(release, platform));
+        }
+
+        // Заполнение селектора версий
+        function populateVersionSelect(platform) {
+            const filtered = getFilteredReleases(platform);
+            versionSelect.innerHTML = '';
+            if (filtered.length === 0) {
+                versionDate.textContent = 'Нет доступных версий';
+                githubBtn.classList.add('disabled');
+                githubBtn.removeAttribute('href');
+                return;
+            }
+            filtered.forEach(release => {
+                const meta = parseMeta(release.body);
+                const label = meta.versionName
+                    ? `${meta.versionName} ${release.tag_name.replace(/^v/, '')}`
+                    : release.tag_name;
+                const option = document.createElement('option');
+                option.value = release.tag_name;
+                option.textContent = label;
+                option.dataset.date = formatDate(release.published_at);
+                option.dataset.post = meta.versionPost || '';
+                versionSelect.appendChild(option);
+            });
+            // Обновить дату и остальное для выбранной
+            updateUIForSelectedRelease();
+        }
+
+        function updateUIForSelectedRelease() {
             const tag = versionSelect.value;
             const release = allReleases.find(r => r.tag_name === tag);
             if (!release) return;
             const meta = parseMeta(release.body);
+            const dateStr = formatDate(release.published_at);
+            versionDate.textContent = `Обновление от ${dateStr}`;
 
-            // Дата релиза
-            releaseDateEl.textContent = `Обновление от ${formatDate(release.published_at)}`;
+            // GitHub кнопка
+            const asset = findAsset(release, currentPlatform);
+            if (asset) {
+                githubBtn.href = asset.browser_download_url;
+                githubBtn.classList.remove('disabled');
+            } else {
+                githubBtn.removeAttribute('href');
+                githubBtn.classList.add('disabled');
+            }
 
             // Кнопка "Что нового?"
             if (meta.versionPost) {
@@ -169,24 +199,7 @@
                 whatsNewBtn.style.display = 'none';
             }
 
-            // Облачные кнопки
-            cloudButtons.forEach(btn => {
-                btn.style.display = btn.dataset.platform === currentPlatform ? '' : 'none';
-            });
-
-            // GitHub кнопка
-            const asset = findAsset(release, currentPlatform);
-            if (asset) {
-                githubBtn.href = asset.browser_download_url;
-                githubBtn.classList.remove('disabled');
-                btnText.textContent = `Скачать с GitHub (${currentPlatform})`;
-            } else {
-                githubBtn.removeAttribute('href');
-                githubBtn.classList.add('disabled');
-                btnText.textContent = `Нет сборки для ${currentPlatform}`;
-            }
-
-            // Версия в шапке (если есть)
+            // Обновление версии в шапке (если есть)
             const headerBadge = document.querySelector('[data-version-role="version"]');
             if (headerBadge) {
                 const ver = release.tag_name.replace(/^v/, '');
@@ -196,22 +209,23 @@
             }
         }
 
-        // Устанавливаем активную платформу
-        platformBtns.forEach(b => {
-            b.classList.toggle('active', b.dataset.platform === currentPlatform);
-            b.addEventListener('click', () => {
-                currentPlatform = b.dataset.platform;
-                platformBtns.forEach(p => p.classList.remove('active'));
-                b.classList.add('active');
-                refreshUI();
+        // Переключение платформы
+        platformBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentPlatform = btn.dataset.platform;
+                platformBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                // Скрыть/показать облачные кнопки
+                cloudButtons.forEach(cb => {
+                    cb.style.display = cb.dataset.platform === currentPlatform ? '' : 'none';
+                });
+                // Перестроить список версий
+                populateVersionSelect(currentPlatform);
             });
         });
 
-        // Слушаем смену версии
-        versionSelect.addEventListener('change', refreshUI);
-
-        // Начальное заполнение
-        refreshUI();
+        // Смена версии
+        versionSelect.addEventListener('change', updateUIForSelectedRelease);
 
         // Кнопка "Что нового?"
         whatsNewBtn.addEventListener('click', () => {
@@ -229,6 +243,12 @@
                 });
             }
         });
+
+        // Начальная инициализация
+        cloudButtons.forEach(cb => {
+            cb.style.display = cb.dataset.platform === currentPlatform ? '' : 'none';
+        });
+        populateVersionSelect(currentPlatform);
     }
 
     if (document.readyState === 'loading') {

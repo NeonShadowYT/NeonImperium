@@ -11,7 +11,6 @@
             container.innerHTML = '';
 
             if (ext === 'webm' || ext === 'mp4') {
-                // Используем <video> для WebM
                 const video = document.createElement('video');
                 video.src = gifSrc;
                 video.autoplay = true;
@@ -26,7 +25,6 @@
                 });
                 container.appendChild(video);
             } else {
-                // Для gif/webp — img
                 const img = document.createElement('img');
                 img.src = gifSrc;
                 img.alt = '';
@@ -45,7 +43,7 @@
         if (!section) return;
 
         const gifSources = [
-            'images/bg-download-1.webm',   // замените на свои
+            'images/bg-download-1.webm',   // замените на свои файлы
             'images/bg-download-2.webm',
             'images/bg-download-3.webm'
         ];
