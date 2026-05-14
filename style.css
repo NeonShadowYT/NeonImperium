@@ -147,23 +147,29 @@
     max-width: 420px;
     background: var(--bg-inner-gradient);
     border-radius: 12px;
-    padding: 10px;
+    padding: 8px 12px;
     border: 1px solid var(--border);
     text-align: center;
 }
 .download-subsection h3 {
-    margin: 0 0 6px;
-    font-size: 16px;
+    margin: 0 0 4px;
+    font-size: 14px;
     color: var(--accent);
 }
 .store-buttons,
 .cloud-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
     justify-content: center;
 }
-
+/* Компактные кнопки */
+.store-buttons .download-button,
+.cloud-buttons .download-button {
+    padding: 6px 12px;
+    font-size: 12px;
+    min-width: auto;
+}
 /* Облачные кнопки видны только для текущей платформы (через inline‑style) */
 
 .github-block {
@@ -249,6 +255,7 @@
     padding: 14px;
     border: 1px solid var(--border);
     transition: transform 0.2s;
+    overflow: hidden; /* чтобы баннер не вылезал за скругления */
 }
 .feature-item:hover {
     transform: translateY(-2px);

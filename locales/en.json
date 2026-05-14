@@ -227,5 +227,7 @@
   "licenseSection7Text": "This Agreement is governed and interpreted in accordance with the laws of the Russian Federation. All disputes arising out of or in connection with this Agreement shall be subject to consideration in court at the location of the Copyright Holder.",
   "licenseSection7Text2": "If any provision of the Agreement is found to be invalid or unenforceable, this does not affect the validity of the remaining provisions.",
   "licenseSection7Text3": "The Copyright Holder reserves the right to unilaterally change the terms of this Agreement. The new version of the Agreement comes into force from the moment it is published on this site. Continued use of the game after the terms have been changed implies acceptance of the new version.",
-  "donateButton": "Support"
+  "donateButton": "Support",
+  "storeTitle": "Stores",
+  "cloudTitle": "Cloud"
 }

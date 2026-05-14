@@ -35,7 +35,7 @@
         const cached = cacheGet(RELEASES_CACHE_KEY);
         if (cached) return cached;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 сек таймаут
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
             const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/releases?per_page=100`;
             const resp = await fetch(url, { signal: controller.signal });
@@ -60,18 +60,56 @@
             if (line.startsWith('game:')) meta.game = line.slice(5).trim().toLowerCase();
             else if (line.startsWith('version-name:')) meta.versionName = line.slice(13).trim();
             else if (line.startsWith('version-post:')) meta.versionPost = line.slice(14).trim();
+            else if (line.startsWith('priority-before:')) meta.priorityBefore = line.slice(16).trim();
         }
         return meta;
     }
 
+    // Сортировка релизов с учётом метки priority-before: TAG
+    function sortReleasesWithPriority(releases) {
+        // Сначала сортируем по дате (новые сверху)
+        const sortedByDate = [...releases].sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+        
+        // Находим релизы с приоритетной меткой
+        const priorityReleases = [];
+        const normalReleases = [];
+        for (const release of sortedByDate) {
+            const meta = parseMeta(release.body);
+            if (meta.priorityBefore) {
+                priorityReleases.push({ release, targetTag: meta.priorityBefore });
+            } else {
+                normalReleases.push(release);
+            }
+        }
+        
+        if (priorityReleases.length === 0) return normalReleases;
+        
+        // Для каждого приоритетного релиза вставляем его перед целевым тегом
+        let result = [...normalReleases];
+        for (const { release, targetTag } of priorityReleases) {
+            const targetIndex = result.findIndex(r => r.tag_name === targetTag);
+            if (targetIndex !== -1) {
+                // Удаляем релиз из result, если он там случайно есть (обычно его нет, т.к. мы отделили)
+                const existingIdx = result.findIndex(r => r.id === release.id);
+                if (existingIdx !== -1) result.splice(existingIdx, 1);
+                // Вставляем перед целевым
+                result.splice(targetIndex, 0, release);
+            } else {
+                // Если целевой тег не найден, добавляем в конец (после всех обычных)
+                result.push(release);
+            }
+        }
+        return result;
+    }
+
     async function getGameReleases(gameTag) {
         const all = await fetchAllReleases();
-        return all
-            .filter(r => {
-                const meta = parseMeta(r.body);
-                return meta.game === gameTag;
-            })
-            .sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+        const filtered = all.filter(r => {
+            const meta = parseMeta(r.body);
+            return meta.game === gameTag;
+        });
+        // Применяем специальную сортировку
+        return sortReleasesWithPriority(filtered);
     }
 
     function findAsset(release, platform) {
