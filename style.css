@@ -280,3 +280,107 @@
     gap: 8px;
     flex-wrap: wrap;
 }
+
+/* ========== Улучшенные системные требования ========== */
+.requirements-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    margin: 24px 0;
+}
+.req-item {
+    flex: 1;
+    min-width: 220px;
+    background: linear-gradient(135deg, var(--bg-inner-gradient), rgba(61,158,179,0.1));
+    border-radius: 24px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    transition: transform 0.2s, border-color 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+.req-item:hover {
+    transform: translateY(-5px);
+    border-color: var(--accent);
+}
+.req-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-light));
+}
+.req-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--accent);
+    margin-bottom: 16px;
+}
+.req-label i {
+    font-size: 28px;
+}
+.req-specs {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.req-spec {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.req-spec i {
+    width: 24px;
+    color: var(--accent);
+    font-size: 16px;
+}
+.fps-badge {
+    display: inline-block;
+    background: rgba(61,158,179,0.2);
+    padding: 4px 12px;
+    border-radius: 40px;
+    font-size: 12px;
+    color: var(--accent);
+    margin-left: 8px;
+}
+
+.consumption-card {
+    background: linear-gradient(135deg, var(--bg-inner-gradient), rgba(61,158,179,0.05));
+    border-radius: 24px;
+    padding: 24px;
+    margin-top: 24px;
+    border: 1px solid var(--border);
+}
+.consumption-card h3 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 8px;
+    font-size: 20px;
+    color: var(--accent);
+}
+.consumption-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+}
+.consumption-table td {
+    padding: 12px 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+}
+.consumption-table td:first-child {
+    font-weight: bold;
+    color: var(--text-primary);
+    width: 40%;
+}
+.consumption-table tr:last-child td {
+    border-bottom: none;
+}

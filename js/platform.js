@@ -1,6 +1,5 @@
 // platform.js – GitHub-блок с выбором версии и платформы, управление облачными кнопками.
-// Статическая часть страницы (площадки, облака) рендерится мгновенно, этот скрипт только
-// заполняет динамический контейнер #github-block-container и переключает видимость облаков.
+// Поддерживает метки priority-before: TAG (вставка перед TAG) и priority-end: true (в самый конец)
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
@@ -61,44 +60,59 @@
             else if (line.startsWith('version-name:')) meta.versionName = line.slice(13).trim();
             else if (line.startsWith('version-post:')) meta.versionPost = line.slice(14).trim();
             else if (line.startsWith('priority-before:')) meta.priorityBefore = line.slice(16).trim();
+            else if (line.startsWith('priority-end:')) meta.priorityEnd = line.slice(13).trim().toLowerCase() === 'true';
         }
         return meta;
     }
 
-    // Сортировка релизов с учётом метки priority-before: TAG
+    // Сортировка релизов:
+    // 1. Релизы с priority-end: true отправляются в самый конец (в порядке даты)
+    // 2. Релизы с priority-before: TAG вставляются перед указанным тегом (если тег найден)
+    // 3. Остальные сортируются по дате (новые сверху)
     function sortReleasesWithPriority(releases) {
-        // Сначала сортируем по дате (новые сверху)
-        const sortedByDate = [...releases].sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
-        
-        // Находим релизы с приоритетной меткой
-        const priorityReleases = [];
+        // Разделяем на три группы
+        const priorityEndReleases = [];
+        const priorityBeforeReleases = [];
         const normalReleases = [];
-        for (const release of sortedByDate) {
+        
+        for (const release of releases) {
             const meta = parseMeta(release.body);
-            if (meta.priorityBefore) {
-                priorityReleases.push({ release, targetTag: meta.priorityBefore });
+            if (meta.priorityEnd) {
+                priorityEndReleases.push(release);
+            } else if (meta.priorityBefore) {
+                priorityBeforeReleases.push({ release, targetTag: meta.priorityBefore });
             } else {
                 normalReleases.push(release);
             }
         }
         
-        if (priorityReleases.length === 0) return normalReleases;
+        // Сортируем обычные по дате (новые сверху)
+        normalReleases.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
         
-        // Для каждого приоритетного релиза вставляем его перед целевым тегом
+        // Сортируем priorityEnd по дате (новые сверху, но они будут в конце общего списка)
+        priorityEndReleases.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+        
+        // Сортируем priorityBefore: сначала обрабатываем, вставляем перед целевыми тегами
+        // Создаём копию normalReleases для модификации
         let result = [...normalReleases];
-        for (const { release, targetTag } of priorityReleases) {
+        
+        for (const { release, targetTag } of priorityBeforeReleases) {
             const targetIndex = result.findIndex(r => r.tag_name === targetTag);
             if (targetIndex !== -1) {
-                // Удаляем релиз из result, если он там случайно есть (обычно его нет, т.к. мы отделили)
+                // Удаляем релиз из result, если он там есть (маловероятно)
                 const existingIdx = result.findIndex(r => r.id === release.id);
                 if (existingIdx !== -1) result.splice(existingIdx, 1);
                 // Вставляем перед целевым
                 result.splice(targetIndex, 0, release);
             } else {
-                // Если целевой тег не найден, добавляем в конец (после всех обычных)
+                // Если целевой тег не найден – помещаем в конец обычных (перед priorityEnd)
                 result.push(release);
             }
         }
+        
+        // Добавляем priorityEnd релизы в самый конец
+        result.push(...priorityEndReleases);
+        
         return result;
     }
 
@@ -108,7 +122,6 @@
             const meta = parseMeta(r.body);
             return meta.game === gameTag;
         });
-        // Применяем специальную сортировку
         return sortReleasesWithPriority(filtered);
     }
 
@@ -133,20 +146,17 @@
         let currentPlatform = (os === 'Android') ? 'Android' : 'Windows';
         const gameTag = 'starve-neon';
 
-        // 1. Управление облачными кнопками (не трогаем статику)
         const cloudButtons = document.querySelectorAll('.cloud-buttons .download-button[data-platform]');
         function updateCloudVisibility() {
             cloudButtons.forEach(cb => {
                 cb.style.display = cb.dataset.platform === currentPlatform ? '' : 'none';
             });
         }
-        updateCloudVisibility(); // мгновенно скрываем ненужные
+        updateCloudVisibility();
 
-        // 2. Динамический GitHub-блок
         const githubContainer = document.getElementById('github-block-container');
         if (!githubContainer) return;
 
-        // Заменяем индикатор загрузки на рабочий интерфейс
         githubContainer.innerHTML = `
             <h3><i class="fab fa-github"></i> GitHub</h3>
             <div class="github-block">
@@ -171,7 +181,6 @@
         const githubBtn = githubContainer.querySelector('#github-download-btn');
         const whatsNewBtn = githubContainer.querySelector('#whats-new-btn');
 
-        // Загружаем релизы (асинхронно, не блокируя остальную страницу)
         let allReleases = [];
         try {
             allReleases = await getGameReleases(gameTag);
@@ -196,7 +205,6 @@
             }
             filtered.forEach(release => {
                 const meta = parseMeta(release.body);
-                // Используем version‑name, если есть, иначе тег без v
                 const label = meta.versionName || release.tag_name.replace(/^v/, '');
                 const option = document.createElement('option');
                 option.value = release.tag_name;
@@ -234,7 +242,6 @@
                 whatsNewBtn.style.display = 'none';
             }
 
-            // Обновляем версию в header
             const headerBadge = document.querySelector('[data-version-role="version"]');
             if (headerBadge) {
                 const name = meta.versionName || release.tag_name.replace(/^v/, '');
@@ -243,7 +250,6 @@
             }
         }
 
-        // Обработчики переключения платформы (влияют и на облака)
         platformBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 currentPlatform = btn.dataset.platform;
@@ -256,7 +262,6 @@
 
         versionSelect.addEventListener('change', updateUIForSelectedRelease);
 
-        // Кнопка «Что нового» – открываем пост и подменяем заголовок
         whatsNewBtn.addEventListener('click', async () => {
             const postId = whatsNewBtn.dataset.postId;
             if (!postId || !window.UIFeedback) return;
@@ -280,7 +285,6 @@
             } catch {}
         });
 
-        // Первичное заполнение списка версий
         populateVersionSelect(currentPlatform);
     }
 
