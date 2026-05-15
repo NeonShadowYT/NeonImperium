@@ -6,10 +6,10 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1e1e30">
     <title data-lang="licenseTitle">Neon Imperium - Лицензионное соглашение</title>
-    <meta name="description" content="Лицензионное соглашение игр Neon Imperium: Starve Neon, Alpha 01, ГК Адвенчур.">
+    <meta name="description" content="Лицензионное соглашение, политика конфиденциальности и отказ от ответственности игр Neon Imperium.">
     <link rel="canonical" href="https://neonshadowyt.github.io/NeonImperium/license.html">
     <meta property="og:title" content="Лицензионное соглашение - Neon Imperium">
-    <meta property="og:description" content="Лицензионное соглашение игр Neon Imperium: Starve Neon, Alpha 01, ГК Адвенчур.">
+    <meta property="og:description" content="Открытые игры, анонимность разработчиков, защита данных.">
     <meta property="og:image" content="images/logo-neon-imperium.webp">
     <meta property="og:url" content="https://neonshadowyt.github.io/NeonImperium/license.html">
     <meta property="og:type" content="website">
@@ -21,32 +21,88 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" media="print" onload="this.media='all'">
-    <style>
-        .license-header { margin-bottom: 30px; }
-        .license-quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 40px 0; }
-        .license-card { background: var(--bg-primary); border-radius: 16px; padding: 24px 20px; border: 1px solid var(--border); transition: transform 0.2s, border-color 0.2s; }
-        .license-card:hover { transform: translateY(-5px); border-color: var(--accent); }
-        .license-card h3 { color: var(--accent); font-size: 22px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-        .license-card ul { list-style: none; padding: 0; margin: 0; }
-        .license-card li { padding: 8px 0 8px 28px; position: relative; font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
-        .license-card li i { position: absolute; left: 0; top: 10px; font-size: 16px; }
-        .license-card.allowed li i { color: #4caf50; }
-        .license-card.forbidden li i { color: #f44336; }
-        .license-card.obligation li i { color: #ff9800; }
-        .license-section { margin-bottom: 30px; }
-        .license-section h2 { color: var(--accent); font-size: 22px; margin-bottom: 15px; border-left: 4px solid var(--accent); padding-left: 15px; }
-        .license-section p, .license-section li { font-size: 15px; line-height: 1.6; color: var(--text-secondary); }
-        .license-section ul { margin-top: 10px; padding-left: 25px; }
-        .license-section li { margin-bottom: 8px; }
-        .license-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center; font-size: 14px; color: #666; }
-        .back-link { display: inline-block; margin-top: 30px; color: var(--accent); text-decoration: none; font-size: 16px; }
-        .back-link:hover { text-decoration: underline; }
-        @media (max-width: 700px) { .license-quick { grid-template-columns: 1fr; } }
-    </style>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/features/ui-utils.js" defer></script>
     <script src="js/core/github-auth.js" defer></script>
     <script src="js/lang.js" defer></script>
+    <style>
+        /* Дополнительные улучшения визуала для страницы лицензии */
+        .license-hero {
+            background: linear-gradient(135deg, rgba(30,30,48,0.95), rgba(20,20,35,0.98));
+            border-bottom: 1px solid var(--border);
+        }
+        .license-section-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            background: var(--bg-card-gradient);
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            padding: 28px;
+            margin-bottom: 28px;
+            box-shadow: var(--shadow);
+        }
+        .license-section-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-hover);
+            border-color: var(--accent);
+        }
+        .license-section-card h2 {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 26px;
+            margin-bottom: 20px;
+            color: var(--accent);
+            border-left: 4px solid var(--accent);
+            padding-left: 16px;
+        }
+        .license-section-card h2 i {
+            font-size: 28px;
+        }
+        .license-badge {
+            background: var(--bg-inner-gradient);
+            border-radius: 60px;
+            padding: 4px 12px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .contact-card {
+            background: linear-gradient(145deg, #2a2a40, #1e1e30);
+            border-radius: 20px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(61,158,179,0.3);
+        }
+        .telegram-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: #0088cc;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 60px;
+            font-size: 18px;
+            margin-top: 12px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-decoration: none;
+        }
+        .telegram-link:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0,136,204,0.3);
+            color: white;
+        }
+        .small-note {
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 24px;
+        }
+        @media (max-width: 700px) {
+            .license-section-card h2 { font-size: 22px; }
+        }
+    </style>
 </head>
 <body>
     <div class="page">
@@ -63,100 +119,101 @@
             </div>
         </nav>
 
-        <header class="card header-card license-header" style="background: var(--bg-card); padding: 40px 28px;">
-            <h1 style="font-size: 42px; margin-bottom: 10px; color: var(--text-primary);" data-lang="licenseTitle">Лицензионное соглашение</h1>
-            <p class="text-secondary" style="font-size: 16px;" data-lang="licenseLastUpdate">Последнее обновление: 21 февраля 2026 г.</p>
-        </header>
+        <!-- Герой с заголовком -->
+        <div class="card license-hero" style="text-align: center; padding: 48px 24px; margin-bottom: 32px;">
+            <h1 style="font-size: 48px; margin-bottom: 12px; color: var(--accent);" data-lang="licenseMainTitle">Лицензионное соглашение</h1>
+            <p class="text-secondary" data-lang="licenseLastUpdate">Последнее обновление: 15 мая 2026 г.</p>
+            <div class="license-badge" style="margin-top: 16px;">
+                <i class="fas fa-code-branch"></i> <span data-lang="licenseOpenBadge">Открытый код по запросу</span>
+            </div>
+        </div>
 
-        <div class="license-quick">
+        <!-- Основные блоки -->
+        <div class="license-section-card">
+            <h2><i class="fas fa-shield-alt"></i> <span data-lang="licenseDisclaimerTitle">Отказ от ответственности</span></h2>
+            <div class="markdown-body" data-lang="licenseDisclaimerText"></div>
+        </div>
+
+        <div class="license-section-card">
+            <h2><i class="fas fa-code"></i> <span data-lang="licenseOpenSourceTitle">Открытый исходный код</span></h2>
+            <div class="markdown-body" data-lang="licenseOpenSourceText"></div>
+        </div>
+
+        <div class="license-section-card">
+            <h2><i class="fas fa-user-secret"></i> <span data-lang="licensePrivacyTitle">Приватность и анонимность</span></h2>
+            <div class="markdown-body" data-lang="licensePrivacyText"></div>
+        </div>
+
+        <!-- Краткие правила (три карточки) -->
+        <div class="license-quick" style="display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; margin: 32px 0;">
             <div class="license-card allowed">
                 <h3><i class="fas fa-check-circle"></i> <span data-lang="licenseAllowedTitle">Разрешено</span></h3>
-                <ul>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed1">Коммерческое использование с отчислением % авторам</span></li>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed2">Распространение оригинальных версий</span></li>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed3">Конфиденциальность: без сбора статистики без согласия</span></li>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed4">Модификация в рамках правил игр</span></li>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed5">Бесплатный доступ к любому платному контенту через активность</span></li>
-                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed6">Бесплатные обновления</span></li>
+                <ul data-lang-list="licenseAllowedList">
+                    <!-- список будет заполнен через JS или вёрстку, но проще оставить статические li с data-lang -->
+                    <li data-lang="licenseAllowed1"></li>
+                    <li data-lang="licenseAllowed2"></li>
+                    <li data-lang="licenseAllowed3"></li>
+                    <li data-lang="licenseAllowed4"></li>
                 </ul>
             </div>
             <div class="license-card forbidden">
                 <h3><i class="fas fa-times-circle"></i> <span data-lang="licenseForbiddenTitle">Запрещено</span></h3>
                 <ul>
-                    <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden1">Выдавать имена, товарные знаки, логотипы за свои</span></li>
-                    <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden2">Создание/использование/распространение вредоносных/читерских модификаций</span></li>
+                    <li data-lang="licenseForbidden1"></li>
+                    <li data-lang="licenseForbidden2"></li>
                 </ul>
             </div>
             <div class="license-card obligation">
-                <h3><i class="fas fa-exclamation-triangle"></i> <span data-lang="licenseObligationTitle">Обязанность</span></h3>
+                <h3><i class="fas fa-exclamation-triangle"></i> <span data-lang="licenseObligationTitle">Обязанности</span></h3>
                 <ul>
-                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation1">Сохранять первоначальные авторские права</span></li>
-                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation2">Выплачивать авторам от 4.2% доходов и более</span></li>
-                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation3">Моды должны иметь открытый исходный код и ссылку на него</span></li>
-                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation4">Моды должны содержать доступ к лицензии оригинальных приложений</span></li>
-                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation5">Указывать ссылки на оригинальные страницы и автора</span></li>
-                    <li><i class="fas fa-heart" style="color: #ff4081;"></i> <span data-lang="licenseObligation6">Ты отдаёшь свою душу авторам приложений ;}</span></li>
+                    <li data-lang="licenseObligation1"></li>
+                    <li data-lang="licenseObligation2"></li>
+                    <li data-lang="licenseObligation3"></li>
                 </ul>
             </div>
         </div>
 
-        <div class="card">
-            <div class="license-section">
-                <h2 data-lang="licenseSection1Title">1. Общие положения</h2>
-                <p data-lang="licenseSection1Text">Настоящее Лицензионное соглашение (далее — «Соглашение») заключается между вами (далее — «Пользователь») и разработчиками игр Neon Imperium (далее — «Правообладатель») и регулирует порядок использования игр: Starve Neon, Alpha 01, ГК Адвенчур, а также всех связанных с ними материалов, обновлений и дополнений.</p>
-                <p data-lang="licenseSection1Text2">Устанавливая, копируя или иным образом используя игру, Пользователь выражает своё полное согласие с условиями настоящего Соглашения. Если Пользователь не принимает условия Соглашения, он обязан незамедлительно удалить все копии игры и не использовать её.</p>
-            </div>
-            <div class="license-section">
-                <h2 data-lang="licenseSection2Title">2. Права на игру</h2>
-                <p data-lang="licenseSection2Text">Все исключительные права на игру, включая, но не ограничиваясь: исходный код, графические и звуковые материалы, сценарии, персонажей, названия, товарные знаки принадлежат Правообладателю. Игра предоставляется Пользователю на условиях простой (неисключительной) лицензии, то есть Пользователю разрешается:</p>
-                <ul>
-                    <li data-lang="licenseSection2Li1">устанавливать игру на неограниченное количество принадлежащих ему устройств;</li>
-                    <li data-lang="licenseSection2Li2">воспроизводить игру в целях личного некоммерческого использования;</li>
-                    <li data-lang="licenseSection2Li3">записывать и публиковать видеоролики и стримы с игровым процессом на любых платформах (YouTube, Twitch, VK Видео и др.) при условии указания авторства (ссылка на страницу игры).</li>
-                </ul>
-            </div>
-            <div class="license-section">
-                <h2 data-lang="licenseSection3Title">3. Ограничения</h2>
-                <p data-lang="licenseSection3Text">Пользователю запрещается:</p>
-                <ul>
-                    <li data-lang="licenseSection3Li1">распространять игру (в том числе бесплатно) на сторонних сайтах, торрент-трекерах, в социальных сетях и иных ресурсах без письменного разрешения Правообладателя;</li>
-                    <li data-lang="licenseSection3Li2">изменять, декомпилировать, дизассемблировать, обфусцировать или создавать производные произведения на основе игры;</li>
-                    <li data-lang="licenseSection3Li3">использовать игру для любых коммерческих целей (в том числе продажа, сдача в аренду, прокат) без отдельного соглашения;</li>
-                    <li data-lang="licenseSection3Li4">удалять или изменять любые уведомления об авторских правах или товарных знаках;</li>
-                    <li data-lang="licenseSection3Li5">использовать игру способами, нарушающими законодательство Российской Федерации или международное право.</li>
-                </ul>
-            </div>
-            <div class="license-section">
-                <h2 data-lang="licenseSection4Title">4. Обновления и модификации</h2>
-                <p data-lang="licenseSection4Text">Правообладатель имеет право выпускать обновления, патчи и дополнительные материалы для игры. Все такие обновления являются неотъемлемой частью игры и регулируются настоящим Соглашением. Правообладатель не гарантирует постоянную обратную совместимость старых версий игры.</p>
-                <p data-lang="licenseSection4Text2">Игра может поддерживать пользовательские модификации (моды), созданные сообществом. Правообладатель не несёт ответственности за моды, созданные третьими лицами, и оставляет за собой право ограничивать использование модов в многопользовательских режимах.</p>
-            </div>
-            <div class="license-section">
-                <h2 data-lang="licenseSection5Title">5. Ответственность и гарантии</h2>
-                <p data-lang="licenseSection5Text">Игра предоставляется «как есть» (as is). Правообладатель не предоставляет никаких гарантий относительно:</p>
-                <ul>
-                    <li data-lang="licenseSection5Li1">безошибочной и бесперебойной работы игры;</li>
-                    <li data-lang="licenseSection5Li2">соответствия игры ожиданиям Пользователя;</li>
-                    <li data-lang="licenseSection5Li3">отсутствия ошибок, багов или сбоев;</li>
-                    <li data-lang="licenseSection5Li4">сохранности пользовательских данных (рекомендуется создавать резервные копии сохранений).</li>
-                </ul>
-                <p data-lang="licenseSection5Text2">Правообладатель не несёт ответственности за любой прямой или косвенный ущерб, возникший в результате использования или невозможности использования игры, включая потерю данных, финансовые убытки или моральный вред.</p>
-            </div>
-            <div class="license-section">
-                <h2 data-lang="licenseSection6Title">6. Сбор данных и конфиденциальность</h2>
-                <p data-lang="licenseSection6Text">Игра может собирать анонимную статистику использования (например, версию игры, время в игре, настройки графики) для улучшения качества продукта. Эти данные не позволяют идентифицировать конкретного Пользователя. Игра не собирает персональные данные без вашего согласия. Файлы сохранений хранятся локально на устройстве Пользователя.</p>
-            </div>
-            <div class="license-section">
-                <h2 data-lang="licenseSection7Title">7. Заключительные положения</h2>
-                <p data-lang="licenseSection7Text">Настоящее Соглашение регулируется и толкуется в соответствии с законодательством Российской Федерации. Все споры, возникающие из настоящего Соглашения или в связи с ним, подлежат рассмотрению в суде по месту нахождения Правообладателя.</p>
-                <p data-lang="licenseSection7Text2">Если какое-либо положение Соглашения будет признано недействительным или не имеющим юридической силы, это не влияет на действительность остальных положений.</p>
-                <p data-lang="licenseSection7Text3">Правообладатель оставляет за собой право в одностороннем порядке изменять условия настоящего Соглашения. Новая версия Соглашения вступает в силу с момента её публикации на данном сайте. Продолжение использования игры после изменения условий означает согласие с новой редакцией.</p>
-            </div>
-            <a href="javascript:history.back()" class="back-link" data-lang="licenseBack">← Вернуться к игре</a>
-            <div class="license-footer">
-                © 2024-2026 Neon Imperium. <span data-lang="allRightsReserved">Все права защищены.</span>
-            </div>
+        <!-- Контакты -->
+        <div class="license-section-card contact-card" style="text-align: center;">
+            <h2 style="border-left: none; justify-content: center;"><i class="fab fa-telegram"></i> <span data-lang="licenseContactTitle">Связь с нами</span></h2>
+            <p class="text-secondary" data-lang="licenseContactDesc">Мы открыты для общения, вопросов и предложений. Пишите в Telegram:</p>
+            <a href="https://t.me/NeonShindowsYT" target="_blank" class="telegram-link">
+                <i class="fab fa-telegram fa-2x"></i> <span>@NeonShindowsYT</span>
+            </a>
+            <div class="small-note" style="margin-top: 20px;" data-lang="licenseContactNote">Ответы обычно в течение суток</div>
+        </div>
+
+        <div class="small-note" style="margin-top: 30px; padding: 20px 0; text-align: center; border-top: 1px solid var(--border);">
+            © 2024-2026 Neon Imperium. <span data-lang="allRightsReserved">Все права защищены.</span>
         </div>
     </div>
+
+    <!-- Скрипт для заполнения списков из переводов (чтобы избежать дублирования) -->
+    <script>
+        (function() {
+            // Вспомогательная функция для заполнения списков, если data-lang не справляется с дочерними элементами
+            function fillListItems() {
+                const lists = document.querySelectorAll('[data-lang-list]');
+                lists.forEach(list => {
+                    const key = list.getAttribute('data-lang-list');
+                    if (!key) return;
+                    const items = list.querySelectorAll('li');
+                    items.forEach((li, idx) => {
+                        const itemKey = `${key}_${idx+1}`;
+                        if (window.translations && window.translations[I18n?.getCurrentLang?.() || 'ru']?.[itemKey]) {
+                            li.textContent = window.translations[I18n.getCurrentLang()][itemKey];
+                        }
+                    });
+                });
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', fillListItems);
+            } else {
+                fillListItems();
+            }
+            // Слушаем смену языка
+            window.addEventListener('languageChanged', () => setTimeout(fillListItems, 100));
+        })();
+    </script>
 </body>
 </html>
