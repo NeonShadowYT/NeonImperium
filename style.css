@@ -84,7 +84,6 @@
     object-fit: cover;
     display: block;
 }
-/* Плавный градиент только для видео-баннеров (не для header) */
 .feature-banner::after {
     content: '';
     position: absolute;
@@ -107,7 +106,7 @@
     z-index: 0;
 }
 
-/* ========== Фон с гифками для секции скачивания (без лишних эффектов) ========== */
+/* ========== Фон с гифками для секции скачивания ========== */
 .download-card {
     position: relative;
     overflow: hidden;
@@ -141,32 +140,28 @@
     z-index: 1;
     pointer-events: none;
 }
-/* Контент над фоном */
 .download-card > * { position: relative; z-index: 2; }
 
-/* ========== Компактная секция скачивания ========== */
+/* ========== МИНИМАЛИСТИЧНАЯ СЕКЦИЯ СКАЧИВАНИЯ ========== */
 .download-sections {
     display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     gap: 12px;
-    align-items: stretch;
 }
 .download-subsection {
-    flex: 1;
-    min-width: 200px;
-    max-width: 280px;
-    background: var(--bg-inner-gradient);
-    border-radius: 16px;
-    padding: 12px 10px;
-    border: 1px solid var(--border);
+    width: 100%;
+    max-width: 360px;
+    background: rgba(30,30,48,0.6);
+    backdrop-filter: blur(8px);
+    border-radius: 20px;
+    padding: 12px 16px;
+    border: 1px solid rgba(61,158,179,0.3);
     text-align: center;
-    transition: transform 0.2s, border-color 0.2s;
+    transition: border-color 0.2s;
 }
 .download-subsection:hover {
     border-color: var(--accent);
-    transform: translateY(-2px);
 }
 .download-subsection h3 {
     margin: 0 0 8px;
@@ -176,21 +171,34 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
+    font-weight: normal;
+    letter-spacing: 0.5px;
 }
 .store-buttons,
 .cloud-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
     justify-content: center;
 }
-/* Компактные кнопки */
+/* Минималистичные кнопки */
 .store-buttons .download-button,
 .cloud-buttons .download-button {
-    padding: 6px 12px;
+    padding: 6px 14px;
     font-size: 12px;
     min-width: auto;
-    border-width: 1px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+.store-buttons .download-button:hover,
+.cloud-buttons .download-button:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: translateY(-2px);
 }
 .github-block {
     display: flex;
@@ -200,15 +208,15 @@
 }
 .platform-selector {
     display: flex;
-    gap: 4px;
+    gap: 8px;
     justify-content: center;
 }
 .platform-btn {
-    background: var(--bg-inner-gradient);
+    background: var(--bg-primary);
     border: 1px solid var(--border);
     color: var(--text-secondary);
-    padding: 4px 10px;
-    border-radius: 16px;
+    padding: 4px 12px;
+    border-radius: 30px;
     cursor: pointer;
     font-family: var(--font-family);
     transition: 0.2s;
@@ -226,8 +234,8 @@
     gap: 4px;
 }
 .version-select {
-    padding: 4px 8px;
-    border-radius: 14px;
+    padding: 5px 10px;
+    border-radius: 30px;
     background: var(--bg-primary);
     border: 1px solid var(--border);
     color: var(--text-primary);
@@ -242,19 +250,31 @@
     margin: 0;
 }
 #whats-new-btn {
-    margin-top: 2px;
+    margin-top: 4px;
     font-size: 11px;
     padding: 4px 12px;
 }
+#github-download-btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+#github-download-btn:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
 #github-download-btn.disabled { opacity: 0.5; pointer-events: none; }
 
-/* Лицензия внутри карточки */
 .download-license {
     font-size: 11px;
     color: var(--text-secondary);
     text-align: center;
     margin-top: 8px;
-    padding: 0;
+    opacity: 0.7;
 }
 .download-license a {
     color: var(--accent);
@@ -262,7 +282,7 @@
     border-bottom: 1px dotted var(--accent);
 }
 
-/* ========== Карточки описания – исправлено затемнение при hover ========== */
+/* ========== Карточки описания (без чернения) ========== */
 .features-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -284,7 +304,7 @@
     transform: translateY(-3px);
     border-color: var(--accent);
     box-shadow: var(--shadow-hover);
-    background: var(--bg-inner-gradient); /* не чернеет, остаётся градиент */
+    background: var(--bg-inner-gradient);
 }
 .feature-item h3 {
     margin: 0 0 6px;
@@ -298,7 +318,7 @@
     line-height: 1.5;
 }
 
-/* ========== Улучшенные системные требования (компактные и стильные) ========== */
+/* ========== УЛУЧШЕННЫЕ СИСТЕМНЫЕ ТРЕБОВАНИЯ (другой фон, контраст) ========== */
 .requirements-grid {
     display: flex;
     flex-wrap: wrap;
@@ -308,19 +328,19 @@
 .req-item {
     flex: 1;
     min-width: 210px;
-    background: linear-gradient(135deg, #252540, #1a1a2e);
+    background: linear-gradient(135deg, #1e1e2a, #15151f);
     border-radius: 20px;
     padding: 18px 16px;
     border: 1px solid var(--border);
     transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 .req-item:hover {
     transform: translateY(-4px);
     border-color: var(--accent);
-    box-shadow: 0 12px 20px rgba(0,0,0,0.3);
+    box-shadow: 0 12px 20px rgba(0,0,0,0.4);
 }
 .req-item::before {
     content: '';
@@ -333,7 +353,7 @@
 }
 .req-label {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
     font-size: 20px;
     font-weight: bold;
@@ -341,7 +361,7 @@
     margin-bottom: 14px;
 }
 .req-label i {
-    font-size: 24px;
+    font-size: 22px;
 }
 .req-specs {
     display: flex;
@@ -365,20 +385,20 @@
 .fps-badge {
     display: inline-block;
     background: rgba(61,158,179,0.2);
-    padding: 2px 10px;
-    border-radius: 30px;
+    padding: 2px 8px;
+    border-radius: 20px;
     font-size: 11px;
-    color: var(--accent);
+    color: var(--accent-light);
     margin-left: 6px;
 }
 
 .consumption-card {
-    background: linear-gradient(135deg, #252540, #1a1a2e);
+    background: linear-gradient(135deg, #1e1e2a, #15151f);
     border-radius: 20px;
     padding: 20px;
     margin-top: 20px;
     border: 1px solid var(--border);
-    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 .consumption-card h3 {
     display: flex;
@@ -390,6 +410,7 @@
 }
 .consumption-card .text-secondary {
     margin-bottom: 12px;
+    font-size: 12px;
 }
 .consumption-table {
     width: 100%;
@@ -418,13 +439,27 @@
     flex-wrap: wrap;
 }
 
-/* Убираем ненужное затенение header (если оно от баннеров) */
+/* Лёгкое затемнение header (только для читаемости) */
 .game-header {
     background-size: cover;
     background-position: center;
-    transition: background-position 0.1s ease-out;
 }
 .header-overlay {
-    background: rgba(0,0,0,0.3); /* лёгкое затемнение для читаемости текста */
+    background: rgba(0,0,0,0.3);
     backdrop-filter: blur(2px);
+}
+
+/* Адаптив для секции скачивания */
+@media (min-width: 700px) {
+    .download-sections {
+        flex-direction: row;
+        justify-content: center;
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+    .download-subsection {
+        width: auto;
+        min-width: 220px;
+        flex: 1;
+    }
 }
