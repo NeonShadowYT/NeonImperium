@@ -1,4 +1,5 @@
 // platform.js – GitHub-блок с выбором версии и платформы
+// Сортировка: сначала релизы с sort-order (по убыванию числа), затем без sort-order (по дате, новые сверху)
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
@@ -63,9 +64,8 @@
         return meta;
     }
 
-    // Новая логика сортировки:
-    // - Без sort-order: вверху, сортируются по дате (новые сверху)
-    // - С sort-order: внизу, сортируются по возрастанию sort-order (меньше число → выше в этой группе)
+    // Сортировка: сначала релизы с sort-order (по убыванию числа, чем больше – тем выше),
+    // затем релизы без sort-order (по дате, новые сверху)
     function sortReleasesByOrder(releases) {
         const withOrder = [];
         const withoutOrder = [];
@@ -77,12 +77,12 @@
                 withoutOrder.push(release);
             }
         }
-        // Сортируем без метки по дате (новые сверху)
+        // Сортируем withOrder по убыванию sort-order (больше → выше)
+        withOrder.sort((a, b) => b.order - a.order);
+        // Сортируем withoutOrder по дате (новые сверху)
         withoutOrder.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
-        // Сортируем с меткой по возрастанию sort-order (чем меньше число, тем выше среди них)
-        withOrder.sort((a, b) => a.order - b.order);
-        // Объединяем: сначала без метки, потом с меткой
-        return [...withoutOrder, ...withOrder.map(item => item.release)];
+        // Сначала withOrder, потом withoutOrder
+        return [...withOrder.map(item => item.release), ...withoutOrder];
     }
 
     async function getGameReleases(gameTag) {
