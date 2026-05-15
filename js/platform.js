@@ -63,24 +63,26 @@
         return meta;
     }
 
-    // Универсальная сортировка:
-    // 1. Если у релиза есть sort-order, используем его (по убыванию: больше → выше в списке)
-    // 2. Если sort-order одинаковый или отсутствует – сортируем по дате (новые сверху)
+    // Новая логика сортировки:
+    // - Без sort-order: вверху, сортируются по дате (новые сверху)
+    // - С sort-order: внизу, сортируются по возрастанию sort-order (меньше число → выше в этой группе)
     function sortReleasesByOrder(releases) {
-        return [...releases].sort((a, b) => {
-            const metaA = parseMeta(a.body);
-            const metaB = parseMeta(b.body);
-            const orderA = metaA.sortOrder;
-            const orderB = metaB.sortOrder;
-
-            if (orderA !== undefined && orderB !== undefined) {
-                if (orderA !== orderB) return orderB - orderA;
-            } else if (orderA !== undefined) return -1; // A с порядком выше
-            else if (orderB !== undefined) return 1;  // B с порядком выше
-
-            // Сортировка по дате (новые сверху)
-            return new Date(b.published_at) - new Date(a.published_at);
-        });
+        const withOrder = [];
+        const withoutOrder = [];
+        for (const release of releases) {
+            const meta = parseMeta(release.body);
+            if (meta.sortOrder !== undefined && !isNaN(meta.sortOrder)) {
+                withOrder.push({ release, order: meta.sortOrder });
+            } else {
+                withoutOrder.push(release);
+            }
+        }
+        // Сортируем без метки по дате (новые сверху)
+        withoutOrder.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+        // Сортируем с меткой по возрастанию sort-order (чем меньше число, тем выше среди них)
+        withOrder.sort((a, b) => a.order - b.order);
+        // Объединяем: сначала без метки, потом с меткой
+        return [...withoutOrder, ...withOrder.map(item => item.release)];
     }
 
     async function getGameReleases(gameTag) {
