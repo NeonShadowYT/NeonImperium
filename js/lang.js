@@ -71,7 +71,9 @@ const I18n = (function() {
             "descriptionTitle": "Описание",
             "videoTitle": "Видео",
             "videoDesc": "Подборка контента от сообщества",
-            "requirementsTitle": "Системные требования"
+            "requirementsTitle": "Системные требования",
+            "storeTitle": "Площадки",
+            "cloudTitle": "Хранилища"
         },
         en: {
             "navHome": "Neon Imperium",
@@ -131,7 +133,9 @@ const I18n = (function() {
             "descriptionTitle": "Description",
             "videoTitle": "Video",
             "videoDesc": "Community content",
-            "requirementsTitle": "System Requirements"
+            "requirementsTitle": "System Requirements",
+            "storeTitle": "Stores",
+            "cloudTitle": "Cloud"
         }
     };
 
