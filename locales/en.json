@@ -8,7 +8,7 @@
   "alphaPageTitle": "Neon Imperium - Alpha 01",
   "gcPageTitle": "Neon Imperium - GC Adven",
   "notFoundTitle": "404 - Page not found",
-  "licenseTitle": "License Agreement",
+  "licenseTitle": "Neon Imperium - License Agreement",
   "backHome": "Back to home",
   "donateButton": "Support",
   "mainProjectsTitle": "Main Projects",
@@ -157,10 +157,10 @@
   "licenseContactNote": "Usually replies within a day",
 
   "licenseAllowedTitle": "Permitted",
-  "licenseAllowedList_1": "Freely play, copy, and distribute original unmodified versions of the games",
-  "licenseAllowedList_2": "Record videos, stream, create reviews, guides, and any other content based on the games, and monetize that content (YouTube, Twitch, TikTok, other platforms) without any royalty payments to the game authors. All income from such content belongs entirely to you.",
-  "licenseAllowedList_3": "Create modifications (mods) provided they are distributed with open source code and do not violate any laws",
-  "licenseAllowedList_4": "Sell your own custom mods, skins, merchandise (t-shirts, mugs, stickers), walkthroughs, consulting, and any other products related to the game without paying royalties to the developers. All revenue remains yours.",
+  "licenseAllowed1": "Freely play, copy, and distribute original unmodified versions of the games",
+  "licenseAllowed2": "Record videos, stream, create reviews, guides, and any other content based on the games, and monetize that content (YouTube, Twitch, TikTok, other platforms) without any royalty payments to the game authors. All income from such content belongs entirely to you.",
+  "licenseAllowed3": "Create modifications (mods) provided they are distributed with open source code and do not violate any laws",
+  "licenseAllowed4": "Sell your own custom mods, skins, merchandise (t-shirts, mugs, stickers), walkthroughs, consulting, and any other products related to the game without paying royalties to the developers. All revenue remains yours.",
 
   "licenseForbiddenTitle": "Prohibited",
   "licenseForbidden1": "Claim the game or its parts (including code, assets) as your own, remove copyright notices",

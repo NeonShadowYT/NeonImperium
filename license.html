@@ -26,7 +26,6 @@
     <script src="js/core/github-auth.js" defer></script>
     <script src="js/lang.js" defer></script>
     <style>
-        /* Дополнительные улучшения визуала для страницы лицензии */
         .license-hero {
             background: linear-gradient(135deg, rgba(30,30,48,0.95), rgba(20,20,35,0.98));
             border-bottom: 1px solid var(--border);
@@ -68,10 +67,54 @@
             align-items: center;
             gap: 6px;
         }
+        .license-quick {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin: 32px 0;
+        }
+        .license-card {
+            background: var(--bg-card-gradient);
+            border-radius: 20px;
+            padding: 24px;
+            border: 1px solid var(--border);
+            transition: transform 0.2s;
+        }
+        .license-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent);
+        }
+        .license-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 22px;
+            margin-bottom: 16px;
+            color: var(--accent);
+        }
+        .license-card ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .license-card li {
+            padding: 8px 0 8px 28px;
+            position: relative;
+            line-height: 1.4;
+            color: var(--text-secondary);
+        }
+        .license-card li i {
+            position: absolute;
+            left: 0;
+            top: 10px;
+        }
+        .license-card.allowed li i { color: #4caf50; }
+        .license-card.forbidden li i { color: #f44336; }
+        .license-card.obligation li i { color: #ff9800; }
         .contact-card {
             background: linear-gradient(145deg, #2a2a40, #1e1e30);
             border-radius: 20px;
-            padding: 20px;
+            padding: 28px;
             text-align: center;
             border: 1px solid rgba(61,158,179,0.3);
         }
@@ -81,10 +124,10 @@
             gap: 12px;
             background: #0088cc;
             color: white;
-            padding: 12px 24px;
+            padding: 12px 28px;
             border-radius: 60px;
             font-size: 18px;
-            margin-top: 12px;
+            margin-top: 16px;
             transition: transform 0.2s, box-shadow 0.2s;
             text-decoration: none;
         }
@@ -100,6 +143,7 @@
             margin-top: 24px;
         }
         @media (max-width: 700px) {
+            .license-quick { grid-template-columns: 1fr; gap: 16px; }
             .license-section-card h2 { font-size: 22px; }
         }
     </style>
@@ -119,7 +163,7 @@
             </div>
         </nav>
 
-        <!-- Герой с заголовком -->
+        <!-- Герой -->
         <div class="card license-hero" style="text-align: center; padding: 48px 24px; margin-bottom: 32px;">
             <h1 style="font-size: 48px; margin-bottom: 12px; color: var(--accent);" data-lang="licenseMainTitle">Лицензионное соглашение</h1>
             <p class="text-secondary" data-lang="licenseLastUpdate">Последнее обновление: 15 мая 2026 г.</p>
@@ -144,76 +188,49 @@
             <div class="markdown-body" data-lang="licensePrivacyText"></div>
         </div>
 
-        <!-- Краткие правила (три карточки) -->
-        <div class="license-quick" style="display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; margin: 32px 0;">
+        <!-- Три карточки с правилами -->
+        <div class="license-quick">
             <div class="license-card allowed">
                 <h3><i class="fas fa-check-circle"></i> <span data-lang="licenseAllowedTitle">Разрешено</span></h3>
-                <ul data-lang-list="licenseAllowedList">
-                    <!-- список будет заполнен через JS или вёрстку, но проще оставить статические li с data-lang -->
-                    <li data-lang="licenseAllowed1"></li>
-                    <li data-lang="licenseAllowed2"></li>
-                    <li data-lang="licenseAllowed3"></li>
-                    <li data-lang="licenseAllowed4"></li>
+                <ul>
+                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed1"></span></li>
+                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed2"></span></li>
+                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed3"></span></li>
+                    <li><i class="fas fa-check"></i> <span data-lang="licenseAllowed4"></span></li>
                 </ul>
             </div>
             <div class="license-card forbidden">
                 <h3><i class="fas fa-times-circle"></i> <span data-lang="licenseForbiddenTitle">Запрещено</span></h3>
                 <ul>
-                    <li data-lang="licenseForbidden1"></li>
-                    <li data-lang="licenseForbidden2"></li>
+                    <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden1"></span></li>
+                    <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden2"></span></li>
+                    <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden3"></span></li>
+                    <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden4"></span></li>
                 </ul>
             </div>
             <div class="license-card obligation">
                 <h3><i class="fas fa-exclamation-triangle"></i> <span data-lang="licenseObligationTitle">Обязанности</span></h3>
                 <ul>
-                    <li data-lang="licenseObligation1"></li>
-                    <li data-lang="licenseObligation2"></li>
-                    <li data-lang="licenseObligation3"></li>
+                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation1"></span></li>
+                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation2"></span></li>
+                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation3"></span></li>
                 </ul>
             </div>
         </div>
 
         <!-- Контакты -->
-        <div class="license-section-card contact-card" style="text-align: center;">
+        <div class="contact-card">
             <h2 style="border-left: none; justify-content: center;"><i class="fab fa-telegram"></i> <span data-lang="licenseContactTitle">Связь с нами</span></h2>
-            <p class="text-secondary" data-lang="licenseContactDesc">Мы открыты для общения, вопросов и предложений. Пишите в Telegram:</p>
+            <p class="text-secondary" data-lang="licenseContactDesc">Есть вопросы, предложения или нужен доступ к коду? Напишите нам в Telegram:</p>
             <a href="https://t.me/NeonShindowsYT" target="_blank" class="telegram-link">
                 <i class="fab fa-telegram fa-2x"></i> <span>@NeonShindowsYT</span>
             </a>
-            <div class="small-note" style="margin-top: 20px;" data-lang="licenseContactNote">Ответы обычно в течение суток</div>
+            <div class="small-note" style="margin-top: 20px;" data-lang="licenseContactNote">Ответ обычно в течение суток</div>
         </div>
 
         <div class="small-note" style="margin-top: 30px; padding: 20px 0; text-align: center; border-top: 1px solid var(--border);">
             © 2024-2026 Neon Imperium. <span data-lang="allRightsReserved">Все права защищены.</span>
         </div>
     </div>
-
-    <!-- Скрипт для заполнения списков из переводов (чтобы избежать дублирования) -->
-    <script>
-        (function() {
-            // Вспомогательная функция для заполнения списков, если data-lang не справляется с дочерними элементами
-            function fillListItems() {
-                const lists = document.querySelectorAll('[data-lang-list]');
-                lists.forEach(list => {
-                    const key = list.getAttribute('data-lang-list');
-                    if (!key) return;
-                    const items = list.querySelectorAll('li');
-                    items.forEach((li, idx) => {
-                        const itemKey = `${key}_${idx+1}`;
-                        if (window.translations && window.translations[I18n?.getCurrentLang?.() || 'ru']?.[itemKey]) {
-                            li.textContent = window.translations[I18n.getCurrentLang()][itemKey];
-                        }
-                    });
-                });
-            }
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', fillListItems);
-            } else {
-                fillListItems();
-            }
-            // Слушаем смену языка
-            window.addEventListener('languageChanged', () => setTimeout(fillListItems, 100));
-        })();
-    </script>
 </body>
 </html>
