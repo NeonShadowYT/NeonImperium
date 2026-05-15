@@ -1,5 +1,4 @@
-// platform.js – GitHub-блок с выбором версии и платформы, управление облачными кнопками.
-// Поддерживает метки priority-before: TAG (вставка перед TAG) и priority-end: true (в самый конец)
+// platform.js – GitHub-блок с выбором версии и платформы
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
@@ -59,61 +58,29 @@
             if (line.startsWith('game:')) meta.game = line.slice(5).trim().toLowerCase();
             else if (line.startsWith('version-name:')) meta.versionName = line.slice(13).trim();
             else if (line.startsWith('version-post:')) meta.versionPost = line.slice(14).trim();
-            else if (line.startsWith('priority-before:')) meta.priorityBefore = line.slice(16).trim();
-            else if (line.startsWith('priority-end:')) meta.priorityEnd = line.slice(13).trim().toLowerCase() === 'true';
+            else if (line.startsWith('sort-order:')) meta.sortOrder = parseInt(line.slice(11).trim(), 10);
         }
         return meta;
     }
 
-    // Сортировка релизов:
-    // 1. Релизы с priority-end: true отправляются в самый конец (в порядке даты)
-    // 2. Релизы с priority-before: TAG вставляются перед указанным тегом (если тег найден)
-    // 3. Остальные сортируются по дате (новые сверху)
-    function sortReleasesWithPriority(releases) {
-        // Разделяем на три группы
-        const priorityEndReleases = [];
-        const priorityBeforeReleases = [];
-        const normalReleases = [];
-        
-        for (const release of releases) {
-            const meta = parseMeta(release.body);
-            if (meta.priorityEnd) {
-                priorityEndReleases.push(release);
-            } else if (meta.priorityBefore) {
-                priorityBeforeReleases.push({ release, targetTag: meta.priorityBefore });
-            } else {
-                normalReleases.push(release);
-            }
-        }
-        
-        // Сортируем обычные по дате (новые сверху)
-        normalReleases.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
-        
-        // Сортируем priorityEnd по дате (новые сверху, но они будут в конце общего списка)
-        priorityEndReleases.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
-        
-        // Сортируем priorityBefore: сначала обрабатываем, вставляем перед целевыми тегами
-        // Создаём копию normalReleases для модификации
-        let result = [...normalReleases];
-        
-        for (const { release, targetTag } of priorityBeforeReleases) {
-            const targetIndex = result.findIndex(r => r.tag_name === targetTag);
-            if (targetIndex !== -1) {
-                // Удаляем релиз из result, если он там есть (маловероятно)
-                const existingIdx = result.findIndex(r => r.id === release.id);
-                if (existingIdx !== -1) result.splice(existingIdx, 1);
-                // Вставляем перед целевым
-                result.splice(targetIndex, 0, release);
-            } else {
-                // Если целевой тег не найден – помещаем в конец обычных (перед priorityEnd)
-                result.push(release);
-            }
-        }
-        
-        // Добавляем priorityEnd релизы в самый конец
-        result.push(...priorityEndReleases);
-        
-        return result;
+    // Универсальная сортировка:
+    // 1. Если у релиза есть sort-order, используем его (по убыванию: больше → выше в списке)
+    // 2. Если sort-order одинаковый или отсутствует – сортируем по дате (новые сверху)
+    function sortReleasesByOrder(releases) {
+        return [...releases].sort((a, b) => {
+            const metaA = parseMeta(a.body);
+            const metaB = parseMeta(b.body);
+            const orderA = metaA.sortOrder;
+            const orderB = metaB.sortOrder;
+
+            if (orderA !== undefined && orderB !== undefined) {
+                if (orderA !== orderB) return orderB - orderA;
+            } else if (orderA !== undefined) return -1; // A с порядком выше
+            else if (orderB !== undefined) return 1;  // B с порядком выше
+
+            // Сортировка по дате (новые сверху)
+            return new Date(b.published_at) - new Date(a.published_at);
+        });
     }
 
     async function getGameReleases(gameTag) {
@@ -122,7 +89,7 @@
             const meta = parseMeta(r.body);
             return meta.game === gameTag;
         });
-        return sortReleasesWithPriority(filtered);
+        return sortReleasesByOrder(filtered);
     }
 
     function findAsset(release, platform) {
