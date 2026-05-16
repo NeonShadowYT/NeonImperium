@@ -123,7 +123,7 @@
   "ram": "RAM",
   "ramVal": "512-1024 MB",
   "storage": "Storage",
-  "storageVal": "256 MB",
+  "storageVal": "256-512 MB",
   "os": "OS",
   "osVal": "Win 10+ 32 Bit / Android 7+",
   "video1Title": "Starve Neon Review",

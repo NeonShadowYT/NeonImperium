@@ -123,7 +123,7 @@
   "ram": "Оперативка",
   "ramVal": "512-1024 Мб",
   "storage": "Память",
-  "storageVal": "256 Мб",
+  "storageVal": "256-512 Мб",
   "os": "Система",
   "osVal": "Win 10+ 32 Бит / Андроид 7+",
   "video1Title": "Обзор Starve Neon",
