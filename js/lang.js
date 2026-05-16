@@ -6,7 +6,7 @@
     const CACHE_PREFIX = 'i18n_';
 
     let currentLang = DEFAULT;
-    let translations = {};       // загруженные переводы
+    let translations = {};
     let observer = null;
 
     function detectBrowserLang() {
@@ -20,14 +20,12 @@
 
     async function fetchTranslations(lang) {
         const cacheKey = CACHE_PREFIX + lang;
-        // сначала из sessionStorage
         const sessionCached = sessionStorage.getItem(cacheKey);
         if (sessionCached) {
             try {
                 return JSON.parse(sessionCached);
             } catch(e) {}
         }
-        // потом из localStorage
         const localCached = localStorage.getItem(cacheKey);
         if (localCached) {
             try {
@@ -36,7 +34,6 @@
                 return data;
             } catch(e) {}
         }
-        // загрузка с сервера
         try {
             const response = await fetch(`${LOCALE_PATH}${lang}.json`);
             if (!response.ok) throw new Error();
@@ -51,7 +48,6 @@
     }
 
     function translate(key) {
-        // если перевод найден – отдаём его, иначе сам ключ
         return translations[key] ?? key;
     }
 
@@ -71,7 +67,6 @@
             }
         });
 
-        // заголовок страницы
         const titleKeys = {
             '/': 'siteTitle',
             '/index.html': 'siteTitle',
@@ -84,7 +79,6 @@
         const titleKey = titleKeys[path] || titleKeys[path.split('/').pop()] || 'siteTitle';
         document.title = translate(titleKey);
 
-        // активная кнопка языка
         document.querySelectorAll('.lang-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.langCode === currentLang);
         });
@@ -94,9 +88,8 @@
         if (lang === currentLang || !SUPPORTED.includes(lang)) return;
         currentLang = lang;
         localStorage.setItem('preferredLanguage', lang);
-        // сначала пустые переводы, потом грузим
         translations = {};
-        updateElements(); // временно покажет ключи
+        updateElements();
         const full = await fetchTranslations(lang);
         if (full) {
             translations = full;
@@ -110,12 +103,10 @@
         translations = await fetchTranslations(currentLang) || {};
         updateElements();
 
-        // обработчики кнопок переключения языка
         document.querySelectorAll('.lang-btn').forEach(btn => {
             btn.addEventListener('click', () => setLanguage(btn.dataset.langCode));
         });
 
-        // следим за динамически добавляемыми элементами с data-lang
         observer = new MutationObserver(mutations => {
             let needUpdate = false;
             for (const m of mutations) {
