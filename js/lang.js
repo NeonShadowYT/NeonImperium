@@ -9,6 +9,12 @@
     let translations = {};
     let observer = null;
 
+    const OLD_KEYS = ['i18n_ru', 'i18n_en', 'i18n_ru_time', 'i18n_en_time'];
+    OLD_KEYS.forEach(key => {
+        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
+    });
+
     function detectBrowserLang() {
         const navLang = (navigator.language || navigator.userLanguage || '').split('-')[0];
         return SUPPORTED.includes(navLang) ? navLang : DEFAULT;
