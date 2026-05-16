@@ -86,8 +86,8 @@
 }
 
 .project-card.square-card .image-wrapper {
-    margin: -10px -10px 8px -10px;   /* отрицательные поля тянут обёртку к краям карточки */
-    width: calc(100% + 20px);        /* компенсация отступов */
+    margin: -10px -10px 8px -10px;
+    width: calc(100% + 20px);
     padding-bottom: 100%;
     border-radius: var(--radius-sm);
     overflow: hidden;
@@ -351,14 +351,14 @@
     border-radius: var(--radius-md);
     padding: 20px;
     border: 1px solid var(--border);
-    transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94);
+    transition: none;
 }
 
 .feature-icon {
     font-size: 32px;
     display: block;
     margin-bottom: 10px;
-    transition: transform 0.2s;
+    transition: none;
 }
 
 .features-extra {
@@ -438,6 +438,11 @@
         transform: translateY(-5px) scale(1.02);
         box-shadow: var(--shadow-hover);
     }
+    /* Убираем hover-эффекты для карточек описания */
+    .feature-item.tilt-card:hover {
+        transform: none;
+        box-shadow: none;
+    }
 }
 
 @media (hover: none) and (pointer: coarse) {
@@ -446,5 +451,8 @@
     }
     .tilt-card:hover {
         transform: translateY(-5px) !important;
+    }
+    .feature-item.tilt-card:hover {
+        transform: none !important;
     }
 }

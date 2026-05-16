@@ -56,27 +56,23 @@ function initTiltEffect() {
     });
 }
 
-// Параллакс для шапок игр (на десктопе) с исправлением затенения при скролле
+// Параллакс для шапок игр (на десктопе) — исправлен сброс при скролле
 function initHeaderParallax() {
     const headers = document.querySelectorAll('.game-header');
     if (headers.length === 0) return;
 
-    // Функция сброса позиции фона
-    const resetBackground = () => {
-        headers.forEach(header => {
-            header.style.backgroundPosition = '';
-        });
-    };
+    let scrollTimer = null;
 
-    // Обработчик скролла: сбрасываем позицию, если мышь не над шапкой
-    let scrollTimeout;
-    window.addEventListener('scroll', () => {
-        if (scrollTimeout) clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-            // Если ни на одной шапке нет наведения, сбрасываем
-            const isHovering = Array.from(headers).some(h => h.matches(':hover'));
-            if (!isHovering) resetBackground();
-        }, 50);
+    window.addEventListener('scroll', function() {
+        if (scrollTimer) clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(function() {
+            headers.forEach(header => {
+                header.style.backgroundPosition = '';
+                header.style.backgroundSize = '';
+                header.style.backgroundSize = '110%';
+                header.style.backgroundPosition = 'center';
+            });
+        }, 100);
     });
 
     headers.forEach(header => {
@@ -98,7 +94,7 @@ function initHeaderParallax() {
         
         header.addEventListener('mousemove', handleMove);
         header.addEventListener('mouseleave', () => {
-            header.style.backgroundPosition = '';
+            header.style.backgroundPosition = 'center';
         });
     });
 }
@@ -108,7 +104,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const isTouch = 'ontouchstart' in window;
     
     if (!isTouch) {
-        // Десктоп: tilt и мышиный параллакс
         initTiltEffect();
         initHeaderParallax();
     }
