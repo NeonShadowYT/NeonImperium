@@ -147,11 +147,19 @@
   "licenseLastUpdate": "Last updated: May 15, 2026",
   "licenseOpenBadge": "Open source upon request",
   "licenseDisclaimerTitle": "Disclaimer of Liability",
-  "licenseDisclaimerText": "Neon Imperium games (Starve Neon, Alpha 01, GC Adven) are provided 'as is', without any express or implied warranties. Developers are not liable for any direct, indirect, incidental, or other damages arising from the use or inability to use the games, including but not limited to: data loss, hardware damage, financial losses, or moral harm. You use the games solely at your own risk.\n\n**Age confirmation:** by downloading, installing, or otherwise using the game, you confirm that you are at least 18 years old, or have reached the age of majority according to the laws of your country. If you are under 18, you must immediately cease using the game and delete all copies.",
+  "licenseDisclaimerText": "Neon Imperium games (Starve Neon, Alpha 01, GC Adven) are provided 'as is', without any express or implied warranties. Developers are not liable for any direct, indirect, incidental, or other damages arising from the use or inability to use the games, including but not limited to: data loss, hardware damage, financial losses, or moral harm. You use the games solely at your own risk.\n\n**Age confirmation:** by downloading, installing, or otherwise using the game, you confirm that you are at least 18 years old, or have reached the age of majority according to the laws of your country. If you are under 18, you must immediately cease using the game and delete all copies. Use by persons under 18 is strictly prohibited.\n\n**Medical contraindications:** the games may contain bright flashing images, rapid frame changes, sharp sound effects and other elements that may trigger epileptic seizures, dizziness, nausea, loss of consciousness or other adverse reactions in people with photosensitive epilepsy, cardiovascular diseases, nervous disorders or other medical conditions. By installing and launching the game, you confirm that you have no medical contraindications to such content, and if necessary you have consulted a doctor. Developers are not liable for any harm to health, including seizures, injuries, worsening of condition caused by the use of the games.\n\n**Free games and future paid options:** at the moment all games are free. In the future, paid games or in-game purchases may appear, which will be announced separately. Any paid elements will always be optional and will not break the balance for free users.",
+
+  "licenseMedicalTitle": "Medical Contraindications",
+  "licenseMedicalText": "Games contain rapidly changing images, flashes, loud sounds. Not recommended for persons with epilepsy, cardiac arrhythmias, high blood pressure, mental disorders, pregnant women, and those who have had a stroke or heart attack. If in doubt, consult a doctor. By continuing to use, you confirm that you have no contraindications.",
+
+  "licenseModDisclaimer": "Developers do not review or control mods created by third parties. Installing mods is at your own risk. Developers are not responsible for any consequences, including software damage, data loss, health damage or legal violations caused by mods.",
+
   "licenseOpenSourceTitle": "Open Source Code",
   "licenseOpenSourceText": "The scripts (software code) of our games are distributed under an open license. Upon request, we can provide a repository with the source code (assets excluded). Assets (images, sounds, models, textures, animations) may have separate restrictions, but the core game mechanics remain open for learning, education, and non-commercial modifications.\n\nTo obtain the code, contact us via Telegram. We reserve the right to deny access without giving a reason.",
-  "licensePrivacyTitle": "Privacy & Anonymity",
-  "licensePrivacyText": "We respect your privacy. Games do not collect personal data without your explicit consent. Any usage statistics are anonymous and not tied to any specific user. We do not store or share your IP addresses, game history, or other personal information with third parties.\n\nDevelopers and website authors also prefer to stay anonymous, using pseudonyms (Neon Shadow, Golden Creeper). This allows us to focus on creativity rather than publicity. Nevertheless, we are always open to dialogue via the communication channels provided.\n\n**Important:** when sending messages through GitHub Issues or comments, your data (username, avatar) will be publicly visible according to GitHub's policy.",
+
+  "licensePrivacyTitle": "Privacy, Anonymity and Data Collection",
+  "licensePrivacyText": "We respect your privacy. Games do not collect personal data without your explicit consent. Any usage statistics (if ever introduced) is strictly anonymous, not tied to any specific user, and can be disabled in the game settings. We do not store or share your IP addresses, game history, or other personal information with third parties. No hidden telemetry exists or is planned without prior notice and your consent.\n\nDevelopers and website authors also prefer to stay anonymous, using pseudonyms (Neon Shadow, Golden Creeper). This allows us to focus on creativity rather than publicity. Nevertheless, we are always open to dialogue via the communication channels provided.\n\n**Important:** when sending messages through GitHub Issues or comments, your data (username, avatar) will be publicly visible according to GitHub's policy.",
+
   "licenseContactTitle": "Contact Us",
   "licenseContactDesc": "Questions, suggestions, or need access to the code? Write to us on Telegram:",
   "licenseContactNote": "Usually replies within a day",
@@ -160,13 +168,14 @@
   "licenseAllowed1": "Freely play, copy, and distribute original unmodified versions of the games",
   "licenseAllowed2": "Record videos, stream, create reviews, guides, and any other content based on the games, and monetize that content (YouTube, Twitch, TikTok, other platforms) without any royalty payments to the game authors. All income from such content belongs entirely to you.",
   "licenseAllowed3": "Create modifications (mods) provided they are distributed with open source code and do not violate any laws",
-  "licenseAllowed4": "Sell your own custom mods, skins, merchandise (t-shirts, mugs, stickers), walkthroughs, consulting, and any other products related to the game without paying royalties to the developers. All revenue remains yours.",
+  "licenseAllowed4": "Sell your own custom mods, skins, in-game items, merchandise (t-shirts, mugs, stickers), walkthroughs, consulting, and any other products related to the game without paying any royalties to the developers. **100% of the revenue from such products remains with you.** The developers do not claim any percentage or fixed share.",
 
   "licenseForbiddenTitle": "Prohibited",
   "licenseForbidden1": "Claim the game or its parts (including code, assets) as your own, remove copyright notices",
   "licenseForbidden2": "Create malicious, cheating, proprietary (closed source) mods, or mods that violate Russian or international law",
   "licenseForbidden3": "Use the game for commercial purposes not related to content creation or mods (e.g., selling the game itself, renting) without separate written permission",
   "licenseForbidden4": "Distribute the game on paid discs, as part of paid-access bundles, or embed it into commercial products without explicit consent",
+  "licenseForbidden5": "Collect or share usage statistics with third parties without explicit user notification and opt-out capability (any telemetry must be voluntary and anonymous)",
 
   "licenseObligationTitle": "Your Obligations",
   "licenseObligation1": "Retain original copyright and license notices in the original game files",

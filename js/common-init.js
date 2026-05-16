@@ -1,4 +1,5 @@
 // js/common-init.js – shared lazy‑loading, donation button, Service Worker registration with update notification
+
 (function () {
   function initLazyYT() {
     if ('IntersectionObserver' in window) {
@@ -66,9 +67,7 @@
     updateText();
   }
 
-  // Уведомление о новой версии: показываем только один раз за сессию
   function showUpdateNotification() {
-    // Если уже показывали в этой сессии, не показываем снова
     if (sessionStorage.getItem('update_notification_shown')) return;
     sessionStorage.setItem('update_notification_shown', '1');
 
@@ -93,7 +92,6 @@
     navigator.serviceWorker.register('sw.js')
       .then(registration => {
         console.log('Service Worker зарегистрирован, scope:', registration.scope);
-        // При обнаружении ожидающего нового воркера показываем уведомление
         if (registration.waiting) {
           showUpdateNotification();
         }
@@ -110,6 +108,92 @@
       .catch(error => console.error('Ошибка регистрации Service Worker:', error));
   }
 
+  // ---------- Обязательное предупреждение 18+ и медицинских рисков перед скачиванием ----------
+  function initDownloadConsent() {
+    const CONSENT_KEY = 'download_consent_given_v1';
+    const consentGiven = localStorage.getItem(CONSENT_KEY) === 'true';
+
+    function showConsentModal(callback) {
+      const modal = document.createElement('div');
+      modal.className = 'modal modal-fullscreen';
+      modal.style.backgroundColor = 'rgba(0,0,0,0.85)';
+      modal.innerHTML = `
+        <div class="modal-content-full" style="max-width: 550px; text-align: center;">
+          <div class="modal-header">
+            <h2>⚠️ ВАЖНОЕ ПРЕДУПРЕЖДЕНИЕ</h2>
+            <button class="modal-close"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="modal-body" style="text-align: left;">
+            <p><strong>Подтвердите, прежде чем скачать игру:</strong></p>
+            <ul style="margin: 15px 0; padding-left: 20px;">
+              <li>Я принимаю <strong><a href="license.html" target="_blank">лицензионное соглашение</a></strong> и осознаю, что разработчики не несут ответственности за любой вред здоровью или имуществу.</li>
+              <li>Я понимаю, что сторонние моды устанавливаю на свой страх и риск.</li>
+            </ul>
+            <label style="display: flex; align-items: center; gap: 10px; margin-top: 15px; cursor: pointer;">
+              <input type="checkbox" id="consent-checkbox"> Я подтверждаю все вышеуказанные условия и согласен(на) с ними.
+            </label>
+          </div>
+          <div class="modal-footer" style="padding: 20px; display: flex; justify-content: flex-end; gap: 12px;">
+            <button class="button" id="consent-cancel">Отмена</button>
+            <button class="button" id="consent-confirm" disabled style="background: var(--accent);">Продолжить</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+
+      const closeModal = () => {
+        modal.remove();
+        document.body.style.overflow = '';
+      };
+
+      const checkbox = modal.querySelector('#consent-checkbox');
+      const confirmBtn = modal.querySelector('#consent-confirm');
+      const cancelBtn = modal.querySelector('#consent-cancel');
+      const closeBtn = modal.querySelector('.modal-close');
+
+      checkbox.addEventListener('change', () => {
+        confirmBtn.disabled = !checkbox.checked;
+      });
+
+      const onConfirm = () => {
+        if (!checkbox.checked) return;
+        localStorage.setItem(CONSENT_KEY, 'true');
+        localStorage.setItem('consent_timestamp', Date.now().toString());
+        closeModal();
+        if (callback) callback();
+      };
+
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', closeModal);
+      closeBtn.addEventListener('click', closeModal);
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+      });
+    }
+
+    function handleDownloadClick(e) {
+      let target = e.target.closest('.download-button, #github-download-btn, .cloud-buttons a, .store-buttons a');
+      if (!target) return;
+      if (target.classList && target.classList.contains('disabled')) {
+        e.preventDefault();
+        return;
+      }
+      if (consentGiven) return;
+
+      e.preventDefault();
+      const originalHref = target.href;
+      if (!originalHref || originalHref === '#') return;
+
+      showConsentModal(() => {
+        window.open(originalHref, target.target || '_blank');
+      });
+    }
+
+    document.body.addEventListener('click', handleDownloadClick);
+  }
+
   window.addEventListener('unhandledrejection', function(event) {
     if (event.reason && event.reason.message && event.reason.message.includes('Failed to fetch')) {
       event.preventDefault();
@@ -121,10 +205,12 @@
       initLazyYT();
       initDonateBtn();
       registerServiceWorker();
+      initDownloadConsent();
     });
   } else {
     initLazyYT();
     initDonateBtn();
     registerServiceWorker();
+    initDownloadConsent();
   }
 })();
