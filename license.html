@@ -211,7 +211,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const CONSENT_LICENSE_KEY = 'license_agreed_v1';
-            const LICENSE_VERSION = '2026-05-15'; // версия лицензии для отслеживания изменений
+            const LICENSE_VERSION = '2026-05-16';
             const storedVersion = localStorage.getItem('license_version');
             const agreedFlag = localStorage.getItem(CONSENT_LICENSE_KEY) === 'true';
             const agreedTimestamp = localStorage.getItem('license_agreed_timestamp');
@@ -220,9 +220,7 @@
             const consentBox = document.getElementById('consent-box-content');
             if (!consentBox) return;
 
-            // Если лицензия уже принята И версия актуальна
             if (agreedFlag && currentVersionValid) {
-                // Показываем сообщение о принятии
                 const acceptedDiv = document.createElement('div');
                 acceptedDiv.className = 'accepted-message';
                 const dateStr = agreedTimestamp ? new Date(parseInt(agreedTimestamp)).toLocaleString() : 'ранее';
@@ -234,7 +232,6 @@
                 `;
                 consentBox.innerHTML = '';
                 consentBox.appendChild(acceptedDiv);
-                // Также обновляем переводы внутри добавленного блока
                 if (window.I18n) {
                     const alreadySpan = acceptedDiv.querySelector('[data-lang="licenseAlreadyAccepted"]');
                     const onSpan = acceptedDiv.querySelector('[data-lang="licenseAcceptedOn"]');
@@ -244,7 +241,6 @@
                 return;
             }
 
-            // Иначе показываем форму согласия
             consentBox.innerHTML = `
                 <i class="fas fa-gavel" style="font-size: 32px; color: var(--accent); margin-bottom: 12px; display: block;"></i>
                 <h3 data-lang="licenseConfirmTitle">Подтверждение ознакомления</h3>
@@ -274,7 +270,6 @@
                 } else {
                     alert('Лицензия принята. Благодарим за понимание.');
                 }
-                // Перезагружаем страницу, чтобы показать сообщение о принятии
                 location.reload();
             });
         });
@@ -295,16 +290,15 @@
             </div>
         </nav>
 
-        <!-- Герой с предупреждением -->
         <div class="license-hero">
             <h1 style="font-size: 48px; margin-bottom: 12px; color: var(--accent);" data-lang="licenseMainTitle">Лицензионное соглашение</h1>
-            <p class="text-secondary" data-lang="licenseLastUpdate">Последнее обновление: 15 мая 2026 г.</p>
+            <p class="text-secondary" data-lang="licenseLastUpdate">Последнее обновление: 16 мая 2026 г.</p>
             <div class="license-badge" style="margin-top: 16px;">
                 <i class="fas fa-code-branch"></i> <span data-lang="licenseOpenBadge">Открытый код по запросу</span>
             </div>
         </div>
 
-        <!-- Основные блоки -->
+        <!-- Основные юридические блоки -->
         <div class="license-section-card">
             <h2><i class="fas fa-shield-alt"></i> <span data-lang="licenseDisclaimerTitle">Отказ от ответственности</span></h2>
             <div class="markdown-body" data-lang="licenseDisclaimerText">Загрузка...</div>
@@ -339,6 +333,7 @@
                     <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden3">Загрузка...</span></li>
                     <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden4">Загрузка...</span></li>
                     <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden5">Загрузка...</span></li>
+                    <li><i class="fas fa-times"></i> <span data-lang="licenseForbidden6">Загрузка...</span></li>
                 </ul>
             </div>
             <div class="license-card obligation">
@@ -347,11 +342,12 @@
                     <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation1">Загрузка...</span></li>
                     <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation2">Загрузка...</span></li>
                     <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation3">Загрузка...</span></li>
+                    <li><i class="fas fa-arrow-right"></i> <span data-lang="licenseObligation4">Загрузка...</span></li>
                 </ul>
             </div>
         </div>
 
-        <!-- Медицинское предупреждение отдельным блоком -->
+        <!-- Медицинское предупреждение -->
         <div class="warning-banner">
             <i class="fas fa-heartbeat" style="font-size: 24px; margin-right: 12px; color: #f44336;"></i>
             <strong data-lang="licenseMedicalTitle">Медицинские противопоказания:</strong>
@@ -377,7 +373,6 @@
 
         <!-- Блок подтверждения ознакомления (динамический) -->
         <div class="consent-box" id="consent-box-content">
-            <!-- Сюда вставляется либо форма, либо сообщение о принятии -->
             <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
         </div>
 
