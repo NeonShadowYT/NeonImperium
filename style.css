@@ -52,19 +52,25 @@
     100% { transform: translateY(0); }
 }
 
-/* ========== GIF-баннеры в карточках – исправлено на всю ширину ========== */
+/* ========== GIF-баннеры в карточках – без затемнений ========== */
 .feature-item {
     overflow: hidden;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s;
     background: var(--bg-inner-gradient);
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid var(--border);
 }
+
+/* Убираем затемнение при наведении */
 .feature-item:hover {
     transform: translateY(-4px);
-    /* Убираем затемнение: не меняем фон и не добавляем тень */
+    /* Никакой тени, никакого изменения фона */
 }
+
 .feature-banner {
     width: calc(100% + 32px);
-    margin: -16px -16px 12px -16px;
+    margin: -14px -14px 12px -14px;
     height: 120px;
     overflow: hidden;
     border-radius: 14px 14px 0 0;
@@ -82,17 +88,6 @@
     object-fit: cover;
     display: block;
 }
-.feature-banner::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 60%;
-    background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%);
-    pointer-events: none;
-    z-index: 1;
-}
 .feature-banner .fallback-emoji {
     position: absolute;
     top: 50%;
@@ -104,41 +99,8 @@
     z-index: 0;
 }
 
-/* ========== Фон с гифками для секции скачивания ========== */
-.download-card {
-    position: relative;
-    overflow: hidden;
-}
-.download-card .bg-gif-layer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 60%;
-    z-index: 0;
-    pointer-events: none;
-    transition: opacity 1.5s ease-in-out;
-    opacity: 0;
-}
-.download-card .bg-gif-layer.active { opacity: 1; }
-.download-card .bg-gif-layer video,
-.download-card .bg-gif-layer img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    filter: blur(4px) brightness(0.6);
-}
-.download-card .bg-gif-mask {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(to bottom, rgba(30,30,48,0.2) 0%, rgba(30,30,48,0.9) 70%, var(--bg-card) 100%);
-    z-index: 1;
-    pointer-events: none;
-}
-.download-card > * { position: relative; z-index: 2; }
+/* ========== Фон с гифками для секции скачивания – полностью убран ========== */
+/* Удалены все стили .bg-gif-layer, .bg-gif-mask и связанные затемнения */
 
 /* ========== Компактная секция скачивания ========== */
 .download-sections {
@@ -244,11 +206,6 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: var(--bg-inner-gradient);
-    border-radius: 14px;
-    padding: 14px;
-    border: 1px solid var(--border);
-    transition: transform 0.2s;
 }
 .feature-item h3 {
     margin: 0 0 6px;
