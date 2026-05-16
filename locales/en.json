@@ -149,9 +149,10 @@
   "licenseDisclaimerTitle": "Disclaimer of Liability",
   "licenseDisclaimerText": "Neon Imperium games (Starve Neon, Alpha 01, GC Adven) are provided 'as is', without any express or implied warranties. Developers are not liable for any direct, indirect, incidental, or other damages arising from the use or inability to use the games, including but not limited to: data loss, hardware damage, financial losses, or moral harm. You use the games solely at your own risk.\n\n**Age confirmation:** by downloading, installing, or otherwise using the game, you confirm that you are at least 18 years old, or have reached the age of majority according to the laws of your country. If you are under 18, you must immediately cease using the game and delete all copies. Use by persons under 18 is strictly prohibited.\n\n**Medical contraindications:** the games may contain bright flashing images, rapid frame changes, sharp sound effects and other elements that may trigger epileptic seizures, dizziness, nausea, loss of consciousness or other adverse reactions in people with photosensitive epilepsy, cardiovascular diseases, nervous disorders or other medical conditions. By installing and launching the game, you confirm that you have no medical contraindications to such content, and if necessary you have consulted a doctor. Developers are not liable for any harm to health, including seizures, injuries, worsening of condition caused by the use of the games.\n\n**Free games and future paid options:** at the moment all games are free. In the future, paid games or in-game purchases may appear, which will be announced separately. Any paid elements will always be optional and will not break the balance for free users.",
 
-  "licenseMedicalTitle": "Medical Contraindications",
+  "licenseMedicalTitle": "⚠️ Medical Contraindications",
   "licenseMedicalText": "Games contain rapidly changing images, flashes, loud sounds. Not recommended for persons with epilepsy, cardiac arrhythmias, high blood pressure, mental disorders, pregnant women, and those who have had a stroke or heart attack. If in doubt, consult a doctor. By continuing to use, you confirm that you have no contraindications.",
 
+  "licenseModDisclaimerTitle": "Third-party mods",
   "licenseModDisclaimer": "Developers do not review or control mods created by third parties. Installing mods is at your own risk. Developers are not responsible for any consequences, including software damage, data loss, health damage or legal violations caused by mods.",
 
   "licenseOpenSourceTitle": "Open Source Code",
@@ -181,6 +182,14 @@
   "licenseObligation1": "Retain original copyright and license notices in the original game files",
   "licenseObligation2": "When publishing mods or videos, provide a clear link to the official website or game page (optional but appreciated)",
   "licenseObligation3": "Solely bear responsibility for any content you create based on the game (mods, videos, merchandise)",
+
+  "licenseAlreadyAccepted": "✓ License accepted",
+  "licenseAcceptedOn": "Accepted on",
+  "licenseConfirmTitle": "Confirmation of Review",
+  "licenseConfirmDesc": "I confirm that I have carefully read the license agreement, understand all risks (including medical) and accept the terms.",
+  "licenseConfirmCheckbox": "I have read and agree to the license terms",
+  "licenseConfirmButton": "Confirm",
+  "licenseConfirmNote": "* Confirmation is stored in your browser and not shared with developers. If the license is updated, consent will be requested again.",
 
   "allRightsReserved": "All rights reserved."
 }

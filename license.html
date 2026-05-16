@@ -178,6 +178,14 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
+        .accepted-message {
+            background: rgba(76,175,80,0.15);
+            border: 1px solid #4caf50;
+            border-radius: 16px;
+            padding: 20px;
+            margin: 20px 0;
+            color: #4caf50;
+        }
         .warning-banner {
             background: rgba(244,67,54,0.15);
             border-left: 4px solid #f44336;
@@ -201,41 +209,74 @@
     <script src="js/core/github-auth.js" defer></script>
     <script src="js/lang.js" defer></script>
     <script>
-        // Дополнительный скрипт для сохранения подтверждения ознакомления с лицензией
         document.addEventListener('DOMContentLoaded', function() {
             const CONSENT_LICENSE_KEY = 'license_agreed_v1';
+            const LICENSE_VERSION = '2026-05-15'; // версия лицензии для отслеживания изменений
+            const storedVersion = localStorage.getItem('license_version');
+            const agreedFlag = localStorage.getItem(CONSENT_LICENSE_KEY) === 'true';
+            const agreedTimestamp = localStorage.getItem('license_agreed_timestamp');
+            const currentVersionValid = (storedVersion === LICENSE_VERSION);
+
+            const consentBox = document.getElementById('consent-box-content');
+            if (!consentBox) return;
+
+            // Если лицензия уже принята И версия актуальна
+            if (agreedFlag && currentVersionValid) {
+                // Показываем сообщение о принятии
+                const acceptedDiv = document.createElement('div');
+                acceptedDiv.className = 'accepted-message';
+                const dateStr = agreedTimestamp ? new Date(parseInt(agreedTimestamp)).toLocaleString() : 'ранее';
+                acceptedDiv.innerHTML = `
+                    <i class="fas fa-check-circle" style="font-size: 24px; margin-right: 12px;"></i>
+                    <strong data-lang="licenseAlreadyAccepted">Лицензия принята</strong><br>
+                    <span data-lang="licenseAcceptedOn">Дата принятия:</span> ${dateStr}<br>
+                    <small>${LICENSE_VERSION}</small>
+                `;
+                consentBox.innerHTML = '';
+                consentBox.appendChild(acceptedDiv);
+                // Также обновляем переводы внутри добавленного блока
+                if (window.I18n) {
+                    const alreadySpan = acceptedDiv.querySelector('[data-lang="licenseAlreadyAccepted"]');
+                    const onSpan = acceptedDiv.querySelector('[data-lang="licenseAcceptedOn"]');
+                    if (alreadySpan) alreadySpan.textContent = I18n.translate('licenseAlreadyAccepted');
+                    if (onSpan) onSpan.textContent = I18n.translate('licenseAcceptedOn');
+                }
+                return;
+            }
+
+            // Иначе показываем форму согласия
+            consentBox.innerHTML = `
+                <i class="fas fa-gavel" style="font-size: 32px; color: var(--accent); margin-bottom: 12px; display: block;"></i>
+                <h3 data-lang="licenseConfirmTitle">Подтверждение ознакомления</h3>
+                <p class="text-secondary" data-lang="licenseConfirmDesc">Я подтверждаю, что внимательно прочитал(а) лицензионное соглашение, понимаю все риски (включая медицинские) и принимаю условия.</p>
+                <label class="consent-checkbox">
+                    <input type="checkbox" id="license-consent-checkbox">
+                    <span data-lang="licenseConfirmCheckbox">Я ознакомлен(а) и согласен(на) с условиями лицензии</span>
+                </label>
+                <button class="consent-btn" id="confirm-license-btn" disabled data-lang="licenseConfirmButton">Подтвердить</button>
+                <div class="small-note" style="margin-top: 16px;" data-lang="licenseConfirmNote">* Подтверждение сохраняется в вашем браузере и не передаётся разработчикам. При обновлении лицензии согласие будет запрошено повторно.</div>
+            `;
+
             const checkbox = document.getElementById('license-consent-checkbox');
             const confirmBtn = document.getElementById('confirm-license-btn');
-            const agreedFlag = localStorage.getItem(CONSENT_LICENSE_KEY) === 'true';
 
-            if (checkbox && confirmBtn) {
-                if (agreedFlag) {
-                    checkbox.checked = true;
-                    confirmBtn.disabled = false;
-                    confirmBtn.textContent = '✓ Вы уже подтвердили';
+            checkbox.addEventListener('change', function() {
+                confirmBtn.disabled = !checkbox.checked;
+            });
+
+            confirmBtn.addEventListener('click', function() {
+                if (!checkbox.checked) return;
+                localStorage.setItem(CONSENT_LICENSE_KEY, 'true');
+                localStorage.setItem('license_agreed_timestamp', Date.now().toString());
+                localStorage.setItem('license_version', LICENSE_VERSION);
+                if (window.UIUtils) {
+                    UIUtils.showToast('Лицензия принята. Благодарим за понимание.', 'success', 5000);
+                } else {
+                    alert('Лицензия принята. Благодарим за понимание.');
                 }
-                checkbox.addEventListener('change', function() {
-                    confirmBtn.disabled = !checkbox.checked;
-                    if (checkbox.checked) {
-                        confirmBtn.textContent = 'Я подтверждаю и принимаю';
-                    } else {
-                        confirmBtn.textContent = 'Подтвердите согласие';
-                    }
-                });
-                confirmBtn.addEventListener('click', function() {
-                    if (!checkbox.checked) return;
-                    localStorage.setItem(CONSENT_LICENSE_KEY, 'true');
-                    localStorage.setItem('license_agreed_timestamp', Date.now().toString());
-                    confirmBtn.textContent = '✓ Подтверждено';
-                    confirmBtn.disabled = true;
-                    // Показываем уведомление
-                    if (window.UIUtils) {
-                        UIUtils.showToast('Благодарим за ознакомление с лицензией. Вы можете скачивать игры.', 'success', 5000);
-                    } else {
-                        alert('Благодарим за ознакомление с лицензией.');
-                    }
-                });
-            }
+                // Перезагружаем страницу, чтобы показать сообщение о принятии
+                location.reload();
+            });
         });
     </script>
 </head>
@@ -320,7 +361,7 @@
         <!-- Предупреждение о модах -->
         <div class="warning-banner" style="border-left-color: #ff9800;">
             <i class="fas fa-puzzle-piece" style="font-size: 24px; margin-right: 12px; color: #ff9800;"></i>
-            <strong>⚠️ Моды сторонних разработчиков:</strong>
+            <strong>⚠️ <span data-lang="licenseModDisclaimerTitle">Моды сторонних разработчиков:</span></strong>
             <span data-lang="licenseModDisclaimer">Загрузка...</span>
         </div>
 
@@ -334,17 +375,10 @@
             <div class="small-note" style="margin-top: 20px;" data-lang="licenseContactNote">Ответ обычно в течение суток</div>
         </div>
 
-        <!-- Блок подтверждения ознакомления -->
-        <div class="consent-box">
-            <i class="fas fa-gavel" style="font-size: 32px; color: var(--accent); margin-bottom: 12px; display: block;"></i>
-            <h3>Подтверждение ознакомления</h3>
-            <p class="text-secondary">Я подтверждаю, что внимательно прочитал(а) лицензионное соглашение, понимаю все риски (включая медицинские) и принимаю условия.</p>
-            <label class="consent-checkbox">
-                <input type="checkbox" id="license-consent-checkbox">
-                <span>Я ознакомлен(а) и согласен(на) с условиями лицензии</span>
-            </label>
-            <button class="consent-btn" id="confirm-license-btn" disabled>Подтвердите согласие</button>
-            <div class="small-note" style="margin-top: 16px;">* Подтверждение сохраняется в вашем браузере и не передаётся разработчикам. Оно служит для вашей же безопасности и напоминания.</div>
+        <!-- Блок подтверждения ознакомления (динамический) -->
+        <div class="consent-box" id="consent-box-content">
+            <!-- Сюда вставляется либо форма, либо сообщение о принятии -->
+            <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
         </div>
 
         <div class="small-note" style="margin-top: 30px; padding: 20px 0; text-align: center; border-top: 1px solid var(--border);">
