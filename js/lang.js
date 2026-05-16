@@ -42,7 +42,7 @@
             localStorage.setItem(cacheKey, JSON.stringify(data));
             return data;
         } catch (err) {
-            console.warn(`Не удалось загрузить перевод для ${lang}`, err);
+            console.warn(`Failed to load translations for ${lang}`, err);
             return null;
         }
     }

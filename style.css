@@ -1,5 +1,4 @@
 /* style.css — точка входа, импортирует все модули. */
-
 @import url('css/variables.css');
 @import url('css/base.css');
 @import url('css/typography.css');
@@ -250,11 +249,7 @@
     border-radius: 14px;
     padding: 14px;
     border: 1px solid var(--border);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-.feature-item:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-hover);
+    transition: transform 0.2s;
 }
 .feature-item h3 {
     margin: 0 0 6px;
@@ -393,7 +388,16 @@
     backdrop-filter: blur(2px);
 }
 
-/* ========== Улучшения для страницы лицензии ========== */
+/* ========== Улучшения страницы лицензии ========== */
+.license-hero {
+    background: linear-gradient(135deg, rgba(30,30,48,0.95), rgba(20,20,35,0.98));
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+    padding: 48px 24px;
+    margin-bottom: 32px;
+    border-radius: 24px;
+    backdrop-filter: blur(8px);
+}
 .license-section-card {
     transition: transform 0.2s, box-shadow 0.2s;
     background: var(--bg-card-gradient);
@@ -408,6 +412,29 @@
     box-shadow: var(--shadow-hover);
     border-color: var(--accent);
 }
+.license-section-card h2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 26px;
+    margin-bottom: 20px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 16px;
+}
+.license-section-card h2 i {
+    font-size: 28px;
+}
+.license-badge {
+    background: var(--bg-inner-gradient);
+    border-radius: 60px;
+    padding: 4px 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
 .license-quick {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -419,37 +446,46 @@
     border-radius: 20px;
     padding: 24px;
     border: 1px solid var(--border);
-    transition: transform 0.2s, border-color 0.2s;
+    transition: transform 0.2s;
 }
 .license-card:hover {
     transform: translateY(-5px);
     border-color: var(--accent);
+    box-shadow: var(--shadow-hover);
 }
-.consent-box {
-    background: var(--bg-inner-gradient);
-    border-radius: 20px;
-    padding: 24px;
-    text-align: center;
-    border: 2px solid var(--accent);
-    margin: 32px 0 24px;
-    transition: box-shadow 0.2s;
+.license-card h3 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 22px;
+    margin-bottom: 16px;
+    color: var(--accent);
 }
-.consent-box:hover {
-    box-shadow: 0 0 15px rgba(61,158,179,0.3);
+.license-card ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
 }
+.license-card li {
+    padding: 8px 0 8px 28px;
+    position: relative;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+.license-card li i {
+    position: absolute;
+    left: 0;
+    top: 10px;
+}
+.license-card.allowed li i { color: #4caf50; }
+.license-card.forbidden li i { color: #f44336; }
+.license-card.obligation li i { color: #ff9800; }
 .contact-card {
     background: linear-gradient(145deg, #2a2a40, #1e1e30);
     border-radius: 20px;
     padding: 28px;
     text-align: center;
     border: 1px solid rgba(61,158,179,0.3);
-    margin-bottom: 28px;
-}
-.warning-banner {
-    background: rgba(244,67,54,0.15);
-    border-left: 4px solid #f44336;
-    padding: 16px 24px;
-    border-radius: 16px;
     margin-bottom: 28px;
 }
 .telegram-link {
@@ -470,7 +506,68 @@
     box-shadow: 0 10px 20px rgba(0,136,204,0.3);
     color: white;
 }
-/* Адаптив для лицензии */
+.consent-box {
+    background: var(--bg-inner-gradient);
+    border-radius: 20px;
+    padding: 24px;
+    text-align: center;
+    border: 2px solid var(--accent);
+    margin: 32px 0 24px;
+}
+.consent-checkbox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 20px 0;
+    font-size: 16px;
+    cursor: pointer;
+}
+.consent-checkbox input {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+.consent-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 12px 32px;
+    border-radius: 40px;
+    font-size: 18px;
+    font-family: 'Russo One', sans-serif;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.consent-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(61,158,179,0.4);
+}
+.consent-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.accepted-message {
+    background: rgba(76,175,80,0.15);
+    border: 1px solid #4caf50;
+    border-radius: 16px;
+    padding: 20px;
+    margin: 20px 0;
+    color: #4caf50;
+}
+.warning-banner {
+    background: rgba(244,67,54,0.15);
+    border-left: 4px solid #f44336;
+    padding: 16px 24px;
+    border-radius: 16px;
+    margin-bottom: 28px;
+}
+.small-note {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 24px;
+}
 @media (max-width: 700px) {
     .license-quick { grid-template-columns: 1fr; gap: 16px; }
     .license-section-card h2 { font-size: 22px; }
