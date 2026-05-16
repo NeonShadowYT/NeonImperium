@@ -56,10 +56,28 @@ function initTiltEffect() {
     });
 }
 
-// Параллакс для шапок игр (на десктопе)
+// Параллакс для шапок игр (на десктопе) с исправлением затенения при скролле
 function initHeaderParallax() {
     const headers = document.querySelectorAll('.game-header');
     if (headers.length === 0) return;
+
+    // Функция сброса позиции фона
+    const resetBackground = () => {
+        headers.forEach(header => {
+            header.style.backgroundPosition = '';
+        });
+    };
+
+    // Обработчик скролла: сбрасываем позицию, если мышь не над шапкой
+    let scrollTimeout;
+    window.addEventListener('scroll', () => {
+        if (scrollTimeout) clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            // Если ни на одной шапке нет наведения, сбрасываем
+            const isHovering = Array.from(headers).some(h => h.matches(':hover'));
+            if (!isHovering) resetBackground();
+        }, 50);
+    });
 
     headers.forEach(header => {
         const handleMove = throttleAnimation((e) => {
@@ -80,7 +98,7 @@ function initHeaderParallax() {
         
         header.addEventListener('mousemove', handleMove);
         header.addEventListener('mouseleave', () => {
-            header.style.backgroundPosition = 'center';
+            header.style.backgroundPosition = '';
         });
     });
 }

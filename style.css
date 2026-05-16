@@ -60,8 +60,7 @@
 }
 .feature-item:hover {
     transform: translateY(-4px);
-    background: var(--bg-inner-gradient);
-    box-shadow: var(--shadow-hover);
+    /* Убираем затемнение: не меняем фон и не добавляем тень */
 }
 .feature-banner {
     width: calc(100% + 32px);
