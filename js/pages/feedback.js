@@ -1,4 +1,4 @@
-// feedback.js — обратная связь на страницах игр (использует OfflineQueue)
+// js/pages/feedback.js — обратная связь на страницах игр (использует OfflineQueue)
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable } = window.Utils;
     const { extractAllowed, extractSummary, decryptPrivateBody } = window.GithubCore;
@@ -11,19 +11,13 @@
     let currentGame, currentTab = 'all', currentPage = 1, hasMore = true, isLoading = false;
     let allIssues = [], container, grid, sentinel, observer, currentAbort, currentUser;
 
-    // ---------- Офлайн-очередь для реакций ----------
     async function addReactionWithSync(issueNumber, content) {
         try {
             await addReaction(issueNumber, content);
             window.UIFeedback.invalidateCache(issueNumber);
         } catch (err) {
             if (isNetworkError(err)) {
-                await queueMutation({
-                    type: 'addReaction',
-                    issueNumber,
-                    content,
-                    timestamp: Date.now()
-                });
+                await queueMutation({ type: 'addReaction', issueNumber, content, timestamp: Date.now() });
                 await registerSync();
                 window.UIUtils.showToast('Реакция будет отправлена при восстановлении связи', 'info');
             } else {
@@ -38,12 +32,7 @@
             window.UIFeedback.invalidateCache(issueNumber);
         } catch (err) {
             if (isNetworkError(err)) {
-                await queueMutation({
-                    type: 'removeReaction',
-                    issueNumber,
-                    reactionId,
-                    timestamp: Date.now()
-                });
+                await queueMutation({ type: 'removeReaction', issueNumber, reactionId, timestamp: Date.now() });
                 await registerSync();
                 window.UIUtils.showToast('Реакция будет удалена при восстановлении связи', 'info');
             } else {
@@ -56,7 +45,6 @@
         return err instanceof TypeError || err.name === 'AbortError' || err.message === 'Failed to fetch';
     }
 
-    // ---------- Основная логика ----------
     document.addEventListener('DOMContentLoaded', init);
     function init() {
         const section = document.getElementById('feedback-section');
@@ -85,7 +73,6 @@
         const postId = new URLSearchParams(location.search).get('post');
         if (postId) setTimeout(() => openPostFromUrl(postId), 1000);
 
-        // Попытка обработать накопившуюся очередь
         processQueue().catch(console.warn);
     }
 

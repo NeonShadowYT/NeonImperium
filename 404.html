@@ -17,7 +17,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" media="print" onload="this.media='all'">
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'"><noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
     <script src="js/utils.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/github-client.js" defer></script>
@@ -25,6 +26,13 @@
     <script src="js/core/github-auth.js" defer></script>
     <script src="js/offline-queue.js" defer></script>
     <script src="js/lang.js" defer></script>
+    <style>
+        /* Critical CSS */
+        body { margin:0; background:#0f0f1a; font-family: 'Russo One', sans-serif; }
+        .nav-bar { background:#1e1e30; border-radius:40px; padding:6px 20px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+        .page { max-width:1200px; margin:0 auto; width:100%; }
+        .loading-spinner { text-align:center; padding:30px; color:#c0c0d0; }
+    </style>
 </head>
 <body>
     <div class="page">

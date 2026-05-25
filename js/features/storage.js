@@ -22,12 +22,31 @@
     let observer = null;
     let gridContainer = null;
 
-    // ---------- Gist API с использованием GithubAPI.fetch и правильной обработкой ошибок ----------
-    async function gistFetch(gistId, token) {
+    async function authFetch(url, options = {}) {
+        const token = currentToken || localStorage.getItem('github_token');
+        const headers = {
+            'Accept': 'application/vnd.github.v3+json',
+            ...options.headers
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        try {
+            const response = await fetch(url, { ...options, headers, signal: controller.signal });
+            clearTimeout(timeoutId);
+            return response;
+        } catch (err) {
+            clearTimeout(timeoutId);
+            throw err;
+        }
+    }
+
+    async function gistFetch(gistId) {
         const url = `https://api.github.com/gists/${gistId}`;
         try {
-            const resp = await GithubAPI.fetch(url);
-            // Проверяем статус ответа напрямую
+            const resp = await authFetch(url);
             if (resp.status === 404) return null;
             if (!resp.ok) {
                 const errorText = await resp.text();
@@ -40,9 +59,9 @@
         }
     }
 
-    async function gistUpdate(gistId, content, token) {
+    async function gistUpdate(gistId, content) {
         const url = `https://api.github.com/gists/${gistId}`;
-        const resp = await GithubAPI.fetch(url, {
+        const resp = await authFetch(url, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ files: { [GIST_FILENAME]: { content } } })
@@ -51,12 +70,12 @@
             const errorText = await resp.text();
             throw new Error(`Gist update error: ${resp.status} ${errorText}`);
         }
-        return resp.json();
+        return await resp.json();
     }
 
-    async function gistCreate(content, token) {
+    async function gistCreate(content) {
         const url = 'https://api.github.com/gists';
-        const resp = await GithubAPI.fetch(url, {
+        const resp = await authFetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ description: GIST_DESCRIPTION, public: false, files: { [GIST_FILENAME]: { content } } })
@@ -69,12 +88,11 @@
         return gist.id;
     }
 
-    async function gistDelete(gistId, token) {
+    async function gistDelete(gistId) {
         const url = `https://api.github.com/gists/${gistId}`;
-        await GithubAPI.fetch(url, { method: 'DELETE' }).catch(() => {});
+        await authFetch(url, { method: 'DELETE' }).catch(() => {});
     }
 
-    // ---------- Дебаунс сохранения ----------
     function triggerDebouncedSave() {
         if (!debouncedSaveBookmarks) {
             debouncedSaveBookmarks = debounce(doSaveBookmarks, 2000);
@@ -94,12 +112,11 @@
                 };
                 const content = JSON.stringify(payload);
                 if (gistId) {
-                    await gistUpdate(gistId, content, currentToken);
+                    await gistUpdate(gistId, content);
                 } else {
-                    const newGistId = await gistCreate(content, currentToken);
+                    const newGistId = await gistCreate(content);
                     gistId = newGistId;
                     localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
-                    // Инвалидируем кэш, чтобы следующий loadBookmarks забрал свежие данные
                     cacheRemoveByPrefix(`gh_api_https://api.github.com/gists/${gistId}`);
                     cacheRemoveByPrefix(`bookmarks_${currentUser}`);
                 }
@@ -107,11 +124,9 @@
             }
         } catch (err) {
             console.error('Ошибка синхронизации закладок:', err);
-            // Не выбрасываем исключение, чтобы не прерывать работу UI
         }
     }
 
-    // ---------- Загрузка закладок ----------
     async function loadBookmarks() {
         if (!currentToken) {
             try {
@@ -132,7 +147,7 @@
             }
 
             gistId = JSON.parse(stored).gistId;
-            const gist = await gistFetch(gistId, currentToken);
+            const gist = await gistFetch(gistId);
             if (!gist) {
                 const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
                 if (local.length > 0) {
@@ -193,7 +208,6 @@
         }
     }
 
-    // ---------- UI (без изменений) ----------
     function syncUIFromBookmarks() {
         if (!gridContainer) return;
 
@@ -354,7 +368,6 @@
         triggerDebouncedSave();
     }
 
-    // ---------- Публичные методы ----------
     async function addBookmark(bookmarkData) {
         if (!currentUser) {
             UIUtils.showToast('Войдите в аккаунт GitHub с правами gist', 'error');
@@ -550,7 +563,7 @@
 
     async function resetStorage() {
         if (gistId && currentToken) {
-            await gistDelete(gistId, currentToken).catch(() => {});
+            await gistDelete(gistId).catch(() => {});
         }
         gistId = null;
         localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);

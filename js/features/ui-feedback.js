@@ -15,7 +15,6 @@
     const reactionLocks = new Map();
     const previewImageCache = new Map();
 
-    // ---------- Реакции (с офлайн-очередью) ----------
     async function addReactionWithQueue(issueNumber, content) {
         try {
             await window.GithubAPI.addReaction(issueNumber, content);
@@ -50,7 +49,6 @@
         return err instanceof TypeError || err.name === 'AbortError' || err.message === 'Failed to fetch';
     }
 
-    // ---------- Кэширование и вспомогательные функции ----------
     function getCached(key, cacheMap) {
         const cached = cacheMap.get(key);
         return (cached && Date.now() - cached.timestamp < CACHE_TTL) ? cached.data : null;
@@ -205,7 +203,6 @@
         setTimeout(() => document.addEventListener('click', close), 100);
     }
 
-    // ---------- Комментарии ----------
     function renderComments(container, comments, currentUser, issueNumber) {
         const hasRepo = window.GithubAuth.hasScope('repo');
         const regular = comments.filter(c => !c.body.trim().startsWith('!vote'));
@@ -292,7 +289,6 @@
         return comments;
     }
 
-    // ---------- Опросы ----------
     function extractPollFromBody(body) {
         const match = /<!-- poll: (.*?) -->/.exec(body);
         if (match) try { return JSON.parse(match[1]); } catch { return null; }
@@ -372,7 +368,6 @@
         }
     }
 
-    // ---------- Полноэкранная модалка ----------
     async function loadReactionsAndComments(container, item, currentUser) {
         const reactionsDiv = createElement('div', 'reactions-container');
         const commentsDiv = createElement('div', 'feedback-comments');
@@ -501,7 +496,8 @@
                 }
             }).then(() => window.UIUtils.showToast('Добавлено в избранное', 'success'))
               .catch(err => {
-                  if (err.message === 'password_required') window.UIUtils.showToast('Для сохранения нужен мастер-пароль', 'error');
+                  if (err.message === 'not_logged_in') window.UIUtils.showToast('Войдите в аккаунт с правами gist', 'error');
+                  else if (err.message === 'duplicate') window.UIUtils.showToast('Уже в избранном', 'info');
                   else window.UIUtils.showToast('Ошибка: ' + err.message, 'error');
               });
         });
@@ -554,7 +550,6 @@
         return allowed.split(',').map(s=>s.trim()).includes(currentUser);
     }
 
-    // ---------- Редактор (создание/редактирование постов) ----------
     function openEditorModal(mode, data, postType = 'feedback') {
         if (!window.GithubAuth.hasScope('repo')) return window.UIUtils.showToast('Нужен scope "repo"', 'error');
         const currentUser = window.GithubAuth.getCurrentUser();
