@@ -1,4 +1,4 @@
-// js/features/storage.js – надёжное хранилище закладок на GitHub Gist (без пароля)
+// js/features/storage.js – надёжное хранилище закладок на GitHub Gist
 (function() {
     const { CONFIG, escapeHtml, createElement, formatDate, debounce, cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, loadModule } = GithubCore;
 
@@ -18,10 +18,12 @@
 
     let debouncedSaveBookmarks = null;
     let lastServerTimestamp = null;
+    let isSaving = false;
 
     let observer = null;
     let gridContainer = null;
 
+    // ---------- Вспомогательная функция для fetch с токеном ----------
     async function authFetch(url, options = {}) {
         const token = currentToken || localStorage.getItem('github_token');
         const headers = {
@@ -43,6 +45,7 @@
         }
     }
 
+    // ---------- Gist API ----------
     async function gistFetch(gistId) {
         const url = `https://api.github.com/gists/${gistId}`;
         try {
@@ -93,6 +96,7 @@
         await authFetch(url, { method: 'DELETE' }).catch(() => {});
     }
 
+    // ---------- Сохранение (с дебаунсом и немедленное) ----------
     function triggerDebouncedSave() {
         if (!debouncedSaveBookmarks) {
             debouncedSaveBookmarks = debounce(doSaveBookmarks, 2000);
@@ -100,33 +104,49 @@
         debouncedSaveBookmarks();
     }
 
-    async function doSaveBookmarks() {
+    async function saveBookmarksImmediately() {
+        if (isSaving) return;
+        isSaving = true;
         try {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentBookmarks));
-
-            if (currentToken) {
-                const payload = {
-                    version: 2,
-                    bookmarks: currentBookmarks,
-                    timestamp: Date.now()
-                };
-                const content = JSON.stringify(payload);
-                if (gistId) {
-                    await gistUpdate(gistId, content);
-                } else {
-                    const newGistId = await gistCreate(content);
-                    gistId = newGistId;
-                    localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
-                    cacheRemoveByPrefix(`gh_api_https://api.github.com/gists/${gistId}`);
-                    cacheRemoveByPrefix(`bookmarks_${currentUser}`);
-                }
-                lastServerTimestamp = Date.now();
-            }
-        } catch (err) {
-            console.error('Ошибка синхронизации закладок:', err);
+            await doSaveBookmarks(true);
+        } finally {
+            isSaving = false;
         }
     }
 
+    async function doSaveBookmarks(forceImmediate = false) {
+        try {
+            // Всегда сохраняем в localStorage
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentBookmarks));
+
+            if (!currentToken) return;
+
+            const payload = {
+                version: 2,
+                bookmarks: currentBookmarks,
+                timestamp: Date.now()
+            };
+            const content = JSON.stringify(payload);
+            
+            if (gistId) {
+                await gistUpdate(gistId, content);
+                console.log('[storage] Gist updated successfully');
+            } else {
+                const newGistId = await gistCreate(content);
+                gistId = newGistId;
+                localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
+                cacheRemoveByPrefix(`gh_api_https://api.github.com/gists/${gistId}`);
+                cacheRemoveByPrefix(`bookmarks_${currentUser}`);
+                console.log('[storage] Gist created successfully', newGistId);
+            }
+            lastServerTimestamp = Date.now();
+        } catch (err) {
+            console.error('Ошибка синхронизации закладок:', err);
+            // Не выбрасываем, чтобы не прерывать UI
+        }
+    }
+
+    // ---------- Загрузка закладок ----------
     async function loadBookmarks() {
         if (!currentToken) {
             try {
@@ -199,7 +219,7 @@
     async function initializeGistWithLocal(localBookmarks) {
         try {
             currentBookmarks = localBookmarks;
-            await doSaveBookmarks();
+            await saveBookmarksImmediately();
             UIUtils.showToast('Закладки восстановлены из локальной копии и сохранены в Gist', 'info');
             return { bookmarks: localBookmarks };
         } catch (err) {
@@ -208,6 +228,7 @@
         }
     }
 
+    // ---------- UI ----------
     function syncUIFromBookmarks() {
         if (!gridContainer) return;
 
@@ -277,7 +298,7 @@
                 });
             }
         } else if (bookmark.thumbnail) {
-            mediaContainer.innerHTML = `<img src="${escapeHtml(bookmark.thumbnail)}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;">`;
+            mediaContainer.innerHTML = `<img src="${escapeHtml(bookmark.thumbnail)}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">`;
             card.dataset.mediaLoaded = 'true';
         } else {
             mediaContainer.innerHTML = '';
@@ -365,9 +386,11 @@
         if (index === -1) return;
         currentBookmarks.splice(index, 1);
         syncUIFromBookmarks();
-        triggerDebouncedSave();
+        // Немедленно сохраняем в Gist (без дебаунса) для удаления
+        await saveBookmarksImmediately();
     }
 
+    // ---------- Публичные методы ----------
     async function addBookmark(bookmarkData) {
         if (!currentUser) {
             UIUtils.showToast('Войдите в аккаунт GitHub с правами gist', 'error');
@@ -412,7 +435,7 @@
         const res = await loadBookmarks();
         currentBookmarks = (res.bookmarks || []).filter(b => b.id !== id);
         syncUIFromBookmarks();
-        triggerDebouncedSave();
+        await saveBookmarksImmediately();
     }
 
     async function openStorageModal() {
