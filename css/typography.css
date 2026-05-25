@@ -52,3 +52,11 @@ h3 {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+@font-face {
+  font-family: 'Russo One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/russoone/v18/Z9XUDmZRWg6M1LvRYsHOz8mJ.woff2) format('woff2');
+}

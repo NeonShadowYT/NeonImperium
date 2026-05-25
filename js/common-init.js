@@ -1,6 +1,57 @@
-// js/common-init.js – shared lazy‑loading, donation button, Service Worker registration with update notification
+// js/common-init.js – lazy load page scripts, fallback for marked.js, donation button, SW registration, download consent
+(function() {
+  // ---------- Ленивая загрузка скриптов страниц (pages/*.js) ----------
+  function loadPageScripts() {
+    const path = location.pathname;
+    let page = path.split('/').pop().replace('.html', '');
+    if (page === '' || page === 'index') page = 'index';
+    const scriptMap = {
+      'index': 'js/pages/news-feed.js',
+      'starve-neon': 'js/pages/feedback.js,js/pages/game-updates.js,js/platform.js,js/features/background-gifs.js',
+      'alpha-01': 'js/pages/feedback.js,js/pages/game-updates.js',
+      'gc-adven': 'js/pages/feedback.js,js/pages/game-updates.js',
+      'license': ''
+    };
+    const scripts = scriptMap[page] ? scriptMap[page].split(',') : [];
+    for (const src of scripts) {
+      if (src && !document.querySelector(`script[src="${src}"]`)) {
+        const s = document.createElement('script');
+        s.src = src;
+        s.defer = true;
+        document.head.appendChild(s);
+      }
+    }
+  }
 
-(function () {
+  // ---------- Fallback для marked.js (если не загрузился) ----------
+  function ensureMarked() {
+    if (typeof marked !== 'undefined') return Promise.resolve();
+    return new Promise((resolve) => {
+      const fallbackCDN = 'https://unpkg.com/marked/marked.min.js';
+      const s = document.createElement('script');
+      s.src = fallbackCDN;
+      s.onload = () => resolve();
+      s.onerror = () => {
+        console.warn('Marked failed to load, using minimal fallback');
+        window.marked = { parse: (txt) => txt.replace(/\n/g, '<br>') };
+        resolve();
+      };
+      document.head.appendChild(s);
+    });
+  }
+
+  // ---------- Предзагрузка шрифта (только один вес) ----------
+  function preloadFont() {
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'font';
+    link.href = 'https://fonts.gstatic.com/s/russoone/v18/Z9XUDmZRWg6M1LvRYsHOz8mJ.woff2';
+    link.crossOrigin = 'anonymous';
+    link.type = 'font/woff2';
+    document.head.appendChild(link);
+  }
+
+  // ---------- Lazy YouTube iframes (без изменений) ----------
   function initLazyYT() {
     if ('IntersectionObserver' in window) {
       const obs = new IntersectionObserver((entries) => {
@@ -33,6 +84,7 @@
     }
   }
 
+  // ---------- Donate button (оставляем как есть) ----------
   function initDonateBtn() {
     const btn = document.getElementById('donate-button');
     if (!btn) return;
@@ -67,10 +119,10 @@
     updateText();
   }
 
+  // ---------- Service Worker с уведомлением об обновлении ----------
   function showUpdateNotification() {
     if (sessionStorage.getItem('update_notification_shown')) return;
     sessionStorage.setItem('update_notification_shown', '1');
-
     const note = document.createElement('div');
     note.id = 'update-notification';
     note.style.cssText =
@@ -92,9 +144,7 @@
     navigator.serviceWorker.register('sw.js')
       .then(registration => {
         console.log('Service Worker зарегистрирован, scope:', registration.scope);
-        if (registration.waiting) {
-          showUpdateNotification();
-        }
+        if (registration.waiting) showUpdateNotification();
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (!newWorker) return;
@@ -108,21 +158,17 @@
       .catch(error => console.error('Ошибка регистрации Service Worker:', error));
   }
 
-  // ---------- Обязательное предупреждение 18+ и медицинских рисков перед скачиванием ----------
+  // ---------- Согласие на скачивание ----------
   function initDownloadConsent() {
     const CONSENT_KEY = 'download_consent_given_v1';
     const consentGiven = localStorage.getItem(CONSENT_KEY) === 'true';
-
     function showConsentModal(callback) {
       const modal = document.createElement('div');
       modal.className = 'modal modal-fullscreen';
       modal.style.backgroundColor = 'rgba(0,0,0,0.85)';
       modal.innerHTML = `
         <div class="modal-content-full" style="max-width: 550px; text-align: center;">
-          <div class="modal-header">
-            <h2>⚠️ ВАЖНОЕ ПРЕДУПРЕЖДЕНИЕ</h2>
-            <button class="modal-close"><i class="fas fa-times"></i></button>
-          </div>
+          <div class="modal-header"><h2>⚠️ ВАЖНОЕ ПРЕДУПРЕЖДЕНИЕ</h2><button class="modal-close"><i class="fas fa-times"></i></button></div>
           <div class="modal-body" style="text-align: left;">
             <p><strong>Подтвердите, прежде чем скачать игру:</strong></p>
             <ul style="margin: 15px 0; padding-left: 20px;">
@@ -142,21 +188,12 @@
       document.body.appendChild(modal);
       modal.classList.add('active');
       document.body.style.overflow = 'hidden';
-
-      const closeModal = () => {
-        modal.remove();
-        document.body.style.overflow = '';
-      };
-
+      const closeModal = () => { modal.remove(); document.body.style.overflow = ''; };
       const checkbox = modal.querySelector('#consent-checkbox');
       const confirmBtn = modal.querySelector('#consent-confirm');
       const cancelBtn = modal.querySelector('#consent-cancel');
       const closeBtn = modal.querySelector('.modal-close');
-
-      checkbox.addEventListener('change', () => {
-        confirmBtn.disabled = !checkbox.checked;
-      });
-
+      checkbox.addEventListener('change', () => { confirmBtn.disabled = !checkbox.checked; });
       const onConfirm = () => {
         if (!checkbox.checked) return;
         localStorage.setItem(CONSENT_KEY, 'true');
@@ -164,50 +201,47 @@
         closeModal();
         if (callback) callback();
       };
-
       confirmBtn.addEventListener('click', onConfirm);
       cancelBtn.addEventListener('click', closeModal);
       closeBtn.addEventListener('click', closeModal);
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
-      });
+      modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
     }
-
     function handleDownloadClick(e) {
       let target = e.target.closest('.download-button, #github-download-btn, .cloud-buttons a, .store-buttons a');
       if (!target) return;
-      if (target.classList && target.classList.contains('disabled')) {
-        e.preventDefault();
-        return;
-      }
+      if (target.classList && target.classList.contains('disabled')) { e.preventDefault(); return; }
       if (consentGiven) return;
-
       e.preventDefault();
       const originalHref = target.href;
       if (!originalHref || originalHref === '#') return;
-
-      showConsentModal(() => {
-        window.open(originalHref, target.target || '_blank');
-      });
+      showConsentModal(() => { window.open(originalHref, target.target || '_blank'); });
     }
-
     document.body.addEventListener('click', handleDownloadClick);
   }
 
-  window.addEventListener('unhandledrejection', function(event) {
-    if (event.reason && event.reason.message && event.reason.message.includes('Failed to fetch')) {
-      event.preventDefault();
-    }
-  }, { capture: true });
-
+  // ---------- Запуск инициализации ----------
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
+      preloadFont();
+      loadPageScripts();
+      ensureMarked().then(() => {
+        if (window.initNewsFeed) window.initNewsFeed();
+        if (window.initFeedback) window.initFeedback();
+        if (window.initGameUpdates) window.initGameUpdates();
+      });
       initLazyYT();
       initDonateBtn();
       registerServiceWorker();
       initDownloadConsent();
     });
   } else {
+    preloadFont();
+    loadPageScripts();
+    ensureMarked().then(() => {
+      if (window.initNewsFeed) window.initNewsFeed();
+      if (window.initFeedback) window.initFeedback();
+      if (window.initGameUpdates) window.initGameUpdates();
+    });
     initLazyYT();
     initDonateBtn();
     registerServiceWorker();
