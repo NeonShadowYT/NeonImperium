@@ -1,6 +1,10 @@
-// js/core/github-auth.js — аутентификация GitHub, устойчивая к сетевым сбоям
+// js/core/github-auth.js — аутентификация GitHub с использованием GitHubClient
 (function() {
-    const { CONFIG, createElement, cacheGet, cacheSet, cacheRemove } = GithubCore;
+    // Зависимости: Utils и GitHubClient
+    const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove } = window.Utils;
+    const GitHubClient = window.GitHubClient;
+    const client = window.GitHubAPIClient;
+
     const TOKEN_KEY = 'github_token';
     const USER_CACHE_KEY = 'github_user';
     const SCOPES_CACHE_KEY = 'github_scopes';
@@ -14,6 +18,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         const navBar = document.querySelector('.nav-bar');
         if (!navBar) return;
+
         profileContainer = createElement('div', 'nav-profile', {}, { role: 'button', tabindex: '0' });
         const langSwitcher = document.querySelector('.lang-switcher');
         navBar.insertBefore(profileContainer, langSwitcher || null);
@@ -21,12 +26,29 @@
         restoreSession();
     });
 
+    // Обновление токена в GitHubClient (единая точка)
+    function updateClientToken(token) {
+        if (client && client.updateToken) {
+            client.updateToken(token);
+        } else if (window.GitHubAPIClient && window.GitHubAPIClient.updateToken) {
+            window.GitHubAPIClient.updateToken(token);
+        }
+        // Также обновляем экземпляр, если он создан через конструктор
+        if (window._githubClientInstance && window._githubClientInstance.setToken) {
+            window._githubClientInstance.setToken(token);
+        }
+    }
+
     async function restoreSession() {
         const token = localStorage.getItem(TOKEN_KEY);
         if (!token) {
             renderLoggedOutUI();
             return;
         }
+
+        // Обновляем клиент токеном
+        updateClientToken(token);
+
         const cachedUser = sessionStorage.getItem(USER_CACHE_KEY);
         const cachedScopes = sessionStorage.getItem(SCOPES_CACHE_KEY);
         if (cachedUser) {
@@ -35,29 +57,31 @@
                 currentUserLogin = user.login;
                 currentScopes = cachedScopes ? JSON.parse(cachedScopes) : [];
                 renderLoggedInUI(user);
-                if (CONFIG.ALLOWED_AUTHORS.includes(user.login)) preloadAdminModules();
+                if (window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(user.login)) preloadAdminModules();
                 return;
-            } catch {}
+            } catch (e) {}
         }
+
         try {
             const userData = await silentValidateToken(token);
             if (userData) {
-                currentUserLogin = userData.login;
+                currentUserLogin = userData.user.login;
                 currentScopes = userData.scopes;
                 sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
                 sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
                 renderLoggedInUI(userData.user);
-                if (CONFIG.ALLOWED_AUTHORS.includes(userData.user.login)) preloadAdminModules();
+                if (window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(userData.user.login)) preloadAdminModules();
                 window.dispatchEvent(new CustomEvent('github-login-success', {
                     detail: { login: userData.user.login, scopes: userData.scopes }
                 }));
                 return;
             }
         } catch (err) {
-            if (err.message === 'unauthorized') {
+            if (err.message === 'unauthorized' || err.message?.includes('401')) {
                 localStorage.removeItem(TOKEN_KEY);
                 sessionStorage.removeItem(USER_CACHE_KEY);
                 sessionStorage.removeItem(SCOPES_CACHE_KEY);
+                updateClientToken(null);
                 renderLoggedOutUI();
                 window.UIUtils?.showToast('Токен недействителен. Войдите снова.', 'error');
                 return;
@@ -98,7 +122,7 @@
                     <h3 id="github-modal-title" style="margin:0; color:var(--accent);">Вход через GitHub</h3>
                 </div>
                 <div class="modal-instructions" style="max-height:320px; overflow-y:auto; padding-right:8px; font-size:14px; line-height:1.6; color:var(--text-secondary);">
-                    <p>Чтобы получить токен, перейдите в <a href="https://github.com/settings/tokens" target="_blank">Personal access tokens</a>, создайте classic токен с правами repo и gist.</p>
+                    <p>Чтобы получить токен, перейдите в <a href="https://github.com/settings/tokens" target="_blank">Personal access tokens</a>, создайте classic токен с правами <strong>repo</strong> и <strong>gist</strong>.</p>
                 </div>
                 <div style="position:relative; margin:20px 0;">
                     <input type="password" id="github-token-input" placeholder="github_pat_xxx..." autocomplete="off" style="width:100%; padding:14px 16px; padding-right:44px; background:var(--bg-primary); border:1px solid var(--border); border-radius:16px; color:var(--text-primary); font-family:monospace;">
@@ -149,21 +173,24 @@
                 localStorage.setItem(TOKEN_KEY, token);
                 sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
                 sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
+                // Обновляем токен в GitHubClient
+                updateClientToken(token);
             }
             renderLoggedInUI(userData.user);
             closeModal();
             window.dispatchEvent(new CustomEvent('github-login-success', {
                 detail: { login: userData.user.login, scopes: userData.scopes }
             }));
-            if (CONFIG.ALLOWED_AUTHORS.includes(userData.user.login)) preloadAdminModules();
+            if (window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(userData.user.login)) preloadAdminModules();
         } catch (err) {
             clearTimeout(timeoutId);
             if (err.name === 'AbortError') {
                 window.UIUtils?.showToast('Таймаут соединения. Попробуйте снова.', 'error');
-            } else if (err.message === 'unauthorized') {
+            } else if (err.message === 'unauthorized' || err.message?.includes('401')) {
                 localStorage.removeItem(TOKEN_KEY);
                 sessionStorage.removeItem(USER_CACHE_KEY);
                 sessionStorage.removeItem(SCOPES_CACHE_KEY);
+                updateClientToken(null);
                 renderLoggedOutUI();
                 window.UIUtils?.showToast('Неверный токен', 'error');
             } else {
@@ -175,13 +202,12 @@
     function renderLoggedInUI(user) {
         const hasRepo = currentScopes.includes('repo');
         const hasGist = currentScopes.includes('gist');
-        // Пункт «Хранилище» только при наличии разрешения gist
         const storageItem = hasGist
             ? `<div class="profile-dropdown-item" data-action="storage"><i class="fas fa-box-archive"></i> Хранилище</div>`
             : '';
         profileContainer.innerHTML = `
             <img src="${user.avatar_url || 'images/default-avatar.webp'}" alt="${user.login}" class="nav-profile-avatar" onerror="this.src='images/default-avatar.webp'" width="32" height="32">
-            <span class="nav-profile-login">${user.login}</span>
+            <span class="nav-profile-login">${escapeHtml(user.login)}</span>
             <i class="fas fa-chevron-right nav-profile-chevron"></i>
             <div class="profile-dropdown">
                 <div class="profile-dropdown-item" data-action="profile"><i class="fas fa-user"></i> Профиль</div>
@@ -234,15 +260,29 @@
 
     async function handleAction(action) {
         switch (action) {
-            case 'login': modal.classList.add('active'); tokenInput.focus(); break;
-            case 'about': window.UIUtils?.showToast('Вход нужен для постов и хранилища. Требуются scopes repo и gist.', 'info', 8000); break;
-            case 'profile': if (currentUserLogin) window.open(`https://github.com/${currentUserLogin}`, '_blank'); break;
-            case 'token-info': window.UIUtils?.showToast(`Вы ${currentUserLogin}, scopes: ${currentScopes.join(', ') || 'нет'}`, 'info', 6000); break;
+            case 'login':
+                modal.classList.add('active');
+                tokenInput.focus();
+                break;
+            case 'about':
+                window.UIUtils?.showToast('Вход нужен для постов и хранилища. Требуются scopes repo и gist.', 'info', 8000);
+                break;
+            case 'profile':
+                if (currentUserLogin) window.open(`https://github.com/${currentUserLogin}`, '_blank');
+                break;
+            case 'token-info':
+                window.UIUtils?.showToast(`Вы ${currentUserLogin}, scopes: ${currentScopes.join(', ') || 'нет'}`, 'info', 6000);
+                break;
             case 'storage':
                 if (!currentScopes.includes('gist')) return window.UIUtils?.showToast('Нужен gist scope', 'error');
-                GithubCore.loadModule('js/features/storage.js').then(() => window.BookmarkStorage?.openStorageModal());
+                if (!window.BookmarkStorage) {
+                    try { await window.Utils.loadModule('js/features/storage.js'); } catch { return window.UIUtils?.showToast('Ошибка загрузки хранилища', 'error'); }
+                }
+                window.BookmarkStorage?.openStorageModal();
                 break;
-            case 'revoke-token': window.open('https://github.com/settings/tokens', '_blank'); break;
+            case 'revoke-token':
+                window.open('https://github.com/settings/tokens', '_blank');
+                break;
             case 'clear-cache':
                 const lastClear = localStorage.getItem(LAST_CLEAR_KEY);
                 if (lastClear && Date.now() - parseInt(lastClear) < CLEAR_COOLDOWN) {
@@ -257,6 +297,7 @@
             case 'logout':
                 localStorage.removeItem(TOKEN_KEY);
                 sessionStorage.clear();
+                updateClientToken(null);
                 currentUserLogin = null;
                 currentScopes = [];
                 renderLoggedOutUI();
@@ -268,8 +309,8 @@
     }
 
     function preloadAdminModules() {
-        GithubCore.loadModule('js/features/editor.js').catch(() => {});
-        GithubCore.loadModule('js/features/ui-feedback.js').catch(() => {});
+        window.Utils.loadModule('js/features/editor.js').catch(() => {});
+        window.Utils.loadModule('js/features/ui-feedback.js').catch(() => {});
     }
 
     window.GithubAuth = {
@@ -277,6 +318,8 @@
         getToken: () => localStorage.getItem(TOKEN_KEY),
         getScopes: () => currentScopes,
         hasScope: scope => currentScopes.includes(scope),
-        isAdmin: () => currentUserLogin && CONFIG.ALLOWED_AUTHORS.includes(currentUserLogin)
+        isAdmin: () => currentUserLogin && window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(currentUserLogin),
+        // Для обновления токена извне
+        updateToken: updateClientToken
     };
 })();

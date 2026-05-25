@@ -1,65 +1,61 @@
-// feedback.js — обратная связь на страницах игр
+// feedback.js — обратная связь на страницах игр (использует OfflineQueue)
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
-    const { loadIssues, loadReactions, addReaction, removeReaction } = GithubAPI;
-    const { renderReactions, openFullModal, openEditorModal, canViewPost } = UIFeedback;
-    const { getCurrentUser, isAdmin } = GithubAuth;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody } = window.Utils;
+    const { loadIssues, loadReactions, addReaction, removeReaction } = window.GithubAPI;
+    const { renderReactions, openFullModal, openEditorModal, canViewPost } = window.UIFeedback;
+    const { getCurrentUser, isAdmin } = window.GithubAuth;
+    const { queueMutation, registerSync, processQueue } = window.OfflineQueue;
 
     const ITEMS_PER_PAGE = 10, MAX_DISPLAY = 30, CACHE_TTL = 5*60*1000;
     let currentGame, currentTab = 'all', currentPage = 1, hasMore = true, isLoading = false;
     let allIssues = [], container, grid, sentinel, observer, currentAbort, currentUser;
 
-    // ================== Background Sync: IndexedDB ==================
-    function openSyncDB() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open('NeonImperiumSync', 1);
-            request.onupgradeneeded = event => {
-                const db = event.target.result;
-                if (!db.objectStoreNames.contains('mutations')) {
-                    db.createObjectStore('mutations', { keyPath: 'id', autoIncrement: true });
-                }
-                if (!db.objectStoreNames.contains('credentials')) {
-                    db.createObjectStore('credentials', { keyPath: 'key' });
-                }
-            };
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async function queueMutation(mutation) {
-        const db = await openSyncDB();
-        const tx = db.transaction('mutations', 'readwrite');
-        const store = tx.objectStore('mutations');
-        await store.add(mutation);
-        await tx.done;
-    }
-
-    async function registerSync() {
+    // ---------- Офлайн-очередь для реакций ----------
+    async function addReactionWithSync(issueNumber, content) {
         try {
-            const registration = await navigator.serviceWorker.ready;
-            await registration.sync.register('github-mutations');
-            console.log('Background sync registered');
-        } catch (e) {
-            console.warn('Background sync not supported', e);
+            await addReaction(issueNumber, content);
+            window.UIFeedback.invalidateCache(issueNumber);
+        } catch (err) {
+            if (isNetworkError(err)) {
+                await queueMutation({
+                    type: 'addReaction',
+                    issueNumber,
+                    content,
+                    timestamp: Date.now()
+                });
+                await registerSync();
+                window.UIUtils.showToast('Реакция будет отправлена при восстановлении связи', 'info');
+            } else {
+                throw err;
+            }
         }
     }
 
-    async function sendTokenToSW(token) {
-        if (!navigator.serviceWorker?.controller) return;
-        navigator.serviceWorker.controller.postMessage({ type: 'SAVE_TOKEN', token });
+    async function removeReactionWithSync(issueNumber, reactionId) {
+        try {
+            await removeReaction(issueNumber, reactionId);
+            window.UIFeedback.invalidateCache(issueNumber);
+        } catch (err) {
+            if (isNetworkError(err)) {
+                await queueMutation({
+                    type: 'removeReaction',
+                    issueNumber,
+                    reactionId,
+                    timestamp: Date.now()
+                });
+                await registerSync();
+                window.UIUtils.showToast('Реакция будет удалена при восстановлении связи', 'info');
+            } else {
+                throw err;
+            }
+        }
     }
 
-    window.addEventListener('github-login-success', () => {
-        const token = GithubAuth.getToken();
-        if (token) sendTokenToSW(token);
-    });
-
-    if (GithubAuth.getToken()) {
-        sendTokenToSW(GithubAuth.getToken());
+    function isNetworkError(err) {
+        return err instanceof TypeError || err.name === 'AbortError' || err.message === 'Failed to fetch';
     }
-    // =================================================================
 
+    // ---------- Основная логика ----------
     document.addEventListener('DOMContentLoaded', init);
     function init() {
         const section = document.getElementById('feedback-section');
@@ -87,17 +83,20 @@
 
         const postId = new URLSearchParams(location.search).get('post');
         if (postId) setTimeout(() => openPostFromUrl(postId), 1000);
+
+        // Попытка обработать накопившуюся очередь
+        processQueue().catch(console.warn);
     }
 
     async function openPostFromUrl(id) {
         try {
-            const issue = await GithubAPI.loadIssue(id);
+            const issue = await window.GithubAPI.loadIssue(id);
             const gameLabel = issue.labels.find(l => l.name.startsWith('game:'));
             if (!gameLabel || gameLabel.name.split(':')[1] !== currentGame) return;
             const item = { id: issue.number, title: issue.title, body: issue.body, author: issue.user.login, date: new Date(issue.created_at), game: currentGame, labels: issue.labels.map(l=>l.name) };
-            if (!canViewPost(issue.body, item.labels, currentUser)) return UIUtils.showToast('Нет доступа', 'error');
+            if (!canViewPost(issue.body, item.labels, currentUser)) return window.UIUtils.showToast('Нет доступа', 'error');
             openFullModal(item);
-        } catch { UIUtils.showToast('Ошибка', 'error'); }
+        } catch { window.UIUtils.showToast('Ошибка', 'error'); }
     }
 
     function checkAuthAndRender() {
@@ -150,7 +149,7 @@
             allIssues = reset ? deduplicateByNumber(issues) : deduplicateByNumber([...allIssues, ...issues]);
             currentPage = page;
             filterAndDisplay(reset);
-        } catch { if (controller.signal.aborted) return; UIUtils.showToast('Ошибка загрузки', 'error'); }
+        } catch { if (controller.signal.aborted) return; window.UIUtils.showToast('Ошибка загрузки', 'error'); }
         finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; isLoading = false; }
     }
 
@@ -177,17 +176,17 @@
         if (issue.labels.some(l=>l.name==='private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
             try { summary = extractSummary(decryptPrivateBody(issue.body, allowed)) || ''; } catch {}
         }
-        const card = GithubCore.createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
+        const card = window.Utils.createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
         card.dataset.issueNumber = issue.number;
-        const inner = GithubCore.createElement('div', 'project-card');
-        const imgW = GithubCore.createElement('div', 'image-wrapper', { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', fontSize: '48px' });
+        const inner = window.Utils.createElement('div', 'project-card');
+        const imgW = window.Utils.createElement('div', 'image-wrapper', { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', fontSize: '48px' });
         imgW.textContent = icon;
-        const title = GithubCore.createElement('h3');
+        const title = window.Utils.createElement('h3');
         title.textContent = issue.title.length > 70 ? issue.title.slice(0,70)+'…' : issue.title;
-        const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+        const preview = window.Utils.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
         preview.textContent = summary.replace(/\n/g,' ');
-        const reactionsDiv = GithubCore.createElement('div', 'reactions-container');
-        const footer = GithubCore.createElement('div', '', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '10px' });
+        const reactionsDiv = window.Utils.createElement('div', 'reactions-container');
+        const footer = window.Utils.createElement('div', '', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '10px' });
         footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span>`;
         inner.append(imgW, title, preview, reactionsDiv, footer);
         card.appendChild(inner);
@@ -203,66 +202,20 @@
         const key = `list_reactions_${num}`;
         const cached = window.reactionsListCache?.get(key);
         if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-            renderReactions(container, num, cached.data, currentUser, addReaction, removeReaction);
+            renderReactions(container, num, cached.data, currentUser, addReactionWithSync, removeReactionWithSync);
             return;
         }
         try {
             const reactions = await loadReactions(num);
             if (!window.reactionsListCache) window.reactionsListCache = new Map();
             window.reactionsListCache.set(key, { data: reactions, timestamp: Date.now() });
-            renderReactions(container, num, reactions, currentUser, addReaction, removeReaction);
+            renderReactions(container, num, reactions, currentUser, addReactionWithSync, removeReactionWithSync);
         } catch {}
     }
 
-    async function addReactionWithSync(issueNumber, content) {
-        try {
-            await addReaction(issueNumber, content);
-            invalidateCache(issueNumber);
-        } catch (err) {
-            if (isNetworkError(err)) {
-                await queueMutation({
-                    type: 'addReaction',
-                    issueNumber,
-                    content,
-                    timestamp: Date.now()
-                });
-                await registerSync();
-                UIUtils.showToast('Реакция будет отправлена при восстановлении связи', 'info');
-            } else {
-                throw err;
-            }
-        }
-    }
-
-    async function removeReactionWithSync(issueNumber, reactionId) {
-        try {
-            await removeReaction(issueNumber, reactionId);
-            invalidateCache(issueNumber);
-        } catch (err) {
-            if (isNetworkError(err)) {
-                await queueMutation({
-                    type: 'removeReaction',
-                    issueNumber,
-                    reactionId,
-                    timestamp: Date.now()
-                });
-                await registerSync();
-                UIUtils.showToast('Реакция будет удалена при восстановлении связи', 'info');
-            } else {
-                throw err;
-            }
-        }
-    }
-
-    function isNetworkError(err) {
-        return err instanceof TypeError || err.name === 'AbortError' || err.message === 'Failed to fetch';
-    }
-
-    window.FeedbackSync = {
+    // Экспорт для внешнего использования (не требуется, но оставим)
+    window.FeedbackPage = {
         addReactionWithSync,
-        removeReactionWithSync,
-        queueMutation,
-        registerSync,
-        isNetworkError
+        removeReactionWithSync
     };
 })();

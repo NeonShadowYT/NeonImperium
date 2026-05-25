@@ -1,217 +1,82 @@
-// js/core/github-api.js — GitHub REST API с кэшированием и фоновым обновлением
+// js/core/github-api.js – обёртка для совместимости со старым кодом
+// Использует GitHubClient из github-client.js
 (function() {
-    const { CONFIG, cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, createAbortable } = GithubCore;
-    const TOKEN_KEY = 'github_token';
+    const client = window.GitHubAPIClient;
 
+    // Получение токена (для обратной совместимости)
     function getToken() {
-        return localStorage.getItem(TOKEN_KEY);
+        return localStorage.getItem('github_token');
     }
 
-    async function githubFetch(url, options = {}) {
-        const token = getToken();
-        const headers = {
-            'Accept': 'application/vnd.github.v3+json',
-            ...options.headers
-        };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        const response = await fetch(url, { ...options, headers });
-        if (!response.ok) {
-            let errorMsg = `HTTP ${response.status}`;
-            try {
-                const errorData = await response.json();
-                errorMsg = errorData.message || errorMsg;
-            } catch {}
-            throw new Error(errorMsg);
-        }
-        return response;
-    }
-
-    function cacheKeyForUrl(url, params = {}) {
-        const query = new URLSearchParams(params).toString();
-        return `gh_api_${url}${query ? '?' + query : ''}`;
-    }
-
-    function invalidateRelated(prefix) {
-        cacheRemoveByPrefix(prefix);
-    }
-
-    const pendingRequests = new Map();
-
-    function getOrCreatePromise(key, factory, ttlKey = null) {
-        if (pendingRequests.has(key)) return pendingRequests.get(key);
-        const promise = factory().then(result => {
-            if (ttlKey) cacheSet(key, result);
-            return result;
-        }).finally(() => {
-            pendingRequests.delete(key);
-        });
-        pendingRequests.set(key, promise);
-        return promise;
-    }
-
-    async function loadIssues({ labels = '', state = 'open', per_page = 20, page = 1, signal } = {}) {
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=${state}&per_page=${per_page}&page=${page}&labels=${encodeURIComponent(labels)}`;
-        const cacheKey = cacheKeyForUrl(url, { state, per_page, page, labels });
-        const cached = cacheGet(cacheKey);
-        if (cached && !signal?.aborted) {
-            fetch(url, {
-                headers: { 'Authorization': `Bearer ${getToken()}` },
-                signal: AbortSignal.timeout(8000)
-            }).then(r => r.json()).then(data => cacheSet(cacheKey, data)).catch(() => {});
-            return cached;
-        }
-        return getOrCreatePromise(cacheKey, async () => {
-            const response = await githubFetch(url, { signal });
-            return response.json();
-        }, cacheKey);
+    // Обёртки для удобства вызова (сохраняем старые имена функций)
+    async function loadIssues(params) {
+        return client.issues().load(params);
     }
 
     async function loadIssue(issueNumber, signal) {
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`;
-        const cacheKey = cacheKeyForUrl(url);
-        const cached = cacheGet(cacheKey);
-        if (cached && !signal?.aborted) {
-            fetch(url, {
-                headers: { 'Authorization': `Bearer ${getToken()}` },
-                signal: AbortSignal.timeout(5000)
-            }).then(r => r.json()).then(data => cacheSet(cacheKey, data)).catch(() => {});
-            return cached;
-        }
-        return getOrCreatePromise(cacheKey, async () => {
-            const response = await githubFetch(url, { signal });
-            const data = await response.json();
-            cacheSet(cacheKey, data);
-            return data;
-        }, cacheKey);
+        return client.issues().loadOne(issueNumber, signal);
     }
 
     async function createIssue(title, body, labels) {
-        // Ensure labels is an array
-        if (!Array.isArray(labels)) {
-            console.warn('[createIssue] labels is not an array, converting', labels);
-            labels = labels ? [labels] : [];
-        }
-        console.log('[createIssue] Sending labels:', labels);
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues`;
-        const response = await githubFetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, body, labels })
-        });
-        const issue = await response.json();
-        invalidateRelated(`gh_api_https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues`);
-        window.dispatchEvent(new CustomEvent('github-issue-created', { detail: issue }));
-        return issue;
+        return client.issues().create(title, body, labels);
     }
 
-    async function updateIssue(issueNumber, data) {
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`;
-        const response = await githubFetch(url, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        const result = await response.json();
-        invalidateRelated(`gh_api_${url}`);
-        return result;
+    async function updateIssue(issueNumber, updates) {
+        return client.issues().update(issueNumber, updates);
     }
 
     async function closeIssue(issueNumber) {
-        return updateIssue(issueNumber, { state: 'closed' });
+        return client.issues().close(issueNumber);
     }
 
     async function loadComments(issueNumber, signal) {
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`;
-        const cacheKey = cacheKeyForUrl(url);
-        const cached = cacheGet(cacheKey);
-        if (cached && !signal?.aborted) {
-            fetch(url, {
-                headers: { 'Authorization': `Bearer ${getToken()}` },
-                signal: AbortSignal.timeout(8000)
-            }).then(r => r.json()).then(data => cacheSet(cacheKey, data)).catch(() => {});
-            return cached;
-        }
-        return getOrCreatePromise(cacheKey, async () => {
-            const response = await githubFetch(url, { signal });
-            const data = await response.json();
-            cacheSet(cacheKey, data);
-            return data;
-        }, cacheKey);
+        return client.comments().load(issueNumber, signal);
     }
 
     async function addComment(issueNumber, body) {
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`;
-        const response = await githubFetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ body })
-        });
-        const result = await response.json();
-        invalidateRelated(`gh_api_https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`);
-        return result;
+        return client.comments().add(issueNumber, body);
     }
 
     async function updateComment(commentId, body) {
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${commentId}`;
-        const response = await githubFetch(url, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ body })
-        });
-        return response.json();
+        return client.comments().update(commentId, body);
     }
 
     async function deleteComment(commentId) {
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${commentId}`;
-        await githubFetch(url, { method: 'DELETE' });
-        invalidateRelated('gh_api_https://api.github.com/repos/');
+        return client.comments().delete(commentId);
     }
 
     async function loadReactions(issueNumber, signal) {
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
-        const cacheKey = cacheKeyForUrl(url);
-        const cached = cacheGet(cacheKey);
-        if (cached && !signal?.aborted) {
-            fetch(url, {
-                headers: { 'Authorization': `Bearer ${getToken()}` },
-                signal: AbortSignal.timeout(8000)
-            }).then(r => r.json()).then(data => cacheSet(cacheKey, data)).catch(() => {});
-            return cached;
-        }
-        return getOrCreatePromise(cacheKey, async () => {
-            const response = await githubFetch(url, { signal });
-            const data = await response.json();
-            cacheSet(cacheKey, data);
-            return data;
-        }, cacheKey);
+        return client.reactions().load(issueNumber, signal);
     }
 
     async function addReaction(issueNumber, content) {
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
-        const response = await githubFetch(url, {
-            method: 'POST',
-            headers: { 'Accept': 'application/vnd.github.squirrel-girl-preview+json' },
-            body: JSON.stringify({ content })
-        });
-        const result = await response.json();
-        invalidateRelated(`gh_api_https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`);
-        return result;
+        return client.reactions().add(issueNumber, content);
     }
 
     async function removeReaction(issueNumber, reactionId) {
-        const id = parseInt(reactionId, 10);
-        if (isNaN(id)) throw new Error('Invalid reaction ID');
-        const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions/${id}`;
-        await githubFetch(url, { method: 'DELETE' });
-        invalidateRelated(`gh_api_https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`);
+        return client.reactions().remove(issueNumber, reactionId);
     }
 
+    // Прямой fetch (для обратной совместимости)
+    async function githubFetch(url, options = {}) {
+        return client.request(url, options);
+    }
+
+    // Экспорт в window.GithubAPI
     window.GithubAPI = {
         getToken,
         fetch: githubFetch,
-        loadIssues, loadIssue, createIssue, updateIssue, closeIssue,
-        loadComments, addComment, updateComment, deleteComment,
-        loadReactions, addReaction, removeReaction
+        loadIssues,
+        loadIssue,
+        createIssue,
+        updateIssue,
+        closeIssue,
+        loadComments,
+        addComment,
+        updateComment,
+        deleteComment,
+        loadReactions,
+        addReaction,
+        removeReaction
     };
 })();
