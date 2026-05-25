@@ -26,16 +26,13 @@
                 const db = event.target.result;
                 const oldVersion = event.oldVersion;
 
-                // Создаём хранилище мутаций
                 if (!db.objectStoreNames.contains(STORE_MUTATIONS)) {
                     db.createObjectStore(STORE_MUTATIONS, { keyPath: 'id', autoIncrement: true });
                 }
-                // Создаём хранилище для токена (если нужно)
                 if (!db.objectStoreNames.contains(STORE_CREDENTIALS)) {
                     db.createObjectStore(STORE_CREDENTIALS, { keyPath: 'key' });
                 }
 
-                // При обновлении с версии 1: добавляем индексы для сортировки
                 if (oldVersion < 2 && db.objectStoreNames.contains(STORE_MUTATIONS)) {
                     const store = request.transaction.objectStore(STORE_MUTATIONS);
                     if (!store.indexNames.contains('timestamp')) {
@@ -60,20 +57,24 @@
         const result = await store.add(item);
         await tx.done;
         console.log('[OfflineQueue] Mutation queued:', mutation.type, result);
-        // После добавления пытаемся зарегистрировать синхронизацию
         registerSync().catch(console.warn);
         return result;
     }
 
-    // ---- Получение всех мутаций из очереди ----
+    // ---- Получение всех мутаций из очереди (всегда возвращает массив) ----
     async function getAllMutations() {
-        const db = await openDB();
-        const tx = db.transaction(STORE_MUTATIONS, 'readonly');
-        const store = tx.objectStore(STORE_MUTATIONS);
-        const index = store.index('timestamp');
-        const mutations = await index.getAll();
-        await tx.done;
-        return mutations;
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_MUTATIONS, 'readonly');
+            const store = tx.objectStore(STORE_MUTATIONS);
+            const index = store.index('timestamp');
+            const mutations = await index.getAll();
+            await tx.done;
+            return mutations || []; // гарантируем массив
+        } catch (err) {
+            console.error('[OfflineQueue] Failed to get mutations:', err);
+            return [];
+        }
     }
 
     // ---- Удаление мутации по id ----
@@ -114,7 +115,6 @@
     async function processMutation(mutation) {
         const { type, issueNumber, content, reactionId, commentId, body, title, labels, issueData } = mutation;
 
-        // Проверяем, загружен ли GitHubAPI
         if (!window.GithubAPI) {
             await loadModule('js/core/github-api.js');
         }
@@ -154,7 +154,7 @@
 
         try {
             const mutations = await getAllMutations();
-            if (mutations.length === 0) return;
+            if (!mutations.length) return;
 
             console.log(`[OfflineQueue] Processing ${mutations.length} mutations`);
 
@@ -165,14 +165,11 @@
                     console.log(`[OfflineQueue] Mutation ${mut.id} (${mut.type}) succeeded`);
                 } catch (err) {
                     console.error(`[OfflineQueue] Mutation ${mut.id} failed:`, err);
-                    // Увеличиваем счётчик попыток
                     const newRetries = (mut.retries || 0) + 1;
                     if (newRetries >= 5) {
-                        // Слишком много ошибок – удаляем мутацию
                         console.warn(`[OfflineQueue] Mutation ${mut.id} exceeded retries, removing`);
                         await deleteMutation(mut.id);
                     } else {
-                        // Обновляем timestamp и retries
                         const db = await openDB();
                         const tx = db.transaction(STORE_MUTATIONS, 'readwrite');
                         const store = tx.objectStore(STORE_MUTATIONS);
@@ -182,12 +179,13 @@
                     }
                 }
             }
+        } catch (err) {
+            console.error('[OfflineQueue] Process queue error:', err);
         } finally {
             isProcessing = false;
         }
     }
 
-    // Дебаунс для обработки очереди (чтобы не вызывать слишком часто)
     const debouncedProcessQueue = debounce(processQueue, 2000);
 
     // ---- Регистрация background sync (через Service Worker) ----
@@ -197,7 +195,6 @@
             console.log('[OfflineQueue] Background sync not supported');
             return;
         }
-
         try {
             const registration = await navigator.serviceWorker.ready;
             await registration.sync.register(SYNC_TAG);
@@ -227,13 +224,11 @@
                 onSyncEvent();
             }
         });
-        // Также при загрузке страницы проверить, есть ли мутации в очереди
         window.addEventListener('load', () => {
             debouncedProcessQueue();
         });
     }
 
-    // Экспорт глобального объекта
     window.OfflineQueue = {
         queueMutation,
         processQueue,
