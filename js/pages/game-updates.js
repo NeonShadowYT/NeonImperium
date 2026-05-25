@@ -1,10 +1,11 @@
 // game-updates.js — обновления игры с админ-кнопкой
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody } = GithubCore;
-    const { loadIssues } = GithubAPI;
-    const { openFullModal } = UIFeedback;
-    const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable } = window.GithubCore;
+    const { loadIssues } = window.GithubAPI;
+    const { openFullModal } = window.UIFeedback;
+    const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const DEFAULT_IMAGE = 'images/default-news.webp';
+    const { extractAllowed, extractSummary, decryptPrivateBody, stripHtml } = window.GithubCore;
 
     let currentAbort = null, currentGame = null;
 
@@ -25,7 +26,7 @@
             if (!cont) return;
             const newPost = { number: issue.number, title: issue.title, body: issue.body, date: new Date(issue.created_at), author: issue.user.login, game: currentGame, labels: issue.labels.map(l=>l.name) };
             let grid = cont.querySelector('.projects-grid');
-            if (!grid) { grid = GithubCore.createElement('div', 'projects-grid'); cont.innerHTML = ''; cont.appendChild(grid); }
+            if (!grid) { grid = window.GithubCore.createElement('div', 'projects-grid'); cont.innerHTML = ''; cont.appendChild(grid); }
             grid.insertBefore(createUpdateCard(newPost), grid.firstChild);
         });
         window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
@@ -60,27 +61,30 @@
             });
             if (posts.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; return; }
             container.innerHTML = '';
-            const grid = GithubCore.createElement('div', 'projects-grid');
+            const grid = window.GithubCore.createElement('div', 'projects-grid');
             container.appendChild(grid);
             posts.forEach(p => grid.appendChild(createUpdateCard(p)));
 
             const parent = container.parentNode;
             let header = parent.querySelector('.updates-header');
             if (!header) {
-                header = GithubCore.createElement('div', 'updates-header', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' });
+                header = window.GithubCore.createElement('div', 'updates-header', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' });
                 header.innerHTML = '<h2 data-lang="updatesTitle">Обновления</h2>';
                 parent.insertBefore(header, container);
             }
             const existing = header.querySelector('.admin-update-btn');
             if (isAdmin() && hasScope('repo')) {
                 if (!existing) {
-                    const btn = GithubCore.createElement('button', 'button admin-update-btn');
+                    const btn = window.GithubCore.createElement('button', 'button admin-update-btn');
                     btn.innerHTML = '<i class="fas fa-plus"></i> Добавить обновление';
-                    btn.addEventListener('click', () => UIFeedback.openEditorModal('new', { game: currentGame }, 'update'));
+                    btn.addEventListener('click', () => window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update'));
                     header.appendChild(btn);
                 }
             } else if (existing) existing.remove();
-        } catch { container.innerHTML = '<p class="error-message">Ошибка загрузки</p>'; }
+        } catch (err) {
+            console.error('Ошибка загрузки обновлений:', err);
+            container.innerHTML = '<p class="error-message">Ошибка загрузки</p>';
+        }
         finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
     }
 
@@ -91,19 +95,19 @@
         if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
             try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
         }
-        const card = GithubCore.createElement('div', 'project-card-link no-tilt tilt-card', { cursor: 'pointer' });
-        const inner = GithubCore.createElement('div', 'project-card');
+        const card = window.GithubCore.createElement('div', 'project-card-link no-tilt tilt-card', { cursor: 'pointer' });
+        const inner = window.GithubCore.createElement('div', 'project-card');
         const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
-        const imgW = GithubCore.createElement('div', 'image-wrapper');
-        const img = GithubCore.createElement('img', 'project-image', {}, { src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy' });
+        const imgW = window.GithubCore.createElement('div', 'image-wrapper');
+        const img = window.GithubCore.createElement('img', 'project-image', {}, { src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy' });
         img.onerror = () => img.src = DEFAULT_IMAGE;
         imgW.appendChild(img);
-        const title = GithubCore.createElement('h3');
+        const title = window.GithubCore.createElement('h3');
         title.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
-        const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
+        const meta = window.GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
-        const summary = extractSummary(previewBody) || GithubCore.stripHtml(previewBody).substring(0,120)+'…';
-        const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+        const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
+        const preview = window.GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
         preview.textContent = summary;
         inner.append(imgW, title, meta, preview);
         card.appendChild(inner);

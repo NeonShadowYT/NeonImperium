@@ -22,14 +22,18 @@
     let observer = null;
     let gridContainer = null;
 
-    // ---------- Gist API с использованием GithubAPI.fetch ----------
+    // ---------- Gist API с использованием GithubAPI.fetch и правильной обработкой ошибок ----------
     async function gistFetch(gistId, token) {
         const url = `https://api.github.com/gists/${gistId}`;
         try {
             const resp = await GithubAPI.fetch(url);
+            // Проверяем статус ответа напрямую
             if (resp.status === 404) return null;
-            if (!resp.ok) throw new Error(`Gist fetch error: ${resp.status}`);
-            return resp.json();
+            if (!resp.ok) {
+                const errorText = await resp.text();
+                throw new Error(`Gist fetch error: ${resp.status} ${errorText}`);
+            }
+            return await resp.json();
         } catch (e) {
             console.error('gistFetch failed:', e);
             return null;
@@ -43,7 +47,10 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ files: { [GIST_FILENAME]: { content } } })
         });
-        if (!resp.ok) throw new Error(`Gist update error: ${resp.status}`);
+        if (!resp.ok) {
+            const errorText = await resp.text();
+            throw new Error(`Gist update error: ${resp.status} ${errorText}`);
+        }
         return resp.json();
     }
 
@@ -54,7 +61,10 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ description: GIST_DESCRIPTION, public: false, files: { [GIST_FILENAME]: { content } } })
         });
-        if (!resp.ok) throw new Error(`Gist create error: ${resp.status}`);
+        if (!resp.ok) {
+            const errorText = await resp.text();
+            throw new Error(`Gist create error: ${resp.status} ${errorText}`);
+        }
         const gist = await resp.json();
         return gist.id;
     }
@@ -97,7 +107,7 @@
             }
         } catch (err) {
             console.error('Ошибка синхронизации закладок:', err);
-            throw err;
+            // Не выбрасываем исключение, чтобы не прерывать работу UI
         }
     }
 
@@ -177,12 +187,13 @@
             await doSaveBookmarks();
             UIUtils.showToast('Закладки восстановлены из локальной копии и сохранены в Gist', 'info');
             return { bookmarks: localBookmarks };
-        } catch {
+        } catch (err) {
+            console.error('Ошибка инициализации Gist из локальных данных:', err);
             return { bookmarks: localBookmarks };
         }
     }
 
-    // ---------- UI ----------
+    // ---------- UI (без изменений) ----------
     function syncUIFromBookmarks() {
         if (!gridContainer) return;
 

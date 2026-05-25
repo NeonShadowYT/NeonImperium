@@ -1,6 +1,7 @@
 // js/features/ui-feedback.js — интерфейс обратной связи (модалки, редактор, реакции, комментарии)
 (function() {
-    const { escapeHtml, renderMarkdown, extractAllowed, decryptPrivateBody, createElement, loadModule } = window.Utils;
+    const { escapeHtml, renderMarkdown, createElement, loadModule } = window.Utils;
+    const { extractAllowed, extractSummary, decryptPrivateBody } = window.GithubCore;
     const { queueMutation, registerSync, processQueue } = window.OfflineQueue;
 
     const REACTION_TYPES = [

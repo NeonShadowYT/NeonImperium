@@ -1,6 +1,7 @@
 // feedback.js — обратная связь на страницах игр (использует OfflineQueue)
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable, extractSummary, extractAllowed, decryptPrivateBody } = window.Utils;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable } = window.Utils;
+    const { extractAllowed, extractSummary, decryptPrivateBody } = window.GithubCore;
     const { loadIssues, loadReactions, addReaction, removeReaction } = window.GithubAPI;
     const { renderReactions, openFullModal, openEditorModal, canViewPost } = window.UIFeedback;
     const { getCurrentUser, isAdmin } = window.GithubAuth;
@@ -213,7 +214,6 @@
         } catch {}
     }
 
-    // Экспорт для внешнего использования (не требуется, но оставим)
     window.FeedbackPage = {
         addReactionWithSync,
         removeReactionWithSync
