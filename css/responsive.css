@@ -4,7 +4,6 @@
 @media (max-width: 900px) {
     .nav-bar { flex-wrap: nowrap; padding: 6px 10px; gap: 5px; }
     .nav-links { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; justify-content: flex-start; }
-    /* убрано правило для -webkit-scrollbar */
     .lang-switcher { flex-shrink: 0; margin-left: auto; }
     .projects-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
 }
@@ -45,7 +44,7 @@
     .feedback-header { flex-direction: column; align-items: stretch; }
     .feedback-header .button { width: 100%; }
     .feedback-tabs { justify-content: flex-start; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-    .feedback-tabs::-webkit-scrollbar { display: none; }  /* скрываем, но не ворнинг? оставим */
+    .feedback-tabs::-webkit-scrollbar { display: none; }
     .feedback-tab { flex-shrink: 0; }
     .feedback-form .button-group { flex-direction: column; }
     .feedback-form .button { width: 100%; }

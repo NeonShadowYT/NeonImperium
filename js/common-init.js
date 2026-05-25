@@ -1,4 +1,4 @@
-// js/common-init.js – lazy load page scripts, fallback for marked.js, donation button, SW registration, download consent
+// js/common-init.js – lazy load page scripts, multiple fallbacks for marked.js, etc.
 (function() {
   // ---------- Ленивая загрузка скриптов страниц (pages/*.js) ----------
   function loadPageScripts() {
@@ -23,24 +23,47 @@
     }
   }
 
-  // ---------- Fallback для marked.js (если не загрузился) ----------
+  // ---------- Fallback для marked.js – несколько CDN ----------
   function ensureMarked() {
     if (typeof marked !== 'undefined') return Promise.resolve();
-    return new Promise((resolve) => {
-      const fallbackCDN = 'https://unpkg.com/marked/marked.min.js';
-      const s = document.createElement('script');
-      s.src = fallbackCDN;
-      s.onload = () => resolve();
-      s.onerror = () => {
-        console.warn('Marked failed to load, using minimal fallback');
+
+    const cdnList = [
+      'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
+      'https://unpkg.com/marked@11.1.1/marked.min.js',
+      'https://cdn.skypack.dev/marked',
+      'https://esm.sh/marked'
+    ];
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function tryLoad(index) {
+      if (index >= cdnList.length) {
+        console.warn('All CDNs failed, using minimal fallback');
         window.marked = { parse: (txt) => txt.replace(/\n/g, '<br>') };
-        resolve();
-      };
-      document.head.appendChild(s);
-    });
+        return;
+      }
+      try {
+        await loadScript(cdnList[index]);
+        if (typeof marked !== 'undefined') return;
+        else throw new Error('marked not defined');
+      } catch (err) {
+        console.warn(`Failed to load marked from ${cdnList[index]}, trying next`);
+        return tryLoad(index + 1);
+      }
+    }
+
+    return tryLoad(0);
   }
 
-  // ---------- Предзагрузка шрифта (только один вес) ----------
+  // ---------- Предзагрузка шрифта ----------
   function preloadFont() {
     const link = document.createElement('link');
     link.rel = 'preload';
@@ -51,7 +74,7 @@
     document.head.appendChild(link);
   }
 
-  // ---------- Lazy YouTube iframes (без изменений) ----------
+  // ---------- Lazy YouTube iframes ----------
   function initLazyYT() {
     if ('IntersectionObserver' in window) {
       const obs = new IntersectionObserver((entries) => {
@@ -84,7 +107,7 @@
     }
   }
 
-  // ---------- Donate button (оставляем как есть) ----------
+  // ---------- Donate button ----------
   function initDonateBtn() {
     const btn = document.getElementById('donate-button');
     if (!btn) return;
