@@ -3,12 +3,10 @@
     const { CONFIG, cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, createAbortable } = GithubCore;
     const TOKEN_KEY = 'github_token';
 
-    // Вспомогательные функции для токена
     function getToken() {
         return localStorage.getItem(TOKEN_KEY);
     }
 
-    // Базовый fetch‑запрос
     async function githubFetch(url, options = {}) {
         const token = getToken();
         const headers = {
@@ -29,24 +27,20 @@
         return response;
     }
 
-    // Генерация ключа кеша для GET-запроса
     function cacheKeyForUrl(url, params = {}) {
         const query = new URLSearchParams(params).toString();
         return `gh_api_${url}${query ? '?' + query : ''}`;
     }
 
-    // Инвалидация связанного кеша (например, после мутации)
     function invalidateRelated(prefix) {
         cacheRemoveByPrefix(prefix);
     }
 
-    // ------- Дедупликация параллельных запросов -------
     const pendingRequests = new Map();
 
     function getOrCreatePromise(key, factory, ttlKey = null) {
         if (pendingRequests.has(key)) return pendingRequests.get(key);
         const promise = factory().then(result => {
-            // Если указан ttlKey, кэшируем результат
             if (ttlKey) cacheSet(key, result);
             return result;
         }).finally(() => {
@@ -56,27 +50,23 @@
         return promise;
     }
 
-    // ------- Загрузка issues -------
     async function loadIssues({ labels = '', state = 'open', per_page = 20, page = 1, signal } = {}) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=${state}&per_page=${per_page}&page=${page}&labels=${encodeURIComponent(labels)}`;
         const cacheKey = cacheKeyForUrl(url, { state, per_page, page, labels });
         const cached = cacheGet(cacheKey);
         if (cached && !signal?.aborted) {
-            // Фоновое обновление
             fetch(url, {
                 headers: { 'Authorization': `Bearer ${getToken()}` },
                 signal: AbortSignal.timeout(8000)
             }).then(r => r.json()).then(data => cacheSet(cacheKey, data)).catch(() => {});
             return cached;
         }
-        // Сетевой запрос с дедупликацией
         return getOrCreatePromise(cacheKey, async () => {
             const response = await githubFetch(url, { signal });
             return response.json();
         }, cacheKey);
     }
 
-    // Загрузка одного issue
     async function loadIssue(issueNumber, signal) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`;
         const cacheKey = cacheKeyForUrl(url);
@@ -96,8 +86,13 @@
         }, cacheKey);
     }
 
-    // Создание issue
     async function createIssue(title, body, labels) {
+        // Ensure labels is an array
+        if (!Array.isArray(labels)) {
+            console.warn('[createIssue] labels is not an array, converting', labels);
+            labels = labels ? [labels] : [];
+        }
+        console.log('[createIssue] Sending labels:', labels);
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues`;
         const response = await githubFetch(url, {
             method: 'POST',
@@ -110,7 +105,6 @@
         return issue;
     }
 
-    // Обновление issue
     async function updateIssue(issueNumber, data) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`;
         const response = await githubFetch(url, {
@@ -123,12 +117,10 @@
         return result;
     }
 
-    // Закрытие issue
     async function closeIssue(issueNumber) {
         return updateIssue(issueNumber, { state: 'closed' });
     }
 
-    // Комментарии
     async function loadComments(issueNumber, signal) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`;
         const cacheKey = cacheKeyForUrl(url);
@@ -173,11 +165,9 @@
     async function deleteComment(commentId) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${commentId}`;
         await githubFetch(url, { method: 'DELETE' });
-        // Инвалидируем все комментарии, так как неизвестен issue number
         invalidateRelated('gh_api_https://api.github.com/repos/');
     }
 
-    // Реакции
     async function loadReactions(issueNumber, signal) {
         const url = `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
         const cacheKey = cacheKeyForUrl(url);

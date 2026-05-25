@@ -505,15 +505,31 @@
         return allowed.split(',').map(s=>s.trim()).includes(currentUser);
     }
 
-    // ---------- openEditorModal (с исправленным draftKey) ----------
+    // ---------- openEditorModal (исправлен: гарантия наличия меток) ----------
     function openEditorModal(mode, data, postType = 'feedback') {
         if (!GithubAuth.hasScope('repo')) return UIUtils.showToast('Нужен scope "repo"', 'error');
         const currentUser = GithubAuth.getCurrentUser();
         const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
 
-        // 🔧 Определяем draftKey ДО использования
-        const game = data.game || 'site';
-        const draftKey = `editor_draft_${postType}_${game}_${mode}`;
+        // 🔧 Определяем game для меток – принудительно получаем из data или из страницы
+        let game = data.game;
+        if (postType === 'feedback' && !game) {
+            // Попытка получить game из URL или атрибута секции feedback
+            const section = document.getElementById('feedback-section');
+            if (section && section.dataset.game) {
+                game = section.dataset.game;
+                console.warn('[openEditorModal] data.game missing, using section.dataset.game =', game);
+            } else {
+                const match = location.pathname.match(/\/([a-z0-9-]+)\.html/);
+                if (match && match[1] !== 'index') game = match[1];
+                console.warn('[openEditorModal] data.game missing, inferred from URL:', game);
+            }
+        }
+        if (postType === 'feedback' && !game) {
+            UIUtils.showToast('Не удалось определить игру. Сообщение будет создано без метки game.', 'warning');
+        }
+
+        const draftKey = `editor_draft_${postType}_${game || 'site'}_${mode}`;
 
         let previewUrl = '';
         let bodyContent = data.body || '';
@@ -628,7 +644,7 @@
             if (postType === 'comment') {
                 try {
                     await GithubAPI.addComment(data.issueNumber, body);
-                    UIUtils.clearDraft(draftKey); // теперь переменная определена
+                    UIUtils.clearDraft(draftKey);
                     closeModal();
                     window.dispatchEvent(new CustomEvent('github-comment-created', { detail: { issueNumber: data.issueNumber } }));
                     UIUtils.showToast('Комментарий добавлен', 'success');
@@ -665,13 +681,33 @@
             }
 
             let category = 'idea';
-            if (postType === 'feedback') category = modal.querySelector('#modal-category')?.value || 'idea';
-            const labels = postType === 'feedback'
-                ? [`game:${data.game}`, `type:${category}`]
-                : postType === 'news'
-                    ? ['type:news']
-                    : ['type:update', `game:${data.game}`];
+            if (postType === 'feedback') {
+                const catSelect = modal.querySelector('#modal-category');
+                if (catSelect) category = catSelect.value;
+                else console.warn('[openEditorModal] #modal-category not found');
+            }
+
+            // Формируем метки – гарантированно массив строк
+            let labels = [];
+            if (postType === 'feedback') {
+                labels = [];
+                if (game) labels.push(`game:${game}`);
+                else console.warn('[openEditorModal] game is undefined, skipping game label');
+                labels.push(`type:${category}`);
+            } else if (postType === 'news') {
+                labels = ['type:news'];
+            } else if (postType === 'update') {
+                labels = ['type:update'];
+                if (game) labels.push(`game:${game}`);
+            }
             if (isPrivate) labels.push('private');
+
+            // Убедимся, что массив не пуст
+            if (labels.length === 0) {
+                console.error('[openEditorModal] No labels generated!');
+                UIUtils.showToast('Внутренняя ошибка: не сформированы метки', 'error');
+                return;
+            }
 
             try {
                 if (mode === 'edit') {
@@ -682,7 +718,7 @@
                 UIUtils.clearDraft(draftKey);
                 closeModal();
                 if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
-                if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(data.game);
+                if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(game);
                 if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
                 UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
             } catch (err) {
@@ -691,7 +727,6 @@
         });
     }
 
-    // Утилита кэширования внешних изображений (не изменялась)
     async function replaceImagesWithDataUrls(container) {
         const images = container.querySelectorAll('img');
         for (const img of images) {

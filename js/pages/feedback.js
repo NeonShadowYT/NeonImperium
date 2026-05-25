@@ -50,17 +50,14 @@
         navigator.serviceWorker.controller.postMessage({ type: 'SAVE_TOKEN', token });
     }
 
-    // Сохраняем токен при логине
     window.addEventListener('github-login-success', () => {
         const token = GithubAuth.getToken();
         if (token) sendTokenToSW(token);
     });
 
-    // При загрузке, если токен есть, тоже отправляем
     if (GithubAuth.getToken()) {
         sendTokenToSW(GithubAuth.getToken());
     }
-
     // =================================================================
 
     document.addEventListener('DOMContentLoaded', init);
@@ -68,7 +65,10 @@
         const section = document.getElementById('feedback-section');
         if (!section) return;
         currentGame = section.dataset.game;
-        if (!currentGame) return;
+        if (!currentGame) {
+            console.warn('[feedback.js] No data-game on #feedback-section');
+            return;
+        }
         container = section.querySelector('.feedback-container');
         if (!container) return;
 
@@ -214,7 +214,6 @@
         } catch {}
     }
 
-    // Обёртки для реакций с поддержкой offline-очереди
     async function addReactionWithSync(issueNumber, content) {
         try {
             await addReaction(issueNumber, content);
@@ -259,7 +258,6 @@
         return err instanceof TypeError || err.name === 'AbortError' || err.message === 'Failed to fetch';
     }
 
-    // Экспортируем функции, чтобы можно было использовать в других частях (например, в ui-feedback.js)
     window.FeedbackSync = {
         addReactionWithSync,
         removeReactionWithSync,
