@@ -299,7 +299,18 @@
     }
 
     async function renderPostBody(container, body, issueNumber) {
-        const html = renderMarkdown(body);
+        let html;
+        try {
+            if (window.marked) {
+                marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
+                html = marked.parse(body);
+            } else {
+                html = body.replace(/\n/g, '<br>');
+            }
+        } catch (err) {
+            console.warn('Markdown parse error, using fallback', err);
+            html = body.replace(/\n/g, '<br>');
+        }
         container.innerHTML = `<div class="markdown-body">${html}</div>`;
         const pollData = extractPollFromBody(body);
         if (pollData) {
@@ -409,7 +420,7 @@
                     await queueMutation({ type: 'addComment', issueNumber: item.id, body: text, timestamp: Date.now() });
                     await registerSync();
                     window.UIUtils.showToast('Комментарий будет отправлен позже', 'info');
-                    tempDiv.remove(); // удаляем временный, потому что он не сохранится локально
+                    tempDiv.remove();
                 } else {
                     window.UIUtils.showToast('Ошибка', 'error');
                     tempDiv.remove();
@@ -502,7 +513,7 @@
 
     async function openFullModal(item) {
         const currentUser = window.GithubAuth.getCurrentUser();
-        const { modal, closeModal } = window.UIUtils.createModal(item.title, '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>', { size: 'full' });
+        const { modal, closeModal } = window.UIUtils.createModal(item.title, '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>', { size: 'full' });
         const container = modal.querySelector('.modal-body');
         const escHandler = (e) => { if (e.key === 'Escape') closeModal(); };
         document.addEventListener('keydown', escHandler);
@@ -522,14 +533,15 @@
             let finalBody = issue.body;
             const allowed = extractAllowed(issue.body);
             if (item.labels?.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-                try { finalBody = decryptPrivateBody(finalBody, allowed); } catch {}
+                try { finalBody = decryptPrivateBody(finalBody, allowed); } catch (e) { console.warn('Decrypt failed', e); }
             }
             await renderPostBody(container, finalBody, item.id);
             await loadReactionsAndComments(container, item, currentUser);
             if (currentUser) setupCommentForm(container, item, currentUser);
-        } catch {
-            container.innerHTML = '<p class="error-message">Ошибка загрузки.</p>';
-            setTimeout(() => { closeModal(); document.removeEventListener('keydown', escHandler); }, 3000);
+        } catch (err) {
+            console.error('Failed to load post:', err);
+            container.innerHTML = `<p class="error-message">Ошибка загрузки поста: ${err.message || 'неизвестная ошибка'}. Попробуйте позже.</p>`;
+            setTimeout(() => { closeModal(); document.removeEventListener('keydown', escHandler); }, 5000);
         }
     }
 
@@ -751,7 +763,6 @@
                 window.UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
             } catch (err) {
                 if (isNetworkError(err)) {
-                    // Добавляем в офлайн-очередь
                     const mutation = {
                         type: mode === 'edit' ? 'updateIssue' : 'createIssue',
                         title: titleVal,

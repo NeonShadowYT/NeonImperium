@@ -24,6 +24,17 @@
         navBar.insertBefore(profileContainer, langSwitcher || null);
         createLoginModal();
         restoreSession();
+
+        // Добавляем обработчик события для вызова модалки входа из любого места
+        window.addEventListener('github-login-requested', () => {
+            if (modal) modal.classList.add('active');
+            else {
+                // Если модалка ещё не создана (редко), создаём и показываем
+                if (!modal) createLoginModal();
+                modal.classList.add('active');
+                if (tokenInput) tokenInput.focus();
+            }
+        });
     });
 
     // Обновление токена в GitHubClient (единая точка)
@@ -33,7 +44,6 @@
         } else if (window.GitHubAPIClient && window.GitHubAPIClient.updateToken) {
             window.GitHubAPIClient.updateToken(token);
         }
-        // Также обновляем экземпляр, если он создан через конструктор
         if (window._githubClientInstance && window._githubClientInstance.setToken) {
             window._githubClientInstance.setToken(token);
         }
@@ -46,7 +56,6 @@
             return;
         }
 
-        // Обновляем клиент токеном
         updateClientToken(token);
 
         const cachedUser = sessionStorage.getItem(USER_CACHE_KEY);
@@ -173,7 +182,6 @@
                 localStorage.setItem(TOKEN_KEY, token);
                 sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
                 sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
-                // Обновляем токен в GitHubClient
                 updateClientToken(token);
             }
             renderLoggedInUI(userData.user);
@@ -319,7 +327,6 @@
         getScopes: () => currentScopes,
         hasScope: scope => currentScopes.includes(scope),
         isAdmin: () => currentUserLogin && window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(currentUserLogin),
-        // Для обновления токена извне
         updateToken: updateClientToken
     };
 })();

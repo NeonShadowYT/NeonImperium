@@ -8,7 +8,6 @@
     const LOCAL_STORAGE_KEY = 'neon_imperium_bookmarks_local';
     const SESSION_CACHE_KEY = 'bookmarks_session_cache';
 
-    // Состояние модуля
     let currentUser = null;
     let currentToken = null;
     let gistId = null;
@@ -20,7 +19,6 @@
     let debouncedSaveBookmarks = null;
     let lastServerTimestamp = null;
 
-    // Виртуализация карточек
     let observer = null;
     let gridContainer = null;
 
@@ -76,7 +74,6 @@
 
     async function doSaveBookmarks() {
         try {
-            // Всегда сохраняем локально
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentBookmarks));
 
             if (currentToken) {
@@ -89,13 +86,18 @@
                 if (gistId) {
                     await gistUpdate(gistId, content, currentToken);
                 } else {
-                    gistId = await gistCreate(content, currentToken);
+                    const newGistId = await gistCreate(content, currentToken);
+                    gistId = newGistId;
                     localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
+                    // Инвалидируем кэш, чтобы следующий loadBookmarks забрал свежие данные
+                    cacheRemoveByPrefix(`gh_api_https://api.github.com/gists/${gistId}`);
+                    cacheRemoveByPrefix(`bookmarks_${currentUser}`);
                 }
                 lastServerTimestamp = Date.now();
             }
         } catch (err) {
             console.error('Ошибка синхронизации закладок:', err);
+            throw err;
         }
     }
 
@@ -109,14 +111,11 @@
             }
         }
 
-        // Пытаемся получить из Gist
         try {
             const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
             if (!stored) {
-                // gistId отсутствует – попробуем восстановить из локального хранилища
                 const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
                 if (local.length > 0) {
-                    // Создаём новый gist с локальными данными
                     return await initializeGistWithLocal(local);
                 }
                 return { bookmarks: [], needSetup: true };
@@ -125,7 +124,6 @@
             gistId = JSON.parse(stored).gistId;
             const gist = await gistFetch(gistId, currentToken);
             if (!gist) {
-                // Gist не найден – пробуем локальные данные
                 const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
                 if (local.length > 0) {
                     return await initializeGistWithLocal(local);
@@ -135,7 +133,6 @@
 
             const file = gist.files?.[GIST_FILENAME];
             if (!file) {
-                // Нет файла – пробуем локальные
                 const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
                 if (local.length > 0) {
                     return await initializeGistWithLocal(local);
@@ -147,7 +144,6 @@
             try {
                 payload = JSON.parse(file.content);
             } catch {
-                // Битый json – пробуем локальные
                 const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
                 if (local.length > 0) {
                     return await initializeGistWithLocal(local);
@@ -160,7 +156,6 @@
                 return { bookmarks: payload.bookmarks };
             }
 
-            // Устаревший формат? пробуем локальные
             const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
             if (local.length > 0) {
                 return await initializeGistWithLocal(local);
@@ -180,7 +175,7 @@
         try {
             currentBookmarks = localBookmarks;
             await doSaveBookmarks();
-            UIUtils.showToast('Закладки восстановлены из локальной копии', 'info');
+            UIUtils.showToast('Закладки восстановлены из локальной копии и сохранены в Gist', 'info');
             return { bookmarks: localBookmarks };
         } catch {
             return { bookmarks: localBookmarks };
@@ -207,7 +202,6 @@
             }
         });
 
-        // Виртуализация
         if (observer) observer.disconnect();
         if (currentBookmarks.length > 50) {
             observer = new IntersectionObserver(handleIntersection, { rootMargin: '200px' });
@@ -334,7 +328,6 @@
         if (titleEl) titleEl.textContent = bookmark.title.length > 60 ? bookmark.title.slice(0,60)+'…' : bookmark.title;
     }
 
-    // ---------- Оптимистичное обновление и удаление ----------
     function optimisticallyUpdate(bookmark) {
         const index = currentBookmarks.findIndex(b => b.id === bookmark.id);
         if (index >= 0) currentBookmarks[index] = bookmark;
@@ -353,11 +346,10 @@
     // ---------- Публичные методы ----------
     async function addBookmark(bookmarkData) {
         if (!currentUser) {
-            UIUtils.showToast('Войдите в аккаунт', 'error');
+            UIUtils.showToast('Войдите в аккаунт GitHub с правами gist', 'error');
             throw new Error('not_logged_in');
         }
 
-        // Гарантированно загружаем последнее состояние
         const res = await loadBookmarks();
         currentBookmarks = res.bookmarks || [];
 

@@ -23,7 +23,7 @@
     }
   }
 
-  // ---------- Fallback для marked.js – несколько CDN ----------
+  // ---------- Fallback для marked.js – несколько CDN с таймаутом ----------
   function ensureMarked() {
     if (typeof marked !== 'undefined') return Promise.resolve();
 
@@ -34,12 +34,21 @@
       'https://esm.sh/marked'
     ];
 
-    function loadScript(src) {
+    function loadScript(src, timeout = 5000) {
       return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = src;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        const timer = setTimeout(() => {
+          reject(new Error(`Timeout loading ${src}`));
+        }, timeout);
+        script.onload = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        script.onerror = () => {
+          clearTimeout(timer);
+          reject(new Error(`Failed to load ${src}`));
+        };
         document.head.appendChild(script);
       });
     }
@@ -63,12 +72,12 @@
     return tryLoad(0);
   }
 
-  // ---------- Предзагрузка шрифта ----------
+  // ---------- Предзагрузка локального шрифта ----------
   function preloadFont() {
     const link = document.createElement('link');
     link.rel = 'preload';
     link.as = 'font';
-    link.href = 'https://fonts.gstatic.com/s/russoone/v18/Z9XUDmZRWg6M1LvRYsHOz8mJ.woff2';
+    link.href = 'fonts/RussoOne.woff2';
     link.crossOrigin = 'anonymous';
     link.type = 'font/woff2';
     document.head.appendChild(link);

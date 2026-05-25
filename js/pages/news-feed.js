@@ -17,6 +17,79 @@
     let currentUser = null;
     let loading = false;
 
+    // Функция для показа модалки входа и ожидания успеха
+    async function ensureLoggedInAndGist() {
+        if (getCurrentUser() && hasScope('gist')) return true;
+        // Диспатчим событие для вызова модалки входа
+        window.dispatchEvent(new CustomEvent('github-login-requested'));
+        // Ждём события успешного входа
+        return new Promise((resolve) => {
+            const onLogin = (e) => {
+                if (e.detail?.scopes?.includes('gist')) {
+                    window.removeEventListener('github-login-success', onLogin);
+                    resolve(true);
+                } else if (e.detail?.scopes) {
+                    // Залогинились, но нет gist – показываем ошибку
+                    UIUtils.showToast('Для закладок требуется scope "gist". Войдите заново с правами gist.', 'error');
+                    window.removeEventListener('github-login-success', onLogin);
+                    resolve(false);
+                }
+            };
+            const onLogout = () => {
+                window.removeEventListener('github-login-success', onLogin);
+                window.removeEventListener('github-logout', onLogout);
+                resolve(false);
+            };
+            window.addEventListener('github-login-success', onLogin);
+            window.addEventListener('github-logout', onLogout);
+            setTimeout(() => {
+                window.removeEventListener('github-login-success', onLogin);
+                window.removeEventListener('github-logout', onLogout);
+                resolve(false);
+            }, 60000);
+        });
+    }
+
+    // Вспомогательная функция для кнопки избранного
+    async function handleBookmark(item) {
+        if (!(await ensureLoggedInAndGist())) {
+            UIUtils.showToast('Необходимо войти с правами gist', 'error');
+            return;
+        }
+        if (!window.BookmarkStorage) {
+            try { await loadModule('js/features/storage.js'); } catch { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
+        }
+        const bookmark = {
+            url: item.type === 'video'
+                ? `https://www.youtube.com/watch?v=${item.id}`
+                : `${location.origin}${location.pathname}?post=${item.number}`,
+            title: item.title,
+            type: item.type === 'video' ? 'video' : 'post',
+            thumbnail: item.thumbnail || DEFAULT_IMAGE,
+            author: item.author,
+            date: item.date,
+            postData: item.type === 'post' ? {
+                id: item.number,
+                title: item.title,
+                body: item.body,
+                author: item.author,
+                date: item.date instanceof Date ? item.date.toISOString() : item.date,
+                labels: item.labels,
+                game: item.game
+            } : undefined
+        };
+        try {
+            await BookmarkStorage.addBookmark(bookmark);
+            UIUtils.showToast('Добавлено в избранное', 'success');
+        } catch (err) {
+            if (err.message === 'password_required') {
+                UIUtils.showToast('Для сохранения нужен мастер-пароль. Откройте хранилище.', 'error');
+            } else if (err.message !== 'duplicate') {
+                UIUtils.showToast('Ошибка: ' + err.message, 'error');
+            }
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('news-section');
         if (!section) return;
@@ -198,42 +271,6 @@
         }
     }
 
-    // Вспомогательная функция для кнопки избранного
-    async function handleBookmark(item) {
-        if (!window.BookmarkStorage) {
-            try { await loadModule('js/features/storage.js'); } catch { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
-        }
-        const bookmark = {
-            url: item.type === 'video'
-                ? `https://www.youtube.com/watch?v=${item.id}`
-                : `${location.origin}${location.pathname}?post=${item.number}`,
-            title: item.title,
-            type: item.type === 'video' ? 'video' : 'post',
-            thumbnail: item.thumbnail || DEFAULT_IMAGE,
-            author: item.author,
-            date: item.date,
-            postData: item.type === 'post' ? {
-                id: item.number,
-                title: item.title,
-                body: item.body,
-                author: item.author,
-                date: item.date instanceof Date ? item.date.toISOString() : item.date,
-                labels: item.labels,
-                game: item.game
-            } : undefined
-        };
-        try {
-            await BookmarkStorage.addBookmark(bookmark);
-            UIUtils.showToast('Добавлено в избранное', 'success');
-        } catch (err) {
-            if (err.message === 'password_required') {
-                UIUtils.showToast('Для сохранения нужен мастер-пароль. Откройте хранилище.', 'error');
-            } else if (err.message !== 'duplicate') {
-                UIUtils.showToast('Ошибка: ' + err.message, 'error');
-            }
-        }
-    }
-
     function createVideoCard(video) {
         const card = GithubCore.createElement('div', 'project-card-link card-interactive');
         const inner = GithubCore.createElement('div', 'project-card');
@@ -251,7 +288,6 @@
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
         inner.appendChild(meta);
 
-        // Кнопка избранного – только при наличии scope gist
         if (currentUser && hasScope('gist')) {
             const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
             favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
@@ -310,7 +346,6 @@
         preview.textContent = summary;
         inner.append(meta, preview);
 
-        // Кнопка избранного – только при наличии scope gist
         if (currentUser && hasScope('gist')) {
             const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
             favBtn.innerHTML = '<i class="far fa-bookmark"></i>';

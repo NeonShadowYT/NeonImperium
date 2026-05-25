@@ -1,3 +1,12 @@
+/* typography.css — локальный шрифт + резерв */
+@font-face {
+  font-family: 'Russo One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/RussoOne.woff2') format('woff2');
+}
+
 h1, h2, h3, h4, .game-title {
     color: var(--text-primary);
     font-weight: 400;
@@ -44,7 +53,6 @@ h3 {
     color: var(--accent);
 }
 
-/* Многострочное усечение текста */
 .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -52,12 +60,4 @@ h3 {
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-@font-face {
-  font-family: 'Russo One';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url(https://fonts.gstatic.com/s/russoone/v18/Z9XUDmZRWg6M1LvRYsHOz8mJ.woff2) format('woff2');
 }
