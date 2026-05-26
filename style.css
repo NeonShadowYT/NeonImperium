@@ -1049,3 +1049,12 @@
     position: relative;
     overflow: hidden;
 }
+.nav-profile {
+    z-index: 10001;
+}
+.profile-dropdown {
+    z-index: 10002 !important;
+}
+.modal, .modal-fullscreen {
+    z-index: 20000 !important;
+}
