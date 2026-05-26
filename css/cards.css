@@ -1,3 +1,4 @@
+/* cards.css — карточки проектов, профилей, обновлений (исправлен hover feature-item) */
 /* Базовая карточка проекта */
 .project-card-link {
     display: block;
@@ -437,11 +438,6 @@
     .tilt-card:hover {
         transform: translateY(-5px) scale(1.02);
         box-shadow: var(--shadow-hover);
-    }
-    /* Убираем hover-эффекты для карточек описания */
-    .feature-item.tilt-card:hover {
-        transform: none;
-        box-shadow: none;
     }
 }
 

@@ -1,4 +1,4 @@
-// js/features/ui-utils.js — UI-функции (модалки, тосты, черновики)
+// js/features/ui-utils.js — UI-функции (модалки, тосты, черновики) с исправлением отображения
 (function() {
     const { createElement, escapeHtml } = window.GithubCore;
 
@@ -85,6 +85,8 @@
         document.body.appendChild(modal);
         document.body.style.overflow = 'hidden';
 
+        // Принудительно устанавливаем display: flex для активной модалки (на случай, если CSS не сработал)
+        modal.style.display = 'flex';
         // Активируем модалку с небольшой задержкой для анимации
         setTimeout(() => {
             modal.classList.add('active');

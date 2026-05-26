@@ -1,4 +1,4 @@
-// js/github-client.js – универсальный клиент GitHub API с ретраями, кэшированием и обработкой 304
+// js/github-client.js – универсальный клиент GitHub API с ретраями, кэшированием и обработкой 304 (исправлен)
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, createAbortable } = window.Utils;
 
@@ -42,19 +42,17 @@
                     });
                     clearTimeout(timeoutId);
 
-                    // Обработка 304 Not Modified – возвращаем null, чтобы вызвающий код использовал кэш
                     if (response.status === 304) {
+                        // Возвращаем специальный сигнал, чтобы вызывающий код знал, что нужно использовать кэш
                         return null;
                     }
 
                     if (response.ok) {
-                        // Для DELETE и других без тела
                         if (response.status === 204) return null;
                         const data = await response.json();
                         return data;
                     }
 
-                    // Ошибки, которые можно повторить
                     if (response.status >= 500 || response.status === 429) {
                         lastError = new Error(`HTTP ${response.status}`);
                         const delay = RETRY_DELAY * Math.pow(2, attempt);
@@ -62,7 +60,6 @@
                         continue;
                     }
 
-                    // Клиентские ошибки – не повторяем
                     let errorMsg = `HTTP ${response.status}`;
                     try {
                         const errorData = await response.json();
@@ -90,9 +87,12 @@
             this.client = client;
         }
 
-        async load({ labels = '', state = 'open', per_page = 20, page = 1, signal } = {}) {
+        async load({ labels = '', state = 'open', per_page = 20, page = 1, signal, forceFresh = false } = {}) {
             const query = new URLSearchParams({ state, per_page, page, labels }).toString();
-            const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?${query}`;
+            let url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?${query}`;
+            if (forceFresh) {
+                url += `&_t=${Date.now()}`;
+            }
             const cacheKey = `gh_api_${url}`;
             const cached = cacheGet(cacheKey);
             
@@ -102,9 +102,11 @@
                     cacheSet(cacheKey, data);
                     return data;
                 }
-                // Если 304 и есть кэш – возвращаем кэш
+                // 304 – используем кэш, если он есть, иначе повторяем запрос без кэша
                 if (cached) return cached;
-                return [];
+                // Кэша нет, но сервер вернул 304 – делаем повторный запрос с принудительным обновлением
+                console.warn('[github-client] 304 without cache, retrying with forceFresh');
+                return this.load({ labels, state, per_page, page, signal, forceFresh: true });
             } catch (err) {
                 if (cached) return cached;
                 throw err;

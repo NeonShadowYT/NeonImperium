@@ -568,9 +568,3 @@
     border: 0 !important;
     background: transparent;
 }
-
-/* Remove any hover scaling or transform for feature cards (already handled, but double‑safe) */
-.feature-item.tilt-card:hover {
-    transform: none !important;
-    box-shadow: none !important;
-}

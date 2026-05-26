@@ -1,4 +1,4 @@
-// js/pages/game-updates.js — обновления игры с админ-кнопкой
+// js/pages/game-updates.js — обновления игры с админ-кнопкой (исправлена загрузка)
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable, stripHtml, loadModule } = window.Utils;
     const { CONFIG, extractAllowed, extractSummary, decryptPrivateBody } = window.GithubCore;
@@ -42,13 +42,33 @@
         try {
             const cacheKey = `game_updates_${game}`;
             let posts = cacheGet(cacheKey);
+            let issues = null;
             if (!posts) {
-                const issues = await loadIssues({ labels: `type:update,game:${game}`, per_page: 10, signal: controller.signal });
-                posts = deduplicateByNumber(issues)
-                    .filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login))
-                    .map(i => ({ number: i.number, title: i.title, body: i.body, date: new Date(i.created_at), author: i.user.login, game, labels: i.labels.map(l => l.name) }));
-                cacheSet(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
+                // Принудительно запрашиваем свежие данные (forceFresh через параметр)
+                issues = await loadIssues({ labels: `type:update,game:${game}`, per_page: 10, signal: controller.signal });
+                if (!issues || !issues.length) {
+                    // Попробуем без forceFresh, возможно кэш есть
+                    issues = await loadIssues({ labels: `type:update,game:${game}`, per_page: 10, signal: controller.signal });
+                }
+                if (issues && issues.length) {
+                    posts = deduplicateByNumber(issues)
+                        .filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login))
+                        .map(i => ({
+                            number: i.number,
+                            title: i.title,
+                            body: i.body,
+                            date: new Date(i.created_at),
+                            author: i.user.login,
+                            game,
+                            labels: i.labels.map(l => l.name)
+                        }));
+                    // Сохраняем в кэш
+                    cacheSet(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
+                } else {
+                    posts = [];
+                }
             } else {
+                // Восстанавливаем даты из строк
                 posts = posts.map(p => ({ ...p, date: new Date(p.date) }));
             }
             const currentUser = getCurrentUser();

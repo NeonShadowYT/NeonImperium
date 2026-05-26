@@ -1,4 +1,4 @@
-/* navigation.css — навигация, выпадающее меню профиля, переключатель языка */
+/* navigation.css — навигация, выпадающее меню профиля, переключатель языка + модалки */
 .nav-bar {
     background: var(--bg-card);
     border-radius: var(--radius-pill);
@@ -186,7 +186,7 @@
     justify-content: center;
 }
 
-.modal.active {
+.modal.active, .modal-fullscreen.active {
     display: flex;
 }
 
