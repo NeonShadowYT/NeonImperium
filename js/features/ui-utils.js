@@ -1,25 +1,17 @@
-// js/features/ui-utils.js
+// js/features/ui-utils.js — только UI-функции, используют GithubCore
 (function() {
-    const { createElement, escapeHtml } = window.GithubCore;
+    const { createElement, escapeHtml, loadModule } = GithubCore;
 
     function showToast(message, type = 'info', duration = 3000) {
         const toast = createElement('div', `toast toast-${type}`, {
-            position: 'fixed',
-            bottom: '20px',
-            right: '20px',
+            position: 'fixed', bottom: '20px', right: '20px',
             background: type === 'error' ? '#f44336' : type === 'success' ? '#4caf50' : 'var(--accent)',
-            color: 'white',
-            padding: '12px 24px',
-            borderRadius: '30px',
-            boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
-            zIndex: '100000',
-            opacity: '0',
-            transform: 'translateY(20px)',
+            color: 'white', padding: '12px 24px', borderRadius: '30px',
+            boxShadow: '0 5px 15px rgba(0,0,0,0.3)', zIndex: '10001',
+            opacity: '0', transform: 'translateY(20px)',
             transition: 'opacity 0.3s, transform 0.3s',
-            fontFamily: "'Russo One', sans-serif",
-            fontSize: '14px',
-            pointerEvents: 'none'
-        });
+            fontFamily: "'Russo One', sans-serif"
+        }, { role: 'alert' });
         toast.textContent = message;
         document.body.appendChild(toast);
         requestAnimationFrame(() => {
@@ -35,29 +27,11 @@
 
     function createModal(title, contentHtml, options = {}) {
         const { onClose, size = 'full', closeButton = true } = options;
+        document.querySelectorAll('.modal-fullscreen, .modal').forEach(m => m.remove());
 
-        // Удаляем старые модалки
-        const existingModals = document.querySelectorAll('.modal-fullscreen, .modal');
-        existingModals.forEach(m => m.remove());
-
-        // Создаём контейнер
         const modal = createElement('div', size === 'full' ? 'modal modal-fullscreen' : 'modal', {
-            position: 'fixed',
-            top: '0',
-            left: '0',
-            width: '100%',
-            height: '100%',
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            zIndex: '1000000',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backdropFilter: 'blur(4px)'
-        });
-
-        // Принудительно задаём display: flex, чтобы перекрыть возможные конфликты
-        modal.style.display = 'flex';
-        modal.style.alignItems = 'center';
-        modal.style.justifyContent = 'center';
+            backgroundColor: 'rgba(0,0,0,0.7)'
+        }, { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'modal-header-title' });
 
         const contentClass = size === 'full' ? 'modal-content modal-content-full' : 'modal-content';
         const headerHtml = `
@@ -67,71 +41,33 @@
                 ${closeButton ? '<button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>' : ''}
             </div>
         `;
-
-        const modalContent = createElement('div', contentClass);
-        modalContent.innerHTML = headerHtml;
-        const bodyDiv = createElement('div', 'modal-body');
-        bodyDiv.innerHTML = contentHtml;
-        modalContent.appendChild(bodyDiv);
-        modal.appendChild(modalContent);
+        modal.innerHTML = `<div class="${contentClass}">${headerHtml}<div class="modal-body">${contentHtml}</div></div>`;
         document.body.appendChild(modal);
-
-        // Блокируем прокрутку фона
         document.body.style.overflow = 'hidden';
-
-        // Добавляем класс active (для возможной анимации, но не обязательно)
-        setTimeout(() => {
-            modal.classList.add('active');
-        }, 10);
+        modal.classList.add('active');
 
         const closeModal = () => {
-            modal.classList.remove('active');
-            setTimeout(() => {
-                modal.remove();
-                document.body.style.overflow = '';
-                if (onClose) onClose();
-            }, 200);
+            modal.remove();
+            document.body.style.overflow = '';
+            onClose?.();
         };
 
-        const closeBtn = modalContent.querySelector('.modal-close');
-        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        modal.querySelector('.modal-close')?.addEventListener('click', closeModal);
         modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 
-        const escHandler = (e) => {
-            if (e.key === 'Escape') {
-                closeModal();
-                document.removeEventListener('keydown', escHandler);
-            }
-        };
+        const escHandler = e => { if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', escHandler); } };
         document.addEventListener('keydown', escHandler);
 
-        console.log('[UIUtils] Modal created and displayed:', title);
         return { modal, closeModal };
     }
 
     function saveDraft(key, data) {
-        try {
-            sessionStorage.setItem(key, JSON.stringify({ ...data, timestamp: Date.now() }));
-        } catch (e) {}
+        try { sessionStorage.setItem(key, JSON.stringify({ ...data, timestamp: Date.now() })); } catch {}
     }
-
     function loadDraft(key) {
-        try {
-            return JSON.parse(sessionStorage.getItem(key));
-        } catch (e) {
-            return null;
-        }
+        try { return JSON.parse(sessionStorage.getItem(key)); } catch { return null; }
     }
+    function clearDraft(key) { sessionStorage.removeItem(key); }
 
-    function clearDraft(key) {
-        sessionStorage.removeItem(key);
-    }
-
-    window.UIUtils = {
-        showToast,
-        createModal,
-        saveDraft,
-        loadDraft,
-        clearDraft
-    };
+    window.UIUtils = { showToast, createModal, saveDraft, loadDraft, clearDraft };
 })();

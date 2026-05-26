@@ -1,7 +1,14 @@
 // js/core/github-api.js – обёртка для совместимости со старым кодом
+// Использует GitHubClient из github-client.js
 (function() {
     const client = window.GitHubAPIClient;
 
+    // Получение токена (для обратной совместимости)
+    function getToken() {
+        return localStorage.getItem('github_token');
+    }
+
+    // Обёртки для удобства вызова (сохраняем старые имена функций)
     async function loadIssues(params) {
         return client.issues().load(params);
     }
@@ -50,7 +57,15 @@
         return client.reactions().remove(issueNumber, reactionId);
     }
 
+    // Прямой fetch (для обратной совместимости)
+    async function githubFetch(url, options = {}) {
+        return client.request(url, options);
+    }
+
+    // Экспорт в window.GithubAPI
     window.GithubAPI = {
+        getToken,
+        fetch: githubFetch,
         loadIssues,
         loadIssue,
         createIssue,

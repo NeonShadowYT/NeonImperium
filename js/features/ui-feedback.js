@@ -1,831 +1,367 @@
-// js/features/ui-feedback.js — интерфейс обратной связи (модалки, редактор, реакции, комментарии)
+// js/pages/news-feed.js – лента новостей, видео проигрываются в карточке, посты в модалке
 (function() {
-    const { escapeHtml, renderMarkdown, createElement, loadModule } = window.Utils;
-    const { extractAllowed, extractSummary, decryptPrivateBody } = window.GithubCore;
-    const { queueMutation, registerSync, processQueue } = window.OfflineQueue;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
+    const { loadIssues, loadIssue } = GithubAPI;
+    const { openFullModal, canViewPost } = UIFeedback;
+    const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
 
-    const REACTION_TYPES = [
-        { content: '+1', emoji: '👍' }, { content: '-1', emoji: '👎' }, { content: 'laugh', emoji: '😄' },
-        { content: 'confused', emoji: '😕' }, { content: 'heart', emoji: '❤️' }, { content: 'hooray', emoji: '🎉' },
-        { content: 'rocket', emoji: '🚀' }, { content: 'eyes', emoji: '👀' }
+    const YT_CHANNELS = [
+        { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
+        { id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' },
+        { id: 'UCQKVSv62dLsK3QnfIke24uQ', name: 'Golden Creeper' },
+        { id: 'UCcuqf3fNtZ2UP5MO89kVKLw', name: 'Mitmi' }
     ];
-    const CACHE_TTL = 5 * 60 * 1000;
-    const reactionsCache = new Map();
-    const commentsCache = new Map();
-    const reactionLocks = new Map();
-    const previewImageCache = new Map();
+    const DEFAULT_IMAGE = 'images/default-news.webp';
 
-    async function addReactionWithQueue(issueNumber, content) {
-        try {
-            await window.GithubAPI.addReaction(issueNumber, content);
-            invalidateCache(issueNumber);
-        } catch (err) {
-            if (isNetworkError(err)) {
-                await queueMutation({ type: 'addReaction', issueNumber, content, timestamp: Date.now() });
-                await registerSync();
-                window.UIUtils.showToast('Реакция будет отправлена позже', 'info');
-            } else {
-                throw err;
-            }
-        }
-    }
+    let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
+    let currentUser = null;
+    let loading = false;
 
-    async function removeReactionWithQueue(issueNumber, reactionId) {
-        try {
-            await window.GithubAPI.removeReaction(issueNumber, reactionId);
-            invalidateCache(issueNumber);
-        } catch (err) {
-            if (isNetworkError(err)) {
-                await queueMutation({ type: 'removeReaction', issueNumber, reactionId, timestamp: Date.now() });
-                await registerSync();
-                window.UIUtils.showToast('Реакция будет удалена позже', 'info');
-            } else {
-                throw err;
-            }
-        }
-    }
-
-    function isNetworkError(err) {
-        return err instanceof TypeError || err.name === 'AbortError' || err.message === 'Failed to fetch';
-    }
-
-    function getCached(key, cacheMap) {
-        const cached = cacheMap.get(key);
-        return (cached && Date.now() - cached.timestamp < CACHE_TTL) ? cached.data : null;
-    }
-    function setCached(key, data, cacheMap) { cacheMap.set(key, { data, timestamp: Date.now() }); }
-    function invalidateCache(issueNumber) {
-        reactionsCache.delete(`reactions_${issueNumber}`);
-        commentsCache.delete(`comments_${issueNumber}`);
-        if (window.reactionsListCache) window.reactionsListCache.delete(`list_reactions_${issueNumber}`);
-    }
-
-    function groupReactions(reactions, currentUser) {
-        const grouped = {};
-        REACTION_TYPES.forEach(t => grouped[t.content] = { ...t, count: 0, userReacted: false, userReactionId: null });
-        reactions.forEach(r => {
-            if (r.content.startsWith('vote:')) return;
-            if (grouped[r.content]) {
-                grouped[r.content].count++;
-                if (currentUser && r.user?.login === currentUser) {
-                    grouped[r.content].userReacted = true;
-                    grouped[r.content].userReactionId = r.id;
+    // Функция для показа модалки входа и ожидания успеха
+    async function ensureLoggedInAndGist() {
+        if (getCurrentUser() && hasScope('gist')) return true;
+        // Диспатчим событие для вызова модалки входа
+        window.dispatchEvent(new CustomEvent('github-login-requested'));
+        // Ждём события успешного входа
+        return new Promise((resolve) => {
+            const onLogin = (e) => {
+                if (e.detail?.scopes?.includes('gist')) {
+                    window.removeEventListener('github-login-success', onLogin);
+                    resolve(true);
+                } else if (e.detail?.scopes) {
+                    // Залогинились, но нет gist – показываем ошибку
+                    UIUtils.showToast('Для закладок требуется scope "gist". Войдите заново с правами gist.', 'error');
+                    window.removeEventListener('github-login-success', onLogin);
+                    resolve(false);
                 }
-            }
+            };
+            const onLogout = () => {
+                window.removeEventListener('github-login-success', onLogin);
+                window.removeEventListener('github-logout', onLogout);
+                resolve(false);
+            };
+            window.addEventListener('github-login-success', onLogin);
+            window.addEventListener('github-logout', onLogout);
+            setTimeout(() => {
+                window.removeEventListener('github-login-success', onLogin);
+                window.removeEventListener('github-logout', onLogout);
+                resolve(false);
+            }, 60000);
         });
-        return Object.values(grouped).filter(g => g.count > 0).sort((a,b) => b.count - a.count);
     }
 
-    function renderReactions(container, issueNumber, reactions, currentUser, onAdd, onRemove) {
-        if (!container) return;
-        const hasRepo = window.GithubAuth.hasScope('repo');
-        const grouped = groupReactions(reactions, currentUser);
-        const visible = grouped.slice(0,3);
-        const hiddenCount = grouped.length - 3;
-        container.innerHTML = '';
-        visible.forEach(g => {
-            const btn = createElement('button', `reaction-button ${g.userReacted ? 'active' : ''}`, {}, {
-                'data-content': g.content,
-                'data-reaction-id': g.userReactionId || '',
-                'data-count': g.count,
-                disabled: !currentUser || !hasRepo,
-                'aria-label': `${g.emoji} (${g.count})`
-            });
-            btn.innerHTML = `<span class="reaction-emoji">${g.emoji}</span><span class="reaction-count">${g.count}</span>`;
-            container.appendChild(btn);
-        });
-        if (currentUser && hasRepo) {
-            const addBtn = createElement('button', 'reaction-add-btn', {}, {
-                'data-add': hiddenCount === 0 ? '' : undefined,
-                'data-more': hiddenCount > 0 ? '' : undefined,
-                'aria-label': hiddenCount > 0 ? 'Показать ещё реакции' : 'Добавить реакцию'
-            });
-            addBtn.innerHTML = `<span>${hiddenCount > 0 ? '+' + hiddenCount : '+'}</span>`;
-            container.appendChild(addBtn);
+    // Вспомогательная функция для кнопки избранного
+    async function handleBookmark(item) {
+        if (!(await ensureLoggedInAndGist())) {
+            UIUtils.showToast('Необходимо войти с правами gist', 'error');
+            return;
         }
-
-        if (!currentUser || !hasRepo) return;
-        container.querySelectorAll('.reaction-button:not([disabled])').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const content = btn.dataset.content;
-                const reactionId = btn.dataset.reactionId;
-                const isActive = btn.classList.contains('active');
-                const countSpan = btn.querySelector('.reaction-count');
-                const oldCount = parseInt(countSpan.textContent, 10);
-                const lockKey = `${issueNumber}_${content}`;
-                if (reactionLocks.has(lockKey)) return;
-
-                if (isActive && reactionId) {
-                    reactionLocks.set(lockKey, true);
-                    btn.classList.remove('active');
-                    countSpan.textContent = oldCount - 1;
-                    try {
-                        await onRemove(issueNumber, parseInt(reactionId, 10));
-                    } catch {
-                        window.UIUtils.showToast('Ошибка при удалении реакции', 'error');
-                        btn.classList.add('active');
-                        countSpan.textContent = oldCount;
-                    } finally { reactionLocks.delete(lockKey); }
-                } else if (!isActive) {
-                    reactionLocks.set(lockKey, true);
-                    btn.classList.add('active');
-                    countSpan.textContent = oldCount + 1;
-                    btn.dataset.reactionId = 'temp';
-                    try {
-                        await onAdd(issueNumber, content);
-                    } catch {
-                        window.UIUtils.showToast('Ошибка при добавлении реакции', 'error');
-                        btn.classList.remove('active');
-                        countSpan.textContent = oldCount;
-                        btn.dataset.reactionId = '';
-                    } finally { reactionLocks.delete(lockKey); }
-                }
-            });
-        });
-
-        const addBtn = container.querySelector('[data-add],[data-more]');
-        if (addBtn) {
-            addBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                showReactionMenu(addBtn, issueNumber, async (selected) => {
-                    const lockKey = `${issueNumber}_${selected}`;
-                    if (reactionLocks.has(lockKey)) return;
-                    reactionLocks.set(lockKey, true);
-                    const existing = Array.from(container.querySelectorAll('.reaction-button')).find(b => b.dataset.content === selected);
-                    if (existing) {
-                        if (existing.classList.contains('active')) { reactionLocks.delete(lockKey); return; }
-                        const countSpan = existing.querySelector('.reaction-count');
-                        const old = parseInt(countSpan.textContent, 10);
-                        existing.classList.add('active');
-                        countSpan.textContent = old + 1;
-                        existing.dataset.reactionId = 'temp';
-                        try { await onAdd(issueNumber, selected); }
-                        catch {
-                            existing.classList.remove('active');
-                            countSpan.textContent = old;
-                            existing.dataset.reactionId = '';
-                        } finally { reactionLocks.delete(lockKey); }
-                    } else {
-                        const tempBtn = createElement('button', 'reaction-button active', {}, {
-                            'data-content': selected,
-                            'data-reaction-id': 'temp'
-                        });
-                        const emoji = REACTION_TYPES.find(t => t.content === selected).emoji;
-                        tempBtn.innerHTML = `<span class="reaction-emoji">${emoji}</span><span class="reaction-count">1</span>`;
-                        container.insertBefore(tempBtn, addBtn);
-                        try { await onAdd(issueNumber, selected); }
-                        catch { tempBtn.remove(); }
-                        finally { reactionLocks.delete(lockKey); }
-                    }
-                });
-            });
+        if (!window.BookmarkStorage) {
+            try { await loadModule('js/features/storage.js'); } catch { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
         }
-    }
-
-    function showReactionMenu(relativeTo, issueNumber, callback) {
-        document.querySelectorAll('.reaction-menu').forEach(m => m.remove());
-        const menu = createElement('div', 'reaction-menu', {
-            position: 'absolute',
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: '30px',
-            padding: '5px',
-            display: 'flex',
-            gap: '5px',
-            zIndex: '10000000',
-            boxShadow: 'var(--shadow)'
-        }, { role: 'menu' });
-        REACTION_TYPES.forEach(t => {
-            const btn = createElement('button', 'reaction-menu-btn', {}, { role: 'menuitem' });
-            btn.innerHTML = t.emoji;
-            btn.onclick = (e) => { e.stopPropagation(); callback(t.content); menu.remove(); };
-            menu.appendChild(btn);
-        });
-        const rect = relativeTo.getBoundingClientRect();
-        menu.style.left = rect.left + 'px';
-        menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
-        document.body.appendChild(menu);
-        const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', close); } };
-        setTimeout(() => document.addEventListener('click', close), 100);
-    }
-
-    function renderComments(container, comments, currentUser, issueNumber) {
-        const hasRepo = window.GithubAuth.hasScope('repo');
-        const regular = comments.filter(c => !c.body.trim().startsWith('!vote'));
-        container.innerHTML = regular.map(c => {
-            const isAuthor = currentUser && c.user.login === currentUser;
-            const canEdit = hasRepo && (isAuthor || window.GithubAuth.isAdmin());
-            let actions = '';
-            if (canEdit) {
-                actions = `<div class="comment-actions"><button class="comment-edit" data-comment-id="${c.id}" data-body="${escapeHtml(c.body)}"><i class="fas fa-edit"></i></button><button class="comment-delete" data-comment-id="${c.id}"><i class="fas fa-trash-alt"></i></button></div>`;
-            }
-            return `<div class="comment" data-comment-id="${c.id}"><div class="comment-meta"><span class="comment-author">${escapeHtml(c.user.login)}</span></div><div class="comment-body">${escapeHtml(c.body).replace(/\n/g,'<br>')}</div>${actions}</div>`;
-        }).join('');
-
-        if (currentUser && hasRepo) {
-            container.querySelectorAll('.comment-edit').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    openEditCommentModal(btn.dataset.commentId, btn.dataset.body, issueNumber);
-                });
-            });
-            container.querySelectorAll('.comment-delete').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    const commentDiv = btn.closest('.comment');
-                    const commentId = btn.dataset.commentId;
-                    commentDiv.remove();
-                    try {
-                        await window.GithubAPI.deleteComment(commentId);
-                        invalidateCache(issueNumber);
-                        window.UIUtils.showToast('Комментарий удалён', 'success');
-                    } catch {
-                        window.UIUtils.showToast('Ошибка при удалении', 'error');
-                        if (!commentDiv.parentNode) container.appendChild(commentDiv);
-                    }
-                });
-            });
-        }
-    }
-
-    function openEditCommentModal(commentId, currentBody, issueNumber) {
-        const html = `
-            <div class="feedback-form">
-                <div id="modal-editor-toolbar"></div>
-                <textarea id="edit-comment-body" class="feedback-textarea" rows="10">${escapeHtml(currentBody)}</textarea>
-                <div class="button-group" style="margin-top:15px; display:flex; gap:10px; justify-content:flex-end;">
-                    <button class="button" id="edit-comment-save">Сохранить</button>
-                    <button class="button" id="edit-comment-cancel">Отмена</button>
-                </div>
-            </div>
-        `;
-        const { modal, closeModal } = window.UIUtils.createModal('Редактировать комментарий', html, { size: 'full' });
-        const textarea = modal.querySelector('#edit-comment-body');
-        const toolbarContainer = modal.querySelector('#modal-editor-toolbar');
-        if (window.Editor) toolbarContainer.appendChild(window.Editor.createEditorToolbar(textarea));
-
-        modal.querySelector('#edit-comment-save').addEventListener('click', async () => {
-            const newBody = textarea.value.trim();
-            if (!newBody) return window.UIUtils.showToast('Комментарий не может быть пустым', 'error');
-            try {
-                await window.GithubAPI.updateComment(commentId, newBody);
-                invalidateCache(issueNumber);
-                closeModal();
-                window.UIUtils.showToast('Комментарий обновлён', 'success');
-            } catch { window.UIUtils.showToast('Ошибка при сохранении', 'error'); }
-        });
-        modal.querySelector('#edit-comment-cancel').addEventListener('click', closeModal);
-    }
-
-    async function loadReactionsWithCache(issueNumber) {
-        const key = `reactions_${issueNumber}`;
-        const cached = getCached(key, reactionsCache);
-        if (cached) return cached;
-        const reactions = await window.GithubAPI.loadReactions(issueNumber);
-        setCached(key, reactions, reactionsCache);
-        return reactions;
-    }
-
-    async function loadCommentsWithCache(issueNumber) {
-        const key = `comments_${issueNumber}`;
-        const cached = getCached(key, commentsCache);
-        if (cached) return cached;
-        const comments = await window.GithubAPI.loadComments(issueNumber);
-        setCached(key, comments, commentsCache);
-        return comments;
-    }
-
-    function extractPollFromBody(body) {
-        const match = /<!-- poll: (.*?) -->/.exec(body);
-        if (match) try { return JSON.parse(match[1]); } catch { return null; }
-        return null;
-    }
-
-    async function renderPostBody(container, body, issueNumber) {
-        let html;
-        try {
-            if (window.marked) {
-                marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-                html = marked.parse(body);
-            } else {
-                html = body.replace(/\n/g, '<br>');
-            }
-        } catch (err) {
-            console.warn('Markdown parse error, using fallback', err);
-            html = body.replace(/\n/g, '<br>');
-        }
-        container.innerHTML = `<div class="markdown-body">${html}</div>`;
-        const pollData = extractPollFromBody(body);
-        if (pollData && issueNumber) {
-            const pollContainer = createElement('div', 'poll-container');
-            container.appendChild(pollContainer);
-            await renderPoll(pollContainer, issueNumber, pollData);
-        }
-    }
-
-    function renderStaticPoll(container, pollData) {
-        const pollDiv = createElement('div', 'poll card');
-        pollDiv.innerHTML = `<h3>📊 ${escapeHtml(pollData.question)}</h3><div class="poll-options static">${pollData.options.map(opt => `<div class="poll-option"><span>${escapeHtml(opt)}</span></div>`).join('')}</div><p class="text-secondary small">(опрос будет доступен после публикации)</p>`;
-        container.appendChild(pollDiv);
-    }
-
-    async function renderPoll(container, issueNumber, pollData) {
-        const currentUser = window.GithubAuth.getCurrentUser();
-        const hasRepo = window.GithubAuth.hasScope('repo');
-        const comments = await window.GithubAPI.loadComments(issueNumber);
-        const votes = comments.filter(c => /^!vote \d+$/.test(c.body.trim()));
-        const counts = pollData.options.map((_,i) => votes.filter(c => c.body.trim() === `!vote ${i}`).length);
-        const total = counts.reduce((a,b)=>a+b,0);
-        const userVoted = currentUser && votes.some(c => c.user.login === currentUser);
-
-        const pollDiv = createElement('div', 'poll card');
-        pollDiv.dataset.issue = issueNumber;
-        let html = `<h3>📊 ${escapeHtml(pollData.question)}</h3><div class="poll-options">`;
-        pollData.options.forEach((opt, i) => {
-            const cnt = counts[i];
-            const pct = total ? Math.round((cnt/total)*100) : 0;
-            html += `<div class="poll-option"><span>${escapeHtml(opt)}</span>`;
-            if (!currentUser || !hasRepo) {}
-            else if (!userVoted) html += `<button class="button poll-vote-btn" data-option="${i}">Голосовать</button>`;
-            else html += `<div class="progress-bar"><div style="width:${pct}%;">${pct}% (${cnt})</div></div>`;
-            html += '</div>';
-        });
-        html += '</div>';
-        if (!currentUser || !hasRepo) html += '<p class="text-secondary small"><i class="fas fa-info-circle"></i> Войдите с scope "repo" для голосования.</p>';
-        else if (!userVoted) html += '<p class="text-secondary small">Вы ещё не голосовали.</p>';
-        pollDiv.innerHTML = html;
-        container.innerHTML = '';
-        container.appendChild(pollDiv);
-
-        if (currentUser && hasRepo && !userVoted) {
-            pollDiv.querySelectorAll('.poll-vote-btn').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    const idx = btn.dataset.option;
-                    btn.disabled = true;
-                    try {
-                        await window.GithubAPI.addComment(issueNumber, `!vote ${idx}`);
-                        window.UIUtils.showToast('Голос учтён', 'success');
-                        await renderPoll(container, issueNumber, pollData);
-                    } catch { window.UIUtils.showToast('Ошибка', 'error'); }
-                });
-            });
-        }
-    }
-
-    async function loadReactionsAndComments(container, item, currentUser) {
-        const reactionsDiv = createElement('div', 'reactions-container');
-        const commentsDiv = createElement('div', 'feedback-comments');
-        container.appendChild(reactionsDiv);
-        container.appendChild(commentsDiv);
-        try {
-            const reactions = await loadReactionsWithCache(item.id);
-            renderReactions(reactionsDiv, item.id, reactions, currentUser, addReactionWithQueue, removeReactionWithQueue);
-        } catch (err) {
-            console.error('Failed to load reactions:', err);
-            reactionsDiv.innerHTML = '<p class="text-secondary">Ошибка загрузки реакций</p>';
-        }
-        try {
-            const comments = await loadCommentsWithCache(item.id);
-            renderComments(commentsDiv, comments, currentUser, item.id);
-        } catch (err) {
-            console.error('Failed to load comments:', err);
-            commentsDiv.innerHTML = '<p class="text-secondary">Ошибка загрузки комментариев</p>';
-        }
-    }
-
-    function setupCommentForm(container, item, currentUser) {
-        if (!window.GithubAuth.hasScope('repo')) return;
-        const form = createElement('div', 'comment-form', { display: 'flex', gap: '8px', marginTop: '16px' });
-        form.innerHTML = `
-            <input type="text" class="comment-input" placeholder="Написать комментарий..." style="flex:1; padding:10px 12px; border-radius:30px; background:var(--bg-primary); border:1px solid var(--border); color:var(--text-primary);">
-            <div class="button-group" style="display:flex; gap:8px;">
-                <button class="button comment-submit">Отправить</button>
-                <button class="button comment-editor-btn"><i class="fas fa-pencil-alt"></i> Редактор</button>
-            </div>
-        `;
-        container.appendChild(form);
-        const input = form.querySelector('.comment-input');
-        const submit = form.querySelector('.comment-submit');
-        const editorBtn = form.querySelector('.comment-editor-btn');
-
-        submit.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const text = input.value.trim();
-            if (!text) return;
-            const tempDiv = createElement('div', 'comment');
-            tempDiv.dataset.commentId = 'temp-' + Date.now();
-            tempDiv.innerHTML = `<div class="comment-meta"><span class="comment-author">${escapeHtml(currentUser)}</span></div><div>${escapeHtml(text).replace(/\n/g,'<br>')}</div>`;
-            container.querySelector('.feedback-comments').appendChild(tempDiv);
-            input.disabled = submit.disabled = editorBtn.disabled = true;
-            try {
-                const newComment = await window.GithubAPI.addComment(item.id, text);
-                tempDiv.dataset.commentId = newComment.id;
-                invalidateCache(item.id);
-                const updated = await window.GithubAPI.loadComments(item.id);
-                setCached(`comments_${item.id}`, updated, commentsCache);
-                renderComments(container.querySelector('.feedback-comments'), updated, currentUser, item.id);
-                window.UIUtils.showToast('Комментарий добавлен', 'success');
-            } catch (err) {
-                if (isNetworkError(err)) {
-                    await queueMutation({ type: 'addComment', issueNumber: item.id, body: text, timestamp: Date.now() });
-                    await registerSync();
-                    window.UIUtils.showToast('Комментарий будет отправлен позже', 'info');
-                    tempDiv.remove();
-                } else {
-                    window.UIUtils.showToast('Ошибка', 'error');
-                    tempDiv.remove();
-                }
-            } finally {
-                input.disabled = submit.disabled = editorBtn.disabled = false;
-                input.value = '';
-            }
-        });
-
-        editorBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window.dispatchEvent(new CustomEvent('open-comment-editor', { detail: { issueNumber: item.id } }));
-        });
-    }
-
-    function addHeaderActions(modalHeader, item, issue, currentUser, closeModal, escHandler) {
-        const isAdmin = window.GithubAuth.isAdmin();
-        const hasRepo = window.GithubAuth.hasScope('repo');
-        const hasGist = window.GithubAuth.hasScope('gist');
-        const postUrl = `${location.origin}${location.pathname}?post=${item.id}`;
-        const actions = createElement('div', 'modal-header-actions', { display: 'flex', gap: '4px', alignItems: 'center', marginRight: 'auto' });
-
-        let btns = '';
-        if (hasRepo && (isAdmin || (currentUser && issue.user.login === currentUser))) {
-            btns += `<button class="action-btn edit-issue" title="Редактировать"><i class="fas fa-edit"></i></button>`;
-            btns += `<button class="action-btn close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>`;
-        }
-        btns += `<button class="action-btn share-post" title="Поделиться"><i class="fas fa-share-alt"></i></button>`;
-        if (currentUser && hasGist) {
-            btns += `<button class="action-btn bookmark-post" title="В избранное"><i class="fas fa-bookmark"></i></button>`;
-        }
-        actions.innerHTML = btns;
-        const closeBtn = modalHeader.querySelector('.modal-close');
-        if (closeBtn) closeBtn.before(actions);
-
-        actions.querySelector('.edit-issue')?.addEventListener('click', (e) => {
-            e.stopPropagation(); closeModal(); document.removeEventListener('keydown', escHandler);
-            let postType = 'feedback';
-            if (item.labels?.includes('type:news')) postType = 'news';
-            else if (item.labels?.includes('type:update')) postType = 'update';
-            openEditorModal('edit', { number: item.id, title: issue.title, body: issue.body, game: item.game }, postType);
-        });
-        actions.querySelector('.close-issue')?.addEventListener('click', async (e) => {
-            e.stopPropagation(); if (!confirm('Закрыть?')) return;
-            try {
-                await window.GithubAPI.closeIssue(item.id);
-                closeModal(); document.removeEventListener('keydown', escHandler);
-                if (window.refreshNewsFeed) window.refreshNewsFeed();
-                if (window.refreshGameUpdates && item.game) window.refreshGameUpdates(item.game);
-                window.UIUtils.showToast('Закрыто', 'success');
-            } catch { window.UIUtils.showToast('Ошибка', 'error'); }
-        });
-        actions.querySelector('.share-post')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            navigator.clipboard.writeText(postUrl).then(() => window.UIUtils.showToast('Ссылка скопирована', 'success')).catch(() => window.UIUtils.showToast('Ошибка', 'error'));
-        });
-        actions.querySelector('.bookmark-post')?.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            if (!window.BookmarkStorage) {
-                try { await loadModule('js/features/storage.js'); } catch { return window.UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
-            }
-            if (!window.BookmarkStorage) return window.UIUtils.showToast('Хранилище не загружено', 'error');
-            const thumbnail = extractFirstImage(issue.body) || 'images/default-news.webp';
-            window.BookmarkStorage.addBookmark({
-                url: postUrl,
+        const bookmark = {
+            url: item.type === 'video'
+                ? `https://www.youtube.com/watch?v=${item.id}`
+                : `${location.origin}${location.pathname}?post=${item.number}`,
+            title: item.title,
+            type: item.type === 'video' ? 'video' : 'post',
+            thumbnail: item.thumbnail || DEFAULT_IMAGE,
+            author: item.author,
+            date: item.date,
+            postData: item.type === 'post' ? {
+                id: item.number,
                 title: item.title,
-                type: 'post',
-                thumbnail: thumbnail,
-                postData: {
-                    id: item.id,
-                    title: item.title,
-                    body: issue.body,
-                    author: item.author,
-                    date: item.date instanceof Date ? item.date.toISOString() : item.date,
-                    labels: item.labels,
-                    game: item.game
-                }
-            }).then(() => window.UIUtils.showToast('Добавлено в избранное', 'success'))
-              .catch(err => {
-                  if (err.message === 'not_logged_in') window.UIUtils.showToast('Войдите в аккаунт с правами gist', 'error');
-                  else if (err.message === 'duplicate') window.UIUtils.showToast('Уже в избранном', 'info');
-                  else window.UIUtils.showToast('Ошибка: ' + err.message, 'error');
-              });
-        });
-    }
-
-    function extractFirstImage(body) {
-        const m = body?.match(/!\[.*?\]\((.*?)\)/);
-        return m ? m[1] : null;
-    }
-
-    async function openFullModal(item) {
-        const currentUser = window.GithubAuth.getCurrentUser();
-        const { modal, closeModal } = window.UIUtils.createModal(item.title, '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>', { size: 'full' });
-        const container = modal.querySelector('.modal-body');
-        const escHandler = (e) => { if (e.key === 'Escape') closeModal(); };
-        document.addEventListener('keydown', escHandler);
+                body: item.body,
+                author: item.author,
+                date: item.date instanceof Date ? item.date.toISOString() : item.date,
+                labels: item.labels,
+                game: item.game
+            } : undefined
+        };
         try {
-            const issue = await window.GithubAPI.loadIssue(item.id);
-            if (issue.state === 'closed') {
-                container.innerHTML = '<p class="error-message">Пост закрыт.</p>';
-                return;
-            }
-            container.innerHTML = '';
-            const header = createElement('div', 'modal-post-header', { display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' });
-            const icon = item.labels?.includes('type:news') ? '📰' : item.labels?.includes('type:update') ? '🔄' : item.labels?.includes('type:idea') ? '💡' : item.labels?.includes('type:bug') ? '🐛' : item.labels?.includes('type:review') ? '⭐' : '📌';
-            header.innerHTML = `<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:24px;">${icon}</span><span style="color:var(--accent);">${escapeHtml(item.author)}</span></div>${item.game ? `<span class="feedback-label">${escapeHtml(item.game)}</span>` : ''}`;
-            container.appendChild(header);
-            addHeaderActions(modal.querySelector('.modal-header'), item, issue, currentUser, closeModal, escHandler);
-
-            let finalBody = issue.body;
-            const allowed = extractAllowed(issue.body);
-            if (item.labels?.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-                try { finalBody = decryptPrivateBody(finalBody, allowed); } catch (e) { console.warn('Decrypt failed', e); }
-            }
-            await renderPostBody(container, finalBody, item.id);
-            await loadReactionsAndComments(container, item, currentUser);
-            if (currentUser && window.GithubAuth.hasScope('repo')) setupCommentForm(container, item, currentUser);
+            await BookmarkStorage.addBookmark(bookmark);
+            UIUtils.showToast('Добавлено в избранное', 'success');
         } catch (err) {
-            console.error('Failed to load post:', err);
-            container.innerHTML = `<p class="error-message">Ошибка загрузки поста: ${err.message || 'неизвестная ошибка'}. Попробуйте позже.</p>`;
-            setTimeout(() => { closeModal(); document.removeEventListener('keydown', escHandler); }, 5000);
+            if (err.message === 'password_required') {
+                UIUtils.showToast('Для сохранения нужен мастер-пароль. Откройте хранилище.', 'error');
+            } else if (err.message !== 'duplicate') {
+                UIUtils.showToast('Ошибка: ' + err.message, 'error');
+            }
         }
     }
 
-    function canViewPost(body, labels, currentUser) {
-        if (!labels.includes('private')) return true;
-        if (window.GithubAuth.isAdmin()) return true;
-        const allowed = extractAllowed(body);
-        if (!allowed) return false;
-        return allowed.split(',').map(s=>s.trim()).includes(currentUser);
-    }
-
-    function openEditorModal(mode, data, postType = 'feedback') {
-        if (!window.GithubAuth.hasScope('repo')) return window.UIUtils.showToast('Нужен scope "repo"', 'error');
-        const currentUser = window.GithubAuth.getCurrentUser();
-        const title = mode === 'edit' ? 'Редактирование' : 'Новое сообщение';
-
-        let game = data.game;
-        if (postType === 'feedback' && !game) {
-            const section = document.getElementById('feedback-section');
-            if (section && section.dataset.game) {
-                game = section.dataset.game;
-                console.warn('[openEditorModal] data.game missing, using section.dataset.game =', game);
-            } else {
-                const match = location.pathname.match(/\/([a-z0-9-]+)\.html/);
-                if (match && match[1] !== 'index') game = match[1];
-            }
-        }
-        if (postType === 'feedback' && !game) {
-            window.UIUtils.showToast('Не удалось определить игру. Сообщение будет создано без метки game.', 'warning');
-        }
-
-        const draftKey = `editor_draft_${postType}_${game || 'site'}_${mode}`;
-
-        let previewUrl = '';
-        let bodyContent = data.body || '';
-        const previewMatch = bodyContent.match(/<!--\s*preview:\s*(https?:\/\/[^\s]+)\s*-->/);
-        if (previewMatch) {
-            previewUrl = previewMatch[1];
-            bodyContent = bodyContent.replace(previewMatch[0]+'\n', '');
-        }
-        let allowedUsers = '';
-        const allowedMatch = bodyContent.match(/<!--\s*allowed:\s*(.*?)\s*-->/);
-        if (allowedMatch) {
-            allowedUsers = allowedMatch[1];
-            bodyContent = bodyContent.replace(allowedMatch[0]+'\n', '');
-        }
-
-        let categoryHtml = '';
-        if (postType === 'feedback') {
-            let curCat = 'idea';
-            if (data.labels) {
-                const tl = data.labels.find(l => l.startsWith('type:'));
-                if (tl) curCat = tl.split(':')[1];
-            }
-            categoryHtml = `<select id="modal-category" class="feedback-select"><option value="idea" ${curCat==='idea'?'selected':''}>💡 Идея</option><option value="bug" ${curCat==='bug'?'selected':''}>🐛 Баг</option><option value="review" ${curCat==='review'?'selected':''}>⭐ Отзыв</option></select>`;
-        }
-
-        const isPrivate = data.labels?.includes('private') || false;
-
-        const html = postType === 'comment' ? `
-            <div class="feedback-form">
-                <div id="modal-editor-toolbar"></div>
-                <textarea id="modal-body" class="feedback-textarea" rows="10">${escapeHtml(bodyContent)}</textarea>
-                <div class="button-group" style="display:flex; justify-content:flex-end; margin-top:15px;">
-                    <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Отправить'}</button>
-                </div>
-            </div>
-        ` : `
-            <div class="feedback-form">
-                <input type="text" id="modal-input-title" class="feedback-input" placeholder="Заголовок" value="${escapeHtml(data.title||'')}">
-                <div class="preview-url-wrapper">
-                    <input type="url" id="modal-preview-url" class="feedback-input" placeholder="Ссылка на превью" value="${escapeHtml(previewUrl)}">
-                    <div id="preview-services-placeholder"></div>
-                </div>
-                ${categoryHtml}
-                <div id="modal-editor-toolbar"></div>
-                <div class="editor-split">
-                    <div class="editor-split-left">
-                        <textarea id="modal-body" class="feedback-textarea" rows="12">${escapeHtml(bodyContent)}</textarea>
-                    </div>
-                    <div class="editor-split-right" id="modal-preview-area"></div>
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; flex-wrap:wrap; gap:10px;">
-                    <div class="access-switch">
-                        <button type="button" class="access-switch-btn ${!isPrivate?'active':''}" data-access="public">Публичный</button>
-                        <button type="button" class="access-switch-btn ${isPrivate?'active':''}" data-access="private">Приватный</button>
-                    </div>
-                    <input type="text" id="private-users" class="private-users-input" placeholder="Ники через запятую" value="${escapeHtml(allowedUsers)}" style="${isPrivate?'':'display:none;'}">
-                    <button class="button" id="modal-submit">${mode==='edit'?'Сохранить':'Опубликовать'}</button>
-                </div>
-            </div>
-        `;
-
-        const { modal, closeModal } = window.UIUtils.createModal(title, html, { size: 'full' });
-        const textarea = modal.querySelector('#modal-body');
-        const toolbarDiv = modal.querySelector('#modal-editor-toolbar');
-        if (window.Editor) toolbarDiv.appendChild(window.Editor.createEditorToolbar(textarea));
-
-        if (postType !== 'comment') {
-            const previewArea = modal.querySelector('#modal-preview-area');
-            const servicesPlaceholder = modal.querySelector('#preview-services-placeholder');
-
-            const syncHeight = () => {
-                const left = modal.querySelector('.editor-split-left');
-                const right = modal.querySelector('.editor-split-right');
-                if (left && right) {
-                    right.style.height = left.offsetHeight + 'px';
-                }
-            };
-            textarea.addEventListener('input', syncHeight);
-            new ResizeObserver(syncHeight).observe(textarea);
-
-            const updatePreview = () => {
-                previewArea.innerHTML = textarea.value ? renderMarkdown(textarea.value) : '<p class="text-secondary">Предпросмотр</p>';
-                syncHeight();
-                replaceImagesWithDataUrls(previewArea);
-            };
-            textarea.addEventListener('input', updatePreview);
-            updatePreview();
-
-            if (servicesPlaceholder && window.Editor) servicesPlaceholder.appendChild(window.Editor.createImageServicesMenu());
-
-            const publicBtn = modal.querySelector('[data-access="public"]');
-            const privateBtn = modal.querySelector('[data-access="private"]');
-            const privateInput = modal.querySelector('#private-users');
-            publicBtn.addEventListener('click', () => {
-                publicBtn.classList.add('active');
-                privateBtn.classList.remove('active');
-                privateInput.style.display = 'none';
+    document.addEventListener('DOMContentLoaded', () => {
+        const section = document.getElementById('news-section');
+        if (!section) return;
+        let header = section.querySelector('.news-header');
+        if (!header) {
+            header = GithubCore.createElement('div', 'news-header', {
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: '20px', flexWrap: 'wrap', gap: '15px'
             });
-            privateBtn.addEventListener('click', () => {
-                privateBtn.classList.add('active');
-                publicBtn.classList.remove('active');
-                privateInput.style.display = 'block';
-            });
+            header.innerHTML = '<div><h2 data-lang="newsTitle">📰 Последние новости</h2><p class="text-secondary" data-lang="newsDesc">Свежие видео и обновления</p></div>';
+            section.prepend(header);
         }
-
-        modal.querySelector('#modal-submit').addEventListener('click', async (e) => {
-            e.preventDefault();
-            if (!window.GithubAuth.hasScope('repo')) return window.UIUtils.showToast('Недостаточно прав', 'error');
-            const body = textarea.value.trim();
-            if (!body) return window.UIUtils.showToast('Заполните описание', 'error');
-
-            if (postType === 'comment') {
-                try {
-                    await window.GithubAPI.addComment(data.issueNumber, body);
-                    window.UIUtils.clearDraft(draftKey);
-                    closeModal();
-                    window.dispatchEvent(new CustomEvent('github-comment-created', { detail: { issueNumber: data.issueNumber } }));
-                    window.UIUtils.showToast('Комментарий добавлен', 'success');
-                } catch (err) { window.UIUtils.showToast('Ошибка: ' + err.message, 'error'); }
-                return;
-            }
-
-            const titleVal = modal.querySelector('#modal-input-title').value.trim();
-            if (!titleVal) return window.UIUtils.showToast('Заполните заголовок', 'error');
-
-            let finalBody = body;
-            const newPreviewUrl = modal.querySelector('#modal-preview-url')?.value.trim() || '';
-            const isPrivate = modal.querySelector('[data-access="private"]')?.classList.contains('active');
-            const allowed = isPrivate ? modal.querySelector('#private-users')?.value.trim() : '';
-
-            const existingPreview = finalBody.match(/<!--\s*preview:\s*(https?:\/\/[^\s]+)\s*-->/);
-            if (newPreviewUrl) {
-                if (existingPreview) {
-                    finalBody = finalBody.replace(existingPreview[0], `<!-- preview: ${newPreviewUrl} -->`);
-                    if (!/!\[Preview\]\(/.test(finalBody)) {
-                        finalBody = finalBody.replace(/(<!-- preview: .*? -->)/, `$1\n\n![Preview](${newPreviewUrl})`);
-                    }
-                } else {
-                    finalBody = `<!-- preview: ${newPreviewUrl} -->\n\n![Preview](${newPreviewUrl})\n\n` + finalBody;
-                }
-            } else if (existingPreview) {
-                finalBody = finalBody.replace(existingPreview[0], '').replace(/!\[Preview\]\(.*?\)\n?/g, '');
-            }
-
-            if (isPrivate && allowed) {
-                finalBody = `<!-- allowed: ${allowed} -->\n\n` + finalBody;
-                finalBody = window.GithubCore.encryptPrivateBody(finalBody, allowed);
-                finalBody = `<!-- encrypted -->\n\n` + finalBody;
-            }
-
-            let category = 'idea';
-            if (postType === 'feedback') {
-                const catSelect = modal.querySelector('#modal-category');
-                if (catSelect) category = catSelect.value;
-            }
-
-            let labels = [];
-            if (postType === 'feedback') {
-                if (game) labels.push(`game:${game}`);
-                labels.push(`type:${category}`);
-            } else if (postType === 'news') {
-                labels = ['type:news'];
-            } else if (postType === 'update') {
-                labels = ['type:update'];
-                if (game) labels.push(`game:${game}`);
-            }
-            if (isPrivate) labels.push('private');
-
-            if (labels.length === 0) {
-                console.error('[openEditorModal] No labels generated!');
-                window.UIUtils.showToast('Внутренняя ошибка: не сформированы метки', 'error');
-                return;
-            }
-
-            try {
-                if (mode === 'edit') {
-                    await window.GithubAPI.updateIssue(data.number, { title: titleVal, body: finalBody, labels });
-                } else {
-                    await window.GithubAPI.createIssue(titleVal, finalBody, labels);
-                }
-                window.UIUtils.clearDraft(draftKey);
-                closeModal();
-                if (postType === 'feedback' && window.refreshNewsFeed) window.refreshNewsFeed();
-                if (postType === 'update' && window.refreshGameUpdates) window.refreshGameUpdates(game);
-                if (postType === 'news' && window.refreshNewsFeed) window.refreshNewsFeed();
-                window.UIUtils.showToast(mode === 'edit' ? 'Сохранено' : 'Опубликовано', 'success');
-            } catch (err) {
-                if (isNetworkError(err)) {
-                    const mutation = {
-                        type: mode === 'edit' ? 'updateIssue' : 'createIssue',
-                        title: titleVal,
-                        body: finalBody,
-                        labels,
-                        ...(mode === 'edit' && { issueNumber: data.number, issueData: { title: titleVal, body: finalBody, labels } })
-                    };
-                    await queueMutation(mutation);
-                    await registerSync();
-                    window.UIUtils.showToast('Пост сохранён в очереди и будет опубликован при восстановлении сети', 'info');
-                    closeModal();
-                } else {
-                    window.UIUtils.showToast('Ошибка: ' + err.message, 'error');
-                }
-            }
+        container = document.getElementById('news-feed');
+        if (container) {
+            currentUser = getCurrentUser();
+            loadNewsFeed();
+        }
+        window.addEventListener('github-login-success', e => {
+            currentUser = e.detail.login;
+            refreshNewsFeed();
         });
-    }
+        window.addEventListener('github-logout', () => {
+            currentUser = null;
+            refreshNewsFeed();
+        });
+        window.addEventListener('github-issue-created', e => {
+            const issue = e.detail;
+            const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
+            if (!typeLabel || !CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+            cacheRemoveByPrefix('posts_news+update_v3');
+            const newPost = {
+                type: 'post', number: issue.number, title: issue.title, body: issue.body,
+                author: issue.user.login, date: new Date(issue.created_at),
+                labels: issue.labels.map(l => l.name),
+                game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
+            };
+            posts = [newPost, ...posts];
+            renderMixed();
+        });
+        const postId = new URLSearchParams(location.search).get('post');
+        if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
+    });
 
-    async function replaceImagesWithDataUrls(container) {
-        const images = container.querySelectorAll('img');
-        for (const img of images) {
-            const src = img.getAttribute('src');
-            if (!src || src.startsWith('data:') || src.startsWith('blob:')) continue;
-            if (src.startsWith('/') || src.startsWith('images/') || src.startsWith('.')) continue;
-            try {
-                const dataUrl = await getCachedPreviewImage(src);
-                img.src = dataUrl;
-            } catch (e) {}
-        }
-    }
-
-    async function getCachedPreviewImage(url) {
-        if (previewImageCache.has(url)) return previewImageCache.get(url);
+    async function openPostFromUrl(postId) {
         try {
-            const response = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(5000) });
-            if (!response.ok) throw new Error('Failed to fetch');
-            const blob = await response.blob();
-            const dataUrl = URL.createObjectURL(blob);
-            previewImageCache.set(url, dataUrl);
-            return dataUrl;
-        } catch (err) {
-            previewImageCache.set(url, url);
-            return url;
-        }
+            const issue = await loadIssue(postId);
+            if (issue.state === 'closed') return UIUtils.showToast('Пост закрыт', 'error');
+            const item = {
+                type: 'post', id: issue.number, title: issue.title, body: issue.body,
+                author: issue.user.login, date: new Date(issue.created_at),
+                game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
+                labels: issue.labels.map(l => l.name)
+            };
+            if (!canViewPost(issue.body, item.labels, currentUser)) return UIUtils.showToast('Нет доступа', 'error');
+            openFullModal(item);
+        } catch { UIUtils.showToast('Ошибка загрузки', 'error'); }
     }
 
-    window.addEventListener('open-comment-editor', (e) => openEditorModal('new', { issueNumber: e.detail.issueNumber }, 'comment'));
-
-    window.UIFeedback = {
-        renderReactions, renderComments, openFullModal, openEditorModal,
-        renderPostBody, canViewPost, REACTION_TYPES, invalidateCache
+    window.refreshNewsFeed = () => {
+        if (!container || loading) return;
+        posts = []; videos = []; postsLoaded = videosLoaded = false;
+        loadNewsFeed();
     };
+
+    function loadNewsFeed() {
+        if (loading) return;
+        loading = true;
+        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">Загрузка новостей...</p></div>';
+        Promise.all([
+            loadPosts(),
+            loadVideos()
+        ]).then(([loadedPosts, loadedVideos]) => {
+            posts = loadedPosts;
+            videos = loadedVideos;
+            postsLoaded = videosLoaded = true;
+            renderMixed();
+        }).catch(err => {
+            console.error('Ошибка загрузки новостей:', err);
+            postsLoaded = videosLoaded = true;
+            posts = [];
+            videos = [];
+            renderMixed();
+        }).finally(() => {
+            loading = false;
+        });
+    }
+
+    async function loadVideos() {
+        try {
+            return await loadVideosFromRSS2JSON();
+        } catch (err) {
+            console.warn('Ошибка загрузки видео:', err);
+            return [];
+        }
+    }
+
+    async function loadVideosFromRSS2JSON() {
+        const cacheKey = 'youtube_videos_rss2json_v3';
+        const cached = cacheGet(cacheKey);
+        if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
+        const all = [];
+        for (const ch of YT_CHANNELS) {
+            const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(`https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`)}`;
+            try {
+                const resp = await fetch(apiUrl);
+                if (!resp.ok) continue;
+                const data = await resp.json();
+                if (data.status !== 'ok') continue;
+                const items = data.items.slice(0, 9).map(item => {
+                    const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
+                    if (!vid) return null;
+                    return {
+                        type: 'video', id: vid, title: item.title, author: ch.name,
+                        date: new Date(item.pubDate),
+                        thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`
+                    };
+                }).filter(v => v);
+                all.push(...items);
+            } catch (err) {
+                console.warn(`Ошибка загрузки видео для канала ${ch.name}:`, err);
+            }
+        }
+        const sorted = all.sort((a, b) => b.date - a.date).slice(0, 20);
+        cacheSet(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
+        return sorted;
+    }
+
+    async function loadPosts() {
+        const cacheKey = 'posts_news+update_v3';
+        const cached = cacheGet(cacheKey);
+        if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
+        const [newsResp, updatesResp] = await Promise.all([
+            fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:news`),
+            fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:update`)
+        ]);
+        const news = newsResp.ok ? await newsResp.json() : [];
+        const updates = updatesResp.ok ? await updatesResp.json() : [];
+        const all = deduplicateByNumber([...news, ...updates]).filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
+        const result = all.map(i => ({
+            type: 'post', number: i.number, title: i.title, body: i.body,
+            author: i.user.login, date: new Date(i.created_at),
+            labels: i.labels.map(l => l.name),
+            game: i.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
+        }));
+        cacheSet(cacheKey, result.map(p => ({ ...p, date: p.date.toISOString() })));
+        return result;
+    }
+
+    function renderMixed() {
+        if (!postsLoaded || !videosLoaded) return;
+        const filteredPosts = posts.filter(p => {
+            if (!p.labels.includes('private')) return true;
+            if (isAdmin()) return true;
+            const allowed = extractAllowed(p.body);
+            return allowed && allowed.split(',').map(s => s.trim()).includes(currentUser);
+        });
+        let items = [...filteredPosts, ...videos];
+        items.sort((a, b) => b.date - a.date);
+        const showItems = items.slice(0, 6);
+        const grid = GithubCore.createElement('div', 'projects-grid');
+        if (showItems.length === 0) {
+            grid.innerHTML = '<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">Пока нет новостей</p></div>';
+        } else {
+            showItems.forEach(item => grid.appendChild(item.type === 'video' ? createVideoCard(item) : createPostCard(item)));
+        }
+        container.innerHTML = '';
+        container.appendChild(grid);
+        const header = document.querySelector('.news-header');
+        if (header) {
+            const existing = header.querySelector('.admin-news-btn');
+            if (isAdmin() && hasScope('repo')) {
+                if (!existing) {
+                    const btn = GithubCore.createElement('button', 'button admin-news-btn');
+                    btn.innerHTML = '<i class="fas fa-plus"></i> Добавить новость';
+                    btn.addEventListener('click', () => UIFeedback.openEditorModal('new', { game: null }, 'news'));
+                    header.appendChild(btn);
+                }
+            } else if (existing) existing.remove();
+        }
+    }
+
+    function createVideoCard(video) {
+        const card = GithubCore.createElement('div', 'project-card-link card-interactive');
+        const inner = GithubCore.createElement('div', 'project-card');
+
+        const imgW = GithubCore.createElement('div', 'image-wrapper');
+        const img = GithubCore.createElement('img', 'project-image', {}, { src: video.thumbnail, alt: video.title, loading: 'lazy' });
+        imgW.appendChild(img);
+        inner.appendChild(imgW);
+
+        const titleEl = GithubCore.createElement('h3', '', { cursor: 'default' });
+        titleEl.textContent = video.title.length > 70 ? video.title.slice(0,70)+'…' : video.title;
+        inner.appendChild(titleEl);
+
+        const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
+        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
+        inner.appendChild(meta);
+
+        if (currentUser && hasScope('gist')) {
+            const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+            favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
+            favBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleBookmark(video);
+            });
+            inner.appendChild(favBtn);
+        }
+
+        card.appendChild(inner);
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
+            const mediaContainer = card.querySelector('.image-wrapper');
+            if (!mediaContainer || mediaContainer.querySelector('iframe')) return;
+            const src = `https://www.youtube.com/embed/${video.id}`;
+            const iframe = GithubCore.createElement('iframe', '', {
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', borderRadius: '12px'
+            });
+            iframe.src = src;
+            iframe.setAttribute('allowfullscreen', 'true');
+            iframe.loading = 'lazy';
+            iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
+            iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
+            mediaContainer.innerHTML = '';
+            mediaContainer.style.background = '#000';
+            mediaContainer.appendChild(iframe);
+        });
+        return card;
+    }
+
+    function createPostCard(post) {
+        let previewBody = post.body;
+        const allowed = extractAllowed(post.body);
+        if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
+            try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
+        }
+        const card = GithubCore.createElement('div', 'project-card-link card-interactive');
+        const inner = GithubCore.createElement('div', 'project-card');
+
+        const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
+        const imgW = GithubCore.createElement('div', 'image-wrapper');
+        const img = GithubCore.createElement('img', 'project-image', {}, { src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy' });
+        img.onerror = () => img.src = DEFAULT_IMAGE;
+        imgW.appendChild(img);
+        inner.appendChild(imgW);
+
+        const titleEl = GithubCore.createElement('h3', '', { cursor: 'pointer' });
+        titleEl.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
+        inner.appendChild(titleEl);
+
+        const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
+        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
+        const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
+        const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+        preview.textContent = summary;
+        inner.append(meta, preview);
+
+        if (currentUser && hasScope('gist')) {
+            const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+            favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
+            favBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleBookmark({ type: 'post', ...post, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE });
+            });
+            inner.appendChild(favBtn);
+        }
+
+        card.appendChild(inner);
+        card.addEventListener('click', (e) => {
+            if (!e.target.closest('button') && !e.target.closest('.news-bookmark-btn')) {
+                openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels });
+            }
+        });
+        return card;
+    }
 })();

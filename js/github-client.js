@@ -1,10 +1,11 @@
-// js/github-client.js – универсальный клиент GitHub API с ретраями, кэшированием и обработкой 304 (исправлен)
+// js/github-client.js – универсальный клиент GitHub API с ретраями, кэшированием и аутентификацией
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, createAbortable } = window.Utils;
+    // Зависит от Utils (должен быть загружен ранее)
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, createAbortable, debounce } = window.Utils;
 
     const BASE_URL = 'https://api.github.com';
-    const DEFAULT_RETRIES = 2;
-    const RETRY_DELAY = 1000;
+    const DEFAULT_RETRIES = 3;
+    const RETRY_DELAY = 1000; // начальная задержка, экспоненциальный рост
     const CONFIG = window.GithubCore?.CONFIG || { REPO_OWNER: 'NeonShadowYT', REPO_NAME: 'NeonImperium' };
 
     class GitHubClient {
@@ -20,6 +21,7 @@
             return this.token || localStorage.getItem('github_token');
         }
 
+        // Универсальный метод запроса с ретраями
         async request(endpoint, options = {}, retries = DEFAULT_RETRIES) {
             const url = endpoint.startsWith('http') ? endpoint : `${BASE_URL}${endpoint}`;
             const token = this.getToken();
@@ -42,24 +44,23 @@
                     });
                     clearTimeout(timeoutId);
 
-                    if (response.status === 304) {
-                        // Возвращаем специальный сигнал, чтобы вызывающий код знал, что нужно использовать кэш
-                        return null;
-                    }
-
+                    // Успех
                     if (response.ok) {
+                        // Для DELETE и других без тела
                         if (response.status === 204) return null;
-                        const data = await response.json();
-                        return data;
+                        return await response.json();
                     }
 
+                    // Ошибки, которые можно повторить
                     if (response.status >= 500 || response.status === 429) {
                         lastError = new Error(`HTTP ${response.status}`);
+                        // Экспоненциальная задержка
                         const delay = RETRY_DELAY * Math.pow(2, attempt);
                         await new Promise(r => setTimeout(r, delay));
                         continue;
                     }
 
+                    // Ошибки авторизации или клиентские – не повторяем
                     let errorMsg = `HTTP ${response.status}`;
                     try {
                         const errorData = await response.json();
@@ -79,6 +80,19 @@
             }
             throw lastError || new Error('Request failed');
         }
+
+        // ----- Специализированные API -----
+        get issues() {
+            return new IssuesAPI(this);
+        }
+
+        get reactions() {
+            return new ReactionsAPI(this);
+        }
+
+        get comments() {
+            return new CommentsAPI(this);
+        }
     }
 
     // ------ Issues API ------
@@ -87,48 +101,37 @@
             this.client = client;
         }
 
-        async load({ labels = '', state = 'open', per_page = 20, page = 1, signal, forceFresh = false } = {}) {
+        // Загрузка списка issues с кэшированием
+        async load({ labels = '', state = 'open', per_page = 20, page = 1, signal } = {}) {
             const query = new URLSearchParams({ state, per_page, page, labels }).toString();
-            let url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?${query}`;
-            if (forceFresh) {
-                url += `&_t=${Date.now()}`;
-            }
+            const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?${query}`;
             const cacheKey = `gh_api_${url}`;
             const cached = cacheGet(cacheKey);
-            
-            try {
-                const data = await this.client.request(url, { signal });
-                if (data !== null) {
-                    cacheSet(cacheKey, data);
-                    return data;
-                }
-                // 304 – используем кэш, если он есть, иначе повторяем запрос без кэша
-                if (cached) return cached;
-                // Кэша нет, но сервер вернул 304 – делаем повторный запрос с принудительным обновлением
-                console.warn('[github-client] 304 without cache, retrying with forceFresh');
-                return this.load({ labels, state, per_page, page, signal, forceFresh: true });
-            } catch (err) {
-                if (cached) return cached;
-                throw err;
+            if (cached && !signal?.aborted) {
+                // Фоновое обновление
+                this.client.request(url, { signal: AbortSignal.timeout(5000) })
+                    .then(data => cacheSet(cacheKey, data))
+                    .catch(() => {});
+                return cached;
             }
+            const data = await this.client.request(url, { signal });
+            cacheSet(cacheKey, data);
+            return data;
         }
 
         async loadOne(issueNumber, signal) {
             const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`;
             const cacheKey = `gh_api_${url}`;
             const cached = cacheGet(cacheKey);
-            try {
-                const data = await this.client.request(url, { signal });
-                if (data !== null) {
-                    cacheSet(cacheKey, data);
-                    return data;
-                }
-                if (cached) return cached;
-                throw new Error('Issue not found');
-            } catch (err) {
-                if (cached) return cached;
-                throw err;
+            if (cached && !signal?.aborted) {
+                this.client.request(url, { signal: AbortSignal.timeout(5000) })
+                    .then(data => cacheSet(cacheKey, data))
+                    .catch(() => {});
+                return cached;
             }
+            const data = await this.client.request(url, { signal });
+            cacheSet(cacheKey, data);
+            return data;
         }
 
         async create(title, body, labels) {
@@ -177,18 +180,15 @@
             const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
             const cacheKey = `gh_api_${url}`;
             const cached = cacheGet(cacheKey);
-            try {
-                const data = await this.client.request(url, { signal });
-                if (data !== null) {
-                    cacheSet(cacheKey, data);
-                    return data;
-                }
-                if (cached) return cached;
-                return [];
-            } catch (err) {
-                if (cached) return cached;
-                throw err;
+            if (cached && !signal?.aborted) {
+                this.client.request(url, { signal: AbortSignal.timeout(5000) })
+                    .then(data => cacheSet(cacheKey, data))
+                    .catch(() => {});
+                return cached;
             }
+            const data = await this.client.request(url, { signal });
+            cacheSet(cacheKey, data);
+            return data;
         }
 
         async add(issueNumber, content) {
@@ -222,18 +222,15 @@
             const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`;
             const cacheKey = `gh_api_${url}`;
             const cached = cacheGet(cacheKey);
-            try {
-                const data = await this.client.request(url, { signal });
-                if (data !== null) {
-                    cacheSet(cacheKey, data);
-                    return data;
-                }
-                if (cached) return cached;
-                return [];
-            } catch (err) {
-                if (cached) return cached;
-                throw err;
+            if (cached && !signal?.aborted) {
+                this.client.request(url, { signal: AbortSignal.timeout(5000) })
+                    .then(data => cacheSet(cacheKey, data))
+                    .catch(() => {});
+                return cached;
             }
+            const data = await this.client.request(url, { signal });
+            cacheSet(cacheKey, data);
+            return data;
         }
 
         async add(issueNumber, body) {
@@ -254,6 +251,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ body })
             });
+            // Инвалидируем кэш всех комментариев (неизвестен issue)
             cacheRemoveByPrefix(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/`);
             return data;
         }
@@ -265,7 +263,9 @@
         }
     }
 
+    // Единый экземпляр клиента (ленивая инициализация)
     let clientInstance = null;
+
     function getClient() {
         if (!clientInstance) {
             clientInstance = new GitHubClient();
@@ -273,15 +273,18 @@
         return clientInstance;
     }
 
+    // Обновление токена (вызывается из github-auth.js)
     function updateToken(token) {
         const client = getClient();
         client.setToken(token);
     }
 
+    // Экспорт в глобальную область
     window.GitHubClient = GitHubClient;
     window.GitHubAPIClient = {
         getClient,
         updateToken,
+        // Для удобства – прямые методы
         request: (...args) => getClient().request(...args),
         issues: () => getClient().issues,
         reactions: () => getClient().reactions,
