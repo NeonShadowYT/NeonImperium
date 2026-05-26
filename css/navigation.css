@@ -1,3 +1,4 @@
+/* navigation.css — навигация, выпадающее меню профиля, переключатель языка */
 .nav-bar {
     background: var(--bg-card);
     border-radius: var(--radius-pill);
@@ -74,7 +75,7 @@
     border-color: var(--accent);
 }
 
-/* Профиль - максимальный z-index */
+/* ========== ПРОФИЛЬ И ВЫПАДАЮЩЕЕ МЕНЮ - ВСЕГДА ПОВЕРХ ========== */
 .nav-profile {
     display: flex;
     align-items: center;
@@ -124,7 +125,7 @@
     transform: rotate(90deg);
 }
 
-/* Выпадающее меню профиля - ещё выше */
+/* Выпадающее меню - максимальный z-index */
 .profile-dropdown {
     position: absolute;
     top: calc(100% + 8px);
