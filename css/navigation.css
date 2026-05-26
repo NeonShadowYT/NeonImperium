@@ -74,7 +74,7 @@
     border-color: var(--accent);
 }
 
-/* Профиль */
+/* Профиль - максимальный z-index */
 .nav-profile {
     display: flex;
     align-items: center;
@@ -86,7 +86,7 @@
     cursor: pointer;
     transition: border-color var(--transition);
     position: relative;
-    z-index: 10000;
+    z-index: 100000 !important;
 }
 
 .nav-profile:hover {
@@ -124,7 +124,7 @@
     transform: rotate(90deg);
 }
 
-/* Выпадающее меню профиля */
+/* Выпадающее меню профиля - ещё выше */
 .profile-dropdown {
     position: absolute;
     top: calc(100% + 8px);
@@ -136,7 +136,7 @@
     min-width: 220px;
     box-shadow: var(--shadow);
     display: none;
-    z-index: 10001 !important;
+    z-index: 100001 !important;
 }
 
 .nav-profile.active .profile-dropdown {
@@ -171,7 +171,7 @@
     margin: 8px 0;
 }
 
-/* Модальное окно входа (создаётся динамически) */
+/* Модальное окно входа */
 .modal {
     display: none;
     position: fixed;
@@ -180,7 +180,7 @@
     width: 100%;
     height: 100%;
     background: rgba(0,0,0,0.8);
-    z-index: 20000;
+    z-index: 200000;
     align-items: center;
     justify-content: center;
 }
@@ -228,20 +228,4 @@
     display: flex;
     gap: 10px;
     justify-content: flex-end;
-}
-
-.nav-profile {
-    z-index: 100000 !important;
-    position: relative;
-}
-.profile-dropdown {
-    z-index: 100001 !important;
-    position: absolute !important;
-}
-/* Убедимся, что header не перекрывает */
-.game-header, .header-card {
-    z-index: 1 !important;
-}
-.nav-bar {
-    z-index: 1000 !important;
 }
