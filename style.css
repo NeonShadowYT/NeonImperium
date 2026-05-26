@@ -1025,3 +1025,29 @@
         transform: none !important;
     }
 }
+
+/* ========== Fix for Starve Neon description cards – remove media borders and hover effects ========== */
+.feature-item {
+    border: 1px solid var(--border);  /* keep card border like other cards */
+}
+
+.feature-banner,
+.feature-banner video,
+.feature-banner img {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    border-radius: 14px 14px 0 0;  /* keep original border-radius for top corners */
+}
+
+/* Ensure no border on the media container itself */
+.feature-banner {
+    border: 0 !important;
+    background: transparent;
+}
+
+/* Remove any hover scaling or transform for feature cards (already handled, but double‑safe) */
+.feature-item.tilt-card:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}
