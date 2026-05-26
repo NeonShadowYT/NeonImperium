@@ -12,7 +12,7 @@
             padding: '12px 24px',
             borderRadius: '30px',
             boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
-            zIndex: '100000',  // Очень высокий z-index, чтобы быть поверх всего
+            zIndex: '100000',
             opacity: '0',
             transform: 'translateY(20px)',
             transition: 'opacity 0.3s, transform 0.3s',
@@ -36,7 +36,6 @@
     function createModal(title, contentHtml, options = {}) {
         const { onClose, size = 'full', closeButton = true } = options;
 
-        // Удаляем старые модалки, чтобы не было конфликта
         const existingModals = document.querySelectorAll('.modal-fullscreen, .modal');
         existingModals.forEach(m => m.remove());
 
@@ -47,8 +46,7 @@
             width: '100%',
             height: '100%',
             backgroundColor: 'rgba(0,0,0,0.85)',
-            zIndex: '1000000',  // Максимальный приоритет
-            display: 'flex',
+            zIndex: '1000000',
             alignItems: 'center',
             justifyContent: 'center',
             backdropFilter: 'blur(4px)'
@@ -85,9 +83,6 @@
         document.body.appendChild(modal);
         document.body.style.overflow = 'hidden';
 
-        // Принудительно устанавливаем display: flex для активной модалки (на случай, если CSS не сработал)
-        modal.style.display = 'flex';
-        // Активируем модалку с небольшой задержкой для анимации
         setTimeout(() => {
             modal.classList.add('active');
         }, 10);
