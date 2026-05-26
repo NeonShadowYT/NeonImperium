@@ -230,3 +230,10 @@
     gap: 10px;
     justify-content: flex-end;
 }
+
+.modal, .modal-fullscreen {
+    z-index: 1000000 !important;
+}
+.modal-content, .modal-content-full {
+    z-index: 1000001 !important;
+}

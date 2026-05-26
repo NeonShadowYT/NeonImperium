@@ -186,8 +186,15 @@
     function showReactionMenu(relativeTo, issueNumber, callback) {
         document.querySelectorAll('.reaction-menu').forEach(m => m.remove());
         const menu = createElement('div', 'reaction-menu', {
-            position: 'absolute', background: 'var(--bg-card)', border: '1px solid var(--border)',
-            borderRadius: '30px', padding: '5px', display: 'flex', gap: '5px', zIndex: '10010', boxShadow: 'var(--shadow)'
+            position: 'absolute',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: '30px',
+            padding: '5px',
+            display: 'flex',
+            gap: '5px',
+            zIndex: '10000000',
+            boxShadow: 'var(--shadow)'
         }, { role: 'menu' });
         REACTION_TYPES.forEach(t => {
             const btn = createElement('button', 'reaction-menu-btn', {}, { role: 'menuitem' });
@@ -275,28 +282,24 @@
         const key = `reactions_${issueNumber}`;
         const cached = getCached(key, reactionsCache);
         if (cached) return cached;
-        try {
-            const reactions = await window.GithubAPI.loadReactions(issueNumber);
-            setCached(key, reactions, reactionsCache);
-            return reactions;
-        } catch (err) {
-            if (cached) return cached;
-            throw err;
-        }
+        const reactions = await window.GithubAPI.loadReactions(issueNumber);
+        setCached(key, reactions, reactionsCache);
+        return reactions;
     }
 
     async function loadCommentsWithCache(issueNumber) {
         const key = `comments_${issueNumber}`;
         const cached = getCached(key, commentsCache);
         if (cached) return cached;
-        try {
-            const comments = await window.GithubAPI.loadComments(issueNumber);
-            setCached(key, comments, commentsCache);
-            return comments;
-        } catch (err) {
-            if (cached) return cached;
-            throw err;
-        }
+        const comments = await window.GithubAPI.loadComments(issueNumber);
+        setCached(key, comments, commentsCache);
+        return comments;
+    }
+
+    function extractPollFromBody(body) {
+        const match = /<!-- poll: (.*?) -->/.exec(body);
+        if (match) try { return JSON.parse(match[1]); } catch { return null; }
+        return null;
     }
 
     async function renderPostBody(container, body, issueNumber) {
@@ -319,6 +322,12 @@
             container.appendChild(pollContainer);
             await renderPoll(pollContainer, issueNumber, pollData);
         }
+    }
+
+    function renderStaticPoll(container, pollData) {
+        const pollDiv = createElement('div', 'poll card');
+        pollDiv.innerHTML = `<h3>📊 ${escapeHtml(pollData.question)}</h3><div class="poll-options static">${pollData.options.map(opt => `<div class="poll-option"><span>${escapeHtml(opt)}</span></div>`).join('')}</div><p class="text-secondary small">(опрос будет доступен после публикации)</p>`;
+        container.appendChild(pollDiv);
     }
 
     async function renderPoll(container, issueNumber, pollData) {
@@ -386,6 +395,136 @@
         }
     }
 
+    function setupCommentForm(container, item, currentUser) {
+        if (!window.GithubAuth.hasScope('repo')) return;
+        const form = createElement('div', 'comment-form', { display: 'flex', gap: '8px', marginTop: '16px' });
+        form.innerHTML = `
+            <input type="text" class="comment-input" placeholder="Написать комментарий..." style="flex:1; padding:10px 12px; border-radius:30px; background:var(--bg-primary); border:1px solid var(--border); color:var(--text-primary);">
+            <div class="button-group" style="display:flex; gap:8px;">
+                <button class="button comment-submit">Отправить</button>
+                <button class="button comment-editor-btn"><i class="fas fa-pencil-alt"></i> Редактор</button>
+            </div>
+        `;
+        container.appendChild(form);
+        const input = form.querySelector('.comment-input');
+        const submit = form.querySelector('.comment-submit');
+        const editorBtn = form.querySelector('.comment-editor-btn');
+
+        submit.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const text = input.value.trim();
+            if (!text) return;
+            const tempDiv = createElement('div', 'comment');
+            tempDiv.dataset.commentId = 'temp-' + Date.now();
+            tempDiv.innerHTML = `<div class="comment-meta"><span class="comment-author">${escapeHtml(currentUser)}</span></div><div>${escapeHtml(text).replace(/\n/g,'<br>')}</div>`;
+            container.querySelector('.feedback-comments').appendChild(tempDiv);
+            input.disabled = submit.disabled = editorBtn.disabled = true;
+            try {
+                const newComment = await window.GithubAPI.addComment(item.id, text);
+                tempDiv.dataset.commentId = newComment.id;
+                invalidateCache(item.id);
+                const updated = await window.GithubAPI.loadComments(item.id);
+                setCached(`comments_${item.id}`, updated, commentsCache);
+                renderComments(container.querySelector('.feedback-comments'), updated, currentUser, item.id);
+                window.UIUtils.showToast('Комментарий добавлен', 'success');
+            } catch (err) {
+                if (isNetworkError(err)) {
+                    await queueMutation({ type: 'addComment', issueNumber: item.id, body: text, timestamp: Date.now() });
+                    await registerSync();
+                    window.UIUtils.showToast('Комментарий будет отправлен позже', 'info');
+                    tempDiv.remove();
+                } else {
+                    window.UIUtils.showToast('Ошибка', 'error');
+                    tempDiv.remove();
+                }
+            } finally {
+                input.disabled = submit.disabled = editorBtn.disabled = false;
+                input.value = '';
+            }
+        });
+
+        editorBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.dispatchEvent(new CustomEvent('open-comment-editor', { detail: { issueNumber: item.id } }));
+        });
+    }
+
+    function addHeaderActions(modalHeader, item, issue, currentUser, closeModal, escHandler) {
+        const isAdmin = window.GithubAuth.isAdmin();
+        const hasRepo = window.GithubAuth.hasScope('repo');
+        const hasGist = window.GithubAuth.hasScope('gist');
+        const postUrl = `${location.origin}${location.pathname}?post=${item.id}`;
+        const actions = createElement('div', 'modal-header-actions', { display: 'flex', gap: '4px', alignItems: 'center', marginRight: 'auto' });
+
+        let btns = '';
+        if (hasRepo && (isAdmin || (currentUser && issue.user.login === currentUser))) {
+            btns += `<button class="action-btn edit-issue" title="Редактировать"><i class="fas fa-edit"></i></button>`;
+            btns += `<button class="action-btn close-issue" title="Закрыть"><i class="fas fa-trash-alt"></i></button>`;
+        }
+        btns += `<button class="action-btn share-post" title="Поделиться"><i class="fas fa-share-alt"></i></button>`;
+        if (currentUser && hasGist) {
+            btns += `<button class="action-btn bookmark-post" title="В избранное"><i class="fas fa-bookmark"></i></button>`;
+        }
+        actions.innerHTML = btns;
+        const closeBtn = modalHeader.querySelector('.modal-close');
+        if (closeBtn) closeBtn.before(actions);
+
+        actions.querySelector('.edit-issue')?.addEventListener('click', (e) => {
+            e.stopPropagation(); closeModal(); document.removeEventListener('keydown', escHandler);
+            let postType = 'feedback';
+            if (item.labels?.includes('type:news')) postType = 'news';
+            else if (item.labels?.includes('type:update')) postType = 'update';
+            openEditorModal('edit', { number: item.id, title: issue.title, body: issue.body, game: item.game }, postType);
+        });
+        actions.querySelector('.close-issue')?.addEventListener('click', async (e) => {
+            e.stopPropagation(); if (!confirm('Закрыть?')) return;
+            try {
+                await window.GithubAPI.closeIssue(item.id);
+                closeModal(); document.removeEventListener('keydown', escHandler);
+                if (window.refreshNewsFeed) window.refreshNewsFeed();
+                if (window.refreshGameUpdates && item.game) window.refreshGameUpdates(item.game);
+                window.UIUtils.showToast('Закрыто', 'success');
+            } catch { window.UIUtils.showToast('Ошибка', 'error'); }
+        });
+        actions.querySelector('.share-post')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(postUrl).then(() => window.UIUtils.showToast('Ссылка скопирована', 'success')).catch(() => window.UIUtils.showToast('Ошибка', 'error'));
+        });
+        actions.querySelector('.bookmark-post')?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!window.BookmarkStorage) {
+                try { await loadModule('js/features/storage.js'); } catch { return window.UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
+            }
+            if (!window.BookmarkStorage) return window.UIUtils.showToast('Хранилище не загружено', 'error');
+            const thumbnail = extractFirstImage(issue.body) || 'images/default-news.webp';
+            window.BookmarkStorage.addBookmark({
+                url: postUrl,
+                title: item.title,
+                type: 'post',
+                thumbnail: thumbnail,
+                postData: {
+                    id: item.id,
+                    title: item.title,
+                    body: issue.body,
+                    author: item.author,
+                    date: item.date instanceof Date ? item.date.toISOString() : item.date,
+                    labels: item.labels,
+                    game: item.game
+                }
+            }).then(() => window.UIUtils.showToast('Добавлено в избранное', 'success'))
+              .catch(err => {
+                  if (err.message === 'not_logged_in') window.UIUtils.showToast('Войдите в аккаунт с правами gist', 'error');
+                  else if (err.message === 'duplicate') window.UIUtils.showToast('Уже в избранном', 'info');
+                  else window.UIUtils.showToast('Ошибка: ' + err.message, 'error');
+              });
+        });
+    }
+
+    function extractFirstImage(body) {
+        const m = body?.match(/!\[.*?\]\((.*?)\)/);
+        return m ? m[1] : null;
+    }
+
     async function openFullModal(item) {
         const currentUser = window.GithubAuth.getCurrentUser();
         const { modal, closeModal } = window.UIUtils.createModal(item.title, '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>', { size: 'full' });
@@ -418,12 +557,6 @@
             container.innerHTML = `<p class="error-message">Ошибка загрузки поста: ${err.message || 'неизвестная ошибка'}. Попробуйте позже.</p>`;
             setTimeout(() => { closeModal(); document.removeEventListener('keydown', escHandler); }, 5000);
         }
-    }
-
-    function extractPollFromBody(body) {
-        const match = /<!-- poll: (.*?) -->/.exec(body);
-        if (match) try { return JSON.parse(match[1]); } catch { return null; }
-        return null;
     }
 
     function canViewPost(body, labels, currentUser) {
