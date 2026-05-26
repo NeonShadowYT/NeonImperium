@@ -1,9 +1,9 @@
-// js/pages/news-feed.js – лента новостей, видео проигрываются в карточке, посты в модалке
+// js/pages/news-feed.js – лента новостей, исправленная версия
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule } = GithubCore;
-    const { loadIssues, loadIssue } = GithubAPI;
-    const { openFullModal, canViewPost } = UIFeedback;
-    const { getCurrentUser, isAdmin, hasScope } = GithubAuth;
+    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, loadModule } = window.GithubCore;
+    const { loadIssues, loadIssue } = window.GithubAPI;
+    const { openFullModal, canViewPost } = window.UIFeedback;
+    const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
 
     const YT_CHANNELS = [
         { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
@@ -17,20 +17,16 @@
     let currentUser = null;
     let loading = false;
 
-    // Функция для показа модалки входа и ожидания успеха
     async function ensureLoggedInAndGist() {
         if (getCurrentUser() && hasScope('gist')) return true;
-        // Диспатчим событие для вызова модалки входа
         window.dispatchEvent(new CustomEvent('github-login-requested'));
-        // Ждём события успешного входа
         return new Promise((resolve) => {
             const onLogin = (e) => {
                 if (e.detail?.scopes?.includes('gist')) {
                     window.removeEventListener('github-login-success', onLogin);
                     resolve(true);
                 } else if (e.detail?.scopes) {
-                    // Залогинились, но нет gist – показываем ошибку
-                    UIUtils.showToast('Для закладок требуется scope "gist". Войдите заново с правами gist.', 'error');
+                    window.UIUtils.showToast('Для закладок требуется scope "gist". Войдите заново с правами gist.', 'error');
                     window.removeEventListener('github-login-success', onLogin);
                     resolve(false);
                 }
@@ -50,14 +46,13 @@
         });
     }
 
-    // Вспомогательная функция для кнопки избранного
     async function handleBookmark(item) {
         if (!(await ensureLoggedInAndGist())) {
-            UIUtils.showToast('Необходимо войти с правами gist', 'error');
+            window.UIUtils.showToast('Необходимо войти с правами gist', 'error');
             return;
         }
         if (!window.BookmarkStorage) {
-            try { await loadModule('js/features/storage.js'); } catch { return UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
+            try { await loadModule('js/features/storage.js'); } catch { return window.UIUtils.showToast('Не удалось загрузить хранилище', 'error'); }
         }
         const bookmark = {
             url: item.type === 'video'
@@ -79,13 +74,13 @@
             } : undefined
         };
         try {
-            await BookmarkStorage.addBookmark(bookmark);
-            UIUtils.showToast('Добавлено в избранное', 'success');
+            await window.BookmarkStorage.addBookmark(bookmark);
+            window.UIUtils.showToast('Добавлено в избранное', 'success');
         } catch (err) {
             if (err.message === 'password_required') {
-                UIUtils.showToast('Для сохранения нужен мастер-пароль. Откройте хранилище.', 'error');
+                window.UIUtils.showToast('Для сохранения нужен мастер-пароль. Откройте хранилище.', 'error');
             } else if (err.message !== 'duplicate') {
-                UIUtils.showToast('Ошибка: ' + err.message, 'error');
+                window.UIUtils.showToast('Ошибка: ' + err.message, 'error');
             }
         }
     }
@@ -95,10 +90,14 @@
         if (!section) return;
         let header = section.querySelector('.news-header');
         if (!header) {
-            header = GithubCore.createElement('div', 'news-header', {
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                marginBottom: '20px', flexWrap: 'wrap', gap: '15px'
-            });
+            header = document.createElement('div');
+            header.className = 'news-header';
+            header.style.display = 'flex';
+            header.style.alignItems = 'center';
+            header.style.justifyContent = 'space-between';
+            header.style.marginBottom = '20px';
+            header.style.flexWrap = 'wrap';
+            header.style.gap = '15px';
             header.innerHTML = '<div><h2 data-lang="newsTitle">📰 Последние новости</h2><p class="text-secondary" data-lang="newsDesc">Свежие видео и обновления</p></div>';
             section.prepend(header);
         }
@@ -136,16 +135,19 @@
     async function openPostFromUrl(postId) {
         try {
             const issue = await loadIssue(postId);
-            if (issue.state === 'closed') return UIUtils.showToast('Пост закрыт', 'error');
+            if (issue.state === 'closed') return window.UIUtils.showToast('Пост закрыт', 'error');
             const item = {
                 type: 'post', id: issue.number, title: issue.title, body: issue.body,
                 author: issue.user.login, date: new Date(issue.created_at),
                 game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
                 labels: issue.labels.map(l => l.name)
             };
-            if (!canViewPost(issue.body, item.labels, currentUser)) return UIUtils.showToast('Нет доступа', 'error');
+            if (!canViewPost(issue.body, item.labels, currentUser)) return window.UIUtils.showToast('Нет доступа', 'error');
             openFullModal(item);
-        } catch { UIUtils.showToast('Ошибка загрузки', 'error'); }
+        } catch (err) {
+            console.error('Failed to open post from URL:', err);
+            window.UIUtils.showToast('Ошибка загрузки поста', 'error');
+        }
     }
 
     window.refreshNewsFeed = () => {
@@ -221,21 +223,26 @@
         const cacheKey = 'posts_news+update_v3';
         const cached = cacheGet(cacheKey);
         if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
-        const [newsResp, updatesResp] = await Promise.all([
-            fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:news`),
-            fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:update`)
-        ]);
-        const news = newsResp.ok ? await newsResp.json() : [];
-        const updates = updatesResp.ok ? await updatesResp.json() : [];
-        const all = deduplicateByNumber([...news, ...updates]).filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
-        const result = all.map(i => ({
-            type: 'post', number: i.number, title: i.title, body: i.body,
-            author: i.user.login, date: new Date(i.created_at),
-            labels: i.labels.map(l => l.name),
-            game: i.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
-        }));
-        cacheSet(cacheKey, result.map(p => ({ ...p, date: p.date.toISOString() })));
-        return result;
+        try {
+            const [newsResp, updatesResp] = await Promise.all([
+                fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:news`),
+                fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:update`)
+            ]);
+            const news = newsResp.ok ? await newsResp.json() : [];
+            const updates = updatesResp.ok ? await updatesResp.json() : [];
+            const all = deduplicateByNumber([...news, ...updates]).filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
+            const result = all.map(i => ({
+                type: 'post', number: i.number, title: i.title, body: i.body,
+                author: i.user.login, date: new Date(i.created_at),
+                labels: i.labels.map(l => l.name),
+                game: i.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
+            }));
+            cacheSet(cacheKey, result.map(p => ({ ...p, date: p.date.toISOString() })));
+            return result;
+        } catch (err) {
+            console.error('Failed to load posts:', err);
+            return [];
+        }
     }
 
     function renderMixed() {
@@ -249,7 +256,8 @@
         let items = [...filteredPosts, ...videos];
         items.sort((a, b) => b.date - a.date);
         const showItems = items.slice(0, 6);
-        const grid = GithubCore.createElement('div', 'projects-grid');
+        const grid = document.createElement('div');
+        grid.className = 'projects-grid';
         if (showItems.length === 0) {
             grid.innerHTML = '<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">Пока нет новостей</p></div>';
         } else {
@@ -262,9 +270,10 @@
             const existing = header.querySelector('.admin-news-btn');
             if (isAdmin() && hasScope('repo')) {
                 if (!existing) {
-                    const btn = GithubCore.createElement('button', 'button admin-news-btn');
+                    const btn = document.createElement('button');
+                    btn.className = 'button admin-news-btn';
                     btn.innerHTML = '<i class="fas fa-plus"></i> Добавить новость';
-                    btn.addEventListener('click', () => UIFeedback.openEditorModal('new', { game: null }, 'news'));
+                    btn.addEventListener('click', () => window.UIFeedback.openEditorModal('new', { game: null }, 'news'));
                     header.appendChild(btn);
                 }
             } else if (existing) existing.remove();
@@ -272,24 +281,32 @@
     }
 
     function createVideoCard(video) {
-        const card = GithubCore.createElement('div', 'project-card-link card-interactive');
-        const inner = GithubCore.createElement('div', 'project-card');
-
-        const imgW = GithubCore.createElement('div', 'image-wrapper');
-        const img = GithubCore.createElement('img', 'project-image', {}, { src: video.thumbnail, alt: video.title, loading: 'lazy' });
+        const card = document.createElement('div');
+        card.className = 'project-card-link card-interactive';
+        const inner = document.createElement('div');
+        inner.className = 'project-card';
+        const imgW = document.createElement('div');
+        imgW.className = 'image-wrapper';
+        const img = document.createElement('img');
+        img.className = 'project-image';
+        img.src = video.thumbnail;
+        img.alt = video.title;
+        img.loading = 'lazy';
         imgW.appendChild(img);
         inner.appendChild(imgW);
-
-        const titleEl = GithubCore.createElement('h3', '', { cursor: 'default' });
+        const titleEl = document.createElement('h3');
+        titleEl.style.cursor = 'default';
         titleEl.textContent = video.title.length > 70 ? video.title.slice(0,70)+'…' : video.title;
         inner.appendChild(titleEl);
-
-        const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
+        const meta = document.createElement('p');
+        meta.className = 'text-secondary';
+        meta.style.fontSize = '12px';
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(video.author)} · <i class="fas fa-calendar-alt"></i> ${video.date.toLocaleDateString()}`;
         inner.appendChild(meta);
-
         if (currentUser && hasScope('gist')) {
-            const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+            const favBtn = document.createElement('div');
+            favBtn.className = 'news-bookmark-btn';
+            favBtn.title = 'В избранное';
             favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
             favBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -297,16 +314,20 @@
             });
             inner.appendChild(favBtn);
         }
-
         card.appendChild(inner);
         card.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
             const mediaContainer = card.querySelector('.image-wrapper');
             if (!mediaContainer || mediaContainer.querySelector('iframe')) return;
             const src = `https://www.youtube.com/embed/${video.id}`;
-            const iframe = GithubCore.createElement('iframe', '', {
-                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', borderRadius: '12px'
-            });
+            const iframe = document.createElement('iframe');
+            iframe.style.position = 'absolute';
+            iframe.style.top = '0';
+            iframe.style.left = '0';
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.border = 'none';
+            iframe.style.borderRadius = '12px';
             iframe.src = src;
             iframe.setAttribute('allowfullscreen', 'true');
             iframe.loading = 'lazy';
@@ -325,29 +346,43 @@
         if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
             try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
         }
-        const card = GithubCore.createElement('div', 'project-card-link card-interactive');
-        const inner = GithubCore.createElement('div', 'project-card');
-
+        const card = document.createElement('div');
+        card.className = 'project-card-link card-interactive';
+        const inner = document.createElement('div');
+        inner.className = 'project-card';
         const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
-        const imgW = GithubCore.createElement('div', 'image-wrapper');
-        const img = GithubCore.createElement('img', 'project-image', {}, { src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy' });
+        const imgW = document.createElement('div');
+        imgW.className = 'image-wrapper';
+        const img = document.createElement('img');
+        img.className = 'project-image';
+        img.src = imgMatch?.[1] || DEFAULT_IMAGE;
+        img.alt = post.title;
+        img.loading = 'lazy';
         img.onerror = () => img.src = DEFAULT_IMAGE;
         imgW.appendChild(img);
         inner.appendChild(imgW);
-
-        const titleEl = GithubCore.createElement('h3', '', { cursor: 'pointer' });
+        const titleEl = document.createElement('h3');
+        titleEl.style.cursor = 'pointer';
         titleEl.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
         inner.appendChild(titleEl);
-
-        const meta = GithubCore.createElement('p', 'text-secondary', { fontSize: '12px' });
+        const meta = document.createElement('p');
+        meta.className = 'text-secondary';
+        meta.style.fontSize = '12px';
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
         const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
-        const preview = GithubCore.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+        const preview = document.createElement('p');
+        preview.className = 'text-secondary';
+        preview.style.fontSize = '13px';
+        preview.style.overflow = 'hidden';
+        preview.style.display = '-webkit-box';
+        preview.style.webkitLineClamp = '2';
+        preview.style.webkitBoxOrient = 'vertical';
         preview.textContent = summary;
         inner.append(meta, preview);
-
         if (currentUser && hasScope('gist')) {
-            const favBtn = GithubCore.createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+            const favBtn = document.createElement('div');
+            favBtn.className = 'news-bookmark-btn';
+            favBtn.title = 'В избранное';
             favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
             favBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -355,7 +390,6 @@
             });
             inner.appendChild(favBtn);
         }
-
         card.appendChild(inner);
         card.addEventListener('click', (e) => {
             if (!e.target.closest('button') && !e.target.closest('.news-bookmark-btn')) {
@@ -363,5 +397,37 @@
             }
         });
         return card;
+    }
+
+    function extractAllowed(body) {
+        const match = /<!--\s*allowed:\s*(.*?)\s*-->/i.exec(body);
+        return match ? match[1].trim() : null;
+    }
+
+    function extractSummary(body) {
+        const match = /<!--\s*summary:\s*(.*?)\s*-->/i.exec(body);
+        return match ? match[1].trim() : null;
+    }
+
+    function decryptPrivateBody(encBase64, allowedStr) {
+        if (!allowedStr) return encBase64;
+        try {
+            const encrypted = decodeURIComponent(escape(atob(encBase64)));
+            let key = '';
+            let hash = 0;
+            for (let i = 0; i < allowedStr.length; i++) {
+                hash = ((hash << 5) - hash) + allowedStr.charCodeAt(i);
+                hash |= 0;
+            }
+            const keyStr = Math.abs(hash).toString(16);
+            let result = '';
+            for (let i = 0; i < encrypted.length; i++) {
+                result += String.fromCharCode(encrypted.charCodeAt(i) ^ keyStr.charCodeAt(i % keyStr.length));
+            }
+            return result;
+        } catch (e) {
+            console.warn('Decrypt failed', e);
+            return encBase64;
+        }
     }
 })();

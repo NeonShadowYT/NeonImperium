@@ -1,8 +1,8 @@
-// js/pages/feedback.js — обратная связь на страницах игр (использует OfflineQueue)
+// js/pages/feedback.js — обратная связь на страницах игр (исправленная версия)
 (function() {
     const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable } = window.Utils;
     const { extractAllowed, extractSummary, decryptPrivateBody } = window.GithubCore;
-    const { loadIssues, loadReactions, addReaction, removeReaction } = window.GithubAPI;
+    const { loadIssues, loadReactions, addReaction, removeReaction, loadIssue } = window.GithubAPI;
     const { renderReactions, openFullModal, openEditorModal, canViewPost } = window.UIFeedback;
     const { getCurrentUser, isAdmin } = window.GithubAuth;
     const { queueMutation, registerSync, processQueue } = window.OfflineQueue;
@@ -78,13 +78,16 @@
 
     async function openPostFromUrl(id) {
         try {
-            const issue = await window.GithubAPI.loadIssue(id);
+            const issue = await loadIssue(id);
             const gameLabel = issue.labels.find(l => l.name.startsWith('game:'));
             if (!gameLabel || gameLabel.name.split(':')[1] !== currentGame) return;
             const item = { id: issue.number, title: issue.title, body: issue.body, author: issue.user.login, date: new Date(issue.created_at), game: currentGame, labels: issue.labels.map(l=>l.name) };
             if (!canViewPost(issue.body, item.labels, currentUser)) return window.UIUtils.showToast('Нет доступа', 'error');
             openFullModal(item);
-        } catch { window.UIUtils.showToast('Ошибка', 'error'); }
+        } catch (err) {
+            console.error('Failed to open post from URL:', err);
+            window.UIUtils.showToast('Ошибка загрузки поста', 'error');
+        }
     }
 
     function checkAuthAndRender() {
@@ -124,7 +127,7 @@
         if (isLoading) return;
         isLoading = true;
         if (currentAbort) currentAbort.controller.abort();
-        const { controller, timeoutId } = createAbortable(10000);
+        const { controller, timeoutId } = createAbortable(15000);
         currentAbort = { controller };
         try {
             const key = `issues_${currentGame}_page_${page}`;
@@ -137,8 +140,15 @@
             allIssues = reset ? deduplicateByNumber(issues) : deduplicateByNumber([...allIssues, ...issues]);
             currentPage = page;
             filterAndDisplay(reset);
-        } catch { if (controller.signal.aborted) return; window.UIUtils.showToast('Ошибка загрузки', 'error'); }
-        finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; isLoading = false; }
+        } catch (err) {
+            if (controller.signal.aborted) return;
+            console.error('Failed to load feedback page:', err);
+            window.UIUtils.showToast('Ошибка загрузки обратной связи', 'error');
+        } finally {
+            clearTimeout(timeoutId);
+            if (currentAbort?.controller === controller) currentAbort = null;
+            isLoading = false;
+        }
     }
 
     function filterAndDisplay(reset) {
@@ -198,7 +208,9 @@
             if (!window.reactionsListCache) window.reactionsListCache = new Map();
             window.reactionsListCache.set(key, { data: reactions, timestamp: Date.now() });
             renderReactions(container, num, reactions, currentUser, addReactionWithSync, removeReactionWithSync);
-        } catch {}
+        } catch (err) {
+            console.error('Failed to load reactions for card:', err);
+        }
     }
 
     window.FeedbackPage = {

@@ -7,7 +7,6 @@
         ALLOWED_AUTHORS: ['NeonShadowYT', 'GoldenCreeper567']
     };
 
-    // Извлекаем мета-комментарии
     function extractMeta(body, tag) {
         const re = new RegExp(`<!--\\s*${tag}:\\s*(.*?)\\s*-->`, 'i');
         const match = body?.match(re);
@@ -16,7 +15,6 @@
     const extractAllowed = body => extractMeta(body, 'allowed');
     const extractSummary = body => extractMeta(body, 'summary');
 
-    // Шифрование (XOR)
     function deriveKey(allowedStr) {
         if (!allowedStr) return 'default-key';
         let hash = 0;
@@ -53,7 +51,6 @@
         }
     }
 
-    // Реэкспорт утилит из Utils (для обратной совместимости)
     const {
         escapeHtml, stripHtml, createElement, formatDate,
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
