@@ -62,14 +62,12 @@
     border: 1px solid var(--border);
 }
 
-/* Убираем затемнение при наведении */
 .feature-item:hover {
     transform: translateY(-4px);
-    /* Никакой тени, никакого изменения фона */
 }
 
 .feature-banner {
-    width: calc(100% + 32px);
+    width: calc(100% + 28px);
     margin: -14px -14px 12px -14px;
     height: 120px;
     overflow: hidden;
@@ -77,6 +75,7 @@
     background: var(--bg-primary);
     opacity: 0;
     transition: opacity 1.2s ease-in-out;
+    position: relative;
 }
 .feature-banner.loaded {
     opacity: 1;
@@ -920,7 +919,12 @@
     border-radius: var(--radius-md);
     padding: 20px;
     border: 1px solid var(--border);
-    transition: none;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.feature-item:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-hover);
 }
 
 .feature-icon {
@@ -1007,11 +1011,6 @@
         transform: translateY(-5px) scale(1.02);
         box-shadow: var(--shadow-hover);
     }
-    /* Убираем hover-эффекты для карточек описания */
-    .feature-item.tilt-card:hover {
-        transform: none;
-        box-shadow: none;
-    }
 }
 
 @media (hover: none) and (pointer: coarse) {
@@ -1020,9 +1019,6 @@
     }
     .tilt-card:hover {
         transform: translateY(-5px) !important;
-    }
-    .feature-item.tilt-card:hover {
-        transform: none !important;
     }
 }
 
@@ -1048,13 +1044,4 @@
 #confirm-license-btn, .telegram-link {
     position: relative;
     overflow: hidden;
-}
-.nav-profile {
-    z-index: 10001;
-}
-.profile-dropdown {
-    z-index: 10002 !important;
-}
-.modal, .modal-fullscreen {
-    z-index: 20000 !important;
 }
