@@ -1035,13 +1035,12 @@
     height: 100%;
     pointer-events: none;
     z-index: 0;
-    opacity: 0.65;
+    opacity: 0.6;
 }
 .page, main, .nav-bar, .card, .modal, .modal-content-full {
     position: relative;
     z-index: 1;
 }
-/* Обеспечиваем, чтобы кнопки имели относительное позиционирование для оверлея */
 .button, .download-button, .reaction-button, .feedback-tab.active,
 .lang-btn.active, .modal-header-actions .action-btn, .access-switch-btn.active,
 .comment-submit, .consent-btn, .nav-link.active, #github-download-btn,
@@ -1049,12 +1048,4 @@
 #confirm-license-btn, .telegram-link {
     position: relative;
     overflow: hidden;
-}
-/* Убираем эффект для элементов, которые не должны иметь шум */
-.no-button-noise {
-    position: static !important;
-    overflow: visible !important;
-}
-.no-button-noise canvas {
-    display: none !important;
 }
