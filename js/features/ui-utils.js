@@ -1,4 +1,4 @@
-// js/features/ui-utils.js — UI-функции (модалки, тосты, черновики) с исправлением отображения
+// js/features/ui-utils.js — UI-функции (модалки, тосты, черновики) с отладкой и принудительным отображением
 (function() {
     const { createElement, escapeHtml } = window.GithubCore;
 
@@ -36,9 +36,11 @@
     function createModal(title, contentHtml, options = {}) {
         const { onClose, size = 'full', closeButton = true } = options;
 
+        // Удаляем старые модалки
         const existingModals = document.querySelectorAll('.modal-fullscreen, .modal');
         existingModals.forEach(m => m.remove());
 
+        // Создаём контейнер модалки
         const modal = createElement('div', size === 'full' ? 'modal modal-fullscreen' : 'modal', {
             position: 'fixed',
             top: '0',
@@ -51,6 +53,9 @@
             justifyContent: 'center',
             backdropFilter: 'blur(4px)'
         }, { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'modal-header-title' });
+
+        // Принудительно включаем flex, чтобы модалка была видна сразу
+        modal.style.display = 'flex';
 
         const contentClass = size === 'full' ? 'modal-content modal-content-full' : 'modal-content';
         const headerHtml = `
@@ -83,6 +88,7 @@
         document.body.appendChild(modal);
         document.body.style.overflow = 'hidden';
 
+        // Добавляем класс active для анимации (но display уже flex, так что не критично)
         setTimeout(() => {
             modal.classList.add('active');
         }, 10);
@@ -108,6 +114,7 @@
         };
         document.addEventListener('keydown', escHandler);
 
+        console.log('[UIUtils] Modal created:', title);
         return { modal, closeModal };
     }
 

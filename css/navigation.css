@@ -1,4 +1,4 @@
-/* navigation.css — навигация, выпадающее меню профиля, переключатель языка + модалки (исправлено) */
+/* navigation.css — полностью переработанные стили модалок, без анимаций для надёжности */
 .nav-bar {
     background: var(--bg-card);
     border-radius: var(--radius-pill);
@@ -75,7 +75,7 @@
     border-color: var(--accent);
 }
 
-/* ========== ПРОФИЛЬ И ВЫПАДАЮЩЕЕ МЕНЮ - ВСЕГДА ПОВЕРХ ========== */
+/* ========== ПРОФИЛЬ И ВЫПАДАЮЩЕЕ МЕНЮ ========== */
 .nav-profile {
     display: flex;
     align-items: center;
@@ -125,7 +125,7 @@
     transform: rotate(90deg);
 }
 
-/* Выпадающее меню - максимальный z-index */
+/* Выпадающее меню */
 .profile-dropdown {
     position: absolute;
     top: calc(100% + 8px);
@@ -172,9 +172,9 @@
     margin: 8px 0;
 }
 
-/* ========== МОДАЛЬНЫЕ ОКНА ========== */
+/* ========== МОДАЛЬНЫЕ ОКНА (упрощённо, без анимации) ========== */
 .modal, .modal-fullscreen {
-    display: none;
+    display: none !important;
     position: fixed;
     top: 0;
     left: 0;
@@ -188,7 +188,7 @@
 }
 
 .modal.active, .modal-fullscreen.active {
-    display: flex;
+    display: flex !important;
 }
 
 .modal-content {
@@ -215,39 +215,6 @@
     z-index: 1000001;
 }
 
-.modal-content h3 {
-    margin-top: 0;
-    color: var(--accent);
-}
-
-.modal-content p {
-    margin-bottom: 20px;
-    font-size: 14px;
-}
-
-.modal-content input {
-    width: 100%;
-    padding: 12px;
-    background: var(--bg-primary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    margin-bottom: 16px;
-    font-family: monospace;
-}
-
-.modal-content input:focus {
-    outline: none;
-    border-color: var(--accent);
-}
-
-.modal-buttons {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-}
-
-/* Дополнительные стили для модальных заголовков и тела */
 .modal-header {
     padding: 20px 30px;
     border-bottom: 1px solid var(--border);
