@@ -1,3 +1,4 @@
+/* navigation.css — навигация, выпадающее меню профиля, переключатель языка */
 .nav-bar {
     background: var(--bg-card);
     border-radius: var(--radius-pill);
@@ -12,7 +13,7 @@
     box-shadow: var(--shadow);
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 1000;
 }
 
 .nav-links {
@@ -74,7 +75,7 @@
     border-color: var(--accent);
 }
 
-/* Профиль */
+/* ========== ПРОФИЛЬ И ВЫПАДАЮЩЕЕ МЕНЮ - ВСЕГДА ПОВЕРХ ========== */
 .nav-profile {
     display: flex;
     align-items: center;
@@ -86,6 +87,7 @@
     cursor: pointer;
     transition: border-color var(--transition);
     position: relative;
+    z-index: 100000 !important;
 }
 
 .nav-profile:hover {
@@ -123,7 +125,7 @@
     transform: rotate(90deg);
 }
 
-/* Выпадающее меню профиля */
+/* Выпадающее меню - максимальный z-index */
 .profile-dropdown {
     position: absolute;
     top: calc(100% + 8px);
@@ -135,7 +137,7 @@
     min-width: 220px;
     box-shadow: var(--shadow);
     display: none;
-    z-index: 1000;
+    z-index: 100001 !important;
 }
 
 .nav-profile.active .profile-dropdown {
@@ -170,7 +172,7 @@
     margin: 8px 0;
 }
 
-/* Модальное окно входа (создаётся динамически) */
+/* Модальное окно входа */
 .modal {
     display: none;
     position: fixed;
@@ -179,7 +181,7 @@
     width: 100%;
     height: 100%;
     background: rgba(0,0,0,0.8);
-    z-index: 2000;
+    z-index: 200000;
     align-items: center;
     justify-content: center;
 }
