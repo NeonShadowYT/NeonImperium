@@ -1,4 +1,4 @@
-// js/features/ui-utils.js — UI-функции (модалки, тосты, черновики) с отладкой и принудительным отображением
+// js/features/ui-utils.js
 (function() {
     const { createElement, escapeHtml } = window.GithubCore;
 
@@ -19,7 +19,7 @@
             fontFamily: "'Russo One', sans-serif",
             fontSize: '14px',
             pointerEvents: 'none'
-        }, { role: 'alert' });
+        });
         toast.textContent = message;
         document.body.appendChild(toast);
         requestAnimationFrame(() => {
@@ -40,7 +40,7 @@
         const existingModals = document.querySelectorAll('.modal-fullscreen, .modal');
         existingModals.forEach(m => m.remove());
 
-        // Создаём контейнер модалки
+        // Создаём контейнер
         const modal = createElement('div', size === 'full' ? 'modal modal-fullscreen' : 'modal', {
             position: 'fixed',
             top: '0',
@@ -52,10 +52,12 @@
             alignItems: 'center',
             justifyContent: 'center',
             backdropFilter: 'blur(4px)'
-        }, { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'modal-header-title' });
+        });
 
-        // Принудительно включаем flex, чтобы модалка была видна сразу
+        // Принудительно задаём display: flex, чтобы перекрыть возможные конфликты
         modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
 
         const contentClass = size === 'full' ? 'modal-content modal-content-full' : 'modal-content';
         const headerHtml = `
@@ -66,29 +68,18 @@
             </div>
         `;
 
-        const modalContent = createElement('div', contentClass, {
-            backgroundColor: 'var(--bg-card)',
-            borderRadius: '24px',
-            maxWidth: size === 'full' ? '900px' : '500px',
-            width: '90%',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            position: 'relative',
-            border: '1px solid var(--accent)',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
-        });
+        const modalContent = createElement('div', contentClass);
         modalContent.innerHTML = headerHtml;
-        const bodyDiv = createElement('div', 'modal-body', {
-            padding: '30px',
-            overflowY: 'auto'
-        });
+        const bodyDiv = createElement('div', 'modal-body');
         bodyDiv.innerHTML = contentHtml;
         modalContent.appendChild(bodyDiv);
         modal.appendChild(modalContent);
         document.body.appendChild(modal);
+
+        // Блокируем прокрутку фона
         document.body.style.overflow = 'hidden';
 
-        // Добавляем класс active для анимации (но display уже flex, так что не критично)
+        // Добавляем класс active (для возможной анимации, но не обязательно)
         setTimeout(() => {
             modal.classList.add('active');
         }, 10);
@@ -114,7 +105,7 @@
         };
         document.addEventListener('keydown', escHandler);
 
-        console.log('[UIUtils] Modal created:', title);
+        console.log('[UIUtils] Modal created and displayed:', title);
         return { modal, closeModal };
     }
 
