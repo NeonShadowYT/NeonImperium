@@ -229,3 +229,19 @@
     gap: 10px;
     justify-content: flex-end;
 }
+
+.nav-profile {
+    z-index: 100000 !important;
+    position: relative;
+}
+.profile-dropdown {
+    z-index: 100001 !important;
+    position: absolute !important;
+}
+/* Убедимся, что header не перекрывает */
+.game-header, .header-card {
+    z-index: 1 !important;
+}
+.nav-bar {
+    z-index: 1000 !important;
+}
