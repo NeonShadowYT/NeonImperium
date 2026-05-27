@@ -158,35 +158,33 @@
   }
 
   function createCard(issue) {
-    const type = issue.labels.find(l=>l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
-    const icon = type === 'idea' ? '💡' : type === 'bug' ? '🐛' : '⭐';
-    let summary = extractSummary(issue.body) || (issue.body||'').substring(0,120)+'…';
-    const allowed = extractAllowed(issue.body);
-    if (issue.labels.some(l=>l.name==='private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-      try { summary = extractSummary(decryptPrivateBody(issue.body, allowed)) || ''; } catch {}
+        const type = issue.labels.find(l=>l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
+        const icon = type === 'idea' ? '💡' : type === 'bug' ? '🐛' : '⭐';
+        let summary = extractSummary(issue.body) || (issue.body||'').substring(0,120)+'…';
+        const allowed = extractAllowed(issue.body);
+        if (issue.labels.some(l=>l.name==='private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
+        try { summary = extractSummary(decryptPrivateBody(issue.body, allowed)) || ''; } catch {}
+        }
+        const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
+        card.dataset.issueNumber = issue.number;
+        const inner = createElement('div', 'project-card');
+        const imgW = createElement('div', 'image-wrapper', { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', fontSize: '48px' });
+        imgW.textContent = icon;
+        const title = createElement('h3');
+        title.textContent = issue.title.length > 70 ? issue.title.slice(0,70)+'…' : issue.title;
+        const preview = createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+        preview.textContent = summary.replace(/\n/g,' ');
+        const footer = createElement('div', '', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '10px' });
+        footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span>`;
+        inner.append(imgW, title, preview, footer);
+        card.appendChild(inner);
+        card.addEventListener('click', async e => {
+        if (e.target.closest('button')) return;
+        if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
+        window.UIFeedback.openFullModal({ id: issue.number, title: issue.title, body: issue.body, author: issue.user.login, date: new Date(issue.created_at), game: currentGame, labels: issue.labels.map(l=>l.name) });
+        });
+        return card;
     }
-    const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
-    card.dataset.issueNumber = issue.number;
-    const inner = createElement('div', 'project-card');
-    const imgW = createElement('div', 'image-wrapper', { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', fontSize: '48px' });
-    imgW.textContent = icon;
-    const title = createElement('h3');
-    title.textContent = issue.title.length > 70 ? issue.title.slice(0,70)+'…' : issue.title;
-    const preview = createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
-    preview.textContent = summary.replace(/\n/g,' ');
-    const reactionsDiv = createElement('div', 'reactions-container');
-    const footer = createElement('div', '', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '10px' });
-    footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span>`;
-    inner.append(imgW, title, preview, reactionsDiv, footer);
-    card.appendChild(inner);
-    loadReactionsForCard(issue.number, reactionsDiv);
-    card.addEventListener('click', async e => {
-      if (e.target.closest('button')) return;
-      if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
-      window.UIFeedback.openFullModal({ id: issue.number, title: issue.title, body: issue.body, author: issue.user.login, date: new Date(issue.created_at), game: currentGame, labels: issue.labels.map(l=>l.name) });
-    });
-    return card;
-  }
 
   async function loadReactionsForCard(num, container) {
     const key = `list_reactions_${num}`;
