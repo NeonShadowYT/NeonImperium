@@ -1,4 +1,3 @@
-/* navigation.css — полностью переработанные стили модалок, без анимаций для надёжности */
 .nav-bar {
     background: var(--bg-card);
     border-radius: var(--radius-pill);
@@ -13,7 +12,7 @@
     box-shadow: var(--shadow);
     position: sticky;
     top: 0;
-    z-index: 1000;
+    z-index: 100;
 }
 
 .nav-links {
@@ -75,7 +74,7 @@
     border-color: var(--accent);
 }
 
-/* ========== ПРОФИЛЬ И ВЫПАДАЮЩЕЕ МЕНЮ ========== */
+/* Профиль */
 .nav-profile {
     display: flex;
     align-items: center;
@@ -87,7 +86,6 @@
     cursor: pointer;
     transition: border-color var(--transition);
     position: relative;
-    z-index: 100000 !important;
 }
 
 .nav-profile:hover {
@@ -125,7 +123,7 @@
     transform: rotate(90deg);
 }
 
-/* Выпадающее меню */
+/* Выпадающее меню профиля */
 .profile-dropdown {
     position: absolute;
     top: calc(100% + 8px);
@@ -137,7 +135,7 @@
     min-width: 220px;
     box-shadow: var(--shadow);
     display: none;
-    z-index: 100001 !important;
+    z-index: 1000;
 }
 
 .nav-profile.active .profile-dropdown {
@@ -172,100 +170,61 @@
     margin: 8px 0;
 }
 
-/* ========== МОДАЛЬНЫЕ ОКНА – абсолютное центрирование ========== */
-.modal,
-.modal-fullscreen {
-    display: none !important;
+/* Модальное окно входа (создаётся динамически) */
+.modal {
+    display: none;
     position: fixed;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.85);
-    z-index: 1000000;
+    background: rgba(0,0,0,0.8);
+    z-index: 2000;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(4px);
-    margin: 0;
-    padding: 0;
 }
 
-.modal.active,
-.modal-fullscreen.active {
-    display: flex !important;
-}
-
-.modal-content,
-.modal-content-full {
-    background: var(--bg-card-gradient);
-    border-radius: 24px;
-    position: relative;
-    border: 1px solid var(--accent);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-    max-width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-    z-index: 1000001;
+.modal.active {
+    display: flex;
 }
 
 .modal-content {
-    width: 400px;
+    background: var(--bg-card-gradient);
+    border-radius: var(--radius-lg);
     padding: 28px;
+    max-width: 400px;
+    width: 90%;
+    border: 1px solid var(--accent);
 }
 
-.modal-content-full {
-    width: 900px;
-    padding: 0;
-}
-
-/* Заголовок и тело модалки (для полноэкранного варианта) */
-.modal-header {
-    padding: 20px 30px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: var(--bg-inner-gradient);
-    border-radius: 24px 24px 0 0;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-
-.modal-header h2 {
-    margin: 0;
-    font-size: 24px;
+.modal-content h3 {
+    margin-top: 0;
     color: var(--accent);
-    word-break: break-word;
-    padding-right: 20px;
 }
 
-.modal-close {
-    background: var(--bg-inner-gradient);
+.modal-content p {
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.modal-content input {
+    width: 100%;
+    padding: 12px;
+    background: var(--bg-primary);
     border: 1px solid var(--border);
-    color: var(--text-secondary);
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-    font-size: 20px;
-    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    font-family: monospace;
 }
 
-.modal-close:hover {
-    background: var(--accent);
-    color: #fff;
+.modal-content input:focus {
+    outline: none;
     border-color: var(--accent);
-    transform: rotate(90deg);
 }
 
-.modal-body {
-    padding: 30px;
-    overflow-y: auto;
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
 }

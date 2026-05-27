@@ -1,6 +1,5 @@
 // js/common-init.js – lazy load page scripts, multiple fallbacks for marked.js, etc.
 (function() {
-  // ---------- Ленивая загрузка скриптов страниц (pages/*.js) ----------
   function loadPageScripts() {
     const path = location.pathname;
     let page = path.split('/').pop().replace('.html', '');
@@ -23,7 +22,6 @@
     }
   }
 
-  // ---------- Fallback для marked.js – несколько CDN с таймаутом ----------
   function ensureMarked() {
     if (typeof marked !== 'undefined') return Promise.resolve();
 
@@ -38,17 +36,9 @@
       return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = src;
-        const timer = setTimeout(() => {
-          reject(new Error(`Timeout loading ${src}`));
-        }, timeout);
-        script.onload = () => {
-          clearTimeout(timer);
-          resolve();
-        };
-        script.onerror = () => {
-          clearTimeout(timer);
-          reject(new Error(`Failed to load ${src}`));
-        };
+        const timer = setTimeout(() => reject(new Error(`Timeout loading ${src}`)), timeout);
+        script.onload = () => { clearTimeout(timer); resolve(); };
+        script.onerror = () => { clearTimeout(timer); reject(new Error(`Failed to load ${src}`)); };
         document.head.appendChild(script);
       });
     }
@@ -72,7 +62,6 @@
     return tryLoad(0);
   }
 
-  // ---------- Предзагрузка локального шрифта ----------
   function preloadFont() {
     const link = document.createElement('link');
     link.rel = 'preload';
@@ -83,7 +72,6 @@
     document.head.appendChild(link);
   }
 
-  // ---------- Lazy YouTube iframes ----------
   function initLazyYT() {
     if ('IntersectionObserver' in window) {
       const obs = new IntersectionObserver((entries) => {
@@ -116,7 +104,6 @@
     }
   }
 
-  // ---------- Donate button ----------
   function initDonateBtn() {
     const btn = document.getElementById('donate-button');
     if (!btn) return;
@@ -128,12 +115,7 @@
       s.src = 'https://static.itch.io/api.js';
       s.onload = () => {
         if (typeof Itch !== 'undefined') {
-          Itch.attachBuyButton(btn, {
-            user: 'neon-imperium',
-            game: 'starve-neon',
-            width: 700,
-            height: 500
-          });
+          Itch.attachBuyButton(btn, { user: 'neon-imperium', game: 'starve-neon', width: 700, height: 500 });
         }
       };
       document.head.appendChild(s);
@@ -143,15 +125,12 @@
       const span = btn.querySelector('span[data-lang="donateButton"]');
       if (!span) return;
       const lang = localStorage.getItem('preferredLanguage') || 'ru';
-      span.textContent =
-        window.translations?.[lang]?.donateButton ??
-        (lang === 'en' ? 'Support' : 'Поддержать');
+      span.textContent = window.translations?.[lang]?.donateButton ?? (lang === 'en' ? 'Support' : 'Поддержать');
     }
     window.addEventListener('languageChanged', updateText);
     updateText();
   }
 
-  // ---------- Service Worker с уведомлением об обновлении ----------
   function showUpdateNotification() {
     if (sessionStorage.getItem('update_notification_shown')) return;
     sessionStorage.setItem('update_notification_shown', '1');
@@ -162,13 +141,9 @@
       'background: var(--accent); color: #fff; padding: 12px 20px;' +
       'border-radius: 40px; box-shadow: 0 6px 14px rgba(0,0,0,0.4);' +
       'font-family: "Russo One", sans-serif; display: flex; align-items: center; gap: 12px;';
-    note.innerHTML =
-      '<span>Доступна новая версия.</span>' +
-      '<button id="update-btn" style="background:white;color:var(--accent);border:none;padding:6px 16px;border-radius:20px;cursor:pointer;font-family:inherit;">Обновить</button>';
+    note.innerHTML = '<span>Доступна новая версия.</span><button id="update-btn" style="background:white;color:var(--accent);border:none;padding:6px 16px;border-radius:20px;cursor:pointer;font-family:inherit;">Обновить</button>';
     document.body.appendChild(note);
-    document.getElementById('update-btn').addEventListener('click', () => {
-      window.location.reload();
-    });
+    document.getElementById('update-btn').addEventListener('click', () => { window.location.reload(); });
   }
 
   function registerServiceWorker() {
@@ -181,16 +156,13 @@
           const newWorker = registration.installing;
           if (!newWorker) return;
           newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              showUpdateNotification();
-            }
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) showUpdateNotification();
           });
         });
       })
       .catch(error => console.error('Ошибка регистрации Service Worker:', error));
   }
 
-  // ---------- Согласие на скачивание ----------
   function initDownloadConsent() {
     const CONSENT_KEY = 'download_consent_given_v1';
     const consentGiven = localStorage.getItem(CONSENT_KEY) === 'true';
@@ -251,7 +223,6 @@
     document.body.addEventListener('click', handleDownloadClick);
   }
 
-  // ---------- Запуск инициализации ----------
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       preloadFont();

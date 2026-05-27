@@ -1,114 +1,115 @@
 // js/pages/game-updates.js — обновления игры с админ-кнопкой
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml } = window.Utils;
-    const { extractAllowed, extractSummary, decryptPrivateBody } = window.GithubCore;
-    const { loadIssues } = window.GithubAPI;
-    const { openFullModal } = window.UIFeedback;
-    const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
-    const DEFAULT_IMAGE = 'images/default-news.webp';
+  const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractAllowed, extractSummary, decryptPrivateBody, loadModule, createElement } = window.Utils;
+  const { loadIssues } = window.GithubAPI;
+  const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
+  const { showToast } = window.UIUtils;
 
-    let currentAbort = null, currentGame = null;
+  let currentAbort = null, currentGame = null;
 
-    document.addEventListener('DOMContentLoaded', () => {
-        const container = document.getElementById('game-updates');
-        if (container?.dataset.game) {
-            currentGame = container.dataset.game;
-            window.currentGame = currentGame;
-            loadGameUpdates(container, currentGame);
-        }
-        window.addEventListener('github-issue-created', e => {
-            const issue = e.detail;
-            if (!currentGame) return;
-            if (!issue.labels.some(l => l.name === 'type:update' && l.name === `game:${currentGame}`)) return;
-            if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
-            cacheRemoveByPrefix(`game_updates_${currentGame}`);
-            const cont = document.getElementById('game-updates');
-            if (!cont) return;
-            const newPost = { number: issue.number, title: issue.title, body: issue.body, date: new Date(issue.created_at), author: issue.user.login, game: currentGame, labels: issue.labels.map(l=>l.name) };
-            let grid = cont.querySelector('.projects-grid');
-            if (!grid) { grid = window.Utils.createElement('div', 'projects-grid'); cont.innerHTML = ''; cont.appendChild(grid); }
-            grid.insertBefore(createUpdateCard(newPost), grid.firstChild);
-        });
-        window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
-        window.addEventListener('github-logout', () => { if (currentGame) refreshGameUpdates(currentGame); });
+  document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('game-updates');
+    if (container?.dataset.game) {
+      currentGame = container.dataset.game;
+      window.currentGame = currentGame;
+      loadGameUpdates(container, currentGame);
+    }
+    window.addEventListener('github-issue-created', e => {
+      const issue = e.detail;
+      if (!currentGame) return;
+      if (!issue.labels.some(l => l.name === 'type:update' && l.name === `game:${currentGame}`)) return;
+      if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+      cacheRemoveByPrefix(`game_updates_${currentGame}`);
+      const cont = document.getElementById('game-updates');
+      if (!cont) return;
+      const newPost = { number: issue.number, title: issue.title, body: issue.body, date: new Date(issue.created_at), author: issue.user.login, game: currentGame, labels: issue.labels.map(l=>l.name) };
+      let grid = cont.querySelector('.projects-grid');
+      if (!grid) { grid = createElement('div', 'projects-grid'); cont.innerHTML = ''; cont.appendChild(grid); }
+      grid.insertBefore(createUpdateCard(newPost), grid.firstChild);
     });
+    window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
+    window.addEventListener('github-logout', () => { if (currentGame) refreshGameUpdates(currentGame); });
+  });
 
-    window.refreshGameUpdates = (game) => {
-        const cont = document.getElementById('game-updates');
-        if (cont && cont.dataset.game === game) loadGameUpdates(cont, game);
-    };
+  window.refreshGameUpdates = (game) => {
+    const cont = document.getElementById('game-updates');
+    if (cont && cont.dataset.game === game) loadGameUpdates(cont, game);
+  };
 
-    async function loadGameUpdates(container, game) {
-        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>';
-        if (currentAbort) currentAbort.controller.abort();
-        const { controller, timeoutId } = createAbortable(10000);
-        currentAbort = { controller };
-        try {
-            const cacheKey = `game_updates_${game}`;
-            let posts = cacheGet(cacheKey);
-            if (!posts) {
-                const issues = await loadIssues({ labels: `type:update,game:${game}`, per_page: 10, signal: controller.signal });
-                posts = deduplicateByNumber(issues).filter(i => CONFIG.ALLOWED_AUTHORS.includes(i.user.login))
-                    .map(i => ({ number: i.number, title: i.title, body: i.body, date: new Date(i.created_at), author: i.user.login, game, labels: i.labels.map(l=>l.name) }));
-                cacheSet(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
-            } else posts = posts.map(p => ({ ...p, date: new Date(p.date) }));
-            const currentUser = getCurrentUser();
-            posts = posts.filter(p => {
-                if (!p.labels.includes('private')) return true;
-                if (isAdmin()) return true;
-                const allowed = extractAllowed(p.body);
-                return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
-            });
-            if (posts.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; return; }
-            container.innerHTML = '';
-            const grid = window.Utils.createElement('div', 'projects-grid');
-            container.appendChild(grid);
-            posts.forEach(p => grid.appendChild(createUpdateCard(p)));
+  async function loadGameUpdates(container, game) {
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>';
+    if (currentAbort) currentAbort.controller.abort();
+    const { controller, timeoutId } = createAbortable(10000);
+    currentAbort = { controller };
+    try {
+      const cacheKey = `game_updates_${game}`;
+      let posts = cacheGet(cacheKey);
+      if (!posts) {
+        const issues = await loadIssues({ labels: `type:update,game:${game}`, per_page: 10, signal: controller.signal });
+        posts = deduplicateByNumber(issues).filter(i => CONFIG.ALLOWED_AUTHORS.includes(i.user.login))
+          .map(i => ({ number: i.number, title: i.title, body: i.body, date: new Date(i.created_at), author: i.user.login, game, labels: i.labels.map(l=>l.name) }));
+        cacheSet(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
+      } else posts = posts.map(p => ({ ...p, date: new Date(p.date) }));
+      const currentUser = getCurrentUser();
+      posts = posts.filter(p => {
+        if (!p.labels.includes('private')) return true;
+        if (isAdmin()) return true;
+        const allowed = extractAllowed(p.body);
+        return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
+      });
+      if (posts.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; return; }
+      container.innerHTML = '';
+      const grid = createElement('div', 'projects-grid');
+      container.appendChild(grid);
+      posts.forEach(p => grid.appendChild(createUpdateCard(p)));
 
-            const parent = container.parentNode;
-            let header = parent.querySelector('.updates-header');
-            if (!header) {
-                header = window.Utils.createElement('div', 'updates-header', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' });
-                header.innerHTML = '<h2 data-lang="updatesTitle">Обновления</h2>';
-                parent.insertBefore(header, container);
-            }
-            const existing = header.querySelector('.admin-update-btn');
-            if (isAdmin() && hasScope('repo')) {
-                if (!existing) {
-                    const btn = window.Utils.createElement('button', 'button admin-update-btn');
-                    btn.innerHTML = '<i class="fas fa-plus"></i> Добавить обновление';
-                    btn.addEventListener('click', () => window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update'));
-                    header.appendChild(btn);
-                }
-            } else if (existing) existing.remove();
-        } catch { container.innerHTML = '<p class="error-message">Ошибка загрузки</p>'; }
-        finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
-    }
-
-    function createUpdateCard(post) {
-        let previewBody = post.body;
-        const allowed = extractAllowed(post.body);
-        const currentUser = getCurrentUser();
-        if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-            try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
+      const parent = container.parentNode;
+      let header = parent.querySelector('.updates-header');
+      if (!header) {
+        header = createElement('div', 'updates-header', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' });
+        header.innerHTML = '<h2 data-lang="updatesTitle">Обновления</h2>';
+        parent.insertBefore(header, container);
+      }
+      const existing = header.querySelector('.admin-update-btn');
+      if (isAdmin() && hasScope('repo')) {
+        if (!existing) {
+          const btn = createElement('button', 'button admin-update-btn');
+          btn.innerHTML = '<i class="fas fa-plus"></i> Добавить обновление';
+          btn.addEventListener('click', async () => { if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js'); window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update'); });
+          header.appendChild(btn);
         }
-        const card = window.Utils.createElement('div', 'project-card-link no-tilt tilt-card', { cursor: 'pointer' });
-        const inner = window.Utils.createElement('div', 'project-card');
-        const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
-        const imgW = window.Utils.createElement('div', 'image-wrapper');
-        const img = window.Utils.createElement('img', 'project-image', {}, { src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy' });
-        img.onerror = () => img.src = DEFAULT_IMAGE;
-        imgW.appendChild(img);
-        const title = window.Utils.createElement('h3');
-        title.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
-        const meta = window.Utils.createElement('p', 'text-secondary', { fontSize: '12px' });
-        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
-        const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
-        const preview = window.Utils.createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
-        preview.textContent = summary;
-        inner.append(imgW, title, meta, preview);
-        card.appendChild(inner);
-        card.addEventListener('click', () => openFullModal({ type: 'update', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels }));
-        return card;
+      } else if (existing) existing.remove();
+    } catch { container.innerHTML = '<p class="error-message">Ошибка загрузки</p>'; }
+    finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
+  }
+
+  function createUpdateCard(post) {
+    let previewBody = post.body;
+    const allowed = extractAllowed(post.body);
+    const currentUser = getCurrentUser();
+    if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
+      try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
     }
+    const card = createElement('div', 'project-card-link no-tilt tilt-card', { cursor: 'pointer' });
+    const inner = createElement('div', 'project-card');
+    const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
+    const imgW = createElement('div', 'image-wrapper');
+    const img = createElement('img', 'project-image', {}, { src: imgMatch?.[1] || 'images/default-news.webp', alt: post.title, loading: 'lazy' });
+    img.onerror = () => img.src = 'images/default-news.webp';
+    imgW.appendChild(img);
+    const title = createElement('h3');
+    title.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
+    const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
+    meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
+    const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
+    const preview = createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+    preview.textContent = summary;
+    inner.append(imgW, title, meta, preview);
+    card.appendChild(inner);
+    card.addEventListener('click', async () => {
+      if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
+      window.UIFeedback.openFullModal({ type: 'update', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels });
+    });
+    return card;
+  }
 })();
