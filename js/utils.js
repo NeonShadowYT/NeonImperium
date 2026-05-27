@@ -38,7 +38,7 @@
         });
     }
 
-    // ---------- Кэширование (sessionStorage + localStorage fallback) ----------
+    // ---------- Кэширование ----------
     function cacheGet(key, ttl = CONFIG.CACHE_TTL) {
         const session = sessionStorage.getItem(key);
         const sessionTime = sessionStorage.getItem(`${key}_time`);
@@ -125,12 +125,12 @@
         };
     }
 
-    // ---------- Markdown (если нужен) ----------
+    // ---------- Markdown ----------
     function renderMarkdown(text) {
         if (!text) return '';
         if (window.marked) {
-            marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-            return marked.parse(text);
+            if (window.marked.setOptions) marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
+            return window.marked.parse(text);
         }
         return text.replace(/\n/g, '<br>');
     }
@@ -156,7 +156,6 @@
         });
     }
 
-    // Экспорт в глобальный объект
     window.Utils = {
         escapeHtml, stripHtml, createElement, formatDate,
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
