@@ -352,7 +352,13 @@
     padding: 20px;
     border: 1px solid var(--border);
     overflow: hidden;
-    transition: transform 0.2s;
+    transition: transform 0.3s cubic-bezier(0.2,0.9,0.4,1), box-shadow 0.3s, border-color 0.2s;
+}
+
+.feature-item:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-hover);
+    border-color: var(--accent);
 }
 
 .feature-item .feature-banner {

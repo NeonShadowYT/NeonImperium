@@ -1,4 +1,4 @@
-// js/features/ui-feedback.js – полный модуль с кнопками в модалке, предпросмотром и редактором комментариев
+// js/features/ui-feedback.js – полный модуль с кнопками в модалке, редактором постов и комментариев
 (function() {
   const { createElement, escapeHtml, renderMarkdown, loadModule, cacheGet, cacheSet, cacheRemoveByPrefix, extractAllowed, extractSummary, decryptPrivateBody, CONFIG } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -74,7 +74,7 @@
     return map[content] || content;
   }
 
-  // ---------- Комментарии с редактором ----------
+  // ---------- Комментарии ----------
   async function loadComments(issueNumber, container, onUpdate) {
     if (!window.GithubAPI) await loadModule('js/core/github-api.js');
     try {
@@ -113,7 +113,6 @@
     } catch (err) { console.error(err); container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>'; }
   }
 
-  // Редактирование комментария через редактор
   async function editCommentWithEditor(commentId, oldBody, onUpdate) {
     if (!window.Editor) await loadModule('js/features/editor.js');
     const newBody = prompt('Редактировать комментарий (поддерживается Markdown)', oldBody);
@@ -170,17 +169,10 @@
     } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
   }
 
+  // Редактирование поста через полноценный редактор
   async function editPost(id, currentTitle, currentBody, game, labels) {
     if (!hasScope('repo')) return showToast('Нет прав', 'error');
-    const newTitle = prompt('Новый заголовок', currentTitle);
-    if (!newTitle) return;
-    const newBody = prompt('Новый текст (Markdown)', currentBody);
-    if (newBody === null) return;
-    try {
-      await window.GithubAPI.updateIssue(id, { title: newTitle, body: newBody });
-      showToast('Пост обновлён', 'success');
-      setTimeout(() => location.reload(), 1000);
-    } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
+    await openEditorModal('edit', { game, title: currentTitle, body: currentBody }, 'post', id);
   }
 
   async function deletePost(id) {
@@ -193,7 +185,7 @@
     } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
   }
 
-  // ---------- Полноэкранная модалка с кнопками ----------
+  // ---------- Полноэкранная модалка ----------
   async function openFullModal(item) {
     const { id, title, body, author, date, game, labels, type } = item;
     const currentUser = getCurrentUser();
@@ -234,7 +226,6 @@
     
     const { modal, closeModal } = createModal(title, html, { size: 'full' });
     
-    // Добавляем кнопки действий в заголовок
     const headerDiv = modal.querySelector('.modal-header');
     if (headerDiv) {
       const actionsDiv = createElement('div', 'modal-header-actions', { display: 'flex', gap: '8px', marginLeft: 'auto', marginRight: '8px' });
@@ -292,8 +283,8 @@
     }
   }
 
-  // ---------- Редактор поста с предпросмотром ----------
-  async function openEditorModal(mode, initialData, context) {
+  // ---------- Редактор поста с предпросмотром (поддержка создания и редактирования) ----------
+  async function openEditorModal(mode, initialData, context, existingId = null) {
     if (!hasScope('repo')) {
       showToast('Требуется scope repo', 'error');
       return;
@@ -324,11 +315,11 @@
             <button id="access-private" class="access-switch-btn">Приватный</button>
           </div>
           <input type="text" id="allowed-users" placeholder="Логины через запятую" value="${escapeHtml(allowedUsers)}" style="display:none; flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border);">
-          <button id="editor-submit" class="button wide">Опубликовать</button>
+          <button id="editor-submit" class="button wide">${mode === 'edit' ? 'Обновить' : 'Опубликовать'}</button>
         </div>
       </div>
     `;
-    const { modal, closeModal } = createModal(mode === 'new' ? 'Создать пост' : 'Редактировать', html, { size: 'full' });
+    const { modal, closeModal } = createModal(mode === 'new' ? 'Создать пост' : 'Редактировать пост', html, { size: 'full' });
 
     const titleInput = modal.querySelector('#editor-title');
     const bodyTextarea = modal.querySelector('#editor-body');
@@ -396,11 +387,18 @@
         labels.push('private');
       }
       try {
-        await window.GithubAPI.createIssue(title, finalBody, labels);
-        showToast('Пост создан', 'success');
+        if (mode === 'edit' && existingId) {
+          await window.GithubAPI.updateIssue(existingId, { title, body: finalBody });
+          showToast('Пост обновлён', 'success');
+          window.dispatchEvent(new CustomEvent('github-issue-updated', { detail: { id: existingId, title, body: finalBody } }));
+        } else {
+          await window.GithubAPI.createIssue(title, finalBody, labels);
+          showToast('Пост создан', 'success');
+          window.dispatchEvent(new CustomEvent('github-issue-created', { detail: { title, body: finalBody, labels: labels.map(l=> ({name:l})), user: { login: getCurrentUser() } } }));
+        }
         clearDraft(draftKey);
         closeModal();
-        window.dispatchEvent(new CustomEvent('github-issue-created', { detail: { title, body: finalBody, labels: labels.map(l=> ({name:l})), user: { login: getCurrentUser() } } }));
+        setTimeout(() => location.reload(), 800);
       } catch (err) { showToast('Ошибка: ' + err.message, 'error'); }
     });
   }

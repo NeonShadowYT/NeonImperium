@@ -1,23 +1,22 @@
-// js/dust-particles.js – динамические летающие частицы с быстрым движением
+// js/dust-particles.js – динамические летающие частицы с быстрым движением и высокой видимостью
 (function() {
     let canvas, ctx, particles = [];
     let animationId = null;
     let width, height;
     let animationTime = 0;
 
-    const PARTICLE_COUNT = 180;             // чуть больше для плотности
+    const PARTICLE_COUNT = 180;
     const BASE_SIZE = 1.5;
     const SIZE_VARIATION = 2.5;
-    const OPACITY_BASE = 0.35;              // значительно увеличена
+    const OPACITY_BASE = 0.35;          // высокая базовая прозрачность
     const OPACITY_VARIATION = 0.4;
 
-    const ANGULAR_SPEED_MIN = 3.0;
+    const ANGULAR_SPEED_MIN = 3.0;      // быстрое вращение
     const ANGULAR_SPEED_MAX = 9.0;
 
     const RADIUS_MIN = 100;
     const RADIUS_MAX = 350;
 
-    // Яркие заметные цвета
     const COLORS = [
         'rgba(61, 158, 179, ',
         'rgba(255, 255, 255, ',
@@ -42,7 +41,6 @@
 
         document.body.insertBefore(canvas, document.body.firstChild);
 
-        // Убедимся, что контент не перекрывает canvas
         const page = document.querySelector('.page');
         if (page) {
             page.style.position = 'relative';
@@ -136,7 +134,7 @@
             ctx.fillStyle = COLORS[p.colorIdx] + finalOpacity + ')';
             ctx.fill();
 
-            // Сильное свечение для всех частиц, чтобы они были заметны
+            // Свечение для заметности
             ctx.shadowBlur = 10;
             ctx.shadowColor = 'rgba(61, 158, 179, 0.9)';
             ctx.fill();
