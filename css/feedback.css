@@ -73,7 +73,6 @@ blockquote.color-red{border-left-color:#f44336}blockquote.color-green{border-lef
 .feedback-item-preview {
     display: -webkit-box;
     -webkit-line-clamp: 2;
-    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;

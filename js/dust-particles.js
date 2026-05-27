@@ -3,29 +3,27 @@
     let canvas, ctx, particles = [];
     let animationId = null;
     let width, height;
-    let lastTimestamp = 0;
-    let deltaTime = 0;
+    let animationTime = 0;
 
-    // === НАСТРОЙКИ (быстрое движение, заметный респаун) ===
-    const PARTICLE_COUNT = 150;            // уменьшено для производительности
+    // === НАСТРОЙКИ (заметное быстрое движение) ===
+    const PARTICLE_COUNT = 150;
     const BASE_SIZE = 1.0;
-    const SIZE_VARIATION = 2.2;           // от 1 до 3.2 px
+    const SIZE_VARIATION = 2.2;
     const OPACITY_BASE = 0.15;
-    const OPACITY_VARIATION = 0.35;        // прозрачность 0.15..0.5
+    const OPACITY_VARIATION = 0.35;
 
-    // Скорость изменения угла (радиан в секунду)
-    const ANGULAR_SPEED_MIN = 1.2;         // быстрое вращение
-    const ANGULAR_SPEED_MAX = 3.5;
+    // Увеличенная угловая скорость (радиан в секунду) – теперь 2..8
+    const ANGULAR_SPEED_MIN = 2.0;
+    const ANGULAR_SPEED_MAX = 8.0;
 
-    // Радиус колебаний (пиксели) – очень большой, чтобы частицы далеко улетали
+    // Большой радиус колебаний – до 300 пикселей
     const RADIUS_MIN = 80;
-    const RADIUS_MAX = 250;
+    const RADIUS_MAX = 300;
 
-    // Цвета
     const COLORS = [
-        'rgba(61, 158, 179, ',   // акцентный
-        'rgba(200, 220, 240, ', // светлый
-        'rgba(255, 255, 255, '  // белый
+        'rgba(61, 158, 179, ',
+        'rgba(200, 220, 240, ',
+        'rgba(255, 255, 255, '
     ];
 
     function initCanvas() {
@@ -70,29 +68,22 @@
         particles = [];
         for (let i = 0; i < PARTICLE_COUNT; i++) {
             particles.push({
-                // Базовая позиция – случайная точка на экране
                 baseX: Math.random() * width,
                 baseY: Math.random() * height,
-                // Углы и скорости вращения
                 angleX: Math.random() * Math.PI * 2,
                 angleY: Math.random() * Math.PI * 2,
                 speedX: ANGULAR_SPEED_MIN + Math.random() * (ANGULAR_SPEED_MAX - ANGULAR_SPEED_MIN),
                 speedY: ANGULAR_SPEED_MIN + Math.random() * (ANGULAR_SPEED_MAX - ANGULAR_SPEED_MIN),
-                // Радиусы движения
                 radiusX: RADIUS_MIN + Math.random() * (RADIUS_MAX - RADIUS_MIN),
                 radiusY: RADIUS_MIN + Math.random() * (RADIUS_MAX - RADIUS_MIN),
-                // Размер и прозрачность
                 size: BASE_SIZE + Math.random() * SIZE_VARIATION,
                 opacity: OPACITY_BASE + Math.random() * OPACITY_VARIATION,
                 colorIdx: Math.floor(Math.random() * COLORS.length),
-                phase: Math.random() * Math.PI * 2,
-                // Флаг, нужно ли респаунить
-                respawn: false
+                phase: Math.random() * Math.PI * 2
             });
         }
     }
 
-    // Респаун частицы – телепортация в новую позицию (на противоположную сторону или случайно)
     function respawnParticle(p) {
         // 70% – противоположная сторона, 30% – случайная позиция
         if (Math.random() < 0.7) {
@@ -102,7 +93,6 @@
             p.baseX = Math.random() * width;
             p.baseY = Math.random() * height;
         }
-        // Сбросить углы и фазу, чтобы траектория изменилась
         p.angleX = Math.random() * Math.PI * 2;
         p.angleY = Math.random() * Math.PI * 2;
         p.phase = Math.random() * Math.PI * 2;
@@ -118,25 +108,23 @@
         ctx.clearRect(0, 0, width, height);
 
         for (let p of particles) {
-            // Вычисляем смещение по синусоиде с быстрым изменением угла
             let offsetX = Math.sin(p.angleX + nowSec * p.speedX) * p.radiusX;
             let offsetY = Math.cos(p.angleY + nowSec * p.speedY + p.phase) * p.radiusY;
 
             let x = p.baseX + offsetX;
             let y = p.baseY + offsetY;
 
-            // Затухание при приближении к краю (0..1)
+            // Затухание у краёв (50px)
             let edgeFade = 1.0;
-            const fadeZone = 50; // зона затухания 50px от края
+            const fadeZone = 50;
             if (x < fadeZone) edgeFade *= x / fadeZone;
             if (x > width - fadeZone) edgeFade *= (width - x) / fadeZone;
             if (y < fadeZone) edgeFade *= y / fadeZone;
             if (y > height - fadeZone) edgeFade *= (height - y) / fadeZone;
 
-            // Если частица совсем ушла за пределы (или крайнее затухание), респауним
             if (edgeFade <= 0.05 || x < -200 || x > width + 200 || y < -200 || y > height + 200) {
                 respawnParticle(p);
-                // Пересчитываем позицию после респауна
+                // Пересчёт позиции после респауна
                 offsetX = Math.sin(p.angleX + nowSec * p.speedX) * p.radiusX;
                 offsetY = Math.cos(p.angleY + nowSec * p.speedY + p.phase) * p.radiusY;
                 x = p.baseX + offsetX;
@@ -152,7 +140,6 @@
             ctx.fillStyle = COLORS[p.colorIdx] + finalOpacity + ')';
             ctx.fill();
 
-            // Свечение для крупных частиц
             if (p.size > 1.8 && finalOpacity > 0.2) {
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = 'rgba(61, 158, 179, 0.7)';
@@ -162,11 +149,9 @@
         }
     }
 
-    let animationTime = 0;
     function animate(nowMs) {
         if (!animationId) return;
-        // Переводим в секунды для независимости от частоты кадров
-        animationTime += 0.025; // плавное увеличение времени
+        animationTime += 0.025; // плавное время, ~1.5 сек/кадр
         drawParticles(animationTime);
         animationId = requestAnimationFrame(animate);
     }
@@ -193,7 +178,6 @@
         }
     }
 
-    // Запуск
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initCanvas);
     } else {

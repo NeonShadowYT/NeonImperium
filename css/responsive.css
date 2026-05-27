@@ -25,6 +25,13 @@
     .storage-header { flex-direction: column; align-items: stretch; }
     .storage-controls { flex-direction: column; gap: 10px; }
     .storage-add-form { grid-template-columns: 1fr; }
+    /* Скрываем скроллбар для WebKit-браузеров без ошибки в Firefox */
+    .feedback-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    @media screen and (-webkit-min-device-pixel-ratio:0) {
+        .feedback-tabs::-webkit-scrollbar {
+            display: none;
+        }
+    }
 }
 
 @media (max-width: 600px) {
@@ -43,13 +50,6 @@
     .modal-body { padding: 20px; }
     .feedback-header { flex-direction: column; align-items: stretch; }
     .feedback-header .button { width: 100%; }
-    .feedback-tabs { justify-content: flex-start; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-    /* Скрываем скроллбар для WebKit-браузеров, но без ошибки в Firefox */
-    @supports (::-webkit-scrollbar) {
-        .feedback-tabs::-webkit-scrollbar {
-            display: none;
-        }
-    }
     .feedback-tab { flex-shrink: 0; }
     .feedback-form .button-group { flex-direction: column; }
     .feedback-form .button { width: 100%; }

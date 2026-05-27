@@ -37,7 +37,6 @@ img {
     display: block;
 }
 
-/* Базовый класс карточки */
 .card {
     background: var(--bg-card-gradient);
     border-radius: var(--radius-md);
@@ -52,7 +51,6 @@ img {
     box-shadow: var(--shadow-hover);
 }
 
-/* Утилиты для hover-эффекта подъёма */
 .hover-lift {
     transition: transform var(--transition), box-shadow var(--transition);
 }
