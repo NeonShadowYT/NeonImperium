@@ -6,18 +6,21 @@
     let time = 0;
     
     // === НАСТРОЙКИ ДЛЯ ЗАМЕТНОГО ДВИЖЕНИЯ ===
-    const PARTICLE_COUNT = 250;
-    const BASE_SIZE = 1.5;
-    const SIZE_VARIATION = 1.8;
-    const OPACITY_BASE = 0.15;
-    const OPACITY_VARIATION = 0.25;
-    const DRIFT_AMPLITUDE = 80;           // большая амплитуда
-    const SPEED_MULT = 0.008;              // быстрая смена положения
+    const PARTICLE_COUNT = 200;          // оптимальное количество
+    const BASE_SIZE = 1.2;
+    const SIZE_VARIATION = 2.0;
+    const OPACITY_BASE = 0.12;
+    const OPACITY_VARIATION = 0.3;
+    const DRIFT_AMPLITUDE = 120;         // увеличенная амплитуда
+    
+    // Новые диапазоны скоростей для быстрого движения
+    const SPEED_MIN = 0.02;              // раньше было 0.005
+    const SPEED_MAX = 0.06;              // раньше было 0.017
     
     const COLORS = [
-        'rgba(61, 158, 179, ',
-        'rgba(200, 220, 240, ',
-        'rgba(255, 255, 255, '
+        'rgba(61, 158, 179, ',   // акцентный
+        'rgba(200, 220, 240, ', // светлый
+        'rgba(255, 255, 255, '  // белый
     ];
     
     function initCanvas() {
@@ -66,10 +69,10 @@
                 baseY: Math.random() * height,
                 angleX: Math.random() * Math.PI * 2,
                 angleY: Math.random() * Math.PI * 2,
-                speedX: 0.005 + Math.random() * 0.012,
-                speedY: 0.005 + Math.random() * 0.012,
-                radiusX: 25 + Math.random() * DRIFT_AMPLITUDE,
-                radiusY: 25 + Math.random() * DRIFT_AMPLITUDE,
+                speedX: SPEED_MIN + Math.random() * (SPEED_MAX - SPEED_MIN),
+                speedY: SPEED_MIN + Math.random() * (SPEED_MAX - SPEED_MIN),
+                radiusX: 30 + Math.random() * DRIFT_AMPLITUDE,
+                radiusY: 30 + Math.random() * DRIFT_AMPLITUDE,
                 size: BASE_SIZE + Math.random() * SIZE_VARIATION,
                 opacity: OPACITY_BASE + Math.random() * OPACITY_VARIATION,
                 colorIdx: Math.floor(Math.random() * COLORS.length),
@@ -83,25 +86,25 @@
         ctx.clearRect(0, 0, width, height);
         
         for (let p of particles) {
-            // Динамическое движение с разными частотами
-            const offsetX = Math.sin(time * p.speedX + p.angleX) * p.radiusX;
+            // Быстрое движение с разными частотами и фазами
+            const offsetX = Math.sin(time * p.speedX * 1.2 + p.angleX) * p.radiusX;
             const offsetY = Math.cos(time * p.speedY * 0.9 + p.angleY + p.phase) * p.radiusY;
             
             let x = p.baseX + offsetX;
             let y = p.baseY + offsetY;
             
-            // Зацикливание
-            if (x < -100) x = width + 100;
-            if (x > width + 100) x = -100;
-            if (y < -100) y = height + 100;
-            if (y > height + 100) y = -100;
+            // Зацикливание с мягким перескоком
+            if (x < -150) x = width + 150;
+            if (x > width + 150) x = -150;
+            if (y < -150) y = height + 150;
+            if (y > height + 150) y = -150;
             
-            // Затухание у краёв
+            // Затухание у краёв для плавного появления/исчезновения
             let edgeFade = 1;
-            if (x < 30) edgeFade *= x / 30;
-            if (x > width - 30) edgeFade *= (width - x) / 30;
-            if (y < 30) edgeFade *= y / 30;
-            if (y > height - 30) edgeFade *= (height - y) / 30;
+            if (x < 40) edgeFade *= x / 40;
+            if (x > width - 40) edgeFade *= (width - x) / 40;
+            if (y < 40) edgeFade *= y / 40;
+            if (y > height - 40) edgeFade *= (height - y) / 40;
             
             const finalOpacity = p.opacity * edgeFade;
             if (finalOpacity <= 0.02) continue;
@@ -111,20 +114,19 @@
             ctx.fillStyle = COLORS[p.colorIdx] + finalOpacity + ')';
             ctx.fill();
             
-            // Свечение для крупных
-            if (p.size > 2.0 && finalOpacity > 0.1) {
-                ctx.shadowBlur = 5;
-                ctx.shadowColor = 'rgba(61, 158, 179, 0.5)';
+            // Лёгкое свечение для крупных частиц
+            if (p.size > 1.8 && finalOpacity > 0.15) {
+                ctx.shadowBlur = 6;
+                ctx.shadowColor = 'rgba(61, 158, 179, 0.6)';
                 ctx.fill();
                 ctx.shadowBlur = 0;
             }
         }
     }
     
-    let lastTimestamp = 0;
     function animate(now) {
-        // Увеличиваем время плавно, чтобы движение было заметным
-        time += 0.025;
+        // Увеличиваем время плавно, движение получается заметным
+        time += 0.025;  // около 1.5 в секунду при 60fps
         drawParticles();
         animationId = requestAnimationFrame(animate);
     }
@@ -151,10 +153,18 @@
         }
     }
     
+    // Опционально: отключаем пылинки на слабых мобильных устройствах (по желанию)
+    function isLowPerformanceDevice() {
+        // Можно добавить проверку на touch или slow connection
+        return false; // всегда включено
+    }
+    
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initCanvas);
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!isLowPerformanceDevice()) initCanvas();
+        });
     } else {
-        initCanvas();
+        if (!isLowPerformanceDevice()) initCanvas();
     }
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
