@@ -1,4 +1,4 @@
-/* Базовая карточка проекта */
+/* ========== Базовая карточка проекта (универсальная) ========== */
 .project-card-link {
     display: block;
     color: inherit;
@@ -345,20 +345,43 @@
     opacity: 0.8;
 }
 
-/* Элемент особенностей */
+/* Элемент особенностей (исправлено: изображение на всю ширину без рамки) */
 .feature-item {
     background: var(--bg-inner-gradient);
     border-radius: var(--radius-md);
     padding: 20px;
     border: 1px solid var(--border);
-    transition: none;
+    overflow: hidden;
+    transition: transform 0.2s;
+}
+
+.feature-item .feature-banner {
+    width: calc(100% + 40px);
+    margin: -20px -20px 12px -20px;
+    height: 140px;
+    overflow: hidden;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    background: var(--bg-primary);
+    opacity: 0;
+    transition: opacity 1.2s ease-in-out;
+}
+
+.feature-item .feature-banner.loaded {
+    opacity: 1;
+}
+
+.feature-item .feature-banner video,
+.feature-item .feature-banner img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .feature-icon {
     font-size: 32px;
     display: block;
     margin-bottom: 10px;
-    transition: none;
 }
 
 .features-extra {
@@ -437,6 +460,10 @@
     .tilt-card:hover {
         transform: translateY(-5px) scale(1.02);
         box-shadow: var(--shadow-hover);
+    }
+    .feature-item.tilt-card:hover {
+        transform: none;
+        box-shadow: none;
     }
 }
 
