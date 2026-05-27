@@ -1,27 +1,27 @@
-// js/dust-particles.js – динамические летающие частицы с быстрым движением и ярким цветом
+// js/dust-particles.js – динамические летающие частицы с быстрым движением
 (function() {
     let canvas, ctx, particles = [];
     let animationId = null;
     let width, height;
     let animationTime = 0;
 
-    const PARTICLE_COUNT = 150;
-    const BASE_SIZE = 1.2;
-    const SIZE_VARIATION = 2.0;
-    const OPACITY_BASE = 0.25;        // повышена
+    const PARTICLE_COUNT = 180;             // чуть больше для плотности
+    const BASE_SIZE = 1.5;
+    const SIZE_VARIATION = 2.5;
+    const OPACITY_BASE = 0.35;              // значительно увеличена
     const OPACITY_VARIATION = 0.4;
 
-    const ANGULAR_SPEED_MIN = 2.5;
+    const ANGULAR_SPEED_MIN = 3.0;
     const ANGULAR_SPEED_MAX = 9.0;
 
     const RADIUS_MIN = 100;
     const RADIUS_MAX = 350;
 
-    // Яркие цвета, заметные на тёмном фоне
+    // Яркие заметные цвета
     const COLORS = [
-        'rgba(61, 158, 179, ',   // акцентный
+        'rgba(61, 158, 179, ',
         'rgba(255, 255, 255, ',
-        'rgba(200, 220, 240, '
+        'rgba(210, 230, 250, '
     ];
 
     function initCanvas() {
@@ -36,12 +36,13 @@
             width: '100%',
             height: '100%',
             pointerEvents: 'none',
-            zIndex: '0',
+            zIndex: '9999',                 // выше всего
             display: 'block'
         });
 
         document.body.insertBefore(canvas, document.body.firstChild);
 
+        // Убедимся, что контент не перекрывает canvas
         const page = document.querySelector('.page');
         if (page) {
             page.style.position = 'relative';
@@ -111,7 +112,7 @@
             let x = p.baseX + offsetX;
             let y = p.baseY + offsetY;
 
-            const fadeZone = 50;
+            const fadeZone = 60;
             let edgeFade = 1.0;
             if (x < fadeZone) edgeFade *= x / fadeZone;
             if (x > width - fadeZone) edgeFade *= (width - x) / fadeZone;
@@ -135,18 +136,17 @@
             ctx.fillStyle = COLORS[p.colorIdx] + finalOpacity + ')';
             ctx.fill();
 
-            if (p.size > 1.5 && finalOpacity > 0.2) {
-                ctx.shadowBlur = 8;
-                ctx.shadowColor = 'rgba(61, 158, 179, 0.8)';
-                ctx.fill();
-                ctx.shadowBlur = 0;
-            }
+            // Сильное свечение для всех частиц, чтобы они были заметны
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = 'rgba(61, 158, 179, 0.9)';
+            ctx.fill();
+            ctx.shadowBlur = 0;
         }
     }
 
     function animate(nowMs) {
         if (!animationId) return;
-        animationTime += 0.025;
+        animationTime += 0.02;
         drawParticles(animationTime);
         animationId = requestAnimationFrame(animate);
     }
