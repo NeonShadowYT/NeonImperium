@@ -6,7 +6,6 @@
         REPO_NAME: 'NeonImperium'
     };
 
-    // ---------- HTML / текст ----------
     function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -20,7 +19,6 @@
         return div.textContent || div.innerText || '';
     }
 
-    // ---------- DOM ----------
     function createElement(tag, className, styles = {}, attrs = {}) {
         const el = document.createElement(tag);
         if (className) el.className = className;
@@ -29,7 +27,6 @@
         return el;
     }
 
-    // ---------- Даты ----------
     function formatDate(date, lang = null) {
         const locale = lang || localStorage.getItem('preferredLanguage') || 'ru';
         const d = new Date(date);
@@ -38,7 +35,6 @@
         });
     }
 
-    // ---------- Кэширование ----------
     function cacheGet(key, ttl = CONFIG.CACHE_TTL) {
         const session = sessionStorage.getItem(key);
         const sessionTime = sessionStorage.getItem(`${key}_time`);
@@ -95,7 +91,6 @@
         } catch {}
     }
 
-    // ---------- Массивы ----------
     function deduplicateByNumber(items) {
         const seen = new Set();
         return items.filter(i => {
@@ -105,7 +100,6 @@
         });
     }
 
-    // ---------- Планирование ----------
     function debounce(fn, delay) {
         let timer;
         return function(...args) {
@@ -125,24 +119,27 @@
         };
     }
 
-    // ---------- Markdown ----------
     function renderMarkdown(text) {
         if (!text) return '';
         if (window.marked) {
-            if (window.marked.setOptions) marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-            return window.marked.parse(text);
+            if (typeof marked.setOptions === 'function') {
+                marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
+            }
+            if (typeof marked.parse === 'function') {
+                return marked.parse(text);
+            } else if (typeof marked === 'function') {
+                return marked(text);
+            }
         }
         return text.replace(/\n/g, '<br>');
     }
 
-    // ---------- Abortable fetch ----------
     function createAbortable(timeout = 20000) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
         return { controller, timeoutId };
     }
 
-    // ---------- Динамическая загрузка скриптов ----------
     const loadedScripts = new Set();
     function loadModule(path) {
         if (loadedScripts.has(path)) return Promise.resolve();

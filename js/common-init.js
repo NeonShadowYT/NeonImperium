@@ -46,7 +46,10 @@
     async function tryLoad(index) {
       if (index >= cdnList.length) {
         console.warn('All CDNs failed, using minimal fallback');
-        window.marked = { parse: (txt) => txt.replace(/\n/g, '<br>') };
+        window.marked = {
+          parse: (txt) => Promise.resolve(txt.replace(/\n/g, '<br>')),
+          setOptions: () => {}
+        };
         return;
       }
       try {

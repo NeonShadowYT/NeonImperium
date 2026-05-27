@@ -1,4 +1,4 @@
-// js/dust-particles.js – Dynamic dust particles background
+// js/dust-particles.js – Dynamic dust particles background with smooth motion
 (function() {
     let canvas, ctx, particles = [];
     let animationId = null;
@@ -9,10 +9,10 @@
     const PARTICLE_COUNT = 180;
     const BASE_SIZE = 1.5;
     const SIZE_VARIATION = 1.2;
-    const OPACITY_BASE = 0.12;
-    const OPACITY_VARIATION = 0.2;
-    const DRIFT_AMPLITUDE = 35;      // max drift distance in pixels
-    const DRIFT_SPEED = 0.002;        // global drift speed multiplier
+    const OPACITY_BASE = 0.08;
+    const OPACITY_VARIATION = 0.15;
+    const DRIFT_AMPLITUDE = 45;      // max drift distance in pixels
+    const DRIFT_SPEED = 0.0015;      // global drift speed multiplier
     
     // Colors
     const COLORS = [
@@ -68,13 +68,13 @@
                 // Base position (where particle tends to return)
                 baseX: Math.random() * width,
                 baseY: Math.random() * height,
-                // Individual drift parameters
+                // Individual drift parameters – уникальные для каждой частицы
                 driftAngleX: Math.random() * Math.PI * 2,
                 driftAngleY: Math.random() * Math.PI * 2,
-                driftSpeedX: 0.0005 + Math.random() * 0.003,
-                driftSpeedY: 0.0005 + Math.random() * 0.003,
-                driftRadiusX: 10 + Math.random() * DRIFT_AMPLITUDE,
-                driftRadiusY: 10 + Math.random() * DRIFT_AMPLITUDE,
+                driftSpeedX: 0.0008 + Math.random() * 0.004,
+                driftSpeedY: 0.0008 + Math.random() * 0.004,
+                driftRadiusX: 15 + Math.random() * DRIFT_AMPLITUDE,
+                driftRadiusY: 15 + Math.random() * DRIFT_AMPLITUDE,
                 // Size and opacity
                 size: BASE_SIZE + Math.random() * SIZE_VARIATION,
                 opacity: OPACITY_BASE + Math.random() * OPACITY_VARIATION,

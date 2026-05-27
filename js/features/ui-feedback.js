@@ -16,12 +16,25 @@
   }
 
   async function renderMarkdownWithEditor(text, targetElement) {
-    if (window.marked && window.marked.parse) {
-      marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-      targetElement.innerHTML = marked.parse(text);
-    } else if (window.marked && typeof window.marked === 'function') {
-      targetElement.innerHTML = window.marked(text);
-    } else {
+    if (!text) { targetElement.innerHTML = ''; return; }
+    try {
+      if (window.marked) {
+        // Безопасная установка опций
+        if (typeof marked.setOptions === 'function') {
+          marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
+        }
+        if (typeof marked.parse === 'function') {
+          targetElement.innerHTML = await marked.parse(text);
+        } else if (typeof marked === 'function') {
+          targetElement.innerHTML = marked(text);
+        } else {
+          throw new Error('marked не функция');
+        }
+      } else {
+        targetElement.innerHTML = text.replace(/\n/g, '<br>');
+      }
+    } catch (e) {
+      console.warn('Markdown ошибка:', e);
       targetElement.innerHTML = text.replace(/\n/g, '<br>');
     }
   }
@@ -250,7 +263,6 @@
       const toolbarContainer = modal.querySelector('#editor-toolbar');
       toolbarContainer.innerHTML = '';
       toolbarContainer.appendChild(toolbar);
-      // Добавляем кнопку хостингов
       const hostBtn = window.Editor.createImageServicesMenu();
       toolbarContainer.appendChild(hostBtn);
     } else {
