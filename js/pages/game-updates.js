@@ -1,6 +1,6 @@
 // js/pages/game-updates.js — обновления игры с админ-кнопкой
 (function() {
-  const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractAllowed, extractSummary, decryptPrivateBody, loadModule, createElement } = window.Utils;
+  const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractAllowed, extractSummary, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
   const { showToast } = window.UIUtils;
@@ -79,8 +79,10 @@
           header.appendChild(btn);
         }
       } else if (existing) existing.remove();
-    } catch { container.innerHTML = '<p class="error-message">Ошибка загрузки</p>'; }
-    finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
+    } catch (err) {
+      console.error('Update load error:', err);
+      container.innerHTML = '<p class="error-message">Ошибка загрузки обновлений</p>';
+    } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
   }
 
   function createUpdateCard(post) {

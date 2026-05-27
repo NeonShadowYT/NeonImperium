@@ -16,9 +16,11 @@
   }
 
   async function renderMarkdownWithEditor(text, targetElement) {
-    if (window.marked) {
+    if (window.marked && window.marked.parse) {
       marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
       targetElement.innerHTML = marked.parse(text);
+    } else if (window.marked && typeof window.marked === 'function') {
+      targetElement.innerHTML = window.marked(text);
     } else {
       targetElement.innerHTML = text.replace(/\n/g, '<br>');
     }
@@ -78,7 +80,7 @@
         return;
       }
       for (const c of comments) {
-        const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px' });
+        const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px', position: 'relative' });
         commentDiv.dataset.id = c.id;
         const header = createElement('div', 'comment-meta', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' });
         header.innerHTML = `<span class="comment-author">${escapeHtml(c.user.login)}</span><span>${new Date(c.created_at).toLocaleString()}</span>`;
@@ -306,7 +308,7 @@
         showToast('Пост создан', 'success');
         clearDraft(draftKey);
         closeModal();
-        window.dispatchEvent(new CustomEvent('github-issue-created', { detail: { title, body: finalBody, labels: labels.map(l=> ({name:l})) } }));
+        window.dispatchEvent(new CustomEvent('github-issue-created', { detail: { title, body: finalBody, labels: labels.map(l=> ({name:l})), user: { login: getCurrentUser() } } }));
       } catch (err) { showToast('Ошибка: ' + err.message, 'error'); }
     });
   }
