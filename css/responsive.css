@@ -1,5 +1,5 @@
 /* ===========================================
-   Все адаптивные стили (без ошибок -webkit-scrollbar)
+   Все адаптивные стили
    =========================================== */
 @media (max-width: 900px) {
     .nav-bar { flex-wrap: nowrap; padding: 6px 10px; gap: 5px; }
@@ -25,8 +25,8 @@
     .storage-header { flex-direction: column; align-items: stretch; }
     .storage-controls { flex-direction: column; gap: 10px; }
     .storage-add-form { grid-template-columns: 1fr; }
-    /* Скрываем скроллбар для WebKit-браузеров без ошибки в Firefox */
-    .feedback-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .feedback-tabs { overflow-x: auto; scrollbar-width: none; }
+    /* Скрываем скроллбар только для WebKit без ошибок в других браузерах */
     @media screen and (-webkit-min-device-pixel-ratio:0) {
         .feedback-tabs::-webkit-scrollbar {
             display: none;
