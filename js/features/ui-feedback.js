@@ -1,4 +1,4 @@
-// js/features/ui-feedback.js – полный модуль с кнопками в модалке
+// js/features/ui-feedback.js – полный модуль с кнопками в модалке, предпросмотром и редактором комментариев
 (function() {
   const { createElement, escapeHtml, renderMarkdown, loadModule, cacheGet, cacheSet, cacheRemoveByPrefix, extractAllowed, extractSummary, decryptPrivateBody, CONFIG } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -74,7 +74,7 @@
     return map[content] || content;
   }
 
-  // ---------- Комментарии ----------
+  // ---------- Комментарии с редактором ----------
   async function loadComments(issueNumber, container, onUpdate) {
     if (!window.GithubAPI) await loadModule('js/core/github-api.js');
     try {
@@ -98,7 +98,7 @@
           const actions = createElement('div', 'comment-actions', { position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', opacity: '0', transition: 'opacity 0.2s' });
           const editBtn = createElement('button', '', {}, { title: 'Редактировать' });
           editBtn.innerHTML = '<i class="fas fa-pen"></i>';
-          editBtn.addEventListener('click', (e) => { e.stopPropagation(); editComment(c.id, c.body, onUpdate); });
+          editBtn.addEventListener('click', (e) => { e.stopPropagation(); editCommentWithEditor(c.id, c.body, onUpdate); });
           const delBtn = createElement('button', '', {}, { title: 'Удалить' });
           delBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
           delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteComment(c.id, onUpdate); });
@@ -113,21 +113,23 @@
     } catch (err) { console.error(err); container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>'; }
   }
 
+  // Редактирование комментария через редактор
+  async function editCommentWithEditor(commentId, oldBody, onUpdate) {
+    if (!window.Editor) await loadModule('js/features/editor.js');
+    const newBody = prompt('Редактировать комментарий (поддерживается Markdown)', oldBody);
+    if (!newBody || newBody === oldBody) return;
+    try {
+      await window.GithubAPI.updateComment(commentId, newBody);
+      showToast('Обновлено', 'success');
+      onUpdate();
+    } catch (err) { showToast('Ошибка', 'error'); }
+  }
+
   async function addComment(issueNumber, body, onUpdate) {
     if (!body.trim()) return showToast('Введите текст', 'error');
     try {
       await window.GithubAPI.addComment(issueNumber, body);
       showToast('Комментарий добавлен', 'success');
-      onUpdate();
-    } catch (err) { showToast('Ошибка', 'error'); }
-  }
-
-  async function editComment(commentId, oldBody, onUpdate) {
-    const newBody = prompt('Редактировать комментарий', oldBody);
-    if (!newBody || newBody === oldBody) return;
-    try {
-      await window.GithubAPI.updateComment(commentId, newBody);
-      showToast('Обновлено', 'success');
       onUpdate();
     } catch (err) { showToast('Ошибка', 'error'); }
   }
@@ -141,7 +143,7 @@
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
-  // ---------- Вспомогательные функции для модалки ----------
+  // ---------- Кнопки модалки ----------
   async function sharePost(title, url) {
     if (navigator.share) {
       try { await navigator.share({ title, url }); } catch(e) {}
@@ -205,20 +207,10 @@
       if (allowed) displayBody = decryptPrivateBody(body, allowed);
     }
     
-    // Формируем кнопки действий в шапке
     const isOwner = author === currentUser;
     const canEdit = isOwner || isAdmin();
     const canDelete = isOwner || isAdmin();
     const canBookmark = currentUser && hasScope('gist');
-    
-    const actionButtons = `
-      <div class="modal-header-actions" style="display: flex; gap: 8px; margin-left: auto; margin-right: 8px;">
-        ${canBookmark ? `<button class="action-btn" id="modal-bookmark-btn" title="В закладки"><i class="fas fa-bookmark"></i></button>` : ''}
-        <button class="action-btn" id="modal-share-btn" title="Поделиться"><i class="fas fa-share-alt"></i></button>
-        ${canEdit ? `<button class="action-btn" id="modal-edit-btn" title="Редактировать"><i class="fas fa-pen"></i></button>` : ''}
-        ${canDelete ? `<button class="action-btn" id="modal-delete-btn" title="Удалить"><i class="fas fa-trash-alt"></i></button>` : ''}
-      </div>
-    `;
     
     const html = `
       <div style="margin-bottom: 16px;">
@@ -242,30 +234,34 @@
     
     const { modal, closeModal } = createModal(title, html, { size: 'full' });
     
-    // Вставляем кнопки в заголовок (после h2)
+    // Добавляем кнопки действий в заголовок
     const headerDiv = modal.querySelector('.modal-header');
-    const h2 = headerDiv.querySelector('h2');
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = actionButtons;
-    const actionsContainer = tempDiv.firstChild;
-    headerDiv.insertBefore(actionsContainer, headerDiv.querySelector('.modal-close'));
-    
-    // Обработчики кнопок
-    const bookmarkBtn = modal.querySelector('#modal-bookmark-btn');
-    if (bookmarkBtn) {
-      bookmarkBtn.addEventListener('click', () => addToBookmarks({ id, title, author, date, game, labels, thumbnail: null }));
-    }
-    const shareBtn = modal.querySelector('#modal-share-btn');
-    if (shareBtn) {
+    if (headerDiv) {
+      const actionsDiv = createElement('div', 'modal-header-actions', { display: 'flex', gap: '8px', marginLeft: 'auto', marginRight: '8px' });
+      if (canBookmark) {
+        const bookmarkBtn = createElement('button', 'action-btn', {}, { title: 'В закладки' });
+        bookmarkBtn.innerHTML = '<i class="fas fa-bookmark"></i>';
+        bookmarkBtn.addEventListener('click', () => addToBookmarks({ id, title, author, date, game, labels, thumbnail: null }));
+        actionsDiv.appendChild(bookmarkBtn);
+      }
+      const shareBtn = createElement('button', 'action-btn', {}, { title: 'Поделиться' });
+      shareBtn.innerHTML = '<i class="fas fa-share-alt"></i>';
       shareBtn.addEventListener('click', () => sharePost(title, `${location.origin}${location.pathname}?post=${id}`));
-    }
-    const editBtn = modal.querySelector('#modal-edit-btn');
-    if (editBtn) {
-      editBtn.addEventListener('click', () => editPost(id, title, body, game, labels));
-    }
-    const deleteBtn = modal.querySelector('#modal-delete-btn');
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', () => deletePost(id));
+      actionsDiv.appendChild(shareBtn);
+      if (canEdit) {
+        const editBtn = createElement('button', 'action-btn', {}, { title: 'Редактировать' });
+        editBtn.innerHTML = '<i class="fas fa-pen"></i>';
+        editBtn.addEventListener('click', () => editPost(id, title, body, game, labels));
+        actionsDiv.appendChild(editBtn);
+      }
+      if (canDelete) {
+        const deleteBtn = createElement('button', 'action-btn', {}, { title: 'Удалить' });
+        deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+        deleteBtn.addEventListener('click', () => deletePost(id));
+        actionsDiv.appendChild(deleteBtn);
+      }
+      const closeBtn = headerDiv.querySelector('.modal-close');
+      headerDiv.insertBefore(actionsDiv, closeBtn);
     }
     
     const contentDiv = modal.querySelector('.post-content');
@@ -296,7 +292,7 @@
     }
   }
 
-  // ---------- Редактор поста (модалка) ----------
+  // ---------- Редактор поста с предпросмотром ----------
   async function openEditorModal(mode, initialData, context) {
     if (!hasScope('repo')) {
       showToast('Требуется scope repo', 'error');
@@ -413,7 +409,7 @@
     renderReactions,
     loadComments,
     addComment,
-    editComment,
+    editComment: editCommentWithEditor,
     deleteComment,
     openFullModal,
     openEditorModal,
