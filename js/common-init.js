@@ -23,7 +23,7 @@
   }
 
   function ensureMarked() {
-    if (typeof marked !== 'undefined') return Promise.resolve();
+    if (typeof marked !== 'undefined' && typeof marked.parse === 'function') return Promise.resolve();
 
     const cdnList = [
       'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
@@ -54,8 +54,8 @@
       }
       try {
         await loadScript(cdnList[index]);
-        if (typeof marked !== 'undefined') return;
-        else throw new Error('marked not defined');
+        if (typeof marked !== 'undefined' && typeof marked.parse === 'function') return;
+        else throw new Error('marked not defined or parse missing');
       } catch (err) {
         console.warn(`Failed to load marked from ${cdnList[index]}, trying next`);
         return tryLoad(index + 1);
@@ -88,6 +88,7 @@
           iframe.setAttribute('frameborder', '0');
           iframe.setAttribute('allowfullscreen', '');
           iframe.loading = 'lazy';
+          iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
           el.appendChild(iframe);
           el.classList.add('loaded');
           obs.unobserve(el);
@@ -102,6 +103,7 @@
         iframe.src = src;
         iframe.setAttribute('frameborder', '0');
         iframe.setAttribute('allowfullscreen', '');
+        iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
         el.appendChild(iframe);
       });
     }

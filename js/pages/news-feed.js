@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – лента новостей, видео проигрываются в карточке, посты в модалке
+// js/pages/news-feed.js – лента новостей (без изменений, но для полноты привожу)
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues, loadIssue } = window.GithubAPI;

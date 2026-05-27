@@ -1,10 +1,9 @@
-// js/features/ui-feedback.js — полный модуль обратной связи, модалок, редактора
+// js/features/ui-feedback.js – полный модуль с кнопками в модалке
 (function() {
   const { createElement, escapeHtml, renderMarkdown, loadModule, cacheGet, cacheSet, cacheRemoveByPrefix, extractAllowed, extractSummary, decryptPrivateBody, CONFIG } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
 
-  // ---------- Вспомогательные функции ----------
   let reactionsListCache = new Map();
   const CACHE_TTL = 5 * 60 * 1000;
 
@@ -19,22 +18,15 @@
     if (!text) { targetElement.innerHTML = ''; return; }
     try {
       if (window.marked) {
-        // Безопасная установка опций
-        if (typeof marked.setOptions === 'function') {
-          marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-        }
-        if (typeof marked.parse === 'function') {
-          targetElement.innerHTML = await marked.parse(text);
-        } else if (typeof marked === 'function') {
-          targetElement.innerHTML = marked(text);
-        } else {
-          throw new Error('marked не функция');
-        }
+        if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
+        if (typeof marked.parse === 'function') targetElement.innerHTML = await marked.parse(text);
+        else if (typeof marked === 'function') targetElement.innerHTML = marked(text);
+        else throw new Error('marked not callable');
       } else {
         targetElement.innerHTML = text.replace(/\n/g, '<br>');
       }
     } catch (e) {
-      console.warn('Markdown ошибка:', e);
+      console.warn('Markdown error:', e);
       targetElement.innerHTML = text.replace(/\n/g, '<br>');
     }
   }
@@ -149,7 +141,57 @@
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
-  // ---------- Полноэкранная модалка поста/обновления ----------
+  // ---------- Вспомогательные функции для модалки ----------
+  async function sharePost(title, url) {
+    if (navigator.share) {
+      try { await navigator.share({ title, url }); } catch(e) {}
+    } else {
+      navigator.clipboard.writeText(url);
+      showToast('Ссылка скопирована', 'success');
+    }
+  }
+
+  async function addToBookmarks(postData) {
+    if (!window.BookmarkStorage) await loadModule('js/features/storage.js');
+    if (!window.BookmarkStorage) return showToast('Хранилище не загружено', 'error');
+    try {
+      await window.BookmarkStorage.addBookmark({
+        url: `${location.origin}${location.pathname}?post=${postData.id}`,
+        title: postData.title,
+        type: 'post',
+        thumbnail: postData.thumbnail || 'images/default-news.webp',
+        author: postData.author,
+        date: postData.date,
+        postData: postData
+      });
+      showToast('Добавлено в закладки', 'success');
+    } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
+  }
+
+  async function editPost(id, currentTitle, currentBody, game, labels) {
+    if (!hasScope('repo')) return showToast('Нет прав', 'error');
+    const newTitle = prompt('Новый заголовок', currentTitle);
+    if (!newTitle) return;
+    const newBody = prompt('Новый текст (Markdown)', currentBody);
+    if (newBody === null) return;
+    try {
+      await window.GithubAPI.updateIssue(id, { title: newTitle, body: newBody });
+      showToast('Пост обновлён', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
+  }
+
+  async function deletePost(id) {
+    if (!hasScope('repo')) return showToast('Нет прав', 'error');
+    if (!confirm('Удалить пост? Это действие необратимо.')) return;
+    try {
+      await window.GithubAPI.closeIssue(id);
+      showToast('Пост закрыт (удалён)', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
+  }
+
+  // ---------- Полноэкранная модалка с кнопками ----------
   async function openFullModal(item) {
     const { id, title, body, author, date, game, labels, type } = item;
     const currentUser = getCurrentUser();
@@ -162,6 +204,22 @@
       const allowed = extractAllowed(body);
       if (allowed) displayBody = decryptPrivateBody(body, allowed);
     }
+    
+    // Формируем кнопки действий в шапке
+    const isOwner = author === currentUser;
+    const canEdit = isOwner || isAdmin();
+    const canDelete = isOwner || isAdmin();
+    const canBookmark = currentUser && hasScope('gist');
+    
+    const actionButtons = `
+      <div class="modal-header-actions" style="display: flex; gap: 8px; margin-left: auto; margin-right: 8px;">
+        ${canBookmark ? `<button class="action-btn" id="modal-bookmark-btn" title="В закладки"><i class="fas fa-bookmark"></i></button>` : ''}
+        <button class="action-btn" id="modal-share-btn" title="Поделиться"><i class="fas fa-share-alt"></i></button>
+        ${canEdit ? `<button class="action-btn" id="modal-edit-btn" title="Редактировать"><i class="fas fa-pen"></i></button>` : ''}
+        ${canDelete ? `<button class="action-btn" id="modal-delete-btn" title="Удалить"><i class="fas fa-trash-alt"></i></button>` : ''}
+      </div>
+    `;
+    
     const html = `
       <div style="margin-bottom: 16px;">
         <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
@@ -181,7 +239,35 @@
         </div>` : '<p class="text-secondary">Войдите, чтобы комментировать</p>'}
       </div>
     `;
+    
     const { modal, closeModal } = createModal(title, html, { size: 'full' });
+    
+    // Вставляем кнопки в заголовок (после h2)
+    const headerDiv = modal.querySelector('.modal-header');
+    const h2 = headerDiv.querySelector('h2');
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = actionButtons;
+    const actionsContainer = tempDiv.firstChild;
+    headerDiv.insertBefore(actionsContainer, headerDiv.querySelector('.modal-close'));
+    
+    // Обработчики кнопок
+    const bookmarkBtn = modal.querySelector('#modal-bookmark-btn');
+    if (bookmarkBtn) {
+      bookmarkBtn.addEventListener('click', () => addToBookmarks({ id, title, author, date, game, labels, thumbnail: null }));
+    }
+    const shareBtn = modal.querySelector('#modal-share-btn');
+    if (shareBtn) {
+      shareBtn.addEventListener('click', () => sharePost(title, `${location.origin}${location.pathname}?post=${id}`));
+    }
+    const editBtn = modal.querySelector('#modal-edit-btn');
+    if (editBtn) {
+      editBtn.addEventListener('click', () => editPost(id, title, body, game, labels));
+    }
+    const deleteBtn = modal.querySelector('#modal-delete-btn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', () => deletePost(id));
+    }
+    
     const contentDiv = modal.querySelector('.post-content');
     await renderMarkdownWithEditor(displayBody, contentDiv);
     const reactionsContainer = modal.querySelector('#modal-reactions');
@@ -224,7 +310,6 @@
 
     let currentTitle = savedTitle;
     let currentBody = savedBody;
-    let isPrivate = false;
     let allowedUsers = '';
 
     const html = `
@@ -257,7 +342,6 @@
     const allowedInput = modal.querySelector('#allowed-users');
     const submitBtn = modal.querySelector('#editor-submit');
 
-    // Загружаем тулбар
     if (window.Editor && window.Editor.createEditorToolbar) {
       const toolbar = window.Editor.createEditorToolbar(bodyTextarea);
       const toolbarContainer = modal.querySelector('#editor-toolbar');
