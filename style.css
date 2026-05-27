@@ -495,3 +495,61 @@
     .license-quick { grid-template-columns: 1fr; gap: 16px; }
     .license-section-card h2 { font-size: 22px; }
 }
+
+/* ========== Дополнительные адаптивные правки ========== */
+@media (max-width: 700px) {
+    .editor-split {
+        flex-direction: column;
+    }
+    .editor-split-left textarea {
+        min-height: 200px;
+    }
+    .modal-header-actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+    .comment-form {
+        flex-wrap: wrap;
+    }
+    .comment-form .comment-input {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+    .comment-form .button-group {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    .download-subsection .store-buttons,
+    .download-subsection .cloud-buttons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .download-subsection .download-button {
+        width: 100%;
+        justify-content: center;
+    }
+    .github-block .platform-selector {
+        flex-wrap: wrap;
+    }
+    .github-block .version-select {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .modal-header-actions {
+        margin-left: 0;
+        margin-top: 8px;
+        width: 100%;
+        justify-content: space-between;
+    }
+    .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+    }
+}

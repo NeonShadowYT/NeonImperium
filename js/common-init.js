@@ -32,7 +32,7 @@
       'https://esm.sh/marked'
     ];
 
-    function loadScript(src, timeout = 5000) {
+    function loadScript(src, timeout = 10000) {
       return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = src;
