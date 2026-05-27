@@ -1,29 +1,27 @@
-// js/dust-particles.js – динамические летающие частицы с быстрым движением и респауном
+// js/dust-particles.js – динамические летающие частицы с быстрым движением и ярким цветом
 (function() {
     let canvas, ctx, particles = [];
     let animationId = null;
     let width, height;
     let animationTime = 0;
 
-    // === НАСТРОЙКИ (заметное быстрое движение) ===
     const PARTICLE_COUNT = 150;
-    const BASE_SIZE = 1.0;
-    const SIZE_VARIATION = 2.2;
-    const OPACITY_BASE = 0.15;
-    const OPACITY_VARIATION = 0.35;
+    const BASE_SIZE = 1.2;
+    const SIZE_VARIATION = 2.0;
+    const OPACITY_BASE = 0.25;        // повышена
+    const OPACITY_VARIATION = 0.4;
 
-    // Увеличенная угловая скорость (радиан в секунду) – теперь 2..8
-    const ANGULAR_SPEED_MIN = 2.0;
-    const ANGULAR_SPEED_MAX = 8.0;
+    const ANGULAR_SPEED_MIN = 2.5;
+    const ANGULAR_SPEED_MAX = 9.0;
 
-    // Большой радиус колебаний – до 300 пикселей
-    const RADIUS_MIN = 80;
-    const RADIUS_MAX = 300;
+    const RADIUS_MIN = 100;
+    const RADIUS_MAX = 350;
 
+    // Яркие цвета, заметные на тёмном фоне
     const COLORS = [
-        'rgba(61, 158, 179, ',
-        'rgba(200, 220, 240, ',
-        'rgba(255, 255, 255, '
+        'rgba(61, 158, 179, ',   // акцентный
+        'rgba(255, 255, 255, ',
+        'rgba(200, 220, 240, '
     ];
 
     function initCanvas() {
@@ -85,7 +83,6 @@
     }
 
     function respawnParticle(p) {
-        // 70% – противоположная сторона, 30% – случайная позиция
         if (Math.random() < 0.7) {
             p.baseX = (p.baseX < 0) ? width + 20 : (p.baseX > width ? -20 : p.baseX);
             p.baseY = (p.baseY < 0) ? height + 20 : (p.baseY > height ? -20 : p.baseY);
@@ -114,9 +111,8 @@
             let x = p.baseX + offsetX;
             let y = p.baseY + offsetY;
 
-            // Затухание у краёв (50px)
-            let edgeFade = 1.0;
             const fadeZone = 50;
+            let edgeFade = 1.0;
             if (x < fadeZone) edgeFade *= x / fadeZone;
             if (x > width - fadeZone) edgeFade *= (width - x) / fadeZone;
             if (y < fadeZone) edgeFade *= y / fadeZone;
@@ -124,7 +120,6 @@
 
             if (edgeFade <= 0.05 || x < -200 || x > width + 200 || y < -200 || y > height + 200) {
                 respawnParticle(p);
-                // Пересчёт позиции после респауна
                 offsetX = Math.sin(p.angleX + nowSec * p.speedX) * p.radiusX;
                 offsetY = Math.cos(p.angleY + nowSec * p.speedY + p.phase) * p.radiusY;
                 x = p.baseX + offsetX;
@@ -140,9 +135,9 @@
             ctx.fillStyle = COLORS[p.colorIdx] + finalOpacity + ')';
             ctx.fill();
 
-            if (p.size > 1.8 && finalOpacity > 0.2) {
+            if (p.size > 1.5 && finalOpacity > 0.2) {
                 ctx.shadowBlur = 8;
-                ctx.shadowColor = 'rgba(61, 158, 179, 0.7)';
+                ctx.shadowColor = 'rgba(61, 158, 179, 0.8)';
                 ctx.fill();
                 ctx.shadowBlur = 0;
             }
@@ -151,7 +146,7 @@
 
     function animate(nowMs) {
         if (!animationId) return;
-        animationTime += 0.025; // плавное время, ~1.5 сек/кадр
+        animationTime += 0.025;
         drawParticles(animationTime);
         animationId = requestAnimationFrame(animate);
     }
