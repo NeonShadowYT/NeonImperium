@@ -1,177 +1,260 @@
 // js/features/dust-particles.js
-// Фоновые динамические частицы (пылинки) с эффектом случайного блуждания
+// Лёгкие летающие частицы акцентного цвета с плавным появлением и щадящей загрузкой
 
 (function() {
     let canvas, ctx, particles = [];
     let animationId = null;
     let width, height;
-    let isEnabled = true;
-
-    // Настройки
-    const CONFIG = {
-        PARTICLE_COUNT: 120,          // количество частиц
-        MIN_RADIUS: 1,
-        MAX_RADIUS: 3,
-        BASE_SPEED: 0.3,              // базовая скорость
-        NOISE_STRENGTH: 0.12,         // сила случайного изменения направления
-        MAX_SPEED: 0.7,
-        MIN_OPACITY: 0.2,
-        MAX_OPACITY: 0.7,
-        OPACITY_WAVE_SPEED: 0.005     // скорость мерцания
-    };
-
-    // Проверка: если пользователь предпочитает сниженную анимацию – отключаем эффект
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (mediaQuery.matches) {
-        isEnabled = false;
-        return;
+    let animationTime = 0;
+    let isAddingParticles = false;
+    let addInterval = null;
+    
+    // НАСТРОЙКИ (оптимизированы под производительность и внешний вид)
+    const TARGET_PARTICLE_COUNT = 70;        // меньше — легче, но достаточно для эффекта
+    const PARTICLE_ADD_STEP = 3;              // добавляем по 3 частицы за раз
+    const ADD_INTERVAL_MS = 120;              // каждые 120 мс
+    
+    const BASE_SIZE = 0.8;                    // мельче, чтобы не отвлекать
+    const SIZE_VARIATION = 1.2;               // 0.8 .. 2.0 пикселя
+    
+    const OPACITY_TARGET_MIN = 0.10;          // менее заметные
+    const OPACITY_TARGET_MAX = 0.28;
+    const FADE_IN_DURATION = 1.5;             // секунды на появление частицы
+    
+    const ANGULAR_SPEED_MIN = 1.8;             // медленнее, спокойнее
+    const ANGULAR_SPEED_MAX = 4.5;
+    
+    const RADIUS_MIN = 80;
+    const RADIUS_MAX = 280;
+    
+    // Цветовая гамма – акцентный цвет #3D9EB3 с небольшими вариациями яркости
+    const ACCENT_BASE = { r: 61, g: 158, b: 179 };
+    
+    function getAccentColor(variation = 0) {
+        // variation: -1 .. 1 (светлее/темнее)
+        let factor = 1 + variation * 0.25; // максимум ±25%
+        let r = Math.min(255, Math.max(0, ACCENT_BASE.r * factor));
+        let g = Math.min(255, Math.max(0, ACCENT_BASE.g * factor));
+        let b = Math.min(255, Math.max(0, ACCENT_BASE.b * factor));
+        return `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
     }
-
+    
+    // --- Инициализация canvas ---
     function initCanvas() {
+        if (canvas) return; // уже создан
         canvas = document.createElement('canvas');
         canvas.id = 'dust-canvas';
-        canvas.style.position = 'fixed';
-        canvas.style.top = '0';
-        canvas.style.left = '0';
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
-        canvas.style.pointerEvents = 'none';
-        canvas.style.zIndex = '-1';
-        canvas.style.display = 'block';
-        document.body.appendChild(canvas);
         ctx = canvas.getContext('2d');
-
+        
+        Object.assign(canvas.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+            zIndex: '9999',
+            display: 'block'
+        });
+        document.body.insertBefore(canvas, document.body.firstChild);
+        
+        // Убедимся, что контент не перекрывается
+        const page = document.querySelector('.page');
+        if (page) page.style.position = 'relative';
+        
         window.addEventListener('resize', onResize);
         onResize();
+        
+        startAddingParticles();   // постепенное наполнение
+        startAnimation();
     }
-
+    
     function onResize() {
         width = window.innerWidth;
         height = window.innerHeight;
         canvas.width = width;
         canvas.height = height;
-        // Пересоздаём частицы при изменении размера (чтобы заполнить новую область)
-        initParticles();
-    }
-
-    function randomRange(min, max) {
-        return min + Math.random() * (max - min);
-    }
-
-    function initParticles() {
-        particles = [];
-        for (let i = 0; i < CONFIG.PARTICLE_COUNT; i++) {
-            particles.push({
-                x: Math.random() * width,
-                y: Math.random() * height,
-                vx: randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED),
-                vy: randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED),
-                radius: randomRange(CONFIG.MIN_RADIUS, CONFIG.MAX_RADIUS),
-                opacity: randomRange(CONFIG.MIN_OPACITY, CONFIG.MAX_OPACITY),
-                opacityPhase: Math.random() * Math.PI * 2, // для мерцания
-                lifePhase: Math.random() * Math.PI * 2      // для дополнительной вариации
-            });
-        }
-    }
-
-    function updateParticles() {
+        // При изменении размера не пересоздаём все частицы грубо,
+        // а просто пересчитываем их базовые координаты с сохранением динамики
         for (let p of particles) {
-            // Добавляем случайный "шум" к скорости (броуновское движение)
-            p.vx += (Math.random() - 0.5) * CONFIG.NOISE_STRENGTH;
-            p.vy += (Math.random() - 0.5) * CONFIG.NOISE_STRENGTH;
-
-            // Ограничиваем максимальную скорость
-            let speed = Math.hypot(p.vx, p.vy);
-            if (speed > CONFIG.MAX_SPEED) {
-                p.vx = (p.vx / speed) * CONFIG.MAX_SPEED;
-                p.vy = (p.vy / speed) * CONFIG.MAX_SPEED;
-            }
-
-            // Двигаем частицу
-            p.x += p.vx;
-            p.y += p.vy;
-
-            // Телепортация при выходе за границы (бесконечное поле)
-            if (p.x < 0) p.x = width;
-            if (p.x > width) p.x = 0;
-            if (p.y < 0) p.y = height;
-            if (p.y > height) p.y = 0;
-
-            // Мерцание: плавное изменение прозрачности
-            p.opacityPhase += CONFIG.OPACITY_WAVE_SPEED;
-            const opacityFactor = (Math.sin(p.opacityPhase) + 1) / 2; // от 0 до 1
-            p.currentOpacity = CONFIG.MIN_OPACITY + opacityFactor * (CONFIG.MAX_OPACITY - CONFIG.MIN_OPACITY);
+            if (p.baseX > width) p.baseX = width - 20;
+            if (p.baseY > height) p.baseY = height - 20;
+            p.baseX = Math.min(width + 50, Math.max(-50, p.baseX));
+            p.baseY = Math.min(height + 50, Math.max(-50, p.baseY));
         }
     }
-
-    function drawParticles() {
-        if (!ctx) return;
+    
+    // --- Создание одной частицы (с плавным появлением) ---
+    function createParticle(x, y) {
+        const targetOpacity = OPACITY_TARGET_MIN + Math.random() * (OPACITY_TARGET_MAX - OPACITY_TARGET_MIN);
+        // вариация цвета: от -0.6 до +0.4 (чуть больше тёмных, чтобы не слишком ярко)
+        const colorVariation = (Math.random() - 0.6) * 1.0;
+        const color = getAccentColor(colorVariation);
+        
+        return {
+            baseX: x !== undefined ? x : Math.random() * width,
+            baseY: y !== undefined ? y : Math.random() * height,
+            angleX: Math.random() * Math.PI * 2,
+            angleY: Math.random() * Math.PI * 2,
+            speedX: ANGULAR_SPEED_MIN + Math.random() * (ANGULAR_SPEED_MAX - ANGULAR_SPEED_MIN),
+            speedY: ANGULAR_SPEED_MIN + Math.random() * (ANGULAR_SPEED_MAX - ANGULAR_SPEED_MIN),
+            radiusX: RADIUS_MIN + Math.random() * (RADIUS_MAX - RADIUS_MIN),
+            radiusY: RADIUS_MIN + Math.random() * (RADIUS_MAX - RADIUS_MIN),
+            size: BASE_SIZE + Math.random() * SIZE_VARIATION,
+            targetOpacity: targetOpacity,
+            currentOpacity: 0,               // начинаем с нуля
+            fadeStartTime: performance.now() / 1000,
+            color: color,
+            phase: Math.random() * Math.PI * 2
+        };
+    }
+    
+    // --- Постепенное добавление частиц ---
+    function startAddingParticles() {
+        if (addInterval) clearInterval(addInterval);
+        isAddingParticles = true;
+        let currentCount = particles.length;
+        
+        addInterval = setInterval(() => {
+            if (!isAddingParticles) return;
+            if (particles.length >= TARGET_PARTICLE_COUNT) {
+                clearInterval(addInterval);
+                addInterval = null;
+                isAddingParticles = false;
+                return;
+            }
+            const toAdd = Math.min(PARTICLE_ADD_STEP, TARGET_PARTICLE_COUNT - particles.length);
+            for (let i = 0; i < toAdd; i++) {
+                particles.push(createParticle());
+            }
+            // Небольшая оптимизация: принудительно не перерисовываем, анимация сама подхватит
+        }, ADD_INTERVAL_MS);
+    }
+    
+    // Респавн частицы, если она улетела далеко за край
+    function respawnParticle(p, nowSec) {
+        // С вероятностью 70% просто телепортируем к противоположному краю
+        if (Math.random() < 0.7) {
+            p.baseX = (p.baseX < 0) ? width + 20 : (p.baseX > width ? -20 : p.baseX);
+            p.baseY = (p.baseY < 0) ? height + 20 : (p.baseY > height ? -20 : p.baseY);
+        } else {
+            p.baseX = Math.random() * width;
+            p.baseY = Math.random() * height;
+        }
+        // Сбрасываем углы, чтобы движение не было рывком
+        p.angleX = Math.random() * Math.PI * 2;
+        p.angleY = Math.random() * Math.PI * 2;
+        p.phase = Math.random() * Math.PI * 2;
+        // Обновляем параметры движения
+        p.speedX = ANGULAR_SPEED_MIN + Math.random() * (ANGULAR_SPEED_MAX - ANGULAR_SPEED_MIN);
+        p.speedY = ANGULAR_SPEED_MIN + Math.random() * (ANGULAR_SPEED_MAX - ANGULAR_SPEED_MIN);
+        p.radiusX = RADIUS_MIN + Math.random() * (RADIUS_MAX - RADIUS_MIN);
+        p.radiusY = RADIUS_MIN + Math.random() * (RADIUS_MAX - RADIUS_MIN);
+        // Плавное появление заново (если частица давно исчезла)
+        p.currentOpacity = 0;
+        p.fadeStartTime = nowSec;
+        p.targetOpacity = OPACITY_TARGET_MIN + Math.random() * (OPACITY_TARGET_MAX - OPACITY_TARGET_MIN);
+        // Немного меняем цвет при респавне (разнообразие)
+        const colorVariation = (Math.random() - 0.6) * 1.0;
+        p.color = getAccentColor(colorVariation);
+    }
+    
+    // --- Отрисовка с учётом плавного появления и затухания у краёв ---
+    function drawParticles(nowSec) {
+        if (!ctx || width === 0 || height === 0) return;
         ctx.clearRect(0, 0, width, height);
         
+        // Отключаем тени для максимальной производительности
+        ctx.shadowBlur = 0;
+        
         for (let p of particles) {
+            // Вычисляем смещение по круговой траектории
+            let offsetX = Math.sin(p.angleX + nowSec * p.speedX) * p.radiusX;
+            let offsetY = Math.cos(p.angleY + nowSec * p.speedY + p.phase) * p.radiusY;
+            let x = p.baseX + offsetX;
+            let y = p.baseY + offsetY;
+            
+            // Плавное затухание у краёв (чтобы частицы не обрезались резко)
+            const fadeZone = 70;
+            let edgeFade = 1.0;
+            if (x < fadeZone) edgeFade *= x / fadeZone;
+            if (x > width - fadeZone) edgeFade *= (width - x) / fadeZone;
+            if (y < fadeZone) edgeFade *= y / fadeZone;
+            if (y > height - fadeZone) edgeFade *= (height - y) / fadeZone;
+            
+            // Если частица слишком далеко — респавним
+            if (edgeFade <= 0.05 || x < -200 || x > width + 200 || y < -200 || y > height + 200) {
+                respawnParticle(p, nowSec);
+                // Пересчитываем координаты после респавна
+                offsetX = Math.sin(p.angleX + nowSec * p.speedX) * p.radiusX;
+                offsetY = Math.cos(p.angleY + nowSec * p.speedY + p.phase) * p.radiusY;
+                x = p.baseX + offsetX;
+                y = p.baseY + offsetY;
+                edgeFade = 1.0;
+            }
+            
+            // Плавное появление (fade-in)
+            let fadeProgress = (nowSec - p.fadeStartTime) / FADE_IN_DURATION;
+            if (fadeProgress >= 1.0) {
+                p.currentOpacity = p.targetOpacity;
+            } else {
+                p.currentOpacity = p.targetOpacity * fadeProgress;
+            }
+            
+            const finalOpacity = p.currentOpacity * edgeFade;
+            if (finalOpacity <= 0.01) continue;
+            
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-            // Цвет частицы – светлый (белый) с текущей прозрачностью
-            ctx.fillStyle = `rgba(255, 255, 255, ${p.currentOpacity})`;
-            ctx.fill();
-            // Небольшое свечение (опционально, но красиво)
-            ctx.shadowBlur = p.radius * 1.5;
-            ctx.shadowColor = `rgba(100, 200, 220, ${p.currentOpacity * 0.5})`;
+            ctx.arc(x, y, p.size, 0, Math.PI * 2);
+            // Используем сохранённый цвет частицы (акцентная гамма)
+            ctx.fillStyle = p.color.replace('rgb', 'rgba').replace(')', `, ${finalOpacity})`);
             ctx.fill();
         }
-        // Сбрасываем тень, чтобы не влиять на последующие кадры
-        ctx.shadowBlur = 0;
     }
-
-    function animate() {
-        if (!isEnabled) return;
-        updateParticles();
-        drawParticles();
+    
+    // --- Анимация и управление циклом ---
+    function animate(nowMs) {
+        if (!animationId) return;
+        // Используем реальное время для плавности движения и fade-in
+        const nowSec = performance.now() / 1000;
+        drawParticles(nowSec);
         animationId = requestAnimationFrame(animate);
     }
-
-    function start() {
-        if (!isEnabled) return;
+    
+    function startAnimation() {
         if (animationId) cancelAnimationFrame(animationId);
-        initCanvas();
-        animate();
+        animationId = requestAnimationFrame(animate);
     }
-
-    function stop() {
+    
+    function stopAnimation() {
         if (animationId) {
             cancelAnimationFrame(animationId);
             animationId = null;
         }
-        if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-        canvas = null;
-        ctx = null;
     }
-
-    // Автозапуск, но с учётом видимости вкладки (экономия ресурсов)
-    let visible = true;
+    
     function handleVisibilityChange() {
         if (document.hidden) {
             if (animationId) cancelAnimationFrame(animationId);
             animationId = null;
         } else {
-            if (!animationId && isEnabled && canvas) {
-                animate();
-            }
+            if (!animationId) startAnimation();
         }
     }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Запуск после полной загрузки DOM
+    
+    // --- Очистка при выгрузке страницы ---
+    window.addEventListener('beforeunload', () => {
+        if (addInterval) clearInterval(addInterval);
+        if (animationId) cancelAnimationFrame(animationId);
+        if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+    });
+    
+    // --- Запуск после загрузки DOM ---
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', start);
+        document.addEventListener('DOMContentLoaded', initCanvas);
     } else {
-        start();
+        initCanvas();
     }
-
-    // Экспортировать API на случай, если понадобится управление извне
-    window.DustParticles = {
-        start, stop,
-        isEnabled: () => isEnabled
-    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 })();
