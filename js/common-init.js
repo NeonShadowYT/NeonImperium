@@ -109,32 +109,15 @@
     }
   }
 
-  function initDonateBtn() {
-    const btn = document.getElementById('donate-button');
-    if (!btn) return;
-    let itchLoaded = false;
-    function loadItch() {
-      if (itchLoaded) return;
-      itchLoaded = true;
-      const s = document.createElement('script');
-      s.src = 'https://static.itch.io/api.js';
-      s.onload = () => {
-        if (typeof Itch !== 'undefined') {
-          Itch.attachBuyButton(btn, { user: 'neon-imperium', game: 'starve-neon', width: 700, height: 500 });
-        }
-      };
-      document.head.appendChild(s);
-    }
-    btn.addEventListener('click', loadItch, { once: true });
-    function updateText() {
-      const span = btn.querySelector('span[data-lang="donateButton"]');
-      if (!span) return;
-      const lang = localStorage.getItem('preferredLanguage') || 'ru';
-      span.textContent = window.translations?.[lang]?.donateButton ?? (lang === 'en' ? 'Support' : 'Поддержать');
-    }
-    window.addEventListener('languageChanged', updateText);
-    updateText();
-  }
+  // Загрузка фоновых частиц (пылинки)
+  function loadDustParticles() {
+      const script = document.createElement('script');
+      script.src = 'js/features/dust-particles.js';
+      script.defer = true;
+      script.onload = () => console.log('Dust particles loaded');
+      script.onerror = () => console.warn('Failed to load dust particles');
+      document.head.appendChild(script);
+  };
 
   function showUpdateNotification() {
     if (sessionStorage.getItem('update_notification_shown')) return;
@@ -238,7 +221,7 @@
         if (window.initGameUpdates) window.initGameUpdates();
       });
       initLazyYT();
-      initDonateBtn();
+      loadDustParticles();
       registerServiceWorker();
       initDownloadConsent();
     });
@@ -251,7 +234,7 @@
       if (window.initGameUpdates) window.initGameUpdates();
     });
     initLazyYT();
-    initDonateBtn();
+    loadDustParticles();
     registerServiceWorker();
     initDownloadConsent();
   }
