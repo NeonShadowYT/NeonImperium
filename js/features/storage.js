@@ -1,4 +1,4 @@
-// js/features/storage.js – хранилище закладок на GitHub Gist (исправленное)
+// js/features/storage.js – хранилище закладок на GitHub Gist (полностью переработанное)
 (function() {
     const { CONFIG, escapeHtml, createElement, formatDate, debounce, cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, loadModule } = window.GithubCore;
     const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -19,7 +19,7 @@
 
     let debouncedSaveBookmarks = null;
     let isSaving = false;
-    let modalRef = null; // ссылка на текущую модалку хранилища
+    let modalRef = null; // ссылка на модалку хранилища
     let searchInputRef = null;
 
     // ---------- Вспомогательные функции ----------
@@ -196,11 +196,30 @@
         debouncedSaveBookmarks();
     }
 
+    // ---------- Получение метаданных через Open Graph (парсинг HTML) ----------
+    async function fetchOpenGraph(url) {
+        try {
+            const resp = await fetch(url, { mode: 'cors' });
+            if (!resp.ok) return null;
+            const html = await resp.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const getMeta = (name) => {
+                const el = doc.querySelector(`meta[property="${name}"]`) || doc.querySelector(`meta[name="${name}"]`);
+                return el ? el.getAttribute('content') : null;
+            };
+            const title = getMeta('og:title') || getMeta('twitter:title') || doc.querySelector('title')?.textContent || null;
+            const image = getMeta('og:image') || getMeta('twitter:image') || null;
+            const video = getMeta('og:video') || getMeta('og:video:url') || null;
+            const embedUrl = video || null;
+            return { title, thumbnail: image, embedUrl };
+        } catch (e) {
+            return null;
+        }
+    }
+
     // ---------- Получение метаданных через oEmbed (несколько провайдеров) ----------
     async function tryOembed(url) {
-        // Список публичных oEmbed-провайдеров (без ключей)
         const providers = [
-            // noembed.com – универсальный
             async (u) => {
                 const resp = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(u)}`);
                 if (!resp.ok) return null;
@@ -208,7 +227,6 @@
                 if (data && data.title) return data;
                 return null;
             },
-            // iframe.ly – бесплатно до 1000 запросов в день
             async (u) => {
                 const resp = await fetch(`https://iframe.ly/api/oembed?url=${encodeURIComponent(u)}`);
                 if (!resp.ok) return null;
@@ -216,7 +234,6 @@
                 if (data && data.title) return data;
                 return null;
             },
-            // microlink.io – бесплатно до 1000 запросов в месяц
             async (u) => {
                 const resp = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(u)}&data.title&data.image&data.embed`);
                 if (!resp.ok) return null;
@@ -236,9 +253,7 @@
             try {
                 const result = await fn(url);
                 if (result) return result;
-            } catch (e) {
-                // продолжаем
-            }
+            } catch (e) {}
         }
         return null;
     }
@@ -290,55 +305,73 @@
         // Видео-сервисы (определяем до oEmbed, чтобы получить embedUrl)
         const videoInfo = await detectVideoService(url);
         if (videoInfo) {
-            // Пытаемся получить название и превью через oEmbed
-            const oembed = await tryOembed(url);
+            // Пытаемся получить название и превью через oEmbed и Open Graph
             let title = videoInfo.title;
             let thumbnail = videoInfo.thumbnail;
+            let embedUrl = videoInfo.embedUrl;
+
+            // Сначала oEmbed
+            const oembed = await tryOembed(url);
             if (oembed) {
                 if (oembed.title) title = oembed.title;
                 if (oembed.thumbnail_url) thumbnail = oembed.thumbnail_url;
-                // Если oembed дал embed-html, можно извлечь iframe src
-                if (oembed.html && !videoInfo.embedUrl) {
+                if (oembed.html && !embedUrl) {
                     const div = document.createElement('div');
                     div.innerHTML = oembed.html;
                     const iframe = div.querySelector('iframe');
-                    if (iframe && iframe.src) videoInfo.embedUrl = iframe.src;
+                    if (iframe && iframe.src) embedUrl = iframe.src;
                 }
             }
+
+            // Если oEmbed не дал результат, пробуем Open Graph
+            if (!title || !thumbnail) {
+                const og = await fetchOpenGraph(url);
+                if (og) {
+                    if (og.title && !title) title = og.title;
+                    if (og.thumbnail && !thumbnail) thumbnail = og.thumbnail;
+                    if (og.embedUrl && !embedUrl) embedUrl = og.embedUrl;
+                }
+            }
+
             return {
                 type: 'video',
-                title: title,
+                title: title || 'Видео',
                 thumbnail: thumbnail || null,
-                embedUrl: videoInfo.embedUrl || null,
+                embedUrl: embedUrl || videoInfo.embedUrl || null,
                 downloadUrl: videoInfo.downloadUrl || null,
                 videoData: videoInfo
             };
         }
 
-        // Обычная ссылка – пробуем oEmbed
+        // Обычная ссылка – пробуем oEmbed и Open Graph
+        let title = url, thumbnail = null, embedUrl = null;
         const oembed = await tryOembed(url);
         if (oembed && oembed.title) {
-            return {
-                type: 'link',
-                title: oembed.title || url,
-                thumbnail: oembed.thumbnail_url || null,
-                embedUrl: oembed.html ? (() => {
-                    const div = document.createElement('div');
-                    div.innerHTML = oembed.html;
-                    const iframe = div.querySelector('iframe');
-                    return iframe ? iframe.src : null;
-                })() : null,
-                downloadUrl: null,
-                linkData: oembed
-            };
+            title = oembed.title;
+            thumbnail = oembed.thumbnail_url || null;
+            if (oembed.html) {
+                const div = document.createElement('div');
+                div.innerHTML = oembed.html;
+                const iframe = div.querySelector('iframe');
+                if (iframe && iframe.src) embedUrl = iframe.src;
+            }
+        } else {
+            // Пробуем Open Graph
+            const og = await fetchOpenGraph(url);
+            if (og) {
+                if (og.title) title = og.title;
+                if (og.thumbnail) thumbnail = og.thumbnail;
+                if (og.embedUrl) embedUrl = og.embedUrl;
+            }
         }
 
         return {
             type: 'link',
-            title: url,
-            thumbnail: null,
-            embedUrl: null,
-            downloadUrl: null
+            title: title || url,
+            thumbnail: thumbnail || null,
+            embedUrl: embedUrl || null,
+            downloadUrl: null,
+            linkData: null
         };
     }
 
@@ -401,21 +434,40 @@
             const match = url.match(/viewkey=([^&]+)/);
             if (match) {
                 const key = match[1];
-                // Преобразуем в embed/ссылку (поддерживается на многих сайтах)
                 const embedUrl = url.replace(/view_video\.php\?viewkey=[^&]+/, `embed/${key}`);
-                // Пробуем получить название через oEmbed
-                let title = 'Видео';
-                try {
-                    const oembed = await tryOembed(url);
-                    if (oembed && oembed.title) title = oembed.title;
-                } catch (e) {}
                 return {
-                    title: title,
+                    title: 'Видео',
                     thumbnail: null,
                     embedUrl: embedUrl,
                     downloadUrl: null,
                     service: 'custom'
                 };
+            }
+        }
+
+        // Другие популярные видео-хостинги (можно добавить)
+        if (url.includes('dailymotion.com')) {
+            const idMatch = url.match(/dailymotion\.com\/video\/([^_]+)/);
+            if (idMatch) {
+                const id = idMatch[1];
+                const embedUrl = `https://www.dailymotion.com/embed/video/${id}`;
+                const thumbnail = `https://www.dailymotion.com/thumbnail/video/${id}`;
+                return { title: 'Dailymotion видео', thumbnail, embedUrl, downloadUrl: null, service: 'dailymotion', id };
+            }
+        }
+        if (url.includes('twitch.tv')) {
+            // Twitch клипы или видео
+            const clipMatch = url.match(/clips\.twitch\.tv\/([^?]+)/);
+            if (clipMatch) {
+                const slug = clipMatch[1];
+                const embedUrl = `https://clips.twitch.tv/embed?clip=${slug}`;
+                return { title: 'Twitch клип', thumbnail: null, embedUrl, downloadUrl: null, service: 'twitch', slug };
+            }
+            const vodMatch = url.match(/twitch\.tv\/videos\/(\d+)/);
+            if (vodMatch) {
+                const id = vodMatch[1];
+                const embedUrl = `https://player.twitch.tv/?video=${id}`;
+                return { title: 'Twitch VOD', thumbnail: null, embedUrl, downloadUrl: null, service: 'twitch', id };
             }
         }
 
@@ -553,7 +605,6 @@
         if (!currentToken) return;
         currentBookmarks = currentBookmarks.filter(b => b.id !== id);
         triggerDebouncedSave();
-        // Обновляем UI, если модалка открыта
         if (modalRef) {
             renderBookmarks(modalRef);
         }
@@ -729,17 +780,32 @@
 
     function buildVideoCard(card, bookmark) {
         card.addEventListener('click', (e) => {
-            e.stopPropagation(); // предотвращаем закрытие родительской модалки
+            e.stopPropagation();
             if (bookmark.embedUrl) {
                 const isDirectVideo = /\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(bookmark.embedUrl);
                 let html;
+                const downloadSection = bookmark.downloadUrl
+                    ? `<a href="${escapeHtml(bookmark.downloadUrl)}" download class="button" style="background:var(--accent);">Скачать видео</a>`
+                    : '';
+
+                // Если нет прямой ссылки, но это YouTube, можно предложить сервисы-загрузчики
+                let extraDownload = '';
+                if (bookmark.videoData && bookmark.videoData.service === 'youtube' && bookmark.videoData.id) {
+                    const vid = bookmark.videoData.id;
+                    extraDownload = `
+                        <a href="https://www.y2mate.com/youtube/${vid}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">Скачать через y2mate</a>
+                        <a href="https://en.savefrom.net/1/?url=https://youtu.be/${vid}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">Скачать через savefrom</a>
+                    `;
+                }
+
                 if (isDirectVideo) {
                     html = `
                         <div style="background:#000;border-radius:12px;overflow:hidden;">
                             <video controls style="width:100%;max-height:70vh;" src="${escapeHtml(bookmark.embedUrl)}"></video>
                         </div>
-                        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-                            ${bookmark.downloadUrl ? `<a href="${escapeHtml(bookmark.downloadUrl)}" download class="button" style="background:var(--accent);">Скачать видео</a>` : ''}
+                        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                            ${downloadSection}
+                            ${extraDownload}
                             <a href="${escapeHtml(bookmark.url)}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">Открыть источник</a>
                         </div>
                     `;
@@ -748,15 +814,16 @@
                         <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;background:#000;border-radius:12px;">
                             <iframe src="${escapeHtml(bookmark.embedUrl)}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe>
                         </div>
-                        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-                            ${bookmark.downloadUrl ? `<a href="${escapeHtml(bookmark.downloadUrl)}" download class="button" style="background:var(--accent);">Скачать видео</a>` : ''}
+                        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                            ${downloadSection}
+                            ${extraDownload}
                             <a href="${escapeHtml(bookmark.url)}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">Открыть источник</a>
                         </div>
                     `;
                 }
-                const { modal, closeModal } = createModal(bookmark.title || 'Видео', html, { size: 'full' });
+                // Создаём модалку видео с опцией keepExisting
+                const { modal, closeModal } = createModal(bookmark.title || 'Видео', html, { size: 'full', keepExisting: true });
                 modal.querySelector('.modal-content-full').style.maxWidth = '900px';
-                // Не закрываем хранилище при закрытии видео
             } else {
                 window.open(bookmark.url, '_blank');
             }
@@ -885,7 +952,7 @@
                     </button>
                 </div>
             `;
-            const { modal, closeModal } = createModal(bookmark.title || 'Сохранение', contentHtml, { size: 'full' });
+            const { modal, closeModal } = createModal(bookmark.title || 'Сохранение', contentHtml, { size: 'full', keepExisting: true });
             modal.querySelector('#download-save-btn').addEventListener('click', () => {
                 const blob = new Blob([bookmark.saveData.content], { type: 'text/plain' });
                 const a = document.createElement('a');
@@ -971,7 +1038,7 @@
         `;
 
         const { modal, closeModal } = createModal('Хранилище', html, { size: 'full' });
-        modalRef = modal; // сохраняем ссылку
+        modalRef = modal;
 
         const style = createElement('style');
         style.textContent = `
@@ -1093,7 +1160,6 @@
             await processFiles(files, modal);
         });
 
-        // Возвращаем объект с модалкой и функцией закрытия
         return { modal, closeModal: () => { closeModal(); modalRef = null; } };
     }
 
