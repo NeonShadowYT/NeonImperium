@@ -1,4 +1,4 @@
-// js/features/storage.js – хранилище закладок на GitHub Gist (полностью переработанное)
+// js/features/storage.js – хранилище закладок на GitHub Gist (финальная версия)
 (function() {
     const { CONFIG, escapeHtml, createElement, formatDate, debounce, cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, loadModule } = window.GithubCore;
     const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -196,28 +196,55 @@
         debouncedSaveBookmarks();
     }
 
-    // ---------- Получение метаданных через Open Graph (парсинг HTML) ----------
-    async function fetchOpenGraph(url) {
+    // ---------- Получение метаданных через парсинг HTML (с поддержкой прокси) ----------
+    async function fetchPageMetadata(url) {
+        // Сначала пробуем напрямую (с CORS)
         try {
-            const resp = await fetch(url, { mode: 'cors' });
+            const resp = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(5000) });
             if (!resp.ok) return null;
             const html = await resp.text();
-            const doc = new DOMParser().parseFromString(html, 'text/html');
-            const getMeta = (name) => {
-                const el = doc.querySelector(`meta[property="${name}"]`) || doc.querySelector(`meta[name="${name}"]`);
-                return el ? el.getAttribute('content') : null;
-            };
-            const title = getMeta('og:title') || getMeta('twitter:title') || doc.querySelector('title')?.textContent || null;
-            const image = getMeta('og:image') || getMeta('twitter:image') || null;
-            const video = getMeta('og:video') || getMeta('og:video:url') || null;
-            const embedUrl = video || null;
-            return { title, thumbnail: image, embedUrl };
+            return parseHtmlMetadata(html, url);
         } catch (e) {
-            return null;
+            // Пробуем через прокси allorigins
+            try {
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+                if (!resp.ok) return null;
+                const html = await resp.text();
+                return parseHtmlMetadata(html, url);
+            } catch (e2) {
+                return null;
+            }
         }
     }
 
-    // ---------- Получение метаданных через oEmbed (несколько провайдеров) ----------
+    function parseHtmlMetadata(html, baseUrl) {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        // Ищем заголовок
+        let title = doc.querySelector('title')?.textContent?.trim() || null;
+        // Ищем og:title
+        const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')?.trim();
+        if (ogTitle) title = ogTitle;
+
+        // Ищем изображение
+        let thumbnail = doc.querySelector('meta[property="og:image"]')?.getAttribute('content')?.trim() || null;
+        if (!thumbnail) {
+            // Ищем первую картинку на странице (может быть большая)
+            const img = doc.querySelector('img');
+            if (img) {
+                let src = img.getAttribute('src');
+                if (src) {
+                    if (src.startsWith('//')) src = 'https:' + src;
+                    else if (src.startsWith('/')) src = new URL(src, baseUrl).href;
+                    thumbnail = src;
+                }
+            }
+        }
+
+        return { title, thumbnail };
+    }
+
+    // ---------- Получение метаданных через oEmbed и Open Graph ----------
     async function tryOembed(url) {
         const providers = [
             async (u) => {
@@ -310,7 +337,7 @@
             let thumbnail = videoInfo.thumbnail;
             let embedUrl = videoInfo.embedUrl;
 
-            // Сначала oEmbed
+            // Сначала пробуем oEmbed с оригинального URL
             const oembed = await tryOembed(url);
             if (oembed) {
                 if (oembed.title) title = oembed.title;
@@ -323,13 +350,21 @@
                 }
             }
 
-            // Если oEmbed не дал результат, пробуем Open Graph
-            if (!title || !thumbnail) {
-                const og = await fetchOpenGraph(url);
-                if (og) {
-                    if (og.title && !title) title = og.title;
-                    if (og.thumbnail && !thumbnail) thumbnail = og.thumbnail;
-                    if (og.embedUrl && !embedUrl) embedUrl = og.embedUrl;
+            // Если не хватает данных, пробуем Open Graph / парсинг страницы
+            if (!title || title === 'Видео' || !thumbnail) {
+                const pageData = await fetchPageMetadata(url);
+                if (pageData) {
+                    if (pageData.title && (title === 'Видео' || !title)) title = pageData.title;
+                    if (pageData.thumbnail && !thumbnail) thumbnail = pageData.thumbnail;
+                }
+            }
+
+            // Если всё ещё нет заголовка, пробуем парсить embed-страницу (если она отличается)
+            if ((!title || title === 'Видео') && videoInfo.embedUrl && videoInfo.embedUrl !== url) {
+                const embedPage = await fetchPageMetadata(videoInfo.embedUrl);
+                if (embedPage && embedPage.title && embedPage.title !== 'Видео') {
+                    title = embedPage.title;
+                    if (!thumbnail && embedPage.thumbnail) thumbnail = embedPage.thumbnail;
                 }
             }
 
@@ -356,12 +391,10 @@
                 if (iframe && iframe.src) embedUrl = iframe.src;
             }
         } else {
-            // Пробуем Open Graph
-            const og = await fetchOpenGraph(url);
-            if (og) {
-                if (og.title) title = og.title;
-                if (og.thumbnail) thumbnail = og.thumbnail;
-                if (og.embedUrl) embedUrl = og.embedUrl;
+            const pageData = await fetchPageMetadata(url);
+            if (pageData) {
+                if (pageData.title) title = pageData.title;
+                if (pageData.thumbnail) thumbnail = pageData.thumbnail;
             }
         }
 
@@ -440,12 +473,14 @@
                     thumbnail: null,
                     embedUrl: embedUrl,
                     downloadUrl: null,
-                    service: 'custom'
+                    service: 'custom',
+                    // сохраняем оригинальный URL для парсинга
+                    originalUrl: url
                 };
             }
         }
 
-        // Другие популярные видео-хостинги (можно добавить)
+        // Другие популярные видео-хостинги
         if (url.includes('dailymotion.com')) {
             const idMatch = url.match(/dailymotion\.com\/video\/([^_]+)/);
             if (idMatch) {
@@ -456,7 +491,6 @@
             }
         }
         if (url.includes('twitch.tv')) {
-            // Twitch клипы или видео
             const clipMatch = url.match(/clips\.twitch\.tv\/([^?]+)/);
             if (clipMatch) {
                 const slug = clipMatch[1];
@@ -788,7 +822,7 @@
                     ? `<a href="${escapeHtml(bookmark.downloadUrl)}" download class="button" style="background:var(--accent);">Скачать видео</a>`
                     : '';
 
-                // Если нет прямой ссылки, но это YouTube, можно предложить сервисы-загрузчики
+                // Сервисы для скачивания YouTube
                 let extraDownload = '';
                 if (bookmark.videoData && bookmark.videoData.service === 'youtube' && bookmark.videoData.id) {
                     const vid = bookmark.videoData.id;
@@ -821,9 +855,42 @@
                         </div>
                     `;
                 }
-                // Создаём модалку видео с опцией keepExisting
-                const { modal, closeModal } = createModal(bookmark.title || 'Видео', html, { size: 'full', keepExisting: true });
-                modal.querySelector('.modal-content-full').style.maxWidth = '900px';
+
+                // Создаём модалку вручную, чтобы не закрывать хранилище
+                const modalOverlay = document.createElement('div');
+                modalOverlay.className = 'modal-fullscreen';
+                modalOverlay.style.zIndex = '10002';
+                modalOverlay.style.backgroundColor = 'rgba(0,0,0,0.85)';
+                modalOverlay.innerHTML = `
+                    <div class="modal-content-full" style="max-width: 900px; max-height: 90vh;">
+                        <div class="modal-header">
+                            <h2>${escapeHtml(bookmark.title || 'Видео')}</h2>
+                            <button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>
+                        </div>
+                        <div class="modal-body" style="padding:20px;">
+                            ${html}
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modalOverlay);
+                modalOverlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
+
+                const closeModal = () => {
+                    modalOverlay.remove();
+                    document.body.style.overflow = '';
+                };
+
+                modalOverlay.querySelector('.modal-close').addEventListener('click', closeModal);
+                modalOverlay.addEventListener('click', (e) => {
+                    if (e.target === modalOverlay) closeModal();
+                });
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        closeModal();
+                        document.removeEventListener('keydown', closeModal);
+                    }
+                });
             } else {
                 window.open(bookmark.url, '_blank');
             }
@@ -952,8 +1019,43 @@
                     </button>
                 </div>
             `;
-            const { modal, closeModal } = createModal(bookmark.title || 'Сохранение', contentHtml, { size: 'full', keepExisting: true });
-            modal.querySelector('#download-save-btn').addEventListener('click', () => {
+            // Создаём модалку вручную, чтобы не закрывать хранилище
+            const modalOverlay = document.createElement('div');
+            modalOverlay.className = 'modal-fullscreen';
+            modalOverlay.style.zIndex = '10002';
+            modalOverlay.style.backgroundColor = 'rgba(0,0,0,0.85)';
+            modalOverlay.innerHTML = `
+                <div class="modal-content-full" style="max-width: 700px; max-height: 90vh;">
+                    <div class="modal-header">
+                        <h2>${escapeHtml(bookmark.title || 'Сохранение')}</h2>
+                        <button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="modal-body" style="padding:20px;">
+                        ${contentHtml}
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modalOverlay);
+            modalOverlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+
+            const closeModal = () => {
+                modalOverlay.remove();
+                document.body.style.overflow = '';
+            };
+
+            modalOverlay.querySelector('.modal-close').addEventListener('click', closeModal);
+            modalOverlay.addEventListener('click', (e) => {
+                if (e.target === modalOverlay) closeModal();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeModal();
+                    document.removeEventListener('keydown', closeModal);
+                }
+            });
+
+            modalOverlay.querySelector('#download-save-btn').addEventListener('click', () => {
                 const blob = new Blob([bookmark.saveData.content], { type: 'text/plain' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
