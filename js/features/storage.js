@@ -44,7 +44,7 @@
         }
     }
 
-    // Безопасный хеш для строк (защита от undefined)
+    // Простой хеш строки (для проверки дубликатов сохранений) – теперь защищён от undefined
     function simpleHash(str) {
         if (typeof str !== 'string' || str.length === 0) return '';
         let hash = 0;
@@ -254,7 +254,7 @@
             };
         }
 
-        // oEmbed (noembed.com)
+        // oEmbed
         try {
             const resp = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
             if (resp.ok) {
@@ -277,7 +277,6 @@
             }
         } catch (e) {}
 
-        // Если ничего не получили – ссылка
         return {
             type: 'link',
             title: url,
@@ -346,36 +345,14 @@
             const match = url.match(/viewkey=([^&]+)/);
             if (match) {
                 const key = match[1];
-                // Пробуем разные варианты подстановки
-                let embedUrl = url.replace(/view_video\.php\?viewkey=[^&]+/, `embed/${key}`);
-                // Если замена не произошла (не совпало), пробуем другой вариант
-                if (embedUrl === url) {
-                    embedUrl = url.replace(/view_video\.php\?viewkey=[^&]+/, `embed.php?viewkey=${key}`);
-                }
+                // Преобразуем в embed/ссылку (поддерживается на многих сайтах)
+                const embedUrl = url.replace(/view_video\.php\?viewkey=[^&]+/, `embed/${key}`);
                 return {
                     title: 'Видео',
                     thumbnail: null,
                     embedUrl: embedUrl,
                     downloadUrl: null,
                     service: 'custom'
-                };
-            }
-        }
-
-        // Если URL похож на видео-хостинг, но не распознан – пробуем извлечь ключ
-        // Некоторые сайты используют /v/ или /video/
-        const genericMatch = url.match(/\/(?:v|video|watch)\/([a-zA-Z0-9_-]+)/);
-        if (genericMatch) {
-            const id = genericMatch[1];
-            // Пробуем сгенерировать embed через /embed/
-            const embedUrl = url.replace(/\/(?:v|video|watch)\/[a-zA-Z0-9_-]+/, `/embed/${id}`);
-            if (embedUrl !== url) {
-                return {
-                    title: 'Видео',
-                    thumbnail: null,
-                    embedUrl: embedUrl,
-                    downloadUrl: null,
-                    service: 'generic'
                 };
             }
         }
@@ -421,8 +398,12 @@
             customFileName = fileName;
         }
 
-        // Сохранение (файл)
-        if (customFileContent !== null && customFileName !== null) {
+        // === Обработка файла (сохранения) ===
+        // Проверяем, что это действительно файл: оба параметра - непустые строки
+        const isFile = (typeof customFileContent === 'string' && customFileContent.length > 0 &&
+                        typeof customFileName === 'string' && customFileName.length > 0);
+
+        if (isFile) {
             const hash = simpleHash(customFileContent);
             const existing = currentBookmarks.some(b =>
                 b.saveData && b.saveData.fileName === customFileName && b.saveData.hash === hash
@@ -453,14 +434,14 @@
             return newBookmark;
         }
 
-        // Ссылка, пост или видео
+        // === Обработка ссылки ===
         if (!url) {
             showToast('Нет ссылки для добавления', 'error');
             throw new Error('no_url');
         }
 
-        // Проверка дубликата
-        if (url && currentBookmarks.some(b => b.url === url)) {
+        // Проверка дубликата по url (для ссылок, постов, видео)
+        if (currentBookmarks.some(b => b.url === url)) {
             showToast('Уже в избранном', 'info');
             throw new Error('duplicate');
         }
@@ -482,17 +463,6 @@
             meta = await fetchMetadata(url);
             if (!meta.title || meta.title === url) {
                 meta.title = customTitle || url;
-            }
-        }
-
-        // Если это видео, но embedUrl не установлен, пробуем сгенерировать на основе url
-        if (meta.type === 'video' && !meta.embedUrl) {
-            // Пробуем извлечь ключ из URL
-            const keyMatch = url.match(/\/(?:v|video|watch|viewkey)\/([a-zA-Z0-9_-]+)/);
-            if (keyMatch) {
-                const key = keyMatch[1];
-                const base = url.replace(/\/(?:v|video|watch|viewkey)\/[a-zA-Z0-9_-]+/, '');
-                meta.embedUrl = `${base}/embed/${key}`;
             }
         }
 
@@ -887,7 +857,7 @@
         card.insertBefore(iconWrapper, content);
     }
 
-    // ---------- Модалка хранилища ----------
+    // ---------- Модалка хранилища (улучшенная) ----------
     async function openStorageModal() {
         updateAuthState();
         if (!currentUser) return showToast('Войдите в аккаунт GitHub', 'error');
