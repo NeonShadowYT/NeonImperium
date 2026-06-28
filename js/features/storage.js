@@ -19,7 +19,7 @@
 
     let debouncedSaveBookmarks = null;
     let isSaving = false;
-    let modalRef = null; // ссылка на текущую модалку
+    let modalRef = null;
     let searchInputRef = null;
 
     // ---------- Вспомогательные функции ----------
@@ -44,7 +44,7 @@
         }
     }
 
-    // Простой хеш строки (для проверки дубликатов сохранений) – теперь защищён от undefined
+    // Безопасный хеш для строк (защита от undefined)
     function simpleHash(str) {
         if (typeof str !== 'string' || str.length === 0) return '';
         let hash = 0;
@@ -111,7 +111,6 @@
         try {
             const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
             if (!stored) {
-                // Первый раз – создаём пустой Gist
                 const content = JSON.stringify({ version: 2, bookmarks: [] });
                 const newGistId = await gistCreate(content);
                 gistId = newGistId;
@@ -122,7 +121,6 @@
             gistId = JSON.parse(stored).gistId;
             const gist = await gistFetch(gistId);
             if (!gist) {
-                // Gist удалён – создаём новый
                 const content = JSON.stringify({ version: 2, bookmarks: [] });
                 const newGistId = await gistCreate(content);
                 gistId = newGistId;
@@ -201,12 +199,11 @@
 
     // ---------- Определение типа и получение метаданных ----------
     async function fetchMetadata(url) {
-        // Защита от undefined
         if (typeof url !== 'string' || !url) {
             return { type: 'link', title: url || 'Ссылка', thumbnail: null, embedUrl: null, downloadUrl: null };
         }
 
-        // Проверяем, является ли ссылка постом NeonImperium
+        // Пост NeonImperium
         if (url.includes('neonshadowyt.github.io/NeonImperium')) {
             const postMatch = url.match(/[?&]post=(\d+)/);
             if (postMatch) {
@@ -244,7 +241,7 @@
             }
         }
 
-        // Проверяем на видео-сервисы
+        // Видео-сервисы
         const videoInfo = await detectVideoService(url);
         if (videoInfo) {
             return {
@@ -257,7 +254,7 @@
             };
         }
 
-        // Пытаемся получить метаданные через oEmbed (noembed.com)
+        // oEmbed (noembed.com)
         try {
             const resp = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
             if (resp.ok) {
@@ -280,7 +277,7 @@
             }
         } catch (e) {}
 
-        // Если ничего не получили – возвращаем как ссылку
+        // Если ничего не получили – ссылка
         return {
             type: 'link',
             title: url,
@@ -291,7 +288,6 @@
     }
 
     async function detectVideoService(url) {
-        // Защита от undefined
         if (typeof url !== 'string' || !url) return null;
 
         // YouTube
@@ -333,31 +329,53 @@
             return { title, thumbnail, embedUrl, downloadUrl: null, service: 'vimeo', id };
         }
 
-        // Проверяем, не является ли ссылка прямым видеофайлом
+        // Прямой видеофайл
         const videoExt = /\.(mp4|webm|ogg|mov|avi|mkv)$/i;
         if (videoExt.test(url)) {
             return {
                 title: 'Видео файл',
                 thumbnail: null,
-                embedUrl: url, // используем как src для <video>
+                embedUrl: url,
                 downloadUrl: url,
                 service: 'direct'
             };
         }
 
-        // Специальная обработка для сайтов с view_video.php?viewkey=...
+        // Специальная обработка для view_video.php?viewkey=...
         if (url.includes('view_video.php?viewkey=')) {
             const match = url.match(/viewkey=([^&]+)/);
             if (match) {
                 const key = match[1];
-                // Пробуем подменить на embed/
-                const embedUrl = url.replace(/view_video\.php\?viewkey=[^&]+/, `embed/${key}`);
+                // Пробуем разные варианты подстановки
+                let embedUrl = url.replace(/view_video\.php\?viewkey=[^&]+/, `embed/${key}`);
+                // Если замена не произошла (не совпало), пробуем другой вариант
+                if (embedUrl === url) {
+                    embedUrl = url.replace(/view_video\.php\?viewkey=[^&]+/, `embed.php?viewkey=${key}`);
+                }
                 return {
                     title: 'Видео',
                     thumbnail: null,
                     embedUrl: embedUrl,
                     downloadUrl: null,
                     service: 'custom'
+                };
+            }
+        }
+
+        // Если URL похож на видео-хостинг, но не распознан – пробуем извлечь ключ
+        // Некоторые сайты используют /v/ или /video/
+        const genericMatch = url.match(/\/(?:v|video|watch)\/([a-zA-Z0-9_-]+)/);
+        if (genericMatch) {
+            const id = genericMatch[1];
+            // Пробуем сгенерировать embed через /embed/
+            const embedUrl = url.replace(/\/(?:v|video|watch)\/[a-zA-Z0-9_-]+/, `/embed/${id}`);
+            if (embedUrl !== url) {
+                return {
+                    title: 'Видео',
+                    thumbnail: null,
+                    embedUrl: embedUrl,
+                    downloadUrl: null,
+                    service: 'generic'
                 };
             }
         }
@@ -403,7 +421,7 @@
             customFileName = fileName;
         }
 
-        // Если есть файл (сохранение)
+        // Сохранение (файл)
         if (customFileContent !== null && customFileName !== null) {
             const hash = simpleHash(customFileContent);
             const existing = currentBookmarks.some(b =>
@@ -435,13 +453,13 @@
             return newBookmark;
         }
 
-        // Обычная ссылка – определяем тип и метаданные
+        // Ссылка, пост или видео
         if (!url) {
             showToast('Нет ссылки для добавления', 'error');
             throw new Error('no_url');
         }
 
-        // Проверка дубликата по url (для ссылок, постов, видео)
+        // Проверка дубликата
         if (url && currentBookmarks.some(b => b.url === url)) {
             showToast('Уже в избранном', 'info');
             throw new Error('duplicate');
@@ -464,6 +482,17 @@
             meta = await fetchMetadata(url);
             if (!meta.title || meta.title === url) {
                 meta.title = customTitle || url;
+            }
+        }
+
+        // Если это видео, но embedUrl не установлен, пробуем сгенерировать на основе url
+        if (meta.type === 'video' && !meta.embedUrl) {
+            // Пробуем извлечь ключ из URL
+            const keyMatch = url.match(/\/(?:v|video|watch|viewkey)\/([a-zA-Z0-9_-]+)/);
+            if (keyMatch) {
+                const key = keyMatch[1];
+                const base = url.replace(/\/(?:v|video|watch|viewkey)\/[a-zA-Z0-9_-]+/, '');
+                meta.embedUrl = `${base}/embed/${key}`;
             }
         }
 
@@ -499,7 +528,7 @@
         }
     }
 
-    // ---------- UI: рендеринг карточек с фильтрацией и поиском ----------
+    // ---------- UI: рендеринг карточек ----------
     function renderBookmarks(modalElement) {
         const grid = modalElement.querySelector('#bookmarks-grid');
         if (!grid) return;
@@ -858,7 +887,7 @@
         card.insertBefore(iconWrapper, content);
     }
 
-    // ---------- Модалка хранилища (улучшенная) ----------
+    // ---------- Модалка хранилища ----------
     async function openStorageModal() {
         updateAuthState();
         if (!currentUser) return showToast('Войдите в аккаунт GitHub', 'error');
@@ -945,6 +974,7 @@
         const grid = modal.querySelector('#bookmarks-grid');
         renderBookmarks(modal);
 
+        // Сортировка
         modal.querySelectorAll('.sort-btn').forEach(b => {
             b.addEventListener('click', () => {
                 sortOrder = b.dataset.order;
@@ -954,6 +984,7 @@
             });
         });
 
+        // Фильтры
         modal.querySelectorAll('.cat-btn').forEach(b => {
             b.addEventListener('click', () => {
                 category = b.dataset.cat;
@@ -963,6 +994,7 @@
             });
         });
 
+        // Поиск
         const searchInput = modal.querySelector('#search-input');
         searchInputRef = searchInput;
         const debouncedSearch = debounce(() => {
@@ -971,6 +1003,7 @@
         }, SEARCH_DEBOUNCE_MS);
         searchInput.addEventListener('input', debouncedSearch);
 
+        // Добавление
         const toggleAddBtn = modal.querySelector('#toggle-add-btn');
         const addForm = modal.querySelector('#add-form');
         let formVisible = false;
@@ -998,6 +1031,7 @@
             }
         });
 
+        // Файлы
         const dropZone = modal.querySelector('#drop-zone');
         const fileInput = modal.querySelector('#file-input');
         const fileSelectBtn = modal.querySelector('#file-select-btn');
