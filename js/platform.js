@@ -1,6 +1,7 @@
 // platform.js – GitHub-блок с выбором версии и платформы
 // Сортировка: сначала релизы без sort-order (по дате, новые сверху),
 // затем релизы с sort-order (по убыванию числа, чем больше – тем выше в этой группе)
+// Добавлена поддержка кастомной даты публикации через мета-поле publish-date
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
@@ -61,6 +62,29 @@
             else if (line.startsWith('version-name:')) meta.versionName = line.slice(13).trim();
             else if (line.startsWith('version-post:')) meta.versionPost = line.slice(14).trim();
             else if (line.startsWith('sort-order:')) meta.sortOrder = parseInt(line.slice(11).trim(), 10);
+            else if (line.startsWith('publish-date:')) {
+                const raw = line.slice(13).trim();
+                // Ожидаем формат YYYY-MM-DD, но можно и другие, попробуем распарсить
+                let date = null;
+                // Сначала попробуем ISO
+                let parts = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                if (parts) {
+                    date = new Date(parseInt(parts[1]), parseInt(parts[2])-1, parseInt(parts[3]));
+                } else {
+                    // Попробуем DD.MM.YYYY
+                    parts = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+                    if (parts) {
+                        date = new Date(parseInt(parts[3]), parseInt(parts[2])-1, parseInt(parts[1]));
+                    } else {
+                        // Попробуем любой другой формат через Date.parse
+                        const d = Date.parse(raw);
+                        if (!isNaN(d)) date = new Date(d);
+                    }
+                }
+                if (date && !isNaN(date.getTime())) {
+                    meta.publishDate = date;
+                }
+            }
         }
         return meta;
     }
@@ -110,6 +134,11 @@
     function formatDate(dateStr) {
         const d = new Date(dateStr);
         return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function formatCustomDate(date) {
+        if (!date || isNaN(date.getTime())) return null;
+        return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
     async function init() {
@@ -183,6 +212,12 @@
                 option.dataset.date = formatDate(release.published_at);
                 option.dataset.post = meta.versionPost || '';
                 option.dataset.versionName = meta.versionName || release.tag_name;
+                // сохраняем кастомную дату, если есть
+                if (meta.publishDate) {
+                    option.dataset.customDate = meta.publishDate.toISOString();
+                } else {
+                    option.dataset.customDate = '';
+                }
                 versionSelect.appendChild(option);
             });
             updateUIForSelectedRelease();
@@ -194,8 +229,20 @@
             const release = allReleases.find(r => r.tag_name === tag);
             if (!release) return;
             const meta = parseMeta(release.body);
-            const dateStr = formatDate(release.published_at);
-            versionDateEl.textContent = `Обновление от ${dateStr}`;
+            
+            // Определяем дату для отображения
+            let displayDate;
+            if (meta.publishDate) {
+                const formatted = formatCustomDate(meta.publishDate);
+                if (formatted) {
+                    displayDate = formatted;
+                } else {
+                    displayDate = formatDate(release.published_at);
+                }
+            } else {
+                displayDate = formatDate(release.published_at);
+            }
+            versionDateEl.textContent = `Обновление от ${displayDate}`;
 
             const asset = findAsset(release, currentPlatform);
             if (asset) {
