@@ -44,8 +44,9 @@
         }
     }
 
-    // Простой хеш строки (для проверки дубликатов сохранений)
+    // Простой хеш строки (для проверки дубликатов сохранений) – теперь защищён от undefined
     function simpleHash(str) {
+        if (typeof str !== 'string' || str.length === 0) return '';
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
             const char = str.charCodeAt(i);
@@ -200,6 +201,11 @@
 
     // ---------- Определение типа и получение метаданных ----------
     async function fetchMetadata(url) {
+        // Защита от undefined
+        if (typeof url !== 'string' || !url) {
+            return { type: 'link', title: url || 'Ссылка', thumbnail: null, embedUrl: null, downloadUrl: null };
+        }
+
         // Проверяем, является ли ссылка постом NeonImperium
         if (url.includes('neonshadowyt.github.io/NeonImperium')) {
             const postMatch = url.match(/[?&]post=(\d+)/);
@@ -285,6 +291,9 @@
     }
 
     async function detectVideoService(url) {
+        // Защита от undefined
+        if (typeof url !== 'string' || !url) return null;
+
         // YouTube
         const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
         if (ytMatch) {
@@ -353,7 +362,6 @@
             }
         }
 
-        // Если ничего не подошло
         return null;
     }
 
@@ -364,7 +372,6 @@
             throw new Error('not_logged_in');
         }
 
-        // Универсальный парсинг параметров
         let url = null;
         let customTitle = null;
         let customFileContent = null;
@@ -372,13 +379,11 @@
         let extraData = {};
 
         if (typeof bookmarkOrUrl === 'object' && bookmarkOrUrl !== null) {
-            // Передан объект
             const obj = bookmarkOrUrl;
             url = obj.url || null;
             customTitle = obj.title || null;
             customFileContent = obj.fileContent || null;
             customFileName = obj.fileName || null;
-            // Сохраняем дополнительные поля, если они есть (type, thumbnail, postData, videoData)
             extraData = {
                 type: obj.type || null,
                 thumbnail: obj.thumbnail || null,
@@ -392,7 +397,6 @@
                 date: obj.date || null,
             };
         } else {
-            // Переданы отдельные параметры
             url = bookmarkOrUrl;
             customTitle = title;
             customFileContent = fileContent;
@@ -401,7 +405,6 @@
 
         // Если есть файл (сохранение)
         if (customFileContent !== null && customFileName !== null) {
-            // Проверка дубликата по имени и хешу содержимого
             const hash = simpleHash(customFileContent);
             const existing = currentBookmarks.some(b =>
                 b.saveData && b.saveData.fileName === customFileName && b.saveData.hash === hash
@@ -439,16 +442,12 @@
         }
 
         // Проверка дубликата по url (для ссылок, постов, видео)
-        if (url) {
-            const existing = currentBookmarks.some(b => b.url === url);
-            if (existing) {
-                showToast('Уже в избранном', 'info');
-                throw new Error('duplicate');
-            }
+        if (url && currentBookmarks.some(b => b.url === url)) {
+            showToast('Уже в избранном', 'info');
+            throw new Error('duplicate');
         }
 
         let meta;
-        // Если переданы готовые метаданные, используем их
         if (extraData.type) {
             meta = {
                 type: extraData.type,
@@ -462,9 +461,7 @@
                 saveData: extraData.saveData || null,
             };
         } else {
-            // Получаем автоматически
             meta = await fetchMetadata(url);
-            // Если fetchMetadata не дал заголовок, используем customTitle или url
             if (!meta.title || meta.title === url) {
                 meta.title = customTitle || url;
             }
@@ -507,17 +504,14 @@
         const grid = modalElement.querySelector('#bookmarks-grid');
         if (!grid) return;
 
-        // Фильтрация по категории
         let filtered = currentBookmarks;
         if (category !== 'all') {
             filtered = filtered.filter(b => b.type === category);
         }
-        // Поиск по названию
         if (searchQuery.trim()) {
             const q = searchQuery.trim().toLowerCase();
             filtered = filtered.filter(b => b.title && b.title.toLowerCase().includes(q));
         }
-        // Сортировка
         if (sortOrder === 'new') {
             filtered.sort((a, b) => new Date(b.added) - new Date(a.added));
         } else {
@@ -562,18 +556,16 @@
             card.style.borderColor = 'var(--border)';
         });
 
-        // В зависимости от типа строим содержимое
         if (bookmark.type === 'post') {
             buildPostCard(card, bookmark);
         } else if (bookmark.type === 'video') {
             buildVideoCard(card, bookmark);
         } else if (bookmark.type === 'save') {
             buildSaveCard(card, bookmark);
-        } else { // link
+        } else {
             buildLinkCard(card, bookmark);
         }
 
-        // Кнопка удаления (в углу)
         const deleteBtn = createElement('button', 'bookmark-delete-btn', {
             position: 'absolute',
             top: '8px',
@@ -605,7 +597,6 @@
         return wrapper;
     }
 
-    // Пост
     function buildPostCard(card, bookmark) {
         card.addEventListener('click', () => {
             if (bookmark.postData && bookmark.postData.id) {
@@ -676,11 +667,9 @@
         }
     }
 
-    // Видео
     function buildVideoCard(card, bookmark) {
         card.addEventListener('click', () => {
             if (bookmark.embedUrl) {
-                // Определяем, является ли embedUrl прямым видеофайлом или iframe-ссылкой
                 const isDirectVideo = /\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(bookmark.embedUrl);
                 let html;
                 if (isDirectVideo) {
@@ -771,7 +760,6 @@
         }
     }
 
-    // Ссылка
     function buildLinkCard(card, bookmark) {
         card.addEventListener('click', () => {
             window.open(bookmark.url, '_blank');
@@ -821,7 +809,6 @@
         }
     }
 
-    // Сохранение (файл .ini или .starver)
     function buildSaveCard(card, bookmark) {
         card.addEventListener('click', () => {
             if (!bookmark.saveData) return;
@@ -958,7 +945,6 @@
         const grid = modal.querySelector('#bookmarks-grid');
         renderBookmarks(modal);
 
-        // Сортировка
         modal.querySelectorAll('.sort-btn').forEach(b => {
             b.addEventListener('click', () => {
                 sortOrder = b.dataset.order;
@@ -968,7 +954,6 @@
             });
         });
 
-        // Фильтры
         modal.querySelectorAll('.cat-btn').forEach(b => {
             b.addEventListener('click', () => {
                 category = b.dataset.cat;
@@ -978,7 +963,6 @@
             });
         });
 
-        // Поиск
         const searchInput = modal.querySelector('#search-input');
         searchInputRef = searchInput;
         const debouncedSearch = debounce(() => {
@@ -987,7 +971,6 @@
         }, SEARCH_DEBOUNCE_MS);
         searchInput.addEventListener('input', debouncedSearch);
 
-        // Добавление
         const toggleAddBtn = modal.querySelector('#toggle-add-btn');
         const addForm = modal.querySelector('#add-form');
         let formVisible = false;
@@ -1015,7 +998,6 @@
             }
         });
 
-        // Файлы
         const dropZone = modal.querySelector('#drop-zone');
         const fileInput = modal.querySelector('#file-input');
         const fileSelectBtn = modal.querySelector('#file-select-btn');
@@ -1044,7 +1026,6 @@
             await processFiles(files, modal);
         });
 
-        // Обработка закрытия
         const originalClose = closeModal;
         modalRef = null;
         return { modal, closeModal: () => { originalClose(); modalRef = null; } };
@@ -1068,7 +1049,6 @@
         if (modal) renderBookmarks(modal);
     }
 
-    // ---------- Обновление состояния авторизации ----------
     function updateAuthState() {
         if (!window.GithubAuth) return;
         currentUser = getCurrentUser();
