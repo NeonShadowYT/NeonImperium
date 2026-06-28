@@ -1,7 +1,7 @@
 // js/features/storage.js – надёжное хранилище закладок на GitHub Gist
-// Полная переработка: поддержка постов, видео, ссылок, сохранений (.ini, .starver)
-// Все данные только в Gist, локальное хранилище не используется для постоянства
-// Исправлены все найденные проблемы, улучшен интерфейс
+// Исправлена проблема удаления, добавлена поддержка произвольных видео-ссылок
+// с подменой вида view_video.php?viewkey=... -> embed/...
+// Исправлен вызов из ui-feedback (теперь корректно обрабатывается объект с url)
 (function() {
     const { CONFIG, escapeHtml, createElement, formatDate, debounce, loadModule } = window.GithubCore;
     const { getCurrentUser, hasScope, getToken } = window.GithubAuth;
@@ -16,11 +16,10 @@
     let gistId = null;
     let currentBookmarks = [];
     let sortOrder = 'new';
-    let category = 'all'; // 'all', 'post', 'video', 'link', 'save'
-
+    let category = 'all';
     let debouncedSaveBookmarks = null;
     let isSaving = false;
-    let modalRef = null; // ссылка на текущую модалку
+    let modalRef = null;
 
     // ---------- Вспомогательные функции ----------
     async function authFetch(url, options = {}) {
@@ -186,19 +185,22 @@
     }
 
     // ---------- Определение типа и получение метаданных ----------
-    // Дополнительная логика подмены ссылок для видео
-    function tryTransformVideoUrl(url) {
-        // Попытка преобразовать URL для встраивания
-        // Пример: view_video.php?viewkey=65acd3b8079af -> embed/65acd3b8079af
-        const viewKeyMatch = url.match(/view_video\.php\?viewkey=([a-f0-9]+)/i);
+    // Функция преобразования URL для видео (общая логика)
+    function transformVideoUrl(url) {
+        if (typeof url !== 'string' || !url.trim()) return null;
+        // Ищем viewkey в query string
+        const viewKeyMatch = url.match(/viewkey=([a-f0-9]+)/i);
         if (viewKeyMatch) {
             const key = viewKeyMatch[1];
-            return {
-                embedUrl: `https://www.example.com/embed/${key}`, // заглушка, нужно знать домен
-                // На самом деле нужно подставлять правильный домен, но в общем случае мы не знаем.
-                // Поэтому просто вернём null, чтобы потом обработать как ссылку.
-                // Лучше вернуть null, чтобы не создавать нерабочий embed.
-            };
+            // Берём базовый URL (протокол + домен)
+            try {
+                const urlObj = new URL(url);
+                const base = urlObj.origin;
+                return `${base}/embed/${key}`;
+            } catch (e) {
+                // Если не удалось разобрать, возвращаем null
+                return null;
+            }
         }
         return null;
     }
@@ -248,7 +250,7 @@
         }
 
         // Проверяем на видео-сервисы
-        const videoInfo = await detectVideoService(url);
+        let videoInfo = await detectVideoService(url);
         if (videoInfo) {
             return {
                 type: 'video',
@@ -260,19 +262,18 @@
             };
         }
 
-        // Попытка подменить ссылку для видео (если detectVideoService не сработал)
-        const transformed = tryTransformVideoUrl(url);
-        if (transformed && transformed.embedUrl) {
-            // Повторно пробуем определить, может теперь получится
-            const videoInfoRetry = await detectVideoService(transformed.embedUrl);
-            if (videoInfoRetry) {
+        // Если не удалось, пробуем преобразовать URL и повторить попытку
+        const transformed = transformVideoUrl(url);
+        if (transformed) {
+            videoInfo = await detectVideoService(transformed);
+            if (videoInfo) {
                 return {
                     type: 'video',
-                    title: videoInfoRetry.title || 'Видео',
-                    thumbnail: videoInfoRetry.thumbnail || null,
-                    embedUrl: videoInfoRetry.embedUrl || null,
-                    downloadUrl: videoInfoRetry.downloadUrl || null,
-                    videoData: videoInfoRetry
+                    title: videoInfo.title || 'Видео',
+                    thumbnail: videoInfo.thumbnail || null,
+                    embedUrl: videoInfo.embedUrl || null,
+                    downloadUrl: videoInfo.downloadUrl || null,
+                    videoData: videoInfo
                 };
             }
         }
@@ -311,7 +312,6 @@
     }
 
     async function detectVideoService(url) {
-        // Защита от нестроки
         if (typeof url !== 'string' || !url.trim()) return null;
 
         // YouTube
@@ -353,48 +353,72 @@
             return { title, thumbnail, embedUrl, downloadUrl: null, service: 'vimeo', id };
         }
 
-        // Проверяем, не является ли ссылка прямым видеофайлом
+        // Прямой видеофайл
         const videoExt = /\.(mp4|webm|ogg|mov|avi|mkv)$/i;
         if (videoExt.test(url)) {
             return {
                 title: 'Видео файл',
                 thumbnail: null,
-                embedUrl: null, // не используем iframe, будем использовать <video>
+                embedUrl: null,
                 downloadUrl: url,
                 service: 'direct'
             };
-        }
-
-        // Twitch (пока пропускаем)
-        if (url.includes('twitch.tv')) {
-            return null;
-        }
-
-        // Дополнительная попытка для сайтов с view_video.php?viewkey=
-        if (url.includes('view_video.php?viewkey=')) {
-            const keyMatch = url.match(/viewkey=([a-f0-9]+)/i);
-            if (keyMatch) {
-                const key = keyMatch[1];
-                // Пытаемся подставить embed-ссылку, но не знаем домен – вернём null
-                // Можно попробовать запросить страницу и найти embed, но это сложно.
-                // Поэтому просто вернём null, чтобы обработать как ссылку.
-                return null;
-            }
         }
 
         return null;
     }
 
     // ---------- Добавление закладки (универсальное) ----------
-    async function addBookmark(url, title, fileContent = null, fileName = null) {
+    // Переделана: теперь принимает объект с параметрами для гибкости
+    // Старая сигнатура (url, title, fileContent, fileName) тоже поддерживается
+    async function addBookmark(urlOrOptions, title, fileContent, fileName) {
         if (!currentUser) {
             showToast('Войдите в аккаунт GitHub с правами gist', 'error');
             throw new Error('not_logged_in');
         }
 
+        // Если первый аргумент – объект (вызов из ui-feedback)
+        if (typeof urlOrOptions === 'object' && urlOrOptions !== null) {
+            const opts = urlOrOptions;
+            // Если есть url, используем его
+            if (opts.url) {
+                // Проверяем дубликат по url
+                const existing = currentBookmarks.some(b => b.url === opts.url);
+                if (existing) {
+                    showToast('Уже в избранном', 'info');
+                    throw new Error('duplicate');
+                }
+                // Получаем метаданные
+                const meta = await fetchMetadata(opts.url);
+                const newBookmark = {
+                    id: Date.now() + '-' + Math.random().toString(36),
+                    added: new Date().toISOString(),
+                    url: opts.url,
+                    title: opts.title || meta.title || opts.url,
+                    type: opts.type || meta.type || 'link',
+                    thumbnail: opts.thumbnail || meta.thumbnail || null,
+                    embedUrl: meta.embedUrl || null,
+                    downloadUrl: meta.downloadUrl || null,
+                    postData: opts.postData || meta.postData || null,
+                    videoData: meta.videoData || null,
+                    linkData: meta.linkData || null,
+                    saveData: null
+                };
+                currentBookmarks = [newBookmark, ...currentBookmarks];
+                triggerDebouncedSave();
+                return newBookmark;
+            } else {
+                // Если url нет, но есть другие данные (например, сохранение)
+                // Пока не реализовано, но можно расширить
+                showToast('Не указан URL', 'error');
+                throw new Error('no_url');
+            }
+        }
+
+        // Старая сигнатура (url, title, fileContent, fileName)
+        const url = urlOrOptions;
         // Если передан файл (сохранение)
         if (fileContent !== null && fileName !== null) {
-            // Проверка дубликата по имени файла
             const existing = currentBookmarks.some(b =>
                 b.type === 'save' && b.saveData && b.saveData.fileName === fileName
             );
@@ -423,7 +447,12 @@
             return newBookmark;
         }
 
-        // Обычная ссылка – определяем тип и метаданные
+        // Обычная ссылка
+        if (!url || typeof url !== 'string') {
+            showToast('Некорректный URL', 'error');
+            throw new Error('invalid_url');
+        }
+
         const meta = await fetchMetadata(url);
         const newBookmark = {
             id: Date.now() + '-' + Math.random().toString(36),
@@ -440,13 +469,10 @@
             saveData: null
         };
 
-        // Проверка дубликата (по url)
-        if (url) {
-            const existing = currentBookmarks.some(b => b.url === url);
-            if (existing) {
-                showToast('Уже в избранном', 'info');
-                throw new Error('duplicate');
-            }
+        const existing = currentBookmarks.some(b => b.url === url);
+        if (existing) {
+            showToast('Уже в избранном', 'info');
+            throw new Error('duplicate');
         }
 
         currentBookmarks = [newBookmark, ...currentBookmarks];
@@ -454,14 +480,17 @@
         return newBookmark;
     }
 
-    // ---------- Удаление ----------
+    // ---------- Удаление (исправлено: немедленное сохранение и обновление UI) ----------
     async function removeBookmark(id) {
         if (!currentToken) return;
         currentBookmarks = currentBookmarks.filter(b => b.id !== id);
-        triggerDebouncedSave();
+        // Немедленное сохранение, чтобы изменения сразу попали в Gist
+        await saveBookmarksImmediately();
+        // Обновляем UI, если модалка открыта
         if (modalRef) {
             renderBookmarks(modalRef);
         }
+        showToast('Закладка удалена', 'info');
     }
 
     // ---------- UI: рендеринг карточек ----------
@@ -516,18 +545,16 @@
             card.style.borderColor = 'var(--border)';
         });
 
-        // В зависимости от типа строим содержимое
         if (bookmark.type === 'post') {
             buildPostCard(card, bookmark);
         } else if (bookmark.type === 'video') {
             buildVideoCard(card, bookmark);
         } else if (bookmark.type === 'save') {
             buildSaveCard(card, bookmark);
-        } else { // link
+        } else {
             buildLinkCard(card, bookmark);
         }
 
-        // Кнопка удаления (в углу)
         const deleteBtn = createElement('button', 'bookmark-delete-btn', {
             position: 'absolute',
             top: '8px',
@@ -559,7 +586,6 @@
         return wrapper;
     }
 
-    // Пост
     function buildPostCard(card, bookmark) {
         card.addEventListener('click', () => {
             if (bookmark.postData && bookmark.postData.id) {
@@ -630,12 +656,9 @@
         }
     }
 
-    // Видео
     function buildVideoCard(card, bookmark) {
         card.addEventListener('click', () => {
-            // Определяем, как показывать видео
             if (bookmark.videoData && bookmark.videoData.service === 'direct') {
-                // Прямой видеофайл – используем <video>
                 const html = `
                     <div style="background:#000;border-radius:12px;overflow:hidden;">
                         <video controls style="width:100%;max-height:70vh;" src="${escapeHtml(bookmark.url)}"></video>
@@ -727,7 +750,6 @@
         }
     }
 
-    // Ссылка
     function buildLinkCard(card, bookmark) {
         card.addEventListener('click', () => {
             window.open(bookmark.url, '_blank');
@@ -742,7 +764,6 @@
         meta.textContent = `Ссылка · ${formatDate(bookmark.added)}`;
         content.appendChild(meta);
 
-        // Кнопка "Открыть"
         const openBtn = createElement('button', 'button small', { marginTop: '8px', alignSelf: 'flex-start' });
         openBtn.textContent = 'Открыть';
         openBtn.addEventListener('click', (e) => {
@@ -786,7 +807,6 @@
         }
     }
 
-    // Сохранение (файл .ini или .starver)
     function buildSaveCard(card, bookmark) {
         card.addEventListener('click', () => {
             if (!bookmark.saveData) return;
@@ -836,7 +856,7 @@
         card.insertBefore(iconWrapper, content);
     }
 
-    // ---------- Модалка хранилища (улучшенный интерфейс) ----------
+    // ---------- Модалка хранилища ----------
     async function openStorageModal() {
         updateAuthState();
         if (!currentUser) return showToast('Войдите в аккаунт GitHub', 'error');
@@ -886,7 +906,6 @@
         const { modal, closeModal } = createModal('Хранилище', html, { size: 'full' });
         modalRef = modal;
 
-        // Стили (улучшенные)
         const style = createElement('style');
         style.textContent = `
             .storage-modal-container{display:flex;flex-direction:column;gap:20px}
@@ -918,10 +937,8 @@
         `;
         modal.appendChild(style);
 
-        // Инициализация UI
         renderBookmarks(modal);
 
-        // Сортировка и фильтры
         modal.querySelectorAll('.sort-btn').forEach(b => {
             b.addEventListener('click', () => {
                 sortOrder = b.dataset.order;
@@ -939,7 +956,6 @@
             });
         });
 
-        // Добавление
         const toggleAddBtn = modal.querySelector('#toggle-add-btn');
         const addForm = modal.querySelector('#add-form');
         let formVisible = false;
@@ -967,7 +983,6 @@
             }
         });
 
-        // Перетаскивание и выбор файлов
         const dropZone = modal.querySelector('#drop-zone');
         const fileInput = modal.querySelector('#file-input');
         const fileSelectBtn = modal.querySelector('#file-select-btn');
@@ -996,7 +1011,6 @@
             await processFiles(files, modal);
         });
 
-        // Обработка закрытия модалки
         const originalClose = closeModal;
         modalRef = null;
         return { modal, closeModal: () => { originalClose(); modalRef = null; } };
@@ -1011,7 +1025,7 @@
             }
             try {
                 const content = await file.text();
-                const bookmark = await addBookmark(null, file.name, content, file.name);
+                await addBookmark(null, file.name, content, file.name);
                 showToast(`Сохранение "${file.name}" добавлено`, 'success');
             } catch (e) {
                 if (e.message !== 'duplicate') {
@@ -1035,7 +1049,6 @@
         }
     }
 
-    // ---------- Подписка на события ----------
     window.addEventListener('github-login-success', updateAuthState);
     window.addEventListener('github-logout', () => {
         currentUser = null;
@@ -1047,7 +1060,6 @@
         }
     });
 
-    // ---------- Публичное API ----------
     window.BookmarkStorage = {
         openStorageModal,
         addBookmark,
