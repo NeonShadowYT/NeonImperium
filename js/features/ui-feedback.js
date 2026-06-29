@@ -1,5 +1,9 @@
 // js/features/ui-feedback.js – полный модуль с кнопками в модалке, редактором постов и комментариев
-// Изменения: оставлены только реакции ❤️ (лайк) и 👀 (просмотры). 👀 добавляется автоматически при открытии поста, не кликабельна.
+// Изменения: 
+// - оставлены только реакции ❤️ (лайк) и 👀 (просмотры)
+// - 👀 добавляется автоматически при открытии поста, не кликабельна
+// - ❤️ с оптимистичным обновлением, мгновенным откликом, блокировкой на время запроса и защитой от спама
+// - при ошибке откат состояния и показ тоста
 (function() {
   const { createElement, escapeHtml, renderMarkdown, loadModule, cacheGet, cacheSet, cacheRemoveByPrefix, extractAllowed, extractSummary, decryptPrivateBody, CONFIG } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -32,8 +36,8 @@
     }
   }
 
-  // ---------- Реакции (только ❤️ и 👀) ----------
-  async function renderReactions(container, issueNumber, reactions, currentUser, onAddHeart, onRemoveHeart) {
+  // ---------- Реакции (только ❤️ и 👀) с оптимистичным обновлением ----------
+  function renderReactions(container, issueNumber, reactions, currentUser, onAddHeart, onRemoveHeart) {
     if (!container) return;
     // Фильтруем только 'heart' и 'eyes'
     const filtered = reactions.filter(r => r.content === 'heart' || r.content === 'eyes');
@@ -47,27 +51,79 @@
     container.innerHTML = '';
     const btnsDiv = createElement('div', 'reactions-buttons', { display: 'flex', gap: '6px', flexWrap: 'wrap' });
 
-    // Сначала ❤️ (кликабельная)
+    // ❤️ (кликабельная, оптимистичное обновление)
     const heartCount = counts.get('heart') || 0;
     const isHeartActive = userReactions.has('heart');
     const heartBtn = createElement('button', `reaction-button ${isHeartActive ? 'active' : ''}`, {
       display: 'inline-flex', alignItems: 'center', gap: '4px',
       padding: '4px 10px', background: 'var(--bg-primary)', border: '1px solid var(--border)',
       borderRadius: '30px', fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer'
-    });
+    }, { type: 'button' });
     heartBtn.innerHTML = `<span class="reaction-emoji">❤️</span><span class="reaction-count">${heartCount || ''}</span>`;
+
+    // Сохраняем состояние для отката
+    let currentActive = isHeartActive;
+    let currentCount = heartCount;
+    let isProcessing = false;
+
+    const updateHeartUI = (active, count) => {
+      currentActive = active;
+      currentCount = count;
+      heartBtn.classList.toggle('active', active);
+      heartBtn.querySelector('.reaction-count').textContent = count || '';
+    };
+
     heartBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (!currentUser) { showToast('Войдите в GitHub', 'error'); return; }
+      if (isProcessing) return; // защита от спама
+
+      // Сохраняем текущие значения для отката
+      const prevActive = currentActive;
+      const prevCount = currentCount;
+
+      // Оптимистичное обновление
+      const newActive = !prevActive;
+      const newCount = prevCount + (newActive ? 1 : -1);
+      updateHeartUI(newActive, newCount);
+      heartBtn.disabled = true;
+      isProcessing = true;
+
       try {
-        if (isHeartActive) {
-          const reactionId = filtered.find(r => r.content === 'heart' && r.user?.login === currentUser)?.id;
-          if (reactionId) await onRemoveHeart(issueNumber, reactionId);
-        } else {
+        if (newActive) {
+          // Добавляем реакцию
           await onAddHeart(issueNumber, 'heart');
+          // Успех – ничего не делаем, состояние уже обновлено
+        } else {
+          // Удаляем реакцию
+          // Нам нужен ID реакции, но мы его не храним. onRemoveHeart принимает issueNumber и reactionId.
+          // Но у нас нет reactionId, поэтому мы должны его найти в текущих реакциях.
+          // Запросим свежие реакции, чтобы найти ID
+          const freshReactions = await window.GithubAPI.loadReactions(issueNumber);
+          const heartReaction = freshReactions.find(r => r.content === 'heart' && r.user?.login === currentUser);
+          if (heartReaction) {
+            await onRemoveHeart(issueNumber, heartReaction.id);
+          } else {
+            // Если не нашли – считаем, что реакции нет, откатываем
+            throw new Error('Reaction not found');
+          }
         }
-      } catch (err) { showToast('Ошибка', 'error'); }
+        // После успеха можно обновить кеш и, возможно, перечитать общее состояние, но мы уже оптимистично обновили.
+        // Для синхронизации с сервером можно не перезагружать всё, т.к. мы сами обновили.
+        // Однако если другие пользователи тоже ставили – это не отразится, но для простоты оставим как есть.
+        // Для точности можно было бы обновить счётчик из ответа сервера, но GitHub не возвращает общее количество.
+        // Поэтому оставляем оптимистичное.
+        showToast(newActive ? '❤️ добавлена' : '❤️ убрана', 'success');
+      } catch (err) {
+        // Ошибка – откатываем
+        updateHeartUI(prevActive, prevCount);
+        showToast('Ошибка: ' + err.message, 'error');
+      } finally {
+        heartBtn.disabled = false;
+        isProcessing = false;
+      }
     });
+
     btnsDiv.appendChild(heartBtn);
 
     // 👀 (только счётчик, не кликабельная)
@@ -279,34 +335,20 @@
     if (currentUser && window.GithubAPI) {
       try {
         // Загружаем реакции
-        const reactions = await window.GithubAPI.loadReactions(id);
+        let reactions = await window.GithubAPI.loadReactions(id);
         // Автоматически добавляем 👀 (eyes) от текущего пользователя, если её нет
         const hasEyes = reactions.some(r => r.content === 'eyes' && r.user?.login === currentUser);
         if (!hasEyes) {
           try {
             await window.GithubAPI.addReaction(id, 'eyes');
-          } catch (e) { /* игнорируем, если уже есть или ошибка */ }
+            // после добавления перезагружаем реакции для обновления счётчика
+            reactions = await window.GithubAPI.loadReactions(id);
+          } catch (e) { /* игнорируем, если ошибка */ }
         }
-        // После добавления перезагружаем реакции
-        const updatedReactions = await window.GithubAPI.loadReactions(id);
-        renderReactions(reactionsContainer, id, updatedReactions, currentUser,
-          async (num, cont) => { 
-            await window.GithubAPI.addReaction(num, cont);
-            // Обновляем отображение после добавления
-            const newReactions = await window.GithubAPI.loadReactions(num);
-            renderReactions(reactionsContainer, num, newReactions, currentUser,
-              async (n, c) => { await window.GithubAPI.addReaction(n, c); refreshComments(); },
-              async (n, rid) => { await window.GithubAPI.removeReaction(n, rid); refreshComments(); }
-            );
-          },
-          async (num, rid) => { 
-            await window.GithubAPI.removeReaction(num, rid);
-            const newReactions = await window.GithubAPI.loadReactions(num);
-            renderReactions(reactionsContainer, num, newReactions, currentUser,
-              async (n, c) => { await window.GithubAPI.addReaction(n, c); refreshComments(); },
-              async (n, rid) => { await window.GithubAPI.removeReaction(n, rid); refreshComments(); }
-            );
-          }
+        // Рендерим реакции с оптимистичным обновлением
+        renderReactions(reactionsContainer, id, reactions, currentUser,
+          async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },
+          async (num, rid) => { await window.GithubAPI.removeReaction(num, rid); }
         );
       } catch(e) { console.warn('Reactions error:', e); }
     }
