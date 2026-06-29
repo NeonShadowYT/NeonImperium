@@ -3,6 +3,7 @@
 // - оставлены только реакции ❤️ (лайк) и 👀 (просмотры)
 // - 👀 добавляется автоматически при открытии поста, не кликабельна
 // - ❤️ с оптимистичным обновлением, мгновенным откликом, блокировкой на время запроса и защитой от спама
+// - явная подсветка активной реакции ❤️ акцентным цветом (фон, текст, граница)
 // - при ошибке откат состояния и показ тоста
 (function() {
   const { createElement, escapeHtml, renderMarkdown, loadModule, cacheGet, cacheSet, cacheRemoveByPrefix, extractAllowed, extractSummary, decryptPrivateBody, CONFIG } = window.GithubCore;
@@ -36,7 +37,7 @@
     }
   }
 
-  // ---------- Реакции (только ❤️ и 👀) с оптимистичным обновлением ----------
+  // ---------- Реакции (только ❤️ и 👀) с оптимистичным обновлением и явной подсветкой ----------
   function renderReactions(container, issueNumber, reactions, currentUser, onAddHeart, onRemoveHeart) {
     if (!container) return;
     // Фильтруем только 'heart' и 'eyes'
@@ -51,17 +52,40 @@
     container.innerHTML = '';
     const btnsDiv = createElement('div', 'reactions-buttons', { display: 'flex', gap: '6px', flexWrap: 'wrap' });
 
-    // ❤️ (кликабельная, оптимистичное обновление)
+    // ❤️ (кликабельная, оптимистичное обновление, с явной подсветкой)
     const heartCount = counts.get('heart') || 0;
     const isHeartActive = userReactions.has('heart');
-    const heartBtn = createElement('button', `reaction-button ${isHeartActive ? 'active' : ''}`, {
+    const heartBtn = createElement('button', 'reaction-button', {
       display: 'inline-flex', alignItems: 'center', gap: '4px',
-      padding: '4px 10px', background: 'var(--bg-primary)', border: '1px solid var(--border)',
-      borderRadius: '30px', fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer'
+      padding: '4px 10px',
+      borderRadius: '30px',
+      fontSize: '13px',
+      cursor: 'pointer',
+      border: '1px solid var(--border)',
+      background: 'var(--bg-primary)',
+      color: 'var(--text-secondary)',
+      transition: 'background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s',
     }, { type: 'button' });
     heartBtn.innerHTML = `<span class="reaction-emoji">❤️</span><span class="reaction-count">${heartCount || ''}</span>`;
 
-    // Сохраняем состояние для отката
+    // Функция обновления UI с явной подсветкой
+    const setHeartActive = (active) => {
+      if (active) {
+        heartBtn.style.background = 'var(--accent)';
+        heartBtn.style.color = '#fff';
+        heartBtn.style.borderColor = 'var(--accent)';
+        heartBtn.classList.add('active');
+      } else {
+        heartBtn.style.background = 'var(--bg-primary)';
+        heartBtn.style.color = 'var(--text-secondary)';
+        heartBtn.style.borderColor = 'var(--border)';
+        heartBtn.classList.remove('active');
+      }
+    };
+
+    // Инициализируем состояние
+    setHeartActive(isHeartActive);
+
     let currentActive = isHeartActive;
     let currentCount = heartCount;
     let isProcessing = false;
@@ -69,7 +93,7 @@
     const updateHeartUI = (active, count) => {
       currentActive = active;
       currentCount = count;
-      heartBtn.classList.toggle('active', active);
+      setHeartActive(active);
       heartBtn.querySelector('.reaction-count').textContent = count || '';
     };
 
@@ -87,39 +111,32 @@
       const newCount = prevCount + (newActive ? 1 : -1);
       updateHeartUI(newActive, newCount);
       heartBtn.disabled = true;
+      heartBtn.style.opacity = '0.6';
       isProcessing = true;
 
       try {
         if (newActive) {
-          // Добавляем реакцию
           await onAddHeart(issueNumber, 'heart');
-          // Успех – ничего не делаем, состояние уже обновлено
+          showToast('❤️ добавлена', 'success');
         } else {
-          // Удаляем реакцию
-          // Нам нужен ID реакции, но мы его не храним. onRemoveHeart принимает issueNumber и reactionId.
-          // Но у нас нет reactionId, поэтому мы должны его найти в текущих реакциях.
-          // Запросим свежие реакции, чтобы найти ID
+          // Для удаления нужно найти ID реакции
           const freshReactions = await window.GithubAPI.loadReactions(issueNumber);
           const heartReaction = freshReactions.find(r => r.content === 'heart' && r.user?.login === currentUser);
           if (heartReaction) {
             await onRemoveHeart(issueNumber, heartReaction.id);
+            showToast('❤️ убрана', 'success');
           } else {
-            // Если не нашли – считаем, что реакции нет, откатываем
-            throw new Error('Reaction not found');
+            throw new Error('Реакция не найдена');
           }
         }
-        // После успеха можно обновить кеш и, возможно, перечитать общее состояние, но мы уже оптимистично обновили.
-        // Для синхронизации с сервером можно не перезагружать всё, т.к. мы сами обновили.
-        // Однако если другие пользователи тоже ставили – это не отразится, но для простоты оставим как есть.
-        // Для точности можно было бы обновить счётчик из ответа сервера, но GitHub не возвращает общее количество.
-        // Поэтому оставляем оптимистичное.
-        showToast(newActive ? '❤️ добавлена' : '❤️ убрана', 'success');
+        // Успех – оставляем оптимистичное состояние
       } catch (err) {
         // Ошибка – откатываем
         updateHeartUI(prevActive, prevCount);
         showToast('Ошибка: ' + err.message, 'error');
       } finally {
         heartBtn.disabled = false;
+        heartBtn.style.opacity = '1';
         isProcessing = false;
       }
     });
@@ -334,18 +351,14 @@
     }
     if (currentUser && window.GithubAPI) {
       try {
-        // Загружаем реакции
         let reactions = await window.GithubAPI.loadReactions(id);
-        // Автоматически добавляем 👀 (eyes) от текущего пользователя, если её нет
         const hasEyes = reactions.some(r => r.content === 'eyes' && r.user?.login === currentUser);
         if (!hasEyes) {
           try {
             await window.GithubAPI.addReaction(id, 'eyes');
-            // после добавления перезагружаем реакции для обновления счётчика
             reactions = await window.GithubAPI.loadReactions(id);
-          } catch (e) { /* игнорируем, если ошибка */ }
+          } catch (e) { /* игнорируем */ }
         }
-        // Рендерим реакции с оптимистичным обновлением
         renderReactions(reactionsContainer, id, reactions, currentUser,
           async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },
           async (num, rid) => { await window.GithubAPI.removeReaction(num, rid); }
