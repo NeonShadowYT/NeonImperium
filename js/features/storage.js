@@ -1,4 +1,5 @@
-// js/features/storage.js – хранилище закладок на GitHub Gist (финальная версия)
+// js/features/storage.js – хранилище закладок на GitHub Gist
+// Исправлено: чтение/запись файлов через base64, замена сохранения для одной игры
 (function() {
     const { CONFIG, escapeHtml, createElement, formatDate, debounce, cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, loadModule } = window.GithubCore;
     const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -19,8 +20,9 @@
 
     let debouncedSaveBookmarks = null;
     let isSaving = false;
-    let modalRef = null; // ссылка на модалку хранилища
+    let modalRef = null;
     let searchInputRef = null;
+    let currentGame = null; // для контекста игры при добавлении сохранения
 
     // ---------- Вспомогательные функции ----------
     async function authFetch(url, options = {}) {
@@ -44,15 +46,50 @@
         }
     }
 
-    function simpleHash(str) {
-        if (typeof str !== 'string' || str.length === 0) return '';
+    // Хеш от ArrayBuffer
+    function simpleHash(buffer) {
         let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
+        const bytes = new Uint8Array(buffer);
+        for (let i = 0; i < bytes.length; i++) {
+            hash = ((hash << 5) - hash) + bytes[i];
             hash |= 0;
         }
         return hash.toString(16);
+    }
+
+    // Преобразование ArrayBuffer в base64
+    function arrayBufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+    }
+
+    // Преобразование base64 в Blob
+    function base64ToBlob(base64, mimeType = 'application/octet-stream') {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return new Blob([bytes], { type: mimeType });
+    }
+
+    // Попытка декодировать base64 как UTF-8 (для показа в привью)
+    function tryDecodeBase64(base64) {
+        try {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            const decoder = new TextDecoder('utf-8', { fatal: true });
+            return decoder.decode(bytes);
+        } catch {
+            return null; // невалидный UTF-8, бинарный файл
+        }
     }
 
     // ---------- Gist API ----------
@@ -198,14 +235,12 @@
 
     // ---------- Получение метаданных через парсинг HTML (с поддержкой прокси) ----------
     async function fetchPageMetadata(url) {
-        // Сначала пробуем напрямую (с CORS)
         try {
             const resp = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(5000) });
             if (!resp.ok) return null;
             const html = await resp.text();
             return parseHtmlMetadata(html, url);
         } catch (e) {
-            // Пробуем через прокси allorigins
             try {
                 const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
                 const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
@@ -220,16 +255,12 @@
 
     function parseHtmlMetadata(html, baseUrl) {
         const doc = new DOMParser().parseFromString(html, 'text/html');
-        // Ищем заголовок
         let title = doc.querySelector('title')?.textContent?.trim() || null;
-        // Ищем og:title
         const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')?.trim();
         if (ogTitle) title = ogTitle;
 
-        // Ищем изображение
         let thumbnail = doc.querySelector('meta[property="og:image"]')?.getAttribute('content')?.trim() || null;
         if (!thumbnail) {
-            // Ищем первую картинку на странице (может быть большая)
             const img = doc.querySelector('img');
             if (img) {
                 let src = img.getAttribute('src');
@@ -240,7 +271,6 @@
                 }
             }
         }
-
         return { title, thumbnail };
     }
 
@@ -291,7 +321,6 @@
             return { type: 'link', title: url || 'Ссылка', thumbnail: null, embedUrl: null, downloadUrl: null };
         }
 
-        // Пост NeonImperium
         if (url.includes('neonshadowyt.github.io/NeonImperium')) {
             const postMatch = url.match(/[?&]post=(\d+)/);
             if (postMatch) {
@@ -329,15 +358,12 @@
             }
         }
 
-        // Видео-сервисы (определяем до oEmbed, чтобы получить embedUrl)
         const videoInfo = await detectVideoService(url);
         if (videoInfo) {
-            // Пытаемся получить название и превью через oEmbed и Open Graph
             let title = videoInfo.title;
             let thumbnail = videoInfo.thumbnail;
             let embedUrl = videoInfo.embedUrl;
 
-            // Сначала пробуем oEmbed с оригинального URL
             const oembed = await tryOembed(url);
             if (oembed) {
                 if (oembed.title) title = oembed.title;
@@ -350,7 +376,6 @@
                 }
             }
 
-            // Если не хватает данных, пробуем Open Graph / парсинг страницы
             if (!title || title === 'Видео' || !thumbnail) {
                 const pageData = await fetchPageMetadata(url);
                 if (pageData) {
@@ -359,7 +384,6 @@
                 }
             }
 
-            // Если всё ещё нет заголовка, пробуем парсить embed-страницу (если она отличается)
             if ((!title || title === 'Видео') && videoInfo.embedUrl && videoInfo.embedUrl !== url) {
                 const embedPage = await fetchPageMetadata(videoInfo.embedUrl);
                 if (embedPage && embedPage.title && embedPage.title !== 'Видео') {
@@ -378,7 +402,6 @@
             };
         }
 
-        // Обычная ссылка – пробуем oEmbed и Open Graph
         let title = url, thumbnail = null, embedUrl = null;
         const oembed = await tryOembed(url);
         if (oembed && oembed.title) {
@@ -411,7 +434,6 @@
     async function detectVideoService(url) {
         if (typeof url !== 'string' || !url) return null;
 
-        // YouTube
         const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
         if (ytMatch) {
             const id = ytMatch[1];
@@ -428,7 +450,6 @@
             return { title, thumbnail, embedUrl, downloadUrl: null, service: 'youtube', id };
         }
 
-        // Vimeo
         const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
         if (vimeoMatch) {
             const id = vimeoMatch[1];
@@ -450,7 +471,6 @@
             return { title, thumbnail, embedUrl, downloadUrl: null, service: 'vimeo', id };
         }
 
-        // Прямой видеофайл
         const videoExt = /\.(mp4|webm|ogg|mov|avi|mkv)$/i;
         if (videoExt.test(url)) {
             return {
@@ -462,7 +482,6 @@
             };
         }
 
-        // Специальная обработка для view_video.php?viewkey=...
         if (url.includes('view_video.php?viewkey=')) {
             const match = url.match(/viewkey=([^&]+)/);
             if (match) {
@@ -474,13 +493,11 @@
                     embedUrl: embedUrl,
                     downloadUrl: null,
                     service: 'custom',
-                    // сохраняем оригинальный URL для парсинга
                     originalUrl: url
                 };
             }
         }
 
-        // Другие популярные видео-хостинги
         if (url.includes('dailymotion.com')) {
             const idMatch = url.match(/dailymotion\.com\/video\/([^_]+)/);
             if (idMatch) {
@@ -520,6 +537,8 @@
         let customFileContent = null;
         let customFileName = null;
         let extraData = {};
+        let fileBase64 = null;   // для бинарных файлов
+        let fileHash = null;
 
         if (typeof bookmarkOrUrl === 'object' && bookmarkOrUrl !== null) {
             const obj = bookmarkOrUrl;
@@ -538,6 +557,7 @@
                 saveData: obj.saveData || null,
                 author: obj.author || null,
                 date: obj.date || null,
+                game: obj.game || null,   // для сохранений
             };
         } else {
             url = bookmarkOrUrl;
@@ -551,13 +571,53 @@
                         typeof customFileName === 'string' && customFileName.length > 0);
 
         if (isFile) {
-            const hash = simpleHash(customFileContent);
+            // customFileContent может быть base64 строкой (если пришла от processFiles)
+            // или обычным текстом (если передали напрямую)
+            let contentToStore = customFileContent;
+            let hash = null;
+            let isBase64 = false;
+            // Проверяем, является ли строка base64 (признак – длинная строка без пробелов и только ASCII)
+            // Просто попробуем декодировать и закодировать обратно
+            try {
+                const decoded = atob(customFileContent);
+                const reEncoded = btoa(decoded);
+                if (reEncoded === customFileContent) {
+                    isBase64 = true;
+                    // Вычисляем хеш от base64? Лучше от бинарных данных, но у нас нет ArrayBuffer.
+                    // Для уникальности используем хеш от строки base64.
+                    hash = simpleHash(new TextEncoder().encode(customFileContent));
+                }
+            } catch {
+                // не base64, считаем текстом
+                isBase64 = false;
+                // Для текста просто преобразуем в base64 для единообразия хранения
+                const encoder = new TextEncoder();
+                const data = encoder.encode(customFileContent);
+                contentToStore = arrayBufferToBase64(data);
+                hash = simpleHash(data);
+            }
+
+            // Проверка дубликата (по хешу)
             const existing = currentBookmarks.some(b =>
-                b.saveData && b.saveData.fileName === customFileName && b.saveData.hash === hash
+                b.saveData && b.saveData.hash === hash
             );
             if (existing) {
                 showToast('Такое сохранение уже есть', 'info');
                 throw new Error('duplicate');
+            }
+
+            // Определяем игру (если передана в extraData.game или из контекста)
+            const gameForSave = extraData.game || currentGame || null;
+
+            // Если для этой игры уже есть сохранение – удаляем старое
+            if (gameForSave) {
+                const oldIndex = currentBookmarks.findIndex(b =>
+                    b.type === 'save' && b.saveData && b.saveData.game === gameForSave
+                );
+                if (oldIndex !== -1) {
+                    currentBookmarks.splice(oldIndex, 1);
+                    console.log(`[storage] Старое сохранение для игры "${gameForSave}" удалено`);
+                }
             }
 
             const newBookmark = {
@@ -571,9 +631,11 @@
                 downloadUrl: null,
                 saveData: {
                     fileName: customFileName,
-                    content: customFileContent,
+                    content: contentToStore,   // всегда base64
                     hash: hash,
-                    mimeType: 'text/plain'
+                    mimeType: 'text/plain',
+                    game: gameForSave,
+                    isBase64: true
                 }
             };
             currentBookmarks = [newBookmark, ...currentBookmarks];
@@ -627,6 +689,7 @@
             saveData: meta.saveData || null,
             author: extraData.author || null,
             date: extraData.date || null,
+            game: extraData.game || null,
         };
 
         currentBookmarks = [newBookmark, ...currentBookmarks];
@@ -822,7 +885,6 @@
                     ? `<a href="${escapeHtml(bookmark.downloadUrl)}" download class="button" style="background:var(--accent);">Скачать видео</a>`
                     : '';
 
-                // Сервисы для скачивания YouTube
                 let extraDownload = '';
                 if (bookmark.videoData && bookmark.videoData.service === 'youtube' && bookmark.videoData.id) {
                     const vid = bookmark.videoData.id;
@@ -856,7 +918,6 @@
                     `;
                 }
 
-                // Создаём модалку вручную, чтобы не закрывать хранилище
                 const modalOverlay = document.createElement('div');
                 modalOverlay.className = 'modal-fullscreen';
                 modalOverlay.style.zIndex = '10002';
@@ -1008,18 +1069,35 @@
     function buildSaveCard(card, bookmark) {
         card.addEventListener('click', () => {
             if (!bookmark.saveData) return;
-            const contentHtml = `
-                <div style="margin-bottom:16px;">
-                    <strong>Файл:</strong> ${escapeHtml(bookmark.saveData.fileName)}
-                </div>
-                <pre style="background:var(--bg-primary);padding:16px;border-radius:12px;border:1px solid var(--border);max-height:400px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:13px;">${escapeHtml(bookmark.saveData.content)}</pre>
-                <div style="margin-top:16px;display:flex;gap:12px;justify-content:center;">
-                    <button class="button" style="background:var(--accent);padding:12px 40px;font-size:18px;" id="download-save-btn">
-                        <i class="fas fa-download"></i> Скачать
-                    </button>
-                </div>
-            `;
-            // Создаём модалку вручную, чтобы не закрывать хранилище
+            const base64 = bookmark.saveData.content;
+            const fileName = bookmark.saveData.fileName || 'save.dat';
+
+            // Пытаемся декодировать для привью
+            const decodedText = tryDecodeBase64(base64);
+            let contentHtml;
+            if (decodedText !== null) {
+                // Текстовый файл
+                contentHtml = `
+                    <div style="margin-bottom:16px;">
+                        <strong>Файл:</strong> ${escapeHtml(fileName)}
+                        ${bookmark.saveData.game ? `<span style="margin-left:12px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:30px;font-size:12px;">${escapeHtml(bookmark.saveData.game)}</span>` : ''}
+                    </div>
+                    <pre style="background:var(--bg-primary);padding:16px;border-radius:12px;border:1px solid var(--border);max-height:400px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:13px;">${escapeHtml(decodedText)}</pre>
+                `;
+            } else {
+                // Бинарный файл
+                contentHtml = `
+                    <div style="margin-bottom:16px;">
+                        <strong>Файл:</strong> ${escapeHtml(fileName)}
+                        ${bookmark.saveData.game ? `<span style="margin-left:12px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:30px;font-size:12px;">${escapeHtml(bookmark.saveData.game)}</span>` : ''}
+                    </div>
+                    <div style="background:var(--bg-primary);padding:20px;border-radius:12px;border:1px solid var(--border);text-align:center;color:var(--text-secondary);">
+                        <i class="fas fa-file" style="font-size:48px;display:block;margin-bottom:12px;"></i>
+                        Бинарный файл (не отображается)
+                    </div>
+                `;
+            }
+
             const modalOverlay = document.createElement('div');
             modalOverlay.className = 'modal-fullscreen';
             modalOverlay.style.zIndex = '10002';
@@ -1032,6 +1110,11 @@
                     </div>
                     <div class="modal-body" style="padding:20px;">
                         ${contentHtml}
+                        <div style="margin-top:16px;display:flex;gap:12px;justify-content:center;">
+                            <button class="button" style="background:var(--accent);padding:12px 40px;font-size:18px;" id="download-save-btn">
+                                <i class="fas fa-download"></i> Скачать
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1056,10 +1139,10 @@
             });
 
             modalOverlay.querySelector('#download-save-btn').addEventListener('click', () => {
-                const blob = new Blob([bookmark.saveData.content], { type: 'text/plain' });
+                const blob = base64ToBlob(base64);
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = bookmark.saveData.fileName;
+                a.download = fileName;
                 a.click();
                 URL.revokeObjectURL(a.href);
             });
@@ -1071,7 +1154,11 @@
         content.appendChild(titleEl);
 
         const meta = createElement('div', '', { fontSize: '12px', color: 'var(--text-secondary)' });
-        meta.textContent = `Сохранение · ${formatDate(bookmark.added)}`;
+        let metaText = `Сохранение · ${formatDate(bookmark.added)}`;
+        if (bookmark.saveData && bookmark.saveData.game) {
+            metaText += ` · ${escapeHtml(bookmark.saveData.game)}`;
+        }
+        meta.textContent = metaText;
         content.appendChild(meta);
 
         card.appendChild(content);
@@ -1090,11 +1177,15 @@
     }
 
     // ---------- Модалка хранилища ----------
-    async function openStorageModal() {
+    async function openStorageModal(gameContext = null) {
         updateAuthState();
         if (!currentUser) return showToast('Войдите в аккаунт GitHub', 'error');
         if (!currentToken) return showToast('Токен не найден', 'error');
         if (!hasScope('gist')) return showToast('Нужен scope "gist"', 'error');
+
+        // Сохраняем контекст игры для замены сохранений
+        if (gameContext) currentGame = gameContext;
+        else currentGame = null;
 
         const res = await loadBookmarks();
         currentBookmarks = res.bookmarks || [];
@@ -1273,8 +1364,29 @@
                 continue;
             }
             try {
-                const content = await file.text();
-                await addBookmark(null, file.name, content, file.name);
+                // Читаем как ArrayBuffer
+                const buffer = await file.arrayBuffer();
+                const base64 = arrayBufferToBase64(buffer);
+                const hash = simpleHash(buffer);
+
+                // Проверяем дубликат по хешу (уже есть в addBookmark, но можно предварительно)
+                // Добавляем с указанием game (если currentGame задан)
+                const bookmarkData = {
+                    url: null,
+                    title: file.name,
+                    fileContent: base64,
+                    fileName: file.name,
+                    game: currentGame || null,
+                    saveData: {
+                        fileName: file.name,
+                        content: base64,
+                        hash: hash,
+                        mimeType: 'text/plain',
+                        game: currentGame || null,
+                        isBase64: true
+                    }
+                };
+                await addBookmark(bookmarkData);
                 showToast(`Сохранение "${file.name}" добавлено`, 'success');
             } catch (e) {
                 if (e.message !== 'duplicate') showToast(`Ошибка при добавлении ${file.name}: ${e.message}`, 'error');
