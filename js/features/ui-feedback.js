@@ -1,4 +1,5 @@
 // js/features/ui-feedback.js – полный модуль с кнопками в модалке, редактором постов и комментариев
+// Изменения: оставлены только реакции ❤️ (лайк) и 👀 (просмотры). 👀 добавляется автоматически при открытии поста, не кликабельна.
 (function() {
   const { createElement, escapeHtml, renderMarkdown, loadModule, cacheGet, cacheSet, cacheRemoveByPrefix, extractAllowed, extractSummary, decryptPrivateBody, CONFIG } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -31,41 +32,54 @@
     }
   }
 
-  // ---------- Реакции ----------
-  async function renderReactions(container, issueNumber, reactions, currentUser, onAdd, onRemove) {
+  // ---------- Реакции (только ❤️ и 👀) ----------
+  async function renderReactions(container, issueNumber, reactions, currentUser, onAddHeart, onRemoveHeart) {
     if (!container) return;
+    // Фильтруем только 'heart' и 'eyes'
+    const filtered = reactions.filter(r => r.content === 'heart' || r.content === 'eyes');
     const counts = new Map();
     const userReactions = new Set();
-    reactions.forEach(r => {
+    filtered.forEach(r => {
       counts.set(r.content, (counts.get(r.content) || 0) + 1);
       if (r.user && r.user.login === currentUser) userReactions.add(r.content);
     });
-    const ordered = ['+1', '-1', 'laugh', 'hooray', 'heart', 'rocket', 'eyes'];
+
     container.innerHTML = '';
     const btnsDiv = createElement('div', 'reactions-buttons', { display: 'flex', gap: '6px', flexWrap: 'wrap' });
-    for (const emoji of ordered) {
-      const count = counts.get(emoji) || 0;
-      const isActive = userReactions.has(emoji);
-      const btn = createElement('button', `reaction-button ${isActive ? 'active' : ''}`, {
-        display: 'inline-flex', alignItems: 'center', gap: '4px',
-        padding: '4px 10px', background: 'var(--bg-primary)', border: '1px solid var(--border)',
-        borderRadius: '30px', fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer'
-      });
-      btn.innerHTML = `<span class="reaction-emoji">${getReactionEmoji(emoji)}</span><span class="reaction-count">${count || ''}</span>`;
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (!currentUser) { showToast('Войдите в GitHub', 'error'); return; }
-        try {
-          if (isActive) {
-            const reactionId = reactions.find(r => r.content === emoji && r.user?.login === currentUser)?.id;
-            if (reactionId) await onRemove(issueNumber, reactionId);
-          } else {
-            await onAdd(issueNumber, emoji);
-          }
-        } catch (err) { showToast('Ошибка', 'error'); }
-      });
-      btnsDiv.appendChild(btn);
-    }
+
+    // Сначала ❤️ (кликабельная)
+    const heartCount = counts.get('heart') || 0;
+    const isHeartActive = userReactions.has('heart');
+    const heartBtn = createElement('button', `reaction-button ${isHeartActive ? 'active' : ''}`, {
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      padding: '4px 10px', background: 'var(--bg-primary)', border: '1px solid var(--border)',
+      borderRadius: '30px', fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer'
+    });
+    heartBtn.innerHTML = `<span class="reaction-emoji">❤️</span><span class="reaction-count">${heartCount || ''}</span>`;
+    heartBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!currentUser) { showToast('Войдите в GitHub', 'error'); return; }
+      try {
+        if (isHeartActive) {
+          const reactionId = filtered.find(r => r.content === 'heart' && r.user?.login === currentUser)?.id;
+          if (reactionId) await onRemoveHeart(issueNumber, reactionId);
+        } else {
+          await onAddHeart(issueNumber, 'heart');
+        }
+      } catch (err) { showToast('Ошибка', 'error'); }
+    });
+    btnsDiv.appendChild(heartBtn);
+
+    // 👀 (только счётчик, не кликабельная)
+    const eyesCount = counts.get('eyes') || 0;
+    const eyesSpan = createElement('span', 'reaction-static', {
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      padding: '4px 10px', background: 'var(--bg-primary)', border: '1px solid var(--border)',
+      borderRadius: '30px', fontSize: '13px', color: 'var(--text-secondary)'
+    });
+    eyesSpan.innerHTML = `<span class="reaction-emoji">👀</span><span class="reaction-count">${eyesCount || ''}</span>`;
+    btnsDiv.appendChild(eyesSpan);
+
     container.appendChild(btnsDiv);
   }
 
@@ -264,11 +278,37 @@
     }
     if (currentUser && window.GithubAPI) {
       try {
+        // Загружаем реакции
         const reactions = await window.GithubAPI.loadReactions(id);
-        renderReactions(reactionsContainer, id, reactions, currentUser,
-          async (num, cont) => { await window.GithubAPI.addReaction(num, cont); refreshComments(); },
-          async (num, rid) => { await window.GithubAPI.removeReaction(num, rid); refreshComments(); });
-      } catch(e) {}
+        // Автоматически добавляем 👀 (eyes) от текущего пользователя, если её нет
+        const hasEyes = reactions.some(r => r.content === 'eyes' && r.user?.login === currentUser);
+        if (!hasEyes) {
+          try {
+            await window.GithubAPI.addReaction(id, 'eyes');
+          } catch (e) { /* игнорируем, если уже есть или ошибка */ }
+        }
+        // После добавления перезагружаем реакции
+        const updatedReactions = await window.GithubAPI.loadReactions(id);
+        renderReactions(reactionsContainer, id, updatedReactions, currentUser,
+          async (num, cont) => { 
+            await window.GithubAPI.addReaction(num, cont);
+            // Обновляем отображение после добавления
+            const newReactions = await window.GithubAPI.loadReactions(num);
+            renderReactions(reactionsContainer, num, newReactions, currentUser,
+              async (n, c) => { await window.GithubAPI.addReaction(n, c); refreshComments(); },
+              async (n, rid) => { await window.GithubAPI.removeReaction(n, rid); refreshComments(); }
+            );
+          },
+          async (num, rid) => { 
+            await window.GithubAPI.removeReaction(num, rid);
+            const newReactions = await window.GithubAPI.loadReactions(num);
+            renderReactions(reactionsContainer, num, newReactions, currentUser,
+              async (n, c) => { await window.GithubAPI.addReaction(n, c); refreshComments(); },
+              async (n, rid) => { await window.GithubAPI.removeReaction(n, rid); refreshComments(); }
+            );
+          }
+        );
+      } catch(e) { console.warn('Reactions error:', e); }
     }
     await refreshComments();
     const submitBtn = modal.querySelector('#submit-comment-btn');
