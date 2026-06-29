@@ -1,5 +1,5 @@
 // js/features/storage.js – хранилище закладок на GitHub Gist
-// Исправлено: чтение/запись файлов через base64, замена сохранения для одной игры
+// Исправлено: чтение/запись файлов через base64, замена сохранения для одной игры, превью игры в карточке
 (function() {
     const { CONFIG, escapeHtml, createElement, formatDate, debounce, cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, loadModule } = window.GithubCore;
     const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -1066,17 +1066,15 @@
         }
     }
 
+    // ========== ИЗМЕНЕННАЯ ФУНКЦИЯ: добавлено превью игры ==========
     function buildSaveCard(card, bookmark) {
         card.addEventListener('click', () => {
             if (!bookmark.saveData) return;
             const base64 = bookmark.saveData.content;
             const fileName = bookmark.saveData.fileName || 'save.dat';
-
-            // Пытаемся декодировать для привью
             const decodedText = tryDecodeBase64(base64);
             let contentHtml;
             if (decodedText !== null) {
-                // Текстовый файл
                 contentHtml = `
                     <div style="margin-bottom:16px;">
                         <strong>Файл:</strong> ${escapeHtml(fileName)}
@@ -1085,7 +1083,6 @@
                     <pre style="background:var(--bg-primary);padding:16px;border-radius:12px;border:1px solid var(--border);max-height:400px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:13px;">${escapeHtml(decodedText)}</pre>
                 `;
             } else {
-                // Бинарный файл
                 contentHtml = `
                     <div style="margin-bottom:16px;">
                         <strong>Файл:</strong> ${escapeHtml(fileName)}
@@ -1148,6 +1145,7 @@
             });
         });
 
+        // Создаём контент карточки
         const content = createElement('div', 'bookmark-content', { padding: '12px', flex: '1', display: 'flex', flexDirection: 'column' });
         const titleEl = createElement('h4', '', { margin: '0 0 4px', fontSize: '16px', color: 'var(--text-primary)' });
         titleEl.textContent = bookmark.title || 'Сохранение';
@@ -1163,17 +1161,46 @@
 
         card.appendChild(content);
 
-        const iconWrapper = createElement('div', 'bookmark-icon', {
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '48px',
-            padding: '20px 0',
-            background: 'var(--bg-primary)',
-            borderBottom: '1px solid var(--border)'
-        });
-        iconWrapper.innerHTML = '<i class="fas fa-save"></i>';
-        card.insertBefore(iconWrapper, content);
+        // Вставляем изображение игры (если есть) или иконку
+        const game = bookmark.saveData?.game;
+        const imageMap = {
+            'starve-neon': 'images/starve-neon-header.webp',
+            'alpha-01': 'images/alpha-01-header.webp',
+            'gc-adven': 'images/gc-adven-header.webp'
+        };
+        const imgSrc = game ? imageMap[game] : null;
+
+        if (imgSrc) {
+            const imgWrapper = createElement('div', 'bookmark-media', {
+                position: 'relative',
+                paddingBottom: '56.25%',
+                background: 'var(--bg-primary)',
+                borderBottom: '1px solid var(--border)',
+                flexShrink: '0'
+            });
+            const img = createElement('img', '', {
+                position: 'absolute',
+                top: 0, left: 0, width: '100%', height: '100%',
+                objectFit: 'cover'
+            });
+            img.src = imgSrc;
+            img.alt = bookmark.title || 'Сохранение';
+            img.onerror = () => { img.style.display = 'none'; };
+            imgWrapper.appendChild(img);
+            card.insertBefore(imgWrapper, content);
+        } else {
+            const iconWrapper = createElement('div', 'bookmark-icon', {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '48px',
+                padding: '20px 0',
+                background: 'var(--bg-primary)',
+                borderBottom: '1px solid var(--border)'
+            });
+            iconWrapper.innerHTML = '<i class="fas fa-save"></i>';
+            card.insertBefore(iconWrapper, content);
+        }
     }
 
     // ---------- Модалка хранилища ----------
