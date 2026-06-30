@@ -1,4 +1,4 @@
-// js/features/ui-feedback.js – полная версия с оптимизациями
+// js/features/ui-feedback.js – полная версия с интеграцией RateLimits
 (function() {
   const { createElement, escapeHtml, renderMarkdown, loadModule, cacheGet, cacheSet, cacheRemoveByPrefix, extractAllowed, extractSummary, decryptPrivateBody, CONFIG } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -23,7 +23,6 @@
 
   async function renderMarkdownWithEditor(text, targetElement, cacheKey = null) {
     if (!text) { targetElement.innerHTML = ''; return; }
-    // Проверяем кэш
     if (cacheKey && markdownCache.has(cacheKey)) {
       targetElement.innerHTML = markdownCache.get(cacheKey);
       return;
@@ -215,12 +214,21 @@
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
-  // Добавление комментария с защитой от спама
+  // Добавление комментария с защитой от спама и ограничением по лимиту
   async function addComment(issueNumber, body, onUpdate) {
     if (!body.trim()) return showToast('Введите текст', 'error');
 
     const currentUser = getCurrentUser();
     if (!currentUser) return showToast('Войдите в GitHub', 'error');
+
+    // Проверка дневного лимита
+    if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
+    if (!window.RateLimits.checkLimit('comments')) {
+      // Сохраняем в очередь
+      window.RateLimits.enqueueAction('comments', { issueNumber, body });
+      showToast('Лимит комментариев исчерпан. Действие будет выполнено позже.', 'warning');
+      return;
+    }
 
     // Ограничение частоты
     const lastTime = parseInt(localStorage.getItem(LAST_COMMENT_KEY) || '0', 10);
@@ -243,6 +251,7 @@
     try {
       await window.GithubAPI.addComment(issueNumber, body);
       localStorage.setItem(LAST_COMMENT_KEY, now.toString());
+      window.RateLimits.increment('comments');
       showToast('Комментарий добавлен', 'success');
       onUpdate();
     } catch (err) {
@@ -333,9 +342,12 @@
       <div class="comments-section">
         <h3>Комментарии</h3>
         <div id="modal-comments-list" class="comments-list"></div>
-        ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px;">
+        ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px; align-items:center;">
           <input type="text" id="new-comment-input" placeholder="Ваш комментарий..." style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border);">
           <button id="submit-comment-btn" class="button small">Отправить</button>
+          <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
+            Осталось: <span class="rate-indicator" data-action="comments">${window.RateLimits ? window.RateLimits.getRemaining('comments') : '?'}</span>
+          </span>
         </div>` : '<p class="text-secondary">Войдите, чтобы комментировать</p>'}
       </div>
     `;
@@ -372,7 +384,6 @@
     }
     
     const contentDiv = modal.querySelector('.post-content');
-    // Кэшируем Markdown по ключу
     const cacheKey = `post_${id}_${currentUser || 'anon'}`;
     await renderMarkdownWithEditor(displayBody, contentDiv, cacheKey);
     
@@ -385,16 +396,24 @@
       try {
         let reactions = await window.GithubAPI.loadReactions(id);
         const hasEyes = reactions.some(r => r.content === 'eyes' && r.user?.login === currentUser);
-        // Задержка перед добавлением 👀 (2 секунды)
+        // Задержка перед добавлением 👀 (2 секунды) с проверкой лимита
         if (!hasEyes) {
           setTimeout(async () => {
             try {
-              await window.GithubAPI.addReaction(id, 'eyes');
-              const newReactions = await window.GithubAPI.loadReactions(id);
-              renderReactions(reactionsContainer, id, newReactions, currentUser,
-                async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },
-                async (num, rid) => { await window.GithubAPI.removeReaction(num, rid); }
-              );
+              // Проверяем лимит для eyesReactions
+              if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
+              if (window.RateLimits.checkLimit('eyesReactions')) {
+                await window.GithubAPI.addReaction(id, 'eyes');
+                window.RateLimits.increment('eyesReactions');
+                const newReactions = await window.GithubAPI.loadReactions(id);
+                renderReactions(reactionsContainer, id, newReactions, currentUser,
+                  async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },
+                  async (num, rid) => { await window.GithubAPI.removeReaction(num, rid); }
+                );
+              } else {
+                // Сохраняем в очередь
+                window.RateLimits.enqueueAction('eyesReactions', { issueNumber: id });
+              }
             } catch (e) { /* игнорируем */ }
           }, 2000);
         }
@@ -408,18 +427,20 @@
     const submitBtn = modal.querySelector('#submit-comment-btn');
     const commentInput = modal.querySelector('#new-comment-input');
     if (submitBtn && commentInput) {
-      // Дебаунс на кнопку отправки комментария (1 секунда)
       const debouncedSubmit = window.GithubCore.debounce(async () => {
         const text = commentInput.value.trim();
         if (!text) return;
         await addComment(id, text, refreshComments);
         commentInput.value = '';
+        // Обновляем индикатор
+        const indicator = modal.querySelector('.rate-indicator[data-action="comments"]');
+        if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('comments');
       }, 1000);
       submitBtn.addEventListener('click', debouncedSubmit);
     }
   }
 
-  // Редактор поста с дебаунсом на кнопку отправки
+  // Редактор поста с дебаунсом на кнопку отправки и лимитами
   async function openEditorModal(mode, initialData, context, existingId = null) {
     if (!hasScope('repo')) {
       showToast('Требуется scope repo', 'error');
@@ -434,6 +455,10 @@
     let currentTitle = savedTitle;
     let currentBody = savedBody;
     let allowedUsers = '';
+
+    // Проверяем лимит постов только для нового, не для редактирования
+    if (mode === 'new' && !window.RateLimits) await loadModule('js/features/rate-limits.js');
+    const canCreate = mode === 'edit' || window.RateLimits?.checkLimit('posts');
 
     const html = `
       <div style="display:flex; flex-direction:column; gap:12px;">
@@ -451,8 +476,12 @@
             <button id="access-private" class="access-switch-btn">Приватный</button>
           </div>
           <input type="text" id="allowed-users" placeholder="Логины через запятую" value="${escapeHtml(allowedUsers)}" style="display:none; flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border);">
-          <button id="editor-submit" class="button wide">${mode === 'edit' ? 'Обновить' : 'Опубликовать'}</button>
+          <button id="editor-submit" class="button wide" ${!canCreate && mode === 'new' ? 'disabled' : ''}>${mode === 'edit' ? 'Обновить' : 'Опубликовать'}</button>
+          ${mode === 'new' ? `<span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
+            Осталось постов: <span class="rate-indicator" data-action="posts">${window.RateLimits ? window.RateLimits.getRemaining('posts') : '?'}</span>
+          </span>` : ''}
         </div>
+        ${!canCreate && mode === 'new' ? `<div style="color:#f44336; font-size:13px;">Дневной лимит постов исчерпан. Действие будет сохранено и выполнено позже.</div>` : ''}
       </div>
     `;
     const { modal, closeModal } = createModal(mode === 'new' ? 'Создать пост' : 'Редактировать пост', html, { size: 'full' });
@@ -512,6 +541,22 @@
       const title = titleInput.value.trim();
       const body = bodyTextarea.value;
       if (!title) return showToast('Введите заголовок', 'error');
+
+      // Проверка лимита для нового поста
+      if (mode === 'new') {
+        if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
+        if (!window.RateLimits.checkLimit('posts')) {
+          // Сохраняем в очередь
+          const finalBody = privMode ? `<!-- allowed: ${allowedInput.value.trim()} -->\n${window.GithubCore.encryptPrivateBody(body, allowedInput.value.trim())}` : body;
+          const labels = [`game:${game}`, context === 'news' ? 'type:news' : context === 'update' ? 'type:update' : 'type:idea'];
+          if (privMode) labels.push('private');
+          window.RateLimits.enqueueAction('posts', { mode: 'new', title, body: finalBody, labels });
+          showToast('Пост сохранён и будет опубликован позже', 'info');
+          closeModal();
+          return;
+        }
+      }
+
       let finalBody = body;
       let labels = [`game:${game}`];
       if (context === 'news') labels.push('type:news');
@@ -530,13 +575,21 @@
           window.dispatchEvent(new CustomEvent('github-issue-updated', { detail: { id: existingId, title, body: finalBody } }));
         } else {
           await window.GithubAPI.createIssue(title, finalBody, labels);
+          window.RateLimits.increment('posts');
           showToast('Пост создан', 'success');
           window.dispatchEvent(new CustomEvent('github-issue-created', { detail: { title, body: finalBody, labels: labels.map(l=> ({name:l})), user: { login: getCurrentUser() } } }));
         }
         clearDraft(draftKey);
         closeModal();
         setTimeout(() => location.reload(), 800);
-      } catch (err) { showToast('Ошибка: ' + err.message, 'error'); }
+      } catch (err) {
+        showToast('Ошибка: ' + err.message, 'error');
+        // Если ошибка связана с лимитами, пробуем сохранить в очередь
+        if (err.message.includes('rate limit') || err.message.includes('secondary')) {
+          window.RateLimits.enqueueAction('posts', { mode: mode === 'edit' ? 'edit' : 'new', id: existingId, title, body: finalBody, labels });
+          showToast('Действие сохранено для повторной попытки позже', 'info');
+        }
+      }
     }, 1000);
     submitBtn.addEventListener('click', debouncedSubmit);
   }

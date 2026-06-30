@@ -1,4 +1,4 @@
-// js/features/storage.js – с кэшированием метаданных и DocumentFragment
+// js/features/storage.js – с кэшированием метаданных и интеграцией RateLimits
 (function() {
     const { CONFIG, escapeHtml, createElement, formatDate, debounce, cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, loadModule } = window.GithubCore;
     const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -338,7 +338,6 @@
             return { type: 'link', title: url || 'Ссылка', thumbnail: null, embedUrl: null, downloadUrl: null };
         }
 
-        // Проверяем кэш
         const cached = getCachedMetadata(url);
         if (cached) return cached;
 
@@ -561,6 +560,16 @@
             throw new Error('not_logged_in');
         }
 
+        // Проверка дневного лимита
+        if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
+        if (!window.RateLimits.checkLimit('storageAdds')) {
+            // Сохраняем в очередь
+            const bookmarkData = typeof bookmarkOrUrl === 'object' ? bookmarkOrUrl : { url: bookmarkOrUrl, title, fileContent, fileName };
+            window.RateLimits.enqueueAction('storageAdds', { bookmark: bookmarkData });
+            showToast('Лимит добавлений в хранилище исчерпан. Действие будет выполнено позже.', 'warning');
+            throw new Error('limit_exceeded');
+        }
+
         let url = null;
         let customTitle = null;
         let customFileContent = null;
@@ -664,6 +673,7 @@
             currentBookmarks = [newBookmark, ...currentBookmarks];
             enforceMaxBookmarks();
             triggerDebouncedSave();
+            window.RateLimits.increment('storageAdds');
             return newBookmark;
         }
 
@@ -718,6 +728,7 @@
         currentBookmarks = [newBookmark, ...currentBookmarks];
         enforceMaxBookmarks();
         triggerDebouncedSave();
+        window.RateLimits.increment('storageAdds');
         return newBookmark;
     }
 
@@ -1236,6 +1247,10 @@
         const res = await loadBookmarks();
         currentBookmarks = res.bookmarks || [];
 
+        // Получаем остаток для индикатора
+        if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
+        const remainingAdds = window.RateLimits ? window.RateLimits.getRemaining('storageAdds') : '?';
+
         const html = `
             <div class="storage-modal-container">
                 <div class="storage-header">
@@ -1253,6 +1268,9 @@
                         </div>
                     </div>
                     <div class="storage-actions">
+                        <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-right:12px;">
+                            Добавлений осталось: <span class="rate-indicator" data-action="storageAdds">${remainingAdds}</span>
+                        </span>
                         <div class="search-wrapper" style="display:flex;gap:8px;align-items:center;">
                             <input type="text" id="search-input" placeholder="Поиск..." style="padding:6px 14px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;width:160px;">
                         </div>
@@ -1361,8 +1379,11 @@
                 showToast('Добавлено', 'success');
                 urlInput.value = '';
                 renderBookmarks(modal);
+                // Обновляем индикатор
+                const indicator = modal.querySelector('.rate-indicator[data-action="storageAdds"]');
+                if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('storageAdds');
             } catch (e) {
-                if (e.message !== 'duplicate') showToast('Ошибка: ' + e.message, 'error');
+                if (e.message !== 'duplicate' && e.message !== 'limit_exceeded') showToast('Ошибка: ' + e.message, 'error');
             }
         }, 1000);
         addBtn.addEventListener('click', debouncedAdd);
@@ -1427,8 +1448,11 @@
                 };
                 await addBookmark(bookmarkData);
                 showToast(`Сохранение "${file.name}" добавлено`, 'success');
+                // Обновляем индикатор
+                const indicator = modal?.querySelector('.rate-indicator[data-action="storageAdds"]');
+                if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('storageAdds');
             } catch (e) {
-                if (e.message !== 'duplicate') showToast(`Ошибка при добавлении ${file.name}: ${e.message}`, 'error');
+                if (e.message !== 'duplicate' && e.message !== 'limit_exceeded') showToast(`Ошибка при добавлении ${file.name}: ${e.message}`, 'error');
             }
         }
         if (modal) renderBookmarks(modal);
