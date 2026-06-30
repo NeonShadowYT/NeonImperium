@@ -1,4 +1,4 @@
-// js/common-init.js – добавлены preconnect, инициализация RateLimits, улучшенная обработка очереди
+// js/common-init.js – инициализация с автоподчисткой кеша
 (function() {
   // Добавляем preconnect для внешних API
   function addPreconnects() {
@@ -127,12 +127,12 @@
   }
 
   function loadDustParticles() {
-      const script = document.createElement('script');
-      script.src = 'js/features/dust-particles.js';
-      script.defer = true;
-      script.onload = () => console.log('Dust particles loaded');
-      script.onerror = () => console.warn('Failed to load dust particles');
-      document.head.appendChild(script);
+    const script = document.createElement('script');
+    script.src = 'js/features/dust-particles.js';
+    script.defer = true;
+    script.onload = () => console.log('Dust particles loaded');
+    script.onerror = () => console.warn('Failed to load dust particles');
+    document.head.appendChild(script);
   }
 
   function showUpdateNotification() {
@@ -227,13 +227,10 @@
     document.body.addEventListener('click', handleDownloadClick);
   }
 
-  // Инициализация RateLimits (добавляем в очередь после загрузки)
   function initRateLimits() {
     if (window.RateLimits) {
       window.RateLimits.init();
-      // Добавляем обработчик для открытия панели из профиля
       window.addEventListener('github-auth-ready', () => {
-        // Добавляем пункт в меню профиля
         const profile = document.querySelector('.nav-profile');
         if (profile) {
           const dropdown = profile.querySelector('.profile-dropdown');
@@ -252,18 +249,32 @@
         }
       });
     } else {
-      // Если ещё не загружен, подгружаем
       const script = document.createElement('script');
       script.src = 'js/features/rate-limits.js';
       script.defer = true;
       script.onload = () => {
         if (window.RateLimits) {
           window.RateLimits.init();
-          // Повторяем добавление пункта
           window.dispatchEvent(new CustomEvent('github-auth-ready'));
         }
       };
       document.head.appendChild(script);
+    }
+  }
+
+  // Автоматическая очистка кеша (только устаревшего) при старте сессии (один раз)
+  function autoClearCache() {
+    if (sessionStorage.getItem('auto_cache_cleared')) return;
+    sessionStorage.setItem('auto_cache_cleared', '1');
+    if (!window.RateLimits) {
+      window.Utils.loadModule('js/features/rate-limits.js').then(() => {
+        if (window.RateLimits) {
+          // Очищаем только устаревший кеш (вызываем внутреннюю функцию без инкремента лимита)
+          window.RateLimits.clearAllCache().catch(console.warn);
+        }
+      }).catch(console.warn);
+    } else {
+      window.RateLimits.clearAllCache().catch(console.warn);
     }
   }
 
@@ -281,6 +292,7 @@
       registerServiceWorker();
       initDownloadConsent();
       initRateLimits();
+      autoClearCache();
     });
   } else {
     preloadFont();
@@ -295,5 +307,6 @@
     registerServiceWorker();
     initDownloadConsent();
     initRateLimits();
+    autoClearCache();
   }
 })();

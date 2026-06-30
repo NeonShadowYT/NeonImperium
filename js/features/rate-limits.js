@@ -1,4 +1,4 @@
-// js/features/rate-limits.js – единая система лимитов, очереди, кеша и визуализации
+// js/features/rate-limits.js – единая система лимитов, очереди и выполнения действий
 (function() {
     // ---------- Конфигурация лимитов ----------
     const LIMITS = {
@@ -6,14 +6,14 @@
         comments: 50,
         storageAdds: 30,
         cacheClears: 5,
-        eyesReactions: 20
+        reactions: 20   // 👀 и ❤️ вместе
     };
 
     const STORAGE_KEY = 'rate_limits';
     const DB_NAME = 'NeonImperiumQueue';
-    const DB_VERSION = 1;
+    const DB_VERSION = 2;
     const STORE_NAME = 'queue';
-    const HISTORY_SIZE = 100; // храним последние 100 действий в истории
+    const HISTORY_SIZE = 100;
 
     let db = null;
     let currentCounts = null;
@@ -53,7 +53,7 @@
             }
         } catch {}
         today = getToday();
-        currentCounts = { posts: 0, comments: 0, storageAdds: 0, cacheClears: 0, eyesReactions: 0 };
+        currentCounts = { posts: 0, comments: 0, storageAdds: 0, cacheClears: 0, reactions: 0 };
         saveCounts();
     }
 
@@ -76,21 +76,19 @@
         if (currentCounts[action] === undefined) currentCounts[action] = 0;
         currentCounts[action]++;
         saveCounts();
+        updateIndicators();
         // После инкремента пробуем обработать очередь
         processQueue().catch(console.warn);
-        updateIndicators();
-        // Обновляем панель, если открыта
         if (window._ratePanelOpen) refreshPanel();
     }
 
-    // Сброс в полночь (проверяется при каждом действии)
+    // Сброс в полночь
     function checkDayReset() {
         const newToday = getToday();
         if (newToday !== today) {
             today = newToday;
-            currentCounts = { posts: 0, comments: 0, storageAdds: 0, cacheClears: 0, eyesReactions: 0 };
+            currentCounts = { posts: 0, comments: 0, storageAdds: 0, cacheClears: 0, reactions: 0 };
             saveCounts();
-            // При смене дня пробуем выполнить очередь
             processQueue().catch(console.warn);
             updateIndicators();
             if (window._ratePanelOpen) refreshPanel();
@@ -104,25 +102,33 @@
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
 
-        // Проверка дубликата: для одинаковых действий с одинаковыми данными (кроме timestamp)
+        // Проверка дубликата: для одного типа действия и одинаковых данных (кроме timestamp)
         const existing = await new Promise((resolve) => {
             const index = store.index('action');
             const range = IDBKeyRange.only(action);
             const request = index.getAll(range);
             request.onsuccess = () => {
                 const items = request.result.filter(item => item.status === 'pending' || item.status === 'failed');
-                // Для комментариев и постов проверяем содержание
                 let duplicate = false;
-                if (action === 'comments') {
+                // Для реакций проверяем issueNumber и content
+                if (action === 'reactions') {
+                    duplicate = items.some(item => item.data.issueNumber === data.issueNumber && item.data.content === data.content);
+                } else if (action === 'comments') {
                     duplicate = items.some(item => item.data.issueNumber === data.issueNumber && item.data.body === data.body);
                 } else if (action === 'posts') {
-                    duplicate = items.some(item => item.data.title === data.title && item.data.body === data.body);
+                    if (data.mode === 'edit' && data.id) {
+                        duplicate = items.some(item => item.data.id === data.id);
+                    } else {
+                        duplicate = items.some(item => item.data.title === data.title && item.data.body === data.body);
+                    }
                 } else if (action === 'storageAdds') {
-                    duplicate = items.some(item => item.data.bookmark.url === data.bookmark.url);
+                    if (data.bookmark.url) {
+                        duplicate = items.some(item => item.data.bookmark.url === data.bookmark.url);
+                    } else if (data.bookmark.saveData && data.bookmark.saveData.hash) {
+                        duplicate = items.some(item => item.data.bookmark.saveData && item.data.bookmark.saveData.hash === data.bookmark.saveData.hash);
+                    }
                 } else if (action === 'cacheClears') {
-                    duplicate = items.some(item => true); // очистка кеша не дублируется
-                } else if (action === 'eyesReactions') {
-                    duplicate = items.some(item => item.data.issueNumber === data.issueNumber);
+                    // не дублируем
                 }
                 resolve(duplicate);
             };
@@ -131,7 +137,7 @@
 
         if (existing) {
             console.log('[RateLimits] Действие уже в очереди:', action);
-            return;
+            return null;
         }
 
         const entry = {
@@ -149,11 +155,35 @@
         await tx.done;
 
         // Показываем уведомление
-        window.UIUtils?.showToast(`Действие "${action}" сохранено в очереди`, 'info');
+        window.UIUtils?.showToast(`Действие "${actionLabels[action] || action}" сохранено в очередь`, 'info');
 
-        // Обновляем панель, если открыта
+        // Обновляем панель
         if (window._ratePanelOpen) refreshPanel();
         updateIndicators();
+
+        // Регистрируем background sync
+        registerSync().catch(console.warn);
+
+        return id;
+    }
+
+    async function getPendingActions() {
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const index = store.index('status');
+            const range = IDBKeyRange.only('pending');
+            const items = await new Promise((resolve) => {
+                const req = index.getAll(range);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve([]);
+            });
+            await tx.done;
+            return items || [];
+        } catch (e) {
+            return [];
+        }
     }
 
     async function processQueue() {
@@ -174,29 +204,45 @@
         // Сортируем по времени (старые сначала)
         pending.sort((a, b) => a.timestamp - b.timestamp);
 
+        // Обрабатываем с задержкой между действиями, чтобы не превысить вторичные лимиты
         for (const item of pending) {
+            // Проверяем актуальность действия
+            let valid = true;
+            if (window.GithubCore && typeof window.GithubCore.isActionStillValid === 'function') {
+                valid = await window.GithubCore.isActionStillValid(item.action, item.data);
+            }
+            if (!valid) {
+                // Удаляем неактуальное действие
+                await new Promise((resolve, reject) => {
+                    const req = store.delete(item.id);
+                    req.onsuccess = resolve;
+                    req.onerror = reject;
+                });
+                continue;
+            }
+
             // Проверяем лимит для этого действия
             if (!checkLimit(item.action)) {
-                // Не можем выполнить сейчас – оставляем в очереди
-                continue;
+                // Не можем выполнить сейчас – оставляем в очереди (прерываем цикл, так как лимиты могут восстановиться позже)
+                break;
             }
 
             try {
                 await executeAction(item.action, item.data);
-                // Успешно – удаляем из очереди и инкрементим счётчик
+                // Успешно – удаляем и инкрементим
                 await new Promise((resolve, reject) => {
                     const req = store.delete(item.id);
                     req.onsuccess = resolve;
                     req.onerror = reject;
                 });
                 increment(item.action);
-                // Логируем в историю (можно сохранять в localStorage)
                 addHistory(item.action, item.data, 'completed');
+                // Небольшая задержка между успешными действиями
+                await new Promise(r => setTimeout(r, 500));
             } catch (err) {
                 console.warn('[RateLimits] Ошибка выполнения действия из очереди:', err);
-                // Увеличиваем счётчик ретраев
-                if (item.retries >= 5) {
-                    // Удаляем, если слишком много ошибок
+                // Если ошибка непреодолима (например, 404), удаляем
+                if (err.status === 404 || err.message.includes('not found')) {
                     await new Promise((resolve, reject) => {
                         const req = store.delete(item.id);
                         req.onsuccess = resolve;
@@ -204,19 +250,28 @@
                     });
                     addHistory(item.action, item.data, 'failed');
                 } else {
-                    // Обновляем retries и статус (оставляем pending)
-                    item.retries++;
-                    await new Promise((resolve, reject) => {
-                        const req = store.put(item);
-                        req.onsuccess = resolve;
-                        req.onerror = reject;
-                    });
+                    // Увеличиваем счётчик ретраев
+                    if (item.retries >= 5) {
+                        await new Promise((resolve, reject) => {
+                            const req = store.delete(item.id);
+                            req.onsuccess = resolve;
+                            req.onerror = reject;
+                        });
+                        addHistory(item.action, item.data, 'failed');
+                    } else {
+                        item.retries++;
+                        item.status = 'pending';
+                        await new Promise((resolve, reject) => {
+                            const req = store.put(item);
+                            req.onsuccess = resolve;
+                            req.onerror = reject;
+                        });
+                    }
                 }
             }
         }
         await tx.done;
 
-        // Обновляем UI
         updateIndicators();
         if (window._ratePanelOpen) refreshPanel();
     }
@@ -225,7 +280,7 @@
     async function executeAction(action, data) {
         switch (action) {
             case 'posts':
-                if (data.mode === 'edit') {
+                if (data.mode === 'edit' && data.id) {
                     await window.GithubAPI.updateIssue(data.id, { title: data.title, body: data.body });
                 } else {
                     await window.GithubAPI.createIssue(data.title, data.body, data.labels);
@@ -238,10 +293,11 @@
                 await window.BookmarkStorage.addBookmark(data.bookmark);
                 break;
             case 'cacheClears':
-                // Очистка кеша – просто отмечаем, что выполнено
+                // Очистка кеша – выполняем через RateLimits.clearAllCache
+                await clearAllCacheInternal();
                 break;
-            case 'eyesReactions':
-                await window.GithubAPI.addReaction(data.issueNumber, 'eyes');
+            case 'reactions':
+                await window.GithubAPI.addReaction(data.issueNumber, data.content);
                 break;
             default:
                 throw new Error('Unknown action');
@@ -267,23 +323,45 @@
         } catch { return []; }
     }
 
+    // ---------- Очистка кеша (внутренняя) ----------
+    async function clearAllCacheInternal() {
+        const cacheNames = await caches.keys();
+        for (const name of cacheNames) {
+            await caches.delete(name);
+        }
+        // Чистим localStorage, исключая лимиты, историю и важные настройки
+        const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token'];
+        for (const key of Object.keys(localStorage)) {
+            if (!exclude.some(ex => key.startsWith(ex))) {
+                localStorage.removeItem(key);
+            }
+        }
+        // sessionStorage чистим всё, кроме текущей сессии (можно оставить для языка и т.п.)
+        const sessionExclude = ['preferredLanguage'];
+        for (const key of Object.keys(sessionStorage)) {
+            if (!sessionExclude.some(ex => key.startsWith(ex))) {
+                sessionStorage.removeItem(key);
+            }
+        }
+        // Также очищаем кеш в памяти
+        if (window._cacheMap) window._cacheMap.clear();
+    }
+
     // ---------- Панель лимитов (модалка) ----------
     function openRatePanel() {
         window._ratePanelOpen = true;
         const { modal, closeModal } = window.UIUtils.createModal('Лимиты и кеш', buildPanelHTML(), { size: 'full' });
         modal.dataset.ratePanel = 'true';
-        // При закрытии снимаем флаг
         const originalClose = closeModal;
         const newClose = () => {
             window._ratePanelOpen = false;
             originalClose();
         };
-        // Переопределяем close
         modal.querySelector('.modal-close').addEventListener('click', newClose);
         modal.addEventListener('click', (e) => {
             if (e.target === modal) newClose();
         });
-        // Обновляем панель при изменении
+
         window._ratePanelRefresh = () => {
             const body = modal.querySelector('.modal-body');
             if (body) body.innerHTML = buildPanelHTML();
@@ -291,7 +369,8 @@
         refreshPanel = () => {
             if (window._ratePanelRefresh) window._ratePanelRefresh();
         };
-        // Добавляем обработчики для кнопок очистки кеша
+
+        // Обработчики кнопок очистки кеша
         modal.addEventListener('click', async (e) => {
             const target = e.target.closest('[data-clear-cache]');
             if (target) {
@@ -302,30 +381,31 @@
             }
             const clearAllBtn = e.target.closest('#clear-all-cache');
             if (clearAllBtn) {
-                await clearAllCache();
+                await clearAllCacheInternal();
                 if (window._ratePanelRefresh) window._ratePanelRefresh();
                 window.UIUtils.showToast('Весь кеш (кроме лимитов) очищен', 'success');
             }
         });
-        // Обновляем таймер до полуночи
+
+        // Обновляем таймер
         updateTimerDisplay(modal);
-        // Периодическое обновление таймера
         const timerInterval = setInterval(() => {
             if (!modal.parentNode) { clearInterval(timerInterval); return; }
             updateTimerDisplay(modal);
         }, 10000);
-        // При закрытии очищаем интервал
         const origClose = newClose;
         const newCloseWithClean = () => {
             clearInterval(timerInterval);
             origClose();
         };
-        // Переопределяем ещё раз
         modal.querySelector('.modal-close').removeEventListener('click', newClose);
         modal.querySelector('.modal-close').addEventListener('click', newCloseWithClean);
         modal.addEventListener('click', (e) => {
             if (e.target === modal) newCloseWithClean();
         });
+
+        // Загружаем очередь
+        loadQueueItems(modal);
     }
 
     function buildPanelHTML() {
@@ -343,10 +423,6 @@
         const hours = Math.floor(msToMidnight / 3600000);
         const minutes = Math.floor((msToMidnight % 3600000) / 60000);
 
-        const history = getHistory();
-        const pending = []; // будем получать из очереди асинхронно, но здесь пока заглушка
-        // Для отображения очереди получаем из IndexedDB асинхронно, но в этом HTML мы не можем ждать,
-        // поэтому оставим место и заполним позже через JS.
         return `
             <div class="rate-panel">
                 <div class="rate-summary">
@@ -362,14 +438,14 @@
                         <div class="rate-limit-item">
                             <span class="rate-label">${actionLabels[action] || action}</span>
                             <div class="rate-bar">
-                                <div class="rate-fill" style="width: ${(rem / LIMITS[action]) * 100}%; background: ${rem > 0 ? 'var(--accent)' : '#f44336'};"></div>
+                                <div class="rate-fill" style="width: ${LIMITS[action] ? (rem / LIMITS[action]) * 100 : 100}%; background: ${rem > 0 ? 'var(--accent)' : '#f44336'};"></div>
                             </div>
                             <span class="rate-count">${rem} / ${LIMITS[action]}</span>
                         </div>
                     `).join('')}
                 </div>
                 <div class="rate-info">
-                    <p><i class="fas fa-info-circle"></i> Лимиты защищают ваш аккаунт от блокировок GitHub и предотвращают спам. При исчерпании лимита действия сохраняются в очередь и выполняются позже.</p>
+                    <p><i class="fas fa-info-circle"></i> Лимиты защищают ваш аккаунт от блокировок GitHub. При исчерпании лимита действия сохраняются в очередь и выполняются позже.</p>
                 </div>
                 <div class="rate-tabs">
                     <button class="rate-tab active" data-tab="history">История</button>
@@ -378,7 +454,7 @@
                 </div>
                 <div class="rate-tab-content">
                     <div id="rate-history" class="rate-history-list">
-                        ${history.slice(-20).reverse().map(h => `
+                        ${getHistory().slice(-20).reverse().map(h => `
                             <div class="rate-history-item ${h.status}">
                                 <span class="rate-action">${actionLabels[h.action] || h.action}</span>
                                 <span class="rate-status">${h.status === 'completed' ? '✅' : '❌'}</span>
@@ -390,7 +466,7 @@
                         <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
                     </div>
                     <div id="rate-cache" style="display:none;" class="rate-cache-actions">
-                        <p>Очистите выборочно:</p>
+                        <p>Очистите выборочно (удаляются только устаревшие данные):</p>
                         <div class="cache-buttons">
                             <button data-clear-cache="static">Статика (CSS, JS)</button>
                             <button data-clear-cache="images">Изображения</button>
@@ -405,7 +481,6 @@
         `;
     }
 
-    // Обновление таймера в панели
     function updateTimerDisplay(modal) {
         const timerEl = modal?.querySelector('.rate-timer strong');
         if (!timerEl) return;
@@ -418,62 +493,79 @@
         timerEl.textContent = `${hours}ч ${minutes}м`;
     }
 
-    // Переменная для обновления панели
+    async function loadQueueItems(modal) {
+        const container = modal?.querySelector('#rate-queue');
+        if (!container) return;
+        const items = await getPendingActions();
+        if (items.length === 0) {
+            container.innerHTML = '<p class="text-secondary">Очередь пуста</p>';
+            return;
+        }
+        container.innerHTML = items.map(item => `
+            <div class="queue-item">
+                <span class="queue-action">${actionLabels[item.action] || item.action}</span>
+                <span class="queue-time">${new Date(item.timestamp).toLocaleString()}</span>
+                <span class="queue-status">${item.status === 'pending' ? '⏳' : '❌'}</span>
+            </div>
+        `).join('');
+    }
+
     let refreshPanel = () => {};
 
-    // ---------- Очистка кеша ----------
+    // ---------- Очистка кеша по типу (только устаревшее) ----------
     async function clearCacheType(type) {
         const cacheNames = await caches.keys();
-        const toDelete = [];
-        switch (type) {
-            case 'static':
-                toDelete.push('static-v7');
-                break;
-            case 'images':
-                toDelete.push('images-v7');
-                break;
-            case 'api':
-                toDelete.push('github-api-v7');
-                break;
-            case 'dynamic':
-                toDelete.push('dynamic-v7');
-                break;
-            default:
-                return;
-        }
+        const now = Date.now();
+        // Определяем TTL для каждого типа
+        const ttlMap = {
+            'static': window.GithubCore?.CONFIG?.CACHE_TTL || 10 * 60 * 1000,
+            'images': window.GithubCore?.CONFIG?.IMAGE_CACHE_TTL || 30 * 24 * 60 * 60 * 1000,
+            'api': window.GithubCore?.CONFIG?.API_CACHE_TTL || 5 * 60 * 1000,
+            'dynamic': window.GithubCore?.CONFIG?.CACHE_TTL || 10 * 60 * 1000
+        };
+        const ttl = ttlMap[type] || 10 * 60 * 1000;
+
+        // Для каждого кеша проверяем записи и удаляем устаревшие
         for (const name of cacheNames) {
-            if (toDelete.includes(name)) {
-                await caches.delete(name);
+            if (type === 'static' && name === 'static-v7') {
+                await cleanCacheByName(name, ttl);
+            } else if (type === 'images' && name === 'images-v7') {
+                await cleanCacheByName(name, ttl);
+            } else if (type === 'api' && name === 'github-api-v7') {
+                await cleanCacheByName(name, ttl);
+            } else if (type === 'dynamic' && name === 'dynamic-v7') {
+                await cleanCacheByName(name, ttl);
             }
         }
         // Дополнительно очищаем localStorage для API-кеша
         if (type === 'api') {
+            const prefix = 'gh_api_';
             for (const key of Object.keys(localStorage)) {
-                if (key.startsWith('gh_api_') || key.startsWith('game_issues_') || key.startsWith('posts_')) {
-                    localStorage.removeItem(key);
+                if (key.startsWith(prefix)) {
+                    const timeKey = key + '_time';
+                    const storedTime = localStorage.getItem(timeKey);
+                    if (storedTime && (now - parseInt(storedTime) > ttl)) {
+                        localStorage.removeItem(key);
+                        localStorage.removeItem(timeKey);
+                    }
                 }
             }
         }
-        // Очищаем sessionStorage для некоторых ключей
-        if (type === 'static') {
-            // ничего
-        }
     }
 
-    async function clearAllCache() {
-        const cacheNames = await caches.keys();
-        const exclude = ['rate_limits', 'pending_actions', 'rate_history'];
-        for (const name of cacheNames) {
-            await caches.delete(name);
-        }
-        // Чистим localStorage, исключая лимиты и историю
-        for (const key of Object.keys(localStorage)) {
-            if (!key.startsWith('rate_') && key !== 'pending_actions' && key !== 'last_cache_clear') {
-                localStorage.removeItem(key);
+    async function cleanCacheByName(cacheName, ttl) {
+        const cache = await caches.open(cacheName);
+        const requests = await cache.keys();
+        const now = Date.now();
+        for (const req of requests) {
+            const response = await cache.match(req);
+            if (response) {
+                const cachedTime = response.headers.get('sw-cached-time');
+                if (cachedTime && (now - parseInt(cachedTime) > ttl)) {
+                    await cache.delete(req);
+                }
             }
         }
-        // Чистим sessionStorage
-        sessionStorage.clear();
     }
 
     // ---------- Индикаторы ----------
@@ -503,40 +595,58 @@
         return indicator;
     }
 
+    // ---------- Background Sync ----------
+    let syncRegistered = false;
+    const SYNC_TAG = 'github-queue-sync';
+
+    async function registerSync() {
+        if (syncRegistered) return;
+        if (!('serviceWorker' in navigator) || !('SyncManager' in window)) return;
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            await registration.sync.register(SYNC_TAG);
+            syncRegistered = true;
+            console.log('[RateLimits] Background sync registered');
+        } catch (err) {
+            console.warn('[RateLimits] Background sync registration failed:', err);
+        }
+    }
+
+    // Обработка события sync от SW
+    if (navigator.serviceWorker) {
+        navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data?.type === 'SYNC_TRIGGERED') {
+                processQueue().catch(console.error);
+            }
+        });
+    }
+
     // ---------- Инициализация ----------
     function init() {
         loadCounts();
-        // Периодическая проверка смены дня
+        // Периодическая проверка смены дня (каждую минуту)
         setInterval(() => {
             checkDayReset();
-        }, 60000); // каждую минуту
+        }, 60000);
 
         // Обработка очереди при загрузке
         processQueue().catch(console.warn);
 
         // Добавляем пункт в меню профиля для открытия панели
-        // Это делается в github-auth.js, но мы можем добавить обработчик событий
         window.addEventListener('github-auth-ready', () => {
-            // Добавляем пункт в dropdown
             const profile = document.querySelector('.nav-profile');
             if (profile) {
                 const dropdown = profile.querySelector('.profile-dropdown');
-                if (dropdown) {
-                    // Проверяем, есть ли уже пункт
-                    if (!dropdown.querySelector('[data-action="rate-panel"]')) {
-                        const item = document.createElement('div');
-                        item.className = 'profile-dropdown-item';
-                        item.dataset.action = 'rate-panel';
-                        item.innerHTML = '<i class="fas fa-chart-bar"></i> Лимиты и кеш';
-                        // Вставляем перед разделителем или в конец
-                        const divider = dropdown.querySelector('.profile-dropdown-divider');
-                        if (divider) {
-                            dropdown.insertBefore(item, divider);
-                        } else {
-                            dropdown.appendChild(item);
-                        }
-                        // Обработчик добавляется в github-auth.js через handleAction
-                        // Мы добавим обработчик в глобальный список
+                if (dropdown && !dropdown.querySelector('[data-action="rate-panel"]')) {
+                    const item = document.createElement('div');
+                    item.className = 'profile-dropdown-item';
+                    item.dataset.action = 'rate-panel';
+                    item.innerHTML = '<i class="fas fa-chart-bar"></i> Лимиты и кеш';
+                    const divider = dropdown.querySelector('.profile-dropdown-divider');
+                    if (divider) {
+                        dropdown.insertBefore(item, divider);
+                    } else {
+                        dropdown.appendChild(item);
                     }
                 }
             }
@@ -547,7 +657,7 @@
             openRatePanel();
         });
 
-        // Также добавляем клик по индикатору для открытия панели
+        // Клик по индикатору открывает панель
         document.addEventListener('click', (e) => {
             const indicator = e.target.closest('.rate-indicator-wrapper, .rate-indicator');
             if (indicator) {
@@ -555,18 +665,16 @@
             }
         });
 
-        // Обновляем индикаторы при загрузке
         updateIndicators();
         console.log('[RateLimits] Инициализирован');
     }
 
-    // Словарь названий действий
     const actionLabels = {
         posts: 'Посты',
         comments: 'Комментарии',
         storageAdds: 'Добавления в хранилище',
         cacheClears: 'Очистка кеша',
-        eyesReactions: 'Реакции 👀'
+        reactions: 'Реакции'
     };
 
     // Экспорт
@@ -581,13 +689,14 @@
         addIndicator,
         updateIndicators,
         clearCacheType,
-        clearAllCache,
+        clearAllCache: clearAllCacheInternal,
         getHistory,
+        getPendingActions,
         LIMITS,
         actionLabels
     };
 
-    // Автоинициализация после загрузки DOM
+    // Автоинициализация
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

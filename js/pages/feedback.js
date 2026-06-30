@@ -1,10 +1,11 @@
-// js/pages/feedback.js – объединённый запрос, ленивая загрузка, DocumentFragment
+// js/pages/feedback.js – обратная связь с performAction
 (function() {
-  const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber, createAbortable, loadModule, createElement } = window.GithubCore;
-  const { extractAllowed, extractSummary, decryptPrivateBody } = window.GithubCore;
+  const {
+    cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber,
+    createAbortable, loadModule, createElement, performAction
+  } = window.GithubCore;
   const { loadIssues, loadReactions, addReaction, removeReaction } = window.GithubAPI;
   const { getCurrentUser, isAdmin } = window.GithubAuth;
-  const { queueMutation, registerSync, processQueue } = window.OfflineQueue;
   const { showToast } = window.UIUtils;
 
   const ITEMS_PER_PAGE = 10, MAX_DISPLAY = 30, CACHE_TTL = 10 * 60 * 1000;
@@ -14,16 +15,15 @@
 
   async function addReactionWithSync(issueNumber, content) {
     try {
-      await addReaction(issueNumber, content);
+      const result = await performAction('reactions', { issueNumber, content }, () => addReaction(issueNumber, content));
+      if (result.queued) {
+        showToast('Реакция будет отправлена позже', 'info');
+      } else {
+        showToast('Реакция добавлена', 'success');
+      }
       window.UIFeedback?.invalidateCache(issueNumber);
     } catch (err) {
-      if (isNetworkError(err)) {
-        await queueMutation({ type: 'addReaction', issueNumber, content, timestamp: Date.now() });
-        await registerSync();
-        showToast('Реакция будет отправлена при восстановлении связи', 'info');
-      } else {
-        throw err;
-      }
+      showToast('Ошибка: ' + err.message, 'error');
     }
   }
 
@@ -32,31 +32,18 @@
       await removeReaction(issueNumber, reactionId);
       window.UIFeedback?.invalidateCache(issueNumber);
     } catch (err) {
-      if (isNetworkError(err)) {
-        await queueMutation({ type: 'removeReaction', issueNumber, reactionId, timestamp: Date.now() });
-        await registerSync();
-        showToast('Реакция будет удалена при восстановлении связи', 'info');
-      } else {
-        throw err;
-      }
+      showToast('Ошибка: ' + err.message, 'error');
     }
   }
 
-  function isNetworkError(err) {
-    return err instanceof TypeError || err.name === 'AbortError' || err.message === 'Failed to fetch';
-  }
-
-  // Ленивая инициализация: запускаем только когда секция появляется в области видимости
   function initLazy() {
     const section = document.getElementById('feedback-section');
     if (!section) return;
     if (initialized) return;
-    // Проверяем, видна ли секция
     const rect = section.getBoundingClientRect();
     if (rect.top < window.innerHeight + 200 && rect.bottom > -200) {
       initializeFeedback(section);
     } else {
-      // Добавляем наблюдатель
       const obs = new IntersectionObserver((entries) => {
         if (entries.some(e => e.isIntersecting)) {
           obs.disconnect();
@@ -84,7 +71,6 @@
       const issue = e.detail;
       if (!issue.labels.some(l => l.name === `game:${currentGame}`)) return;
       cacheRemoveByPrefix(`game_issues_${currentGame}`);
-      // Добавляем в начало
       allIssues = [issue, ...allIssues];
       filterAndDisplay(true);
     });
@@ -94,11 +80,8 @@
 
     const postId = new URLSearchParams(location.search).get('post');
     if (postId) setTimeout(() => openPostFromUrl(postId), 1000);
-
-    processQueue().catch(console.warn);
   }
 
-  // Загружаем все issues для игры (один запрос вместо двух)
   async function loadGameIssues(reset) {
     if (isLoading) return;
     isLoading = true;
@@ -109,12 +92,9 @@
       const key = `game_issues_${currentGame}`;
       let issues = cacheGet(key);
       if (!issues) {
-        // Загружаем все open issues с лейблом game:...
         issues = await loadIssues({ labels: `game:${currentGame}`, state: 'open', per_page: 100, signal: controller.signal });
-        // Фильтруем только те, у которых есть game:метка (loadIssues уже фильтрует по labels, но на всякий случай)
         cacheSet(key, issues);
       }
-      // Фильтруем по типу, приватность и т.д. на клиенте
       allIssues = deduplicateByNumber(issues);
       filterAndDisplay(reset);
     } catch (err) {
@@ -135,7 +115,6 @@
       const allowed = extractAllowed(i.body);
       return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
     });
-    // Фильтр по типу
     if (currentTab !== 'all') {
       filtered = filtered.filter(i => i.labels.some(l => l.name === `type:${currentTab}`));
     }
@@ -191,7 +170,6 @@
       currentPage = 1;
       filterAndDisplay(true);
     }));
-    // Наблюдатель для бесконечной прокрутки
     observer = new IntersectionObserver(e => {
       if (e[0].isIntersecting && !isLoading && hasMore) {
         currentPage++;
@@ -199,7 +177,6 @@
       }
     }, { threshold: 0.1 });
     observer.observe(sentinel);
-    // Загружаем данные
     await loadGameIssues(true);
   }
 
@@ -232,7 +209,6 @@
     return card;
   }
 
-  // Открытие поста по ID из URL
   async function openPostFromUrl(id) {
     try {
       const issue = await window.GithubAPI.loadIssue(id);
@@ -245,10 +221,8 @@
     } catch { showToast('Ошибка', 'error'); }
   }
 
-  // Инициализация при загрузке DOM
   document.addEventListener('DOMContentLoaded', () => {
     initLazy();
-    // Также подписываемся на скролл для случаев, когда секция ещё не видна
     window.addEventListener('scroll', initLazy, { passive: true });
   });
 

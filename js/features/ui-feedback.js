@@ -1,6 +1,10 @@
-// js/features/ui-feedback.js – полная версия с интеграцией RateLimits и оптимистичными обновлениями
+// js/features/ui-feedback.js – полная версия с performAction, единоразовой ❤️ и автоматической 👀
 (function() {
-  const { createElement, escapeHtml, renderMarkdown, loadModule, cacheGet, cacheSet, cacheRemoveByPrefix, extractAllowed, extractSummary, decryptPrivateBody, CONFIG } = window.GithubCore;
+  const {
+    createElement, escapeHtml, renderMarkdown, loadModule,
+    performAction, isActionStillValid, extractAllowed, decryptPrivateBody,
+    cacheRemoveByPrefix, CONFIG
+  } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
 
@@ -43,6 +47,8 @@
     }
   }
 
+  // Рендерим реакции: ❤️ единоразовая (кнопка становится неактивной после установки),
+  // 👀 автоматически ставится через performAction (если лимит есть или в очередь)
   function renderReactions(container, issueNumber, reactions, currentUser, onAddHeart, onRemoveHeart) {
     if (!container) return;
     const filtered = reactions.filter(r => r.content === 'heart' || r.content === 'eyes');
@@ -56,7 +62,7 @@
     container.innerHTML = '';
     const btnsDiv = createElement('div', 'reactions-buttons', { display: 'flex', gap: '6px', flexWrap: 'wrap' });
 
-    // ❤️
+    // ❤️ – единоразовая
     const heartCount = counts.get('heart') || 0;
     const isHeartActive = userReactions.has('heart');
     const heartBtn = createElement('button', 'reaction-button', {
@@ -64,93 +70,57 @@
       padding: '4px 10px',
       borderRadius: '30px',
       fontSize: '13px',
-      cursor: 'pointer',
+      cursor: isHeartActive ? 'default' : 'pointer',
       border: '1px solid var(--border)',
-      background: 'var(--bg-primary)',
-      color: 'var(--text-secondary)',
+      background: isHeartActive ? 'var(--accent)' : 'var(--bg-primary)',
+      color: isHeartActive ? '#fff' : 'var(--text-secondary)',
       transition: 'background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s',
-    }, { type: 'button' });
+      opacity: isHeartActive ? '1' : '0.8',
+      pointerEvents: isHeartActive ? 'none' : 'auto'
+    }, { type: 'button', disabled: isHeartActive });
     heartBtn.innerHTML = `<span class="reaction-emoji">❤️</span><span class="reaction-count">${heartCount || ''}</span>`;
 
-    const setHeartActive = (active) => {
-      if (active) {
-        heartBtn.style.background = 'var(--accent)';
-        heartBtn.style.color = '#fff';
-        heartBtn.style.borderColor = 'var(--accent)';
-        heartBtn.classList.add('active');
-      } else {
-        heartBtn.style.background = 'var(--bg-primary)';
-        heartBtn.style.color = 'var(--text-secondary)';
-        heartBtn.style.borderColor = 'var(--border)';
-        heartBtn.classList.remove('active');
-      }
-    };
-    setHeartActive(isHeartActive);
-
-    let currentActive = isHeartActive;
-    let currentCount = heartCount;
-    let isProcessing = false;
-
-    const updateHeartUI = (active, count) => {
-      currentActive = active;
-      currentCount = count;
-      setHeartActive(active);
-      heartBtn.querySelector('.reaction-count').textContent = count || '';
-    };
-
-    let lastClickTime = 0;
-    const CLICK_COOLDOWN = 1000;
-
-    heartBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (!currentUser) { showToast('Войдите в GitHub', 'error'); return; }
-      if (isProcessing) return;
-      const now = Date.now();
-      if (now - lastClickTime < CLICK_COOLDOWN) {
-        showToast('Слишком часто', 'warning');
-        return;
-      }
-      lastClickTime = now;
-
-      const prevActive = currentActive;
-      const prevCount = currentCount;
-      const newActive = !prevActive;
-      const newCount = prevCount + (newActive ? 1 : -1);
-      // Оптимистичное обновление
-      updateHeartUI(newActive, newCount);
-      heartBtn.disabled = true;
-      heartBtn.style.opacity = '0.6';
-      isProcessing = true;
-
-      try {
-        if (newActive) {
-          await onAddHeart(issueNumber, 'heart');
-          showToast('❤️ добавлена', 'success');
-        } else {
-          const freshReactions = await window.GithubAPI.loadReactions(issueNumber);
-          const heartReaction = freshReactions.find(r => r.content === 'heart' && r.user?.login === currentUser);
-          if (heartReaction) {
-            await onRemoveHeart(issueNumber, heartReaction.id);
-            showToast('❤️ убрана', 'success');
+    if (!isHeartActive) {
+      heartBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!currentUser) { showToast('Войдите в GitHub', 'error'); return; }
+        try {
+          const result = await performAction('reactions', { issueNumber, content: 'heart' }, () => window.GithubAPI.addReaction(issueNumber, 'heart'));
+          if (result.queued) {
+            showToast('❤️ будет добавлена при восстановлении лимитов', 'info');
           } else {
-            throw new Error('Реакция не найдена');
+            showToast('❤️ добавлена', 'success');
           }
+          // Делаем кнопку неактивной сразу (оптимистично)
+          heartBtn.disabled = true;
+          heartBtn.style.pointerEvents = 'none';
+          heartBtn.style.background = 'var(--accent)';
+          heartBtn.style.color = '#fff';
+          const countSpan = heartBtn.querySelector('.reaction-count');
+          if (countSpan) {
+            const current = parseInt(countSpan.textContent) || 0;
+            countSpan.textContent = current + 1;
+          }
+          // Обновляем данные с сервера (асинхронно)
+          window.GithubAPI.loadReactions(issueNumber).then(newReactions => {
+            renderReactions(container, issueNumber, newReactions, currentUser, onAddHeart, onRemoveHeart);
+          }).catch(() => {});
+        } catch (err) {
+          showToast('Ошибка: ' + err.message, 'error');
+          heartBtn.disabled = false;
+          heartBtn.style.pointerEvents = 'auto';
+          heartBtn.style.background = 'var(--bg-primary)';
+          heartBtn.style.color = 'var(--text-secondary)';
         }
-      } catch (err) {
-        // Откат при ошибке
-        updateHeartUI(prevActive, prevCount);
-        showToast('Ошибка: ' + err.message, 'error');
-      } finally {
-        heartBtn.disabled = false;
-        heartBtn.style.opacity = '1';
-        isProcessing = false;
-      }
-    });
-
+      });
+    } else {
+      heartBtn.disabled = true;
+    }
     btnsDiv.appendChild(heartBtn);
 
-    // 👀
+    // 👀 – автоматическая, но только если пользователь ещё не поставил
     const eyesCount = counts.get('eyes') || 0;
+    const hasEyes = userReactions.has('eyes');
     const eyesSpan = createElement('span', 'reaction-static', {
       display: 'inline-flex', alignItems: 'center', gap: '4px',
       padding: '4px 10px', background: 'var(--bg-primary)', border: '1px solid var(--border)',
@@ -158,6 +128,27 @@
     });
     eyesSpan.innerHTML = `<span class="reaction-emoji">👀</span><span class="reaction-count">${eyesCount || ''}</span>`;
     btnsDiv.appendChild(eyesSpan);
+
+    // Если пользователь не ставил 👀, ставим автоматически через performAction
+    if (currentUser && !hasEyes) {
+      performAction('reactions', { issueNumber, content: 'eyes' }, () => window.GithubAPI.addReaction(issueNumber, 'eyes'))
+        .then(result => {
+          if (result.queued) {
+            console.log('[👀] Реакция поставлена в очередь');
+          } else {
+            console.log('[👀] Реакция успешно добавлена');
+          }
+          const countSpan = eyesSpan.querySelector('.reaction-count');
+          if (countSpan) {
+            const current = parseInt(countSpan.textContent) || 0;
+            countSpan.textContent = current + 1;
+          }
+          window.GithubAPI.loadReactions(issueNumber).then(newReactions => {
+            renderReactions(container, issueNumber, newReactions, currentUser, onAddHeart, onRemoveHeart);
+          }).catch(() => {});
+        })
+        .catch(err => console.warn('Ошибка при добавлении 👀:', err));
+    }
 
     container.appendChild(btnsDiv);
   }
@@ -197,7 +188,10 @@
         }
         container.appendChild(commentDiv);
       }
-    } catch (err) { console.error(err); container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>'; }
+    } catch (err) {
+      console.error(err);
+      container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
+    }
   }
 
   async function editCommentWithEditor(commentId, oldBody, onUpdate) {
@@ -211,80 +205,33 @@
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
-  // Добавление комментария с проверкой лимита и оптимистичным обновлением
+  // Добавление комментария с performAction
   async function addComment(issueNumber, body, onUpdate) {
     if (!body.trim()) return showToast('Введите текст', 'error');
 
     const currentUser = getCurrentUser();
     if (!currentUser) return showToast('Войдите в GitHub', 'error');
 
-    // Проверяем лимит
-    if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
-    if (!window.RateLimits.checkLimit('comments')) {
-      window.RateLimits.enqueueAction('comments', { issueNumber, body });
-      showToast('Лимит комментариев исчерпан. Действие сохранено в очередь.', 'warning');
-      // Оптимистично добавляем комментарий локально
-      const container = document.getElementById('modal-comments-list');
-      if (container) {
-        const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px', opacity: '0.6' });
-        commentDiv.innerHTML = `
-          <div class="comment-meta"><span class="comment-author">${escapeHtml(currentUser)}</span><span>сейчас</span></div>
-          <div class="comment-body">${escapeHtml(body)} <span style="font-size:11px; color:var(--text-secondary);">(ожидает синхронизации)</span></div>
-        `;
-        container.prepend(commentDiv);
-      }
-      return;
-    }
-
-    // Ограничение частоты
-    const lastTime = parseInt(localStorage.getItem(LAST_COMMENT_KEY) || '0', 10);
-    const now = Date.now();
-    if (now - lastTime < COMMENT_COOLDOWN) {
-      showToast(`Подождите ${Math.ceil((COMMENT_COOLDOWN - (now - lastTime)) / 1000)} секунд`, 'warning');
-      return;
-    }
-
-    // Проверка дубликата (опционально)
     try {
-      const comments = await window.GithubAPI.loadComments(issueNumber);
-      const lastComment = comments.filter(c => c.user.login === currentUser).pop();
-      if (lastComment && lastComment.body.trim() === body.trim()) {
-        showToast('Вы уже оставили такой комментарий', 'warning');
-        return;
+      const result = await performAction('comments', { issueNumber, body }, () => window.GithubAPI.addComment(issueNumber, body));
+      if (result.queued) {
+        showToast('Комментарий сохранён в очередь', 'info');
+        const container = document.getElementById('modal-comments-list');
+        if (container) {
+          const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px', opacity: '0.6' });
+          commentDiv.innerHTML = `
+            <div class="comment-meta"><span class="comment-author">${escapeHtml(currentUser)}</span><span>сейчас</span></div>
+            <div class="comment-body">${escapeHtml(body)} <span style="font-size:11px; color:var(--text-secondary);">(ожидает синхронизации)</span></div>
+          `;
+          container.prepend(commentDiv);
+        }
+      } else {
+        showToast('Комментарий добавлен', 'success');
+        localStorage.setItem(LAST_COMMENT_KEY, Date.now().toString());
+        onUpdate();
       }
-    } catch (e) {}
-
-    // Оптимистичное добавление
-    const container = document.getElementById('modal-comments-list');
-    if (container) {
-      const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px' });
-      commentDiv.innerHTML = `
-        <div class="comment-meta"><span class="comment-author">${escapeHtml(currentUser)}</span><span>сейчас</span></div>
-        <div class="comment-body">${escapeHtml(body)}</div>
-      `;
-      container.prepend(commentDiv);
-    }
-
-    try {
-      await window.GithubAPI.addComment(issueNumber, body);
-      localStorage.setItem(LAST_COMMENT_KEY, now.toString());
-      window.RateLimits.increment('comments');
-      showToast('Комментарий добавлен', 'success');
-      onUpdate(); // обновляем список с сервера
     } catch (err) {
       showToast('Ошибка: ' + err.message, 'error');
-      // Удаляем оптимистично добавленный комментарий при ошибке
-      if (container) {
-        const first = container.querySelector('.comment');
-        if (first && first.querySelector('.comment-author')?.textContent === currentUser) {
-          first.remove();
-        }
-      }
-      // Если ошибка связана с лимитами, пробуем сохранить в очередь
-      if (err.message.includes('rate limit') || err.message.includes('secondary')) {
-        window.RateLimits.enqueueAction('comments', { issueNumber, body });
-        showToast('Действие сохранено в очередь', 'info');
-      }
     }
   }
 
@@ -297,7 +244,6 @@
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
-  // Остальные функции (share, bookmark, edit, delete post) без изменений
   async function sharePost(title, url) {
     if (navigator.share) {
       try { await navigator.share({ title, url }); } catch(e) {}
@@ -352,12 +298,12 @@
       const allowed = extractAllowed(body);
       if (allowed) displayBody = decryptPrivateBody(body, allowed);
     }
-    
+
     const isOwner = author === currentUser;
     const canEdit = isOwner || isAdmin();
     const canDelete = isOwner || isAdmin();
     const canBookmark = currentUser && hasScope('gist');
-    
+
     const html = `
       <div style="margin-bottom: 16px;">
         <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
@@ -380,9 +326,9 @@
         </div>` : '<p class="text-secondary">Войдите, чтобы комментировать</p>'}
       </div>
     `;
-    
+
     const { modal, closeModal } = createModal(title, html, { size: 'full' });
-    
+
     const headerDiv = modal.querySelector('.modal-header');
     if (headerDiv) {
       const actionsDiv = createElement('div', 'modal-header-actions', { display: 'flex', gap: '8px', marginLeft: 'auto', marginRight: '8px' });
@@ -411,11 +357,11 @@
       const closeBtn = headerDiv.querySelector('.modal-close');
       headerDiv.insertBefore(actionsDiv, closeBtn);
     }
-    
+
     const contentDiv = modal.querySelector('.post-content');
     const cacheKey = `post_${id}_${currentUser || 'anon'}`;
     await renderMarkdownWithEditor(displayBody, contentDiv, cacheKey);
-    
+
     const reactionsContainer = modal.querySelector('#modal-reactions');
     const commentsContainer = modal.querySelector('#modal-comments-list');
     async function refreshComments() {
@@ -424,34 +370,6 @@
     if (currentUser && window.GithubAPI) {
       try {
         let reactions = await window.GithubAPI.loadReactions(id);
-        const hasEyes = reactions.some(r => r.content === 'eyes' && r.user?.login === currentUser);
-        if (!hasEyes) {
-          setTimeout(async () => {
-            try {
-              if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
-              if (window.RateLimits.checkLimit('eyesReactions')) {
-                await window.GithubAPI.addReaction(id, 'eyes');
-                window.RateLimits.increment('eyesReactions');
-                const newReactions = await window.GithubAPI.loadReactions(id);
-                renderReactions(reactionsContainer, id, newReactions, currentUser,
-                  async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },
-                  async (num, rid) => { await window.GithubAPI.removeReaction(num, rid); }
-                );
-              } else {
-                window.RateLimits.enqueueAction('eyesReactions', { issueNumber: id });
-                // Оптимистично добавляем 👀 локально
-                const eyesSpan = reactionsContainer.querySelector('.reaction-static');
-                if (eyesSpan) {
-                  const countSpan = eyesSpan.querySelector('.reaction-count');
-                  if (countSpan) {
-                    const current = parseInt(countSpan.textContent) || 0;
-                    countSpan.textContent = current + 1;
-                  }
-                }
-              }
-            } catch (e) { /* игнорируем */ }
-          }, 2000);
-        }
         renderReactions(reactionsContainer, id, reactions, currentUser,
           async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },
           async (num, rid) => { await window.GithubAPI.removeReaction(num, rid); }
@@ -474,7 +392,7 @@
     }
   }
 
-  // Редактор поста с проверкой лимита
+  // Редактор поста с performAction
   async function openEditorModal(mode, initialData, context, existingId = null) {
     if (!hasScope('repo')) {
       showToast('Требуется scope repo', 'error');
@@ -489,9 +407,6 @@
     let currentTitle = savedTitle;
     let currentBody = savedBody;
     let allowedUsers = '';
-
-    if (mode === 'new' && !window.RateLimits) await loadModule('js/features/rate-limits.js');
-    const canCreate = mode === 'edit' || window.RateLimits?.checkLimit('posts');
 
     const html = `
       <div style="display:flex; flex-direction:column; gap:12px;">
@@ -509,12 +424,11 @@
             <button id="access-private" class="access-switch-btn">Приватный</button>
           </div>
           <input type="text" id="allowed-users" placeholder="Логины через запятую" value="${escapeHtml(allowedUsers)}" style="display:none; flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border);">
-          <button id="editor-submit" class="button wide" ${!canCreate && mode === 'new' ? 'disabled' : ''}>${mode === 'edit' ? 'Обновить' : 'Опубликовать'}</button>
-          ${mode === 'new' ? `<span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
+          <button id="editor-submit" class="button wide">${mode === 'edit' ? 'Обновить' : 'Опубликовать'}</button>
+          <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
             Осталось постов: <span class="rate-indicator" data-action="posts">${window.RateLimits ? window.RateLimits.getRemaining('posts') : '?'}</span>
-          </span>` : ''}
+          </span>
         </div>
-        ${!canCreate && mode === 'new' ? `<div style="color:#f44336; font-size:13px;">Дневной лимит постов исчерпан. Действие будет сохранено в очередь.</div>` : ''}
       </div>
     `;
     const { modal, closeModal } = createModal(mode === 'new' ? 'Создать пост' : 'Редактировать пост', html, { size: 'full' });
@@ -574,19 +488,6 @@
       const body = bodyTextarea.value;
       if (!title) return showToast('Введите заголовок', 'error');
 
-      if (mode === 'new') {
-        if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
-        if (!window.RateLimits.checkLimit('posts')) {
-          const finalBody = privMode ? `<!-- allowed: ${allowedInput.value.trim()} -->\n${window.GithubCore.encryptPrivateBody(body, allowedInput.value.trim())}` : body;
-          const labels = [`game:${game}`, context === 'news' ? 'type:news' : context === 'update' ? 'type:update' : 'type:idea'];
-          if (privMode) labels.push('private');
-          window.RateLimits.enqueueAction('posts', { mode: 'new', title, body: finalBody, labels });
-          showToast('Пост сохранён в очередь', 'info');
-          closeModal();
-          return;
-        }
-      }
-
       let finalBody = body;
       let labels = [`game:${game}`];
       if (context === 'news') labels.push('type:news');
@@ -598,26 +499,26 @@
         finalBody = `<!-- allowed: ${allowed} -->\n${window.GithubCore.encryptPrivateBody(body, allowed)}`;
         labels.push('private');
       }
+
+      const actionPayload = mode === 'edit' ? { mode: 'edit', id: existingId, title, body: finalBody } : { title, body: finalBody, labels };
       try {
-        if (mode === 'edit' && existingId) {
-          await window.GithubAPI.updateIssue(existingId, { title, body: finalBody });
-          showToast('Пост обновлён', 'success');
-          window.dispatchEvent(new CustomEvent('github-issue-updated', { detail: { id: existingId, title, body: finalBody } }));
+        const result = await performAction('posts', actionPayload, () => {
+          if (mode === 'edit' && existingId) {
+            return window.GithubAPI.updateIssue(existingId, { title, body: finalBody });
+          } else {
+            return window.GithubAPI.createIssue(title, finalBody, labels);
+          }
+        });
+        if (result.queued) {
+          showToast('Пост сохранён в очередь', 'info');
         } else {
-          await window.GithubAPI.createIssue(title, finalBody, labels);
-          window.RateLimits.increment('posts');
-          showToast('Пост создан', 'success');
-          window.dispatchEvent(new CustomEvent('github-issue-created', { detail: { title, body: finalBody, labels: labels.map(l=> ({name:l})), user: { login: getCurrentUser() } } }));
+          showToast(mode === 'edit' ? 'Пост обновлён' : 'Пост создан', 'success');
         }
         clearDraft(draftKey);
         closeModal();
         setTimeout(() => location.reload(), 800);
       } catch (err) {
         showToast('Ошибка: ' + err.message, 'error');
-        if (err.message.includes('rate limit') || err.message.includes('secondary')) {
-          window.RateLimits.enqueueAction('posts', { mode: mode === 'edit' ? 'edit' : 'new', id: existingId, title, body: finalBody, labels });
-          showToast('Действие сохранено в очередь', 'info');
-        }
       }
     }, 1000);
     submitBtn.addEventListener('click', debouncedSubmit);
