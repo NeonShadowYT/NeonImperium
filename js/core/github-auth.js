@@ -1,6 +1,5 @@
-// js/core/github-auth.js — аутентификация GitHub с интеграцией RateLimits
+// js/core/github-auth.js — аутентификация GitHub с интеграцией RateLimits и пунктом "Лимиты и кеш"
 (function() {
-    // Зависимости: Utils и GitHubClient
     const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule } = window.Utils;
     const GitHubClient = window.GitHubClient;
     const client = window.GitHubAPIClient;
@@ -25,7 +24,6 @@
         createLoginModal();
         restoreSession();
 
-        // Добавляем обработчик события для вызова модалки входа из любого места
         window.addEventListener('github-login-requested', () => {
             if (modal) modal.classList.add('active');
             else {
@@ -36,7 +34,6 @@
         });
     });
 
-    // Обновление токена в GitHubClient (единая точка)
     function updateClientToken(token) {
         if (client && client.updateToken) {
             client.updateToken(token);
@@ -212,17 +209,13 @@
         const storageItem = hasGist
             ? `<div class="profile-dropdown-item" data-action="storage"><i class="fas fa-box-archive"></i> Хранилище</div>`
             : '';
-        // Получаем остаток очисток кеша
-        let cacheRemaining = '?';
-        if (window.RateLimits) {
-            cacheRemaining = window.RateLimits.getRemaining('cacheClears');
-        }
         profileContainer.innerHTML = `
             <img src="${user.avatar_url || 'images/default-avatar.webp'}" alt="${user.login}" class="nav-profile-avatar" onerror="this.src='images/default-avatar.webp'" width="32" height="32">
             <span class="nav-profile-login">${escapeHtml(user.login)}</span>
             <i class="fas fa-chevron-right nav-profile-chevron"></i>
             <div class="profile-dropdown">
                 <div class="profile-dropdown-item" data-action="profile"><i class="fas fa-user"></i> Профиль</div>
+                <div class="profile-dropdown-item" data-action="limits"><i class="fas fa-chart-bar"></i> Лимиты и кеш</div>
                 <div class="profile-dropdown-item" data-action="token-info"><i class="fas fa-key"></i> Токен активен
                     <div style="font-size:11px;margin-left:8px;">
                         <span style="color:${hasRepo?'#4caf50':'#ff9800'}"><i class="fas fa-${hasRepo?'check':'exclamation-triangle'}-circle"></i> repo</span>
@@ -232,10 +225,6 @@
                 ${storageItem}
                 <div class="profile-dropdown-item" data-action="revoke-token"><i class="fas fa-external-link-alt"></i> Управление токенами</div>
                 <div class="profile-dropdown-divider"></div>
-                <div class="profile-dropdown-item" data-action="clear-cache">
-                    <i class="fas fa-trash-alt"></i> Очистить кеш
-                    <span style="font-size:11px; color:var(--text-secondary); margin-left:8px;">(осталось: <span class="rate-indicator" data-action="cacheClears">${cacheRemaining}</span>)</span>
-                </div>
                 <div class="profile-dropdown-item" data-action="logout"><i class="fas fa-sign-out-alt"></i> Выйти</div>
             </div>
         `;
@@ -250,7 +239,7 @@
                 <div class="profile-dropdown-item" data-action="login"><i class="fab fa-github"></i> Войти через GitHub</div>
                 <div class="profile-dropdown-item" data-action="about"><i class="fas fa-info-circle"></i> Зачем это нужно?</div>
                 <div class="profile-dropdown-divider"></div>
-                <div class="profile-dropdown-item" data-action="clear-cache"><i class="fas fa-trash-alt"></i> Очистить кеш</div>
+                <div class="profile-dropdown-item" data-action="limits"><i class="fas fa-chart-bar"></i> Лимиты и кеш</div>
             </div>
         `;
         bindDropdownEvents();
@@ -285,6 +274,10 @@
             case 'profile':
                 if (currentUserLogin) window.open(`https://github.com/${currentUserLogin}`, '_blank');
                 break;
+            case 'limits':
+                if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
+                window.RateLimits.openLimitsModal();
+                break;
             case 'token-info':
                 window.UIUtils?.showToast(`Вы ${currentUserLogin}, scopes: ${currentScopes.join(', ') || 'нет'}`, 'info', 6000);
                 break;
@@ -298,26 +291,6 @@
             case 'revoke-token':
                 window.open('https://github.com/settings/tokens', '_blank');
                 break;
-            case 'clear-cache': {
-                // Проверяем лимит очисток кеша
-                if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
-                if (!window.RateLimits.checkLimit('cacheClears')) {
-                    window.RateLimits.enqueueAction('cacheClears', {});
-                    window.UIUtils?.showToast('Лимит очисток кеша исчерпан. Действие будет выполнено позже.', 'warning');
-                    return;
-                }
-                const lastClear = localStorage.getItem(LAST_CLEAR_KEY);
-                if (lastClear && Date.now() - parseInt(lastClear) < CLEAR_COOLDOWN) {
-                    window.UIUtils?.showToast('Подождите', 'warning');
-                    return;
-                }
-                sessionStorage.clear();
-                localStorage.setItem(LAST_CLEAR_KEY, Date.now().toString());
-                window.RateLimits.increment('cacheClears');
-                window.UIUtils?.showToast('Кеш очищен', 'info');
-                setTimeout(() => location.reload(), 1000);
-                break;
-            }
             case 'logout':
                 localStorage.removeItem(TOKEN_KEY);
                 sessionStorage.clear();

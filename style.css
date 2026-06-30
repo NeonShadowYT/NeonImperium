@@ -617,3 +617,21 @@
         height: 80px;
     }
 }
+
+/* Стили для модалки лимитов */
+.limits-modal .modal-content-full {
+    max-width: 800px;
+}
+.limits-modal .modal-body {
+    padding: 20px;
+}
+.limits-modal .rate-indicator {
+    font-weight: bold;
+    color: var(--accent);
+}
+.limits-modal .rate-timer {
+    font-weight: bold;
+    color: var(--accent-light);
+    font-family: monospace;
+    font-size: 14px;
+}
