@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – лента новостей (без изменений, но для полноты привожу)
+// js/pages/news-feed.js – увеличен TTL кеша видео до 30 минут
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues, loadIssue } = window.GithubAPI;
@@ -101,7 +101,8 @@
   }
   async function loadVideosFromRSS2JSON() {
     const cacheKey = 'youtube_videos_rss2json_v3';
-    const cached = cacheGet(cacheKey);
+    // Увеличен TTL до 30 минут
+    const cached = cacheGet(cacheKey, 30 * 60 * 1000);
     if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
     const all = [];
     for (const ch of YT_CHANNELS) {

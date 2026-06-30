@@ -1,10 +1,4 @@
-// js/features/ui-feedback.js – полный модуль с кнопками в модалке, редактором постов и комментариев
-// Изменения: 
-// - оставлены только реакции ❤️ (лайк) и 👀 (просмотры)
-// - 👀 добавляется автоматически при открытии поста, не кликабельна
-// - ❤️ с оптимистичным обновлением, мгновенным откликом, блокировкой на время запроса и защитой от спама
-// - явная подсветка активной реакции ❤️ акцентным цветом (фон, текст, граница)
-// - при ошибке откат состояния и показ тоста
+// js/features/ui-feedback.js – полная версия с оптимизациями
 (function() {
   const { createElement, escapeHtml, renderMarkdown, loadModule, cacheGet, cacheSet, cacheRemoveByPrefix, extractAllowed, extractSummary, decryptPrivateBody, CONFIG } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -12,6 +6,10 @@
 
   let reactionsListCache = new Map();
   const CACHE_TTL = 5 * 60 * 1000;
+
+  // Для защиты от спама комментариями
+  const LAST_COMMENT_KEY = 'last_comment_time';
+  const COMMENT_COOLDOWN = 10000; // 10 секунд
 
   function canViewPost(body, labels, currentUser) {
     if (!labels || !labels.includes('private')) return true;
@@ -37,10 +35,9 @@
     }
   }
 
-  // ---------- Реакции (только ❤️ и 👀) с оптимистичным обновлением и явной подсветкой ----------
+  // Реакции (только ❤️ и 👀) с оптимистичным обновлением и защитой от спама
   function renderReactions(container, issueNumber, reactions, currentUser, onAddHeart, onRemoveHeart) {
     if (!container) return;
-    // Фильтруем только 'heart' и 'eyes'
     const filtered = reactions.filter(r => r.content === 'heart' || r.content === 'eyes');
     const counts = new Map();
     const userReactions = new Set();
@@ -52,7 +49,7 @@
     container.innerHTML = '';
     const btnsDiv = createElement('div', 'reactions-buttons', { display: 'flex', gap: '6px', flexWrap: 'wrap' });
 
-    // ❤️ (кликабельная, оптимистичное обновление, с явной подсветкой)
+    // ❤️
     const heartCount = counts.get('heart') || 0;
     const isHeartActive = userReactions.has('heart');
     const heartBtn = createElement('button', 'reaction-button', {
@@ -68,7 +65,6 @@
     }, { type: 'button' });
     heartBtn.innerHTML = `<span class="reaction-emoji">❤️</span><span class="reaction-count">${heartCount || ''}</span>`;
 
-    // Функция обновления UI с явной подсветкой
     const setHeartActive = (active) => {
       if (active) {
         heartBtn.style.background = 'var(--accent)';
@@ -82,8 +78,6 @@
         heartBtn.classList.remove('active');
       }
     };
-
-    // Инициализируем состояние
     setHeartActive(isHeartActive);
 
     let currentActive = isHeartActive;
@@ -97,16 +91,23 @@
       heartBtn.querySelector('.reaction-count').textContent = count || '';
     };
 
+    // Дополнительная защита от спама: минимальный интервал между кликами
+    let lastClickTime = 0;
+    const CLICK_COOLDOWN = 1000; // 1 секунда
+
     heartBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (!currentUser) { showToast('Войдите в GitHub', 'error'); return; }
-      if (isProcessing) return; // защита от спама
+      if (isProcessing) return;
+      const now = Date.now();
+      if (now - lastClickTime < CLICK_COOLDOWN) {
+        showToast('Слишком часто', 'warning');
+        return;
+      }
+      lastClickTime = now;
 
-      // Сохраняем текущие значения для отката
       const prevActive = currentActive;
       const prevCount = currentCount;
-
-      // Оптимистичное обновление
       const newActive = !prevActive;
       const newCount = prevCount + (newActive ? 1 : -1);
       updateHeartUI(newActive, newCount);
@@ -119,7 +120,6 @@
           await onAddHeart(issueNumber, 'heart');
           showToast('❤️ добавлена', 'success');
         } else {
-          // Для удаления нужно найти ID реакции
           const freshReactions = await window.GithubAPI.loadReactions(issueNumber);
           const heartReaction = freshReactions.find(r => r.content === 'heart' && r.user?.login === currentUser);
           if (heartReaction) {
@@ -129,9 +129,7 @@
             throw new Error('Реакция не найдена');
           }
         }
-        // Успех – оставляем оптимистичное состояние
       } catch (err) {
-        // Ошибка – откатываем
         updateHeartUI(prevActive, prevCount);
         showToast('Ошибка: ' + err.message, 'error');
       } finally {
@@ -143,7 +141,7 @@
 
     btnsDiv.appendChild(heartBtn);
 
-    // 👀 (только счётчик, не кликабельная)
+    // 👀
     const eyesCount = counts.get('eyes') || 0;
     const eyesSpan = createElement('span', 'reaction-static', {
       display: 'inline-flex', alignItems: 'center', gap: '4px',
@@ -156,12 +154,7 @@
     container.appendChild(btnsDiv);
   }
 
-  function getReactionEmoji(content) {
-    const map = { '+1': '👍', '-1': '👎', 'laugh': '😄', 'hooray': '🎉', 'heart': '❤️', 'rocket': '🚀', 'eyes': '👀' };
-    return map[content] || content;
-  }
-
-  // ---------- Комментарии ----------
+  // Комментарии с защитой от спама
   async function loadComments(issueNumber, container, onUpdate) {
     if (!window.GithubAPI) await loadModule('js/core/github-api.js');
     try {
@@ -211,13 +204,39 @@
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
+  // Добавление комментария с защитой от спама
   async function addComment(issueNumber, body, onUpdate) {
     if (!body.trim()) return showToast('Введите текст', 'error');
+
+    const currentUser = getCurrentUser();
+    if (!currentUser) return showToast('Войдите в GitHub', 'error');
+
+    // Ограничение частоты
+    const lastTime = parseInt(localStorage.getItem(LAST_COMMENT_KEY) || '0', 10);
+    const now = Date.now();
+    if (now - lastTime < COMMENT_COOLDOWN) {
+      showToast(`Подождите ${Math.ceil((COMMENT_COOLDOWN - (now - lastTime)) / 1000)} секунд`, 'warning');
+      return;
+    }
+
+    // Проверка дубликата: загружаем комментарии и смотрим последний от этого пользователя
+    try {
+      const comments = await window.GithubAPI.loadComments(issueNumber);
+      const lastComment = comments.filter(c => c.user.login === currentUser).pop();
+      if (lastComment && lastComment.body.trim() === body.trim()) {
+        showToast('Вы уже оставили такой комментарий', 'warning');
+        return;
+      }
+    } catch (e) { /* если не загрузились, пропускаем проверку */ }
+
     try {
       await window.GithubAPI.addComment(issueNumber, body);
+      localStorage.setItem(LAST_COMMENT_KEY, now.toString());
       showToast('Комментарий добавлен', 'success');
       onUpdate();
-    } catch (err) { showToast('Ошибка', 'error'); }
+    } catch (err) {
+      showToast('Ошибка: ' + err.message, 'error');
+    }
   }
 
   async function deleteComment(commentId, onUpdate) {
@@ -229,7 +248,7 @@
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
-  // ---------- Кнопки модалки ----------
+  // Кнопки модалки
   async function sharePost(title, url) {
     if (navigator.share) {
       try { await navigator.share({ title, url }); } catch(e) {}
@@ -256,7 +275,6 @@
     } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
   }
 
-  // Редактирование поста через полноценный редактор
   async function editPost(id, currentTitle, currentBody, game, labels) {
     if (!hasScope('repo')) return showToast('Нет прав', 'error');
     await openEditorModal('edit', { game, title: currentTitle, body: currentBody }, 'post', id);
@@ -272,7 +290,7 @@
     } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
   }
 
-  // ---------- Полноэкранная модалка ----------
+  // Полноэкранная модалка с задержкой для 👀
   async function openFullModal(item) {
     const { id, title, body, author, date, game, labels, type } = item;
     const currentUser = getCurrentUser();
@@ -353,11 +371,19 @@
       try {
         let reactions = await window.GithubAPI.loadReactions(id);
         const hasEyes = reactions.some(r => r.content === 'eyes' && r.user?.login === currentUser);
+        // Задержка перед добавлением 👀 (2 секунды)
         if (!hasEyes) {
-          try {
-            await window.GithubAPI.addReaction(id, 'eyes');
-            reactions = await window.GithubAPI.loadReactions(id);
-          } catch (e) { /* игнорируем */ }
+          setTimeout(async () => {
+            try {
+              await window.GithubAPI.addReaction(id, 'eyes');
+              // Обновим реакции после добавления
+              const newReactions = await window.GithubAPI.loadReactions(id);
+              renderReactions(reactionsContainer, id, newReactions, currentUser,
+                async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },
+                async (num, rid) => { await window.GithubAPI.removeReaction(num, rid); }
+              );
+            } catch (e) { /* игнорируем */ }
+          }, 2000);
         }
         renderReactions(reactionsContainer, id, reactions, currentUser,
           async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },
@@ -369,16 +395,18 @@
     const submitBtn = modal.querySelector('#submit-comment-btn');
     const commentInput = modal.querySelector('#new-comment-input');
     if (submitBtn && commentInput) {
-      submitBtn.addEventListener('click', async () => {
+      // Дебаунс на кнопку отправки комментария (1 секунда)
+      const debouncedSubmit = window.GithubCore.debounce(async () => {
         const text = commentInput.value.trim();
         if (!text) return;
         await addComment(id, text, refreshComments);
         commentInput.value = '';
-      });
+      }, 1000);
+      submitBtn.addEventListener('click', debouncedSubmit);
     }
   }
 
-  // ---------- Редактор поста с предпросмотром (поддержка создания и редактирования) ----------
+  // Редактор поста с дебаунсом на кнопку отправки
   async function openEditorModal(mode, initialData, context, existingId = null) {
     if (!hasScope('repo')) {
       showToast('Требуется scope repo', 'error');
@@ -466,7 +494,8 @@
       allowedInput.style.display = 'flex';
     });
 
-    submitBtn.addEventListener('click', async () => {
+    // Дебаунс на кнопку отправки поста (1 секунда)
+    const debouncedSubmit = window.GithubCore.debounce(async () => {
       const title = titleInput.value.trim();
       const body = bodyTextarea.value;
       if (!title) return showToast('Введите заголовок', 'error');
@@ -495,7 +524,8 @@
         closeModal();
         setTimeout(() => location.reload(), 800);
       } catch (err) { showToast('Ошибка: ' + err.message, 'error'); }
-    });
+    }, 1000);
+    submitBtn.addEventListener('click', debouncedSubmit);
   }
 
   window.UIFeedback = {

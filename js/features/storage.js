@@ -1,5 +1,4 @@
-// js/features/storage.js – хранилище закладок на GitHub Gist
-// Исправлено: чтение/запись файлов через base64, замена сохранения для одной игры, превью игры в карточке
+// js/features/storage.js – с ограничениями размера файла, количества закладок и дебаунсом
 (function() {
     const { CONFIG, escapeHtml, createElement, formatDate, debounce, cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, loadModule } = window.GithubCore;
     const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -9,6 +8,8 @@
     const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
     const STORAGE_KEY_PREFIX = 'bookmarks_';
     const SEARCH_DEBOUNCE_MS = 300;
+    const MAX_BOOKMARKS = 100;
+    const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024; // 1 МБ
 
     let currentUser = null;
     let currentToken = null;
@@ -22,9 +23,8 @@
     let isSaving = false;
     let modalRef = null;
     let searchInputRef = null;
-    let currentGame = null; // для контекста игры при добавлении сохранения
+    let currentGame = null;
 
-    // ---------- Вспомогательные функции ----------
     async function authFetch(url, options = {}) {
         const token = currentToken || localStorage.getItem('github_token');
         const headers = {
@@ -46,7 +46,6 @@
         }
     }
 
-    // Хеш от ArrayBuffer
     function simpleHash(buffer) {
         let hash = 0;
         const bytes = new Uint8Array(buffer);
@@ -57,7 +56,6 @@
         return hash.toString(16);
     }
 
-    // Преобразование ArrayBuffer в base64
     function arrayBufferToBase64(buffer) {
         const bytes = new Uint8Array(buffer);
         let binary = '';
@@ -67,7 +65,6 @@
         return btoa(binary);
     }
 
-    // Преобразование base64 в Blob
     function base64ToBlob(base64, mimeType = 'application/octet-stream') {
         const binary = atob(base64);
         const bytes = new Uint8Array(binary.length);
@@ -77,7 +74,6 @@
         return new Blob([bytes], { type: mimeType });
     }
 
-    // Попытка декодировать base64 как UTF-8 (для показа в привью)
     function tryDecodeBase64(base64) {
         try {
             const binary = atob(base64);
@@ -88,11 +84,10 @@
             const decoder = new TextDecoder('utf-8', { fatal: true });
             return decoder.decode(bytes);
         } catch {
-            return null; // невалидный UTF-8, бинарный файл
+            return null;
         }
     }
 
-    // ---------- Gist API ----------
     async function gistFetch(gistId) {
         const url = `https://api.github.com/gists/${gistId}`;
         try {
@@ -138,7 +133,6 @@
         return gist.id;
     }
 
-    // ---------- Загрузка/сохранение закладок ----------
     async function loadBookmarks() {
         if (!currentToken) {
             return { bookmarks: [] };
@@ -233,7 +227,19 @@
         debouncedSaveBookmarks();
     }
 
-    // ---------- Получение метаданных через парсинг HTML (с поддержкой прокси) ----------
+    // Ограничение количества закладок
+    function enforceMaxBookmarks() {
+        if (currentBookmarks.length > MAX_BOOKMARKS) {
+            // Удаляем самые старые (кроме сохранений, если нужно, но пока просто по дате)
+            const sorted = [...currentBookmarks].sort((a, b) => new Date(a.added) - new Date(b.added));
+            const toRemove = sorted.slice(0, currentBookmarks.length - MAX_BOOKMARKS);
+            const idsToRemove = new Set(toRemove.map(b => b.id));
+            currentBookmarks = currentBookmarks.filter(b => !idsToRemove.has(b.id));
+            showToast(`Превышен лимит в ${MAX_BOOKMARKS} закладок, старые удалены`, 'warning');
+            triggerDebouncedSave();
+        }
+    }
+
     async function fetchPageMetadata(url) {
         try {
             const resp = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(5000) });
@@ -274,7 +280,6 @@
         return { title, thumbnail };
     }
 
-    // ---------- Получение метаданных через oEmbed и Open Graph ----------
     async function tryOembed(url) {
         const providers = [
             async (u) => {
@@ -315,7 +320,6 @@
         return null;
     }
 
-    // ---------- Определение типа и получение метаданных ----------
     async function fetchMetadata(url) {
         if (typeof url !== 'string' || !url) {
             return { type: 'link', title: url || 'Ссылка', thumbnail: null, embedUrl: null, downloadUrl: null };
@@ -525,7 +529,7 @@
         return null;
     }
 
-    // ---------- Добавление закладки (универсальное) ----------
+    // Добавление закладки с ограничениями
     async function addBookmark(bookmarkOrUrl, title, fileContent, fileName) {
         if (!currentUser) {
             showToast('Войдите в аккаунт GitHub с правами gist', 'error');
@@ -537,7 +541,7 @@
         let customFileContent = null;
         let customFileName = null;
         let extraData = {};
-        let fileBase64 = null;   // для бинарных файлов
+        let fileBase64 = null;
         let fileHash = null;
 
         if (typeof bookmarkOrUrl === 'object' && bookmarkOrUrl !== null) {
@@ -557,7 +561,7 @@
                 saveData: obj.saveData || null,
                 author: obj.author || null,
                 date: obj.date || null,
-                game: obj.game || null,   // для сохранений
+                game: obj.game || null,
             };
         } else {
             url = bookmarkOrUrl;
@@ -566,38 +570,35 @@
             customFileName = fileName;
         }
 
-        // === Обработка файла (сохранения) ===
         const isFile = (typeof customFileContent === 'string' && customFileContent.length > 0 &&
                         typeof customFileName === 'string' && customFileName.length > 0);
 
         if (isFile) {
-            // customFileContent может быть base64 строкой (если пришла от processFiles)
-            // или обычным текстом (если передали напрямую)
+            // Проверка размера файла (base64 строка, длина * 3/4 байт)
+            const approxBytes = customFileContent.length * 0.75;
+            if (approxBytes > MAX_FILE_SIZE_BYTES) {
+                showToast(`Файл слишком большой (${Math.round(approxBytes/1024)} КБ, максимум ${MAX_FILE_SIZE_BYTES/1024} КБ)`, 'error');
+                throw new Error('file_too_large');
+            }
+
             let contentToStore = customFileContent;
             let hash = null;
             let isBase64 = false;
-            // Проверяем, является ли строка base64 (признак – длинная строка без пробелов и только ASCII)
-            // Просто попробуем декодировать и закодировать обратно
             try {
                 const decoded = atob(customFileContent);
                 const reEncoded = btoa(decoded);
                 if (reEncoded === customFileContent) {
                     isBase64 = true;
-                    // Вычисляем хеш от base64? Лучше от бинарных данных, но у нас нет ArrayBuffer.
-                    // Для уникальности используем хеш от строки base64.
                     hash = simpleHash(new TextEncoder().encode(customFileContent));
                 }
             } catch {
-                // не base64, считаем текстом
                 isBase64 = false;
-                // Для текста просто преобразуем в base64 для единообразия хранения
                 const encoder = new TextEncoder();
                 const data = encoder.encode(customFileContent);
                 contentToStore = arrayBufferToBase64(data);
                 hash = simpleHash(data);
             }
 
-            // Проверка дубликата (по хешу)
             const existing = currentBookmarks.some(b =>
                 b.saveData && b.saveData.hash === hash
             );
@@ -606,10 +607,8 @@
                 throw new Error('duplicate');
             }
 
-            // Определяем игру (если передана в extraData.game или из контекста)
             const gameForSave = extraData.game || currentGame || null;
 
-            // Если для этой игры уже есть сохранение – удаляем старое
             if (gameForSave) {
                 const oldIndex = currentBookmarks.findIndex(b =>
                     b.type === 'save' && b.saveData && b.saveData.game === gameForSave
@@ -631,7 +630,7 @@
                 downloadUrl: null,
                 saveData: {
                     fileName: customFileName,
-                    content: contentToStore,   // всегда base64
+                    content: contentToStore,
                     hash: hash,
                     mimeType: 'text/plain',
                     game: gameForSave,
@@ -639,11 +638,11 @@
                 }
             };
             currentBookmarks = [newBookmark, ...currentBookmarks];
+            enforceMaxBookmarks(); // проверка лимита
             triggerDebouncedSave();
             return newBookmark;
         }
 
-        // === Обработка ссылки ===
         if (!url) {
             showToast('Нет ссылки для добавления', 'error');
             throw new Error('no_url');
@@ -693,11 +692,11 @@
         };
 
         currentBookmarks = [newBookmark, ...currentBookmarks];
+        enforceMaxBookmarks();
         triggerDebouncedSave();
         return newBookmark;
     }
 
-    // ---------- Удаление ----------
     async function removeBookmark(id) {
         if (!currentToken) return;
         currentBookmarks = currentBookmarks.filter(b => b.id !== id);
@@ -707,7 +706,6 @@
         }
     }
 
-    // ---------- UI: рендеринг карточек ----------
     function renderBookmarks(modalElement) {
         const grid = modalElement.querySelector('#bookmarks-grid');
         if (!grid) return;
@@ -1066,7 +1064,6 @@
         }
     }
 
-    // ========== ИЗМЕНЕННАЯ ФУНКЦИЯ: добавлено превью игры ==========
     function buildSaveCard(card, bookmark) {
         card.addEventListener('click', () => {
             if (!bookmark.saveData) return;
@@ -1145,7 +1142,6 @@
             });
         });
 
-        // Создаём контент карточки
         const content = createElement('div', 'bookmark-content', { padding: '12px', flex: '1', display: 'flex', flexDirection: 'column' });
         const titleEl = createElement('h4', '', { margin: '0 0 4px', fontSize: '16px', color: 'var(--text-primary)' });
         titleEl.textContent = bookmark.title || 'Сохранение';
@@ -1161,7 +1157,6 @@
 
         card.appendChild(content);
 
-        // Вставляем изображение игры (если есть) или иконку
         const game = bookmark.saveData?.game;
         const imageMap = {
             'starve-neon': 'images/starve-neon-header.webp',
@@ -1203,14 +1198,12 @@
         }
     }
 
-    // ---------- Модалка хранилища ----------
     async function openStorageModal(gameContext = null) {
         updateAuthState();
         if (!currentUser) return showToast('Войдите в аккаунт GitHub', 'error');
         if (!currentToken) return showToast('Токен не найден', 'error');
         if (!hasScope('gist')) return showToast('Нужен scope "gist"', 'error');
 
-        // Сохраняем контекст игры для замены сохранений
         if (gameContext) currentGame = gameContext;
         else currentGame = null;
 
@@ -1294,7 +1287,6 @@
         const grid = modal.querySelector('#bookmarks-grid');
         renderBookmarks(modal);
 
-        // Сортировка
         modal.querySelectorAll('.sort-btn').forEach(b => {
             b.addEventListener('click', () => {
                 sortOrder = b.dataset.order;
@@ -1304,7 +1296,6 @@
             });
         });
 
-        // Фильтры
         modal.querySelectorAll('.cat-btn').forEach(b => {
             b.addEventListener('click', () => {
                 category = b.dataset.cat;
@@ -1314,7 +1305,6 @@
             });
         });
 
-        // Поиск
         const searchInput = modal.querySelector('#search-input');
         searchInputRef = searchInput;
         const debouncedSearch = debounce(() => {
@@ -1323,7 +1313,6 @@
         }, SEARCH_DEBOUNCE_MS);
         searchInput.addEventListener('input', debouncedSearch);
 
-        // Добавление
         const toggleAddBtn = modal.querySelector('#toggle-add-btn');
         const addForm = modal.querySelector('#add-form');
         let formVisible = false;
@@ -1335,7 +1324,8 @@
 
         const addBtn = modal.querySelector('#confirm-add');
         const urlInput = modal.querySelector('#new-url');
-        addBtn.addEventListener('click', async () => {
+        // Дебаунс для кнопки добавления
+        const debouncedAdd = debounce(async () => {
             const url = urlInput.value.trim();
             if (!url) {
                 showToast('Введите ссылку', 'error');
@@ -1349,9 +1339,9 @@
             } catch (e) {
                 if (e.message !== 'duplicate') showToast('Ошибка: ' + e.message, 'error');
             }
-        });
+        }, 1000);
+        addBtn.addEventListener('click', debouncedAdd);
 
-        // Файлы
         const dropZone = modal.querySelector('#drop-zone');
         const fileInput = modal.querySelector('#file-input');
         const fileSelectBtn = modal.querySelector('#file-select-btn');
@@ -1391,13 +1381,10 @@
                 continue;
             }
             try {
-                // Читаем как ArrayBuffer
                 const buffer = await file.arrayBuffer();
                 const base64 = arrayBufferToBase64(buffer);
                 const hash = simpleHash(buffer);
 
-                // Проверяем дубликат по хешу (уже есть в addBookmark, но можно предварительно)
-                // Добавляем с указанием game (если currentGame задан)
                 const bookmarkData = {
                     url: null,
                     title: file.name,

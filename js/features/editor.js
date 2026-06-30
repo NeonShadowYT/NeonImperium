@@ -1,4 +1,4 @@
-// js/features/editor.js — улучшенный редактор с тулбаром и ленивой инициализацией
+// js/features/editor.js – с дебаунсом на отправку
 (function() {
     const TEMPLATES = {
         bold:       { name: 'Жирный', icon: 'fas fa-bold', action: (ta) => insertMarkdown(ta, '**', 'текст', true) },
@@ -227,7 +227,6 @@
         return toolbar;
     }
 
-    // Публичное API
     window.Editor = {
         TEMPLATES,
         createEditorToolbar,

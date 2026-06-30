@@ -1,6 +1,5 @@
-// js/offline-queue.js – единая офлайн-очередь для мутаций GitHub API
+// js/offline-queue.js – с дедупликацией мутаций
 (function() {
-    // Зависит от Utils (loadModule, debounce)
     const { loadModule, debounce } = window.Utils;
 
     const DB_NAME = 'NeonImperiumSync';
@@ -13,7 +12,6 @@
     let isProcessing = false;
     let syncRegistered = false;
 
-    // ---- Инициализация IndexedDB ----
     function openDB() {
         if (dbPromise) return dbPromise;
 
@@ -44,11 +42,60 @@
         return dbPromise;
     }
 
-    // ---- Сохранение мутации в очередь ----
+    async function getAllMutations() {
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_MUTATIONS, 'readonly');
+            const store = tx.objectStore(STORE_MUTATIONS);
+            const index = store.index('timestamp');
+            const mutations = await index.getAll();
+            await tx.done;
+            return mutations || [];
+        } catch (err) {
+            console.error('[OfflineQueue] Failed to get mutations:', err);
+            return [];
+        }
+    }
+
+    // Дедупликация при добавлении
     async function queueMutation(mutation) {
         const db = await openDB();
         const tx = db.transaction(STORE_MUTATIONS, 'readwrite');
         const store = tx.objectStore(STORE_MUTATIONS);
+
+        // Получаем все существующие мутации
+        const allMutations = await store.getAll();
+        // Проверяем дубликаты для некоторых типов
+        let duplicate = null;
+        const { type, issueNumber, content, reactionId, body } = mutation;
+        if (type === 'addReaction' || type === 'removeReaction') {
+            duplicate = allMutations.find(existing =>
+                existing.type === type &&
+                existing.issueNumber === issueNumber &&
+                existing.content === content &&
+                existing.retries < 3
+            );
+        } else if (type === 'addComment') {
+            duplicate = allMutations.find(existing =>
+                existing.type === type &&
+                existing.issueNumber === issueNumber &&
+                existing.body === body &&
+                existing.retries < 3
+            );
+        }
+        // Для других типов не дедуплицируем (или можно добавить)
+
+        if (duplicate) {
+            // Обновляем timestamp и сбрасываем ретраи
+            duplicate.timestamp = Date.now();
+            duplicate.retries = 0;
+            await store.put(duplicate);
+            await tx.done;
+            console.log('[OfflineQueue] Duplicate mutation updated:', duplicate.id);
+            return duplicate.id;
+        }
+
+        // Иначе добавляем новую
         const item = {
             ...mutation,
             timestamp: Date.now(),
@@ -61,23 +108,6 @@
         return result;
     }
 
-    // ---- Получение всех мутаций из очереди (всегда возвращает массив) ----
-    async function getAllMutations() {
-        try {
-            const db = await openDB();
-            const tx = db.transaction(STORE_MUTATIONS, 'readonly');
-            const store = tx.objectStore(STORE_MUTATIONS);
-            const index = store.index('timestamp');
-            const mutations = await index.getAll();
-            await tx.done;
-            return mutations || []; // гарантируем массив
-        } catch (err) {
-            console.error('[OfflineQueue] Failed to get mutations:', err);
-            return [];
-        }
-    }
-
-    // ---- Удаление мутации по id ----
     async function deleteMutation(id) {
         const db = await openDB();
         const tx = db.transaction(STORE_MUTATIONS, 'readwrite');
@@ -85,7 +115,6 @@
         await tx.done;
     }
 
-    // ---- Очистка всей очереди (при сбросе данных) ----
     async function clearQueue() {
         const db = await openDB();
         const tx = db.transaction(STORE_MUTATIONS, 'readwrite');
@@ -94,7 +123,6 @@
         console.log('[OfflineQueue] Queue cleared');
     }
 
-    // ---- Получение/сохранение токена в IndexedDB (резерв) ----
     async function getStoredToken() {
         const db = await openDB();
         const tx = db.transaction(STORE_CREDENTIALS, 'readonly');
@@ -111,7 +139,6 @@
         await tx.done;
     }
 
-    // ---- Обработка одной мутации (отправка на сервер) ----
     async function processMutation(mutation) {
         const { type, issueNumber, content, reactionId, commentId, body, title, labels, issueData } = mutation;
 
@@ -147,7 +174,6 @@
         }
     }
 
-    // ---- Обработка всей очереди (с повторными попытками) ----
     async function processQueue() {
         if (isProcessing) return;
         isProcessing = true;
@@ -188,7 +214,6 @@
 
     const debouncedProcessQueue = debounce(processQueue, 2000);
 
-    // ---- Регистрация background sync (через Service Worker) ----
     async function registerSync() {
         if (syncRegistered) return;
         if (!('serviceWorker' in navigator) || !('SyncManager' in window)) {
@@ -205,19 +230,16 @@
         }
     }
 
-    // ---- Вызывать при получении сигнала от SW (например, после восстановления сети) ----
     function onSyncEvent() {
         console.log('[OfflineQueue] Sync event triggered');
         processQueue().catch(console.error);
     }
 
-    // ---- Сброс всей очереди (при смене пользователя) ----
     async function resetQueue() {
         await clearQueue();
         syncRegistered = false;
     }
 
-    // ---- Инициализация: слушаем сообщения от Service Worker ----
     if (navigator.serviceWorker) {
         navigator.serviceWorker.addEventListener('message', (event) => {
             if (event.data?.type === 'SYNC_TRIGGERED') {
