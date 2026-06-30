@@ -1,5 +1,22 @@
-// js/common-init.js – lazy load page scripts, multiple fallbacks for marked.js, etc.
+// js/common-init.js – добавлены preconnect для GitHub API и rss2json
 (function() {
+  // Добавляем preconnect для внешних API
+  function addPreconnects() {
+    const links = [
+      'https://api.github.com',
+      'https://api.rss2json.com',
+      'https://cdnjs.cloudflare.com'
+    ];
+    links.forEach(url => {
+      const link = document.createElement('link');
+      link.rel = 'preconnect';
+      link.href = url;
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+    });
+  }
+  addPreconnects();
+
   function loadPageScripts() {
     const path = location.pathname;
     let page = path.split('/').pop().replace('.html', '');
@@ -109,7 +126,6 @@
     }
   }
 
-  // Загрузка фоновых частиц (пылинки)
   function loadDustParticles() {
       const script = document.createElement('script');
       script.src = 'js/features/dust-particles.js';

@@ -11,6 +11,9 @@
   const LAST_COMMENT_KEY = 'last_comment_time';
   const COMMENT_COOLDOWN = 10000; // 10 секунд
 
+  // Кэш для Markdown-рендеринга (в памяти)
+  const markdownCache = new Map();
+
   function canViewPost(body, labels, currentUser) {
     if (!labels || !labels.includes('private')) return true;
     if (isAdmin()) return true;
@@ -18,17 +21,25 @@
     return allowed && allowed.split(',').map(s => s.trim()).includes(currentUser);
   }
 
-  async function renderMarkdownWithEditor(text, targetElement) {
+  async function renderMarkdownWithEditor(text, targetElement, cacheKey = null) {
     if (!text) { targetElement.innerHTML = ''; return; }
+    // Проверяем кэш
+    if (cacheKey && markdownCache.has(cacheKey)) {
+      targetElement.innerHTML = markdownCache.get(cacheKey);
+      return;
+    }
     try {
+      let html;
       if (window.marked) {
         if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-        if (typeof marked.parse === 'function') targetElement.innerHTML = await marked.parse(text);
-        else if (typeof marked === 'function') targetElement.innerHTML = marked(text);
+        if (typeof marked.parse === 'function') html = await marked.parse(text);
+        else if (typeof marked === 'function') html = marked(text);
         else throw new Error('marked not callable');
       } else {
-        targetElement.innerHTML = text.replace(/\n/g, '<br>');
+        html = text.replace(/\n/g, '<br>');
       }
+      if (cacheKey) markdownCache.set(cacheKey, html);
+      targetElement.innerHTML = html;
     } catch (e) {
       console.warn('Markdown error:', e);
       targetElement.innerHTML = text.replace(/\n/g, '<br>');
@@ -290,7 +301,7 @@
     } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
   }
 
-  // Полноэкранная модалка с задержкой для 👀
+  // Полноэкранная модалка с задержкой для 👀 и кэшированием Markdown
   async function openFullModal(item) {
     const { id, title, body, author, date, game, labels, type } = item;
     const currentUser = getCurrentUser();
@@ -361,7 +372,10 @@
     }
     
     const contentDiv = modal.querySelector('.post-content');
-    await renderMarkdownWithEditor(displayBody, contentDiv);
+    // Кэшируем Markdown по ключу
+    const cacheKey = `post_${id}_${currentUser || 'anon'}`;
+    await renderMarkdownWithEditor(displayBody, contentDiv, cacheKey);
+    
     const reactionsContainer = modal.querySelector('#modal-reactions');
     const commentsContainer = modal.querySelector('#modal-comments-list');
     async function refreshComments() {
@@ -376,7 +390,6 @@
           setTimeout(async () => {
             try {
               await window.GithubAPI.addReaction(id, 'eyes');
-              // Обновим реакции после добавления
               const newReactions = await window.GithubAPI.loadReactions(id);
               renderReactions(reactionsContainer, id, newReactions, currentUser,
                 async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },

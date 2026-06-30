@@ -1,12 +1,9 @@
-// platform.js – GitHub-блок с выбором версии и платформы
-// Сортировка: сначала релизы без sort-order (по дате, новые сверху),
-// затем релизы с sort-order (по убыванию числа, чем больше – тем выше в этой группе)
-// Добавлена поддержка кастомной даты публикации через мета-поле publish-date
+// js/platform.js – увеличен TTL кэша релизов до 1 часа
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
     const RELEASES_CACHE_KEY = 'github_all_releases';
-    const CACHE_DURATION = 10 * 60 * 1000;
+    const CACHE_DURATION = 60 * 60 * 1000; // 1 час
 
     function getOS() {
         const ua = navigator.userAgent;
@@ -64,19 +61,15 @@
             else if (line.startsWith('sort-order:')) meta.sortOrder = parseInt(line.slice(11).trim(), 10);
             else if (line.startsWith('publish-date:')) {
                 const raw = line.slice(13).trim();
-                // Ожидаем формат YYYY-MM-DD, но можно и другие, попробуем распарсить
                 let date = null;
-                // Сначала попробуем ISO
                 let parts = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
                 if (parts) {
                     date = new Date(parseInt(parts[1]), parseInt(parts[2])-1, parseInt(parts[3]));
                 } else {
-                    // Попробуем DD.MM.YYYY
                     parts = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
                     if (parts) {
                         date = new Date(parseInt(parts[3]), parseInt(parts[2])-1, parseInt(parts[1]));
                     } else {
-                        // Попробуем любой другой формат через Date.parse
                         const d = Date.parse(raw);
                         if (!isNaN(d)) date = new Date(d);
                     }
@@ -89,9 +82,6 @@
         return meta;
     }
 
-    // Новая сортировка:
-    // - Без sort-order: вверху, сортируются по дате (новые сверху)
-    // - С sort-order: внизу, сортируются по убыванию sort-order (чем больше число, тем выше среди этой группы)
     function sortReleasesByOrder(releases) {
         const withOrder = [];
         const withoutOrder = [];
@@ -103,11 +93,8 @@
                 withoutOrder.push(release);
             }
         }
-        // Сортируем без метки по дате (новые сверху)
         withoutOrder.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
-        // Сортируем с меткой по убыванию sort-order (больше число → выше среди них)
         withOrder.sort((a, b) => b.order - a.order);
-        // Сначала без метки, потом с меткой
         return [...withoutOrder, ...withOrder.map(item => item.release)];
     }
 
@@ -212,7 +199,6 @@
                 option.dataset.date = formatDate(release.published_at);
                 option.dataset.post = meta.versionPost || '';
                 option.dataset.versionName = meta.versionName || release.tag_name;
-                // сохраняем кастомную дату, если есть
                 if (meta.publishDate) {
                     option.dataset.customDate = meta.publishDate.toISOString();
                 } else {
@@ -230,7 +216,6 @@
             if (!release) return;
             const meta = parseMeta(release.body);
             
-            // Определяем дату для отображения
             let displayDate;
             if (meta.publishDate) {
                 const formatted = formatCustomDate(meta.publishDate);

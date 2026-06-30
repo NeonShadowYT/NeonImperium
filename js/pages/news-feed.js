@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – увеличен TTL кеша видео до 30 минут
+// js/pages/news-feed.js – DocumentFragment и уже увеличен TTL для видео
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues, loadIssue } = window.GithubAPI;
@@ -101,7 +101,7 @@
   }
   async function loadVideosFromRSS2JSON() {
     const cacheKey = 'youtube_videos_rss2json_v3';
-    // Увеличен TTL до 30 минут
+    // TTL увеличен до 30 минут
     const cached = cacheGet(cacheKey, 30 * 60 * 1000);
     if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
     const all = [];
@@ -149,7 +149,11 @@
     const showItems = items.slice(0, 6);
     const grid = createElement('div', 'projects-grid');
     if (showItems.length === 0) grid.innerHTML = '<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">Пока нет новостей</p></div>';
-    else showItems.forEach(item => grid.appendChild(item.type === 'video' ? createVideoCard(item) : createPostCard(item)));
+    else {
+      const fragment = document.createDocumentFragment();
+      showItems.forEach(item => fragment.appendChild(item.type === 'video' ? createVideoCard(item) : createPostCard(item)));
+      grid.appendChild(fragment);
+    }
     container.innerHTML = '';
     container.appendChild(grid);
     const header = document.querySelector('.news-header');

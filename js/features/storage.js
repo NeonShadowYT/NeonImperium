@@ -1,4 +1,4 @@
-// js/features/storage.js – с ограничениями размера файла, количества закладок и дебаунсом
+// js/features/storage.js – с кэшированием метаданных и DocumentFragment
 (function() {
     const { CONFIG, escapeHtml, createElement, formatDate, debounce, cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, loadModule } = window.GithubCore;
     const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
@@ -9,7 +9,9 @@
     const STORAGE_KEY_PREFIX = 'bookmarks_';
     const SEARCH_DEBOUNCE_MS = 300;
     const MAX_BOOKMARKS = 100;
-    const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024; // 1 МБ
+    const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024;
+    const METADATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 часа
+    const METADATA_CACHE_PREFIX = 'metadata_';
 
     let currentUser = null;
     let currentToken = null;
@@ -227,10 +229,8 @@
         debouncedSaveBookmarks();
     }
 
-    // Ограничение количества закладок
     function enforceMaxBookmarks() {
         if (currentBookmarks.length > MAX_BOOKMARKS) {
-            // Удаляем самые старые (кроме сохранений, если нужно, но пока просто по дате)
             const sorted = [...currentBookmarks].sort((a, b) => new Date(a.added) - new Date(b.added));
             const toRemove = sorted.slice(0, currentBookmarks.length - MAX_BOOKMARKS);
             const idsToRemove = new Set(toRemove.map(b => b.id));
@@ -238,6 +238,19 @@
             showToast(`Превышен лимит в ${MAX_BOOKMARKS} закладок, старые удалены`, 'warning');
             triggerDebouncedSave();
         }
+    }
+
+    // Кэширование метаданных
+    function getCachedMetadata(url) {
+        const key = METADATA_CACHE_PREFIX + url;
+        const cached = cacheGet(key, METADATA_CACHE_TTL);
+        if (cached) return cached;
+        return null;
+    }
+
+    function setCachedMetadata(url, data) {
+        const key = METADATA_CACHE_PREFIX + url;
+        cacheSet(key, data);
     }
 
     async function fetchPageMetadata(url) {
@@ -325,6 +338,11 @@
             return { type: 'link', title: url || 'Ссылка', thumbnail: null, embedUrl: null, downloadUrl: null };
         }
 
+        // Проверяем кэш
+        const cached = getCachedMetadata(url);
+        if (cached) return cached;
+
+        let result;
         if (url.includes('neonshadowyt.github.io/NeonImperium')) {
             const postMatch = url.match(/[?&]post=(\d+)/);
             if (postMatch) {
@@ -332,7 +350,7 @@
                 try {
                     const issue = await window.GithubAPI.loadIssue(postId);
                     if (issue) {
-                        return {
+                        result = {
                             type: 'post',
                             title: issue.title,
                             thumbnail: null,
@@ -348,9 +366,11 @@
                                 game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
                             }
                         };
+                        setCachedMetadata(url, result);
+                        return result;
                     }
                 } catch (e) {
-                    return {
+                    result = {
                         type: 'post',
                         title: 'Пост #' + postId,
                         thumbnail: null,
@@ -358,6 +378,8 @@
                         downloadUrl: null,
                         postData: { id: postId }
                     };
+                    setCachedMetadata(url, result);
+                    return result;
                 }
             }
         }
@@ -396,7 +418,7 @@
                 }
             }
 
-            return {
+            result = {
                 type: 'video',
                 title: title || 'Видео',
                 thumbnail: thumbnail || null,
@@ -404,6 +426,8 @@
                 downloadUrl: videoInfo.downloadUrl || null,
                 videoData: videoInfo
             };
+            setCachedMetadata(url, result);
+            return result;
         }
 
         let title = url, thumbnail = null, embedUrl = null;
@@ -425,7 +449,7 @@
             }
         }
 
-        return {
+        result = {
             type: 'link',
             title: title || url,
             thumbnail: thumbnail || null,
@@ -433,6 +457,8 @@
             downloadUrl: null,
             linkData: null
         };
+        setCachedMetadata(url, result);
+        return result;
     }
 
     async function detectVideoService(url) {
@@ -529,7 +555,6 @@
         return null;
     }
 
-    // Добавление закладки с ограничениями
     async function addBookmark(bookmarkOrUrl, title, fileContent, fileName) {
         if (!currentUser) {
             showToast('Войдите в аккаунт GitHub с правами gist', 'error');
@@ -574,7 +599,6 @@
                         typeof customFileName === 'string' && customFileName.length > 0);
 
         if (isFile) {
-            // Проверка размера файла (base64 строка, длина * 3/4 байт)
             const approxBytes = customFileContent.length * 0.75;
             if (approxBytes > MAX_FILE_SIZE_BYTES) {
                 showToast(`Файл слишком большой (${Math.round(approxBytes/1024)} КБ, максимум ${MAX_FILE_SIZE_BYTES/1024} КБ)`, 'error');
@@ -638,7 +662,7 @@
                 }
             };
             currentBookmarks = [newBookmark, ...currentBookmarks];
-            enforceMaxBookmarks(); // проверка лимита
+            enforceMaxBookmarks();
             triggerDebouncedSave();
             return newBookmark;
         }
@@ -730,10 +754,12 @@
             return;
         }
 
+        const fragment = document.createDocumentFragment();
         filtered.forEach(bookmark => {
             const card = createBookmarkCard(bookmark);
-            grid.appendChild(card);
+            fragment.appendChild(card);
         });
+        grid.appendChild(fragment);
     }
 
     function createBookmarkCard(bookmark) {
@@ -1324,7 +1350,6 @@
 
         const addBtn = modal.querySelector('#confirm-add');
         const urlInput = modal.querySelector('#new-url');
-        // Дебаунс для кнопки добавления
         const debouncedAdd = debounce(async () => {
             const url = urlInput.value.trim();
             if (!url) {
