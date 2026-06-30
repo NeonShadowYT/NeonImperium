@@ -10,7 +10,7 @@
     const SEARCH_DEBOUNCE_MS = 300;
     const MAX_BOOKMARKS = 100;
     const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024;
-    const METADATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 часа
+    const METADATA_CACHE_TTL = 24 * 60 * 60 * 1000;
     const METADATA_CACHE_PREFIX = 'metadata_';
 
     let currentUser = null;
@@ -240,7 +240,6 @@
         }
     }
 
-    // Кэширование метаданных
     function getCachedMetadata(url) {
         const key = METADATA_CACHE_PREFIX + url;
         const cached = cacheGet(key, METADATA_CACHE_TTL);
@@ -560,13 +559,23 @@
             throw new Error('not_logged_in');
         }
 
-        // Проверка дневного лимита
         if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
         if (!window.RateLimits.checkLimit('storageAdds')) {
-            // Сохраняем в очередь
             const bookmarkData = typeof bookmarkOrUrl === 'object' ? bookmarkOrUrl : { url: bookmarkOrUrl, title, fileContent, fileName };
             window.RateLimits.enqueueAction('storageAdds', { bookmark: bookmarkData });
-            showToast('Лимит добавлений в хранилище исчерпан. Действие будет выполнено позже.', 'warning');
+            showToast('Лимит добавлений в хранилище исчерпан. Действие сохранено в очередь.', 'warning');
+            // Оптимистичное добавление в локальный список
+            const tempBookmark = {
+                id: 'temp-' + Date.now(),
+                added: new Date().toISOString(),
+                title: title || bookmarkOrUrl,
+                type: 'link',
+                url: typeof bookmarkOrUrl === 'string' ? bookmarkOrUrl : null,
+                thumbnail: null,
+                _pending: true
+            };
+            currentBookmarks = [tempBookmark, ...currentBookmarks];
+            if (modalRef) renderBookmarks(modalRef);
             throw new Error('limit_exceeded');
         }
 
@@ -792,6 +801,10 @@
             height: '100%',
             transition: 'transform 0.2s, border-color 0.2s'
         });
+        if (bookmark._pending) {
+            card.style.opacity = '0.6';
+            card.style.borderColor = 'var(--accent)';
+        }
         card.addEventListener('mouseenter', () => {
             card.style.borderColor = 'var(--accent)';
         });
@@ -1247,7 +1260,6 @@
         const res = await loadBookmarks();
         currentBookmarks = res.bookmarks || [];
 
-        // Получаем остаток для индикатора
         if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
         const remainingAdds = window.RateLimits ? window.RateLimits.getRemaining('storageAdds') : '?';
 
@@ -1379,7 +1391,6 @@
                 showToast('Добавлено', 'success');
                 urlInput.value = '';
                 renderBookmarks(modal);
-                // Обновляем индикатор
                 const indicator = modal.querySelector('.rate-indicator[data-action="storageAdds"]');
                 if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('storageAdds');
             } catch (e) {
@@ -1448,7 +1459,6 @@
                 };
                 await addBookmark(bookmarkData);
                 showToast(`Сохранение "${file.name}" добавлено`, 'success');
-                // Обновляем индикатор
                 const indicator = modal?.querySelector('.rate-indicator[data-action="storageAdds"]');
                 if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('storageAdds');
             } catch (e) {

@@ -1,4 +1,4 @@
-// js/common-init.js – добавлены preconnect для GitHub API и rss2json
+// js/common-init.js – добавлены preconnect, инициализация RateLimits, улучшенная обработка очереди
 (function() {
   // Добавляем preconnect для внешних API
   function addPreconnects() {
@@ -133,7 +133,7 @@
       script.onload = () => console.log('Dust particles loaded');
       script.onerror = () => console.warn('Failed to load dust particles');
       document.head.appendChild(script);
-  };
+  }
 
   function showUpdateNotification() {
     if (sessionStorage.getItem('update_notification_shown')) return;
@@ -227,6 +227,46 @@
     document.body.addEventListener('click', handleDownloadClick);
   }
 
+  // Инициализация RateLimits (добавляем в очередь после загрузки)
+  function initRateLimits() {
+    if (window.RateLimits) {
+      window.RateLimits.init();
+      // Добавляем обработчик для открытия панели из профиля
+      window.addEventListener('github-auth-ready', () => {
+        // Добавляем пункт в меню профиля
+        const profile = document.querySelector('.nav-profile');
+        if (profile) {
+          const dropdown = profile.querySelector('.profile-dropdown');
+          if (dropdown && !dropdown.querySelector('[data-action="rate-panel"]')) {
+            const item = document.createElement('div');
+            item.className = 'profile-dropdown-item';
+            item.dataset.action = 'rate-panel';
+            item.innerHTML = '<i class="fas fa-chart-bar"></i> Лимиты и кеш';
+            const divider = dropdown.querySelector('.profile-dropdown-divider');
+            if (divider) {
+              dropdown.insertBefore(item, divider);
+            } else {
+              dropdown.appendChild(item);
+            }
+          }
+        }
+      });
+    } else {
+      // Если ещё не загружен, подгружаем
+      const script = document.createElement('script');
+      script.src = 'js/features/rate-limits.js';
+      script.defer = true;
+      script.onload = () => {
+        if (window.RateLimits) {
+          window.RateLimits.init();
+          // Повторяем добавление пункта
+          window.dispatchEvent(new CustomEvent('github-auth-ready'));
+        }
+      };
+      document.head.appendChild(script);
+    }
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       preloadFont();
@@ -240,6 +280,7 @@
       loadDustParticles();
       registerServiceWorker();
       initDownloadConsent();
+      initRateLimits();
     });
   } else {
     preloadFont();
@@ -253,5 +294,6 @@
     loadDustParticles();
     registerServiceWorker();
     initDownloadConsent();
+    initRateLimits();
   }
 })();

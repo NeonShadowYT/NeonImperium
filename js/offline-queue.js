@@ -1,4 +1,4 @@
-// js/offline-queue.js – с дедупликацией мутаций
+// js/offline-queue.js – очередь для фоновой синхронизации с IndexedDB
 (function() {
     const { loadModule, debounce } = window.Utils;
 
@@ -57,15 +57,13 @@
         }
     }
 
-    // Дедупликация при добавлении
     async function queueMutation(mutation) {
         const db = await openDB();
         const tx = db.transaction(STORE_MUTATIONS, 'readwrite');
         const store = tx.objectStore(STORE_MUTATIONS);
 
-        // Получаем все существующие мутации
+        // Проверка дубликатов для некоторых типов
         const allMutations = await store.getAll();
-        // Проверяем дубликаты для некоторых типов
         let duplicate = null;
         const { type, issueNumber, content, reactionId, body } = mutation;
         if (type === 'addReaction' || type === 'removeReaction') {
@@ -83,10 +81,8 @@
                 existing.retries < 3
             );
         }
-        // Для других типов не дедуплицируем (или можно добавить)
 
         if (duplicate) {
-            // Обновляем timestamp и сбрасываем ретраи
             duplicate.timestamp = Date.now();
             duplicate.retries = 0;
             await store.put(duplicate);
@@ -95,7 +91,6 @@
             return duplicate.id;
         }
 
-        // Иначе добавляем новую
         const item = {
             ...mutation,
             timestamp: Date.now(),

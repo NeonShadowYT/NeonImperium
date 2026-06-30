@@ -251,7 +251,6 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ body })
             });
-            // Инвалидируем кэш всех комментариев (неизвестен issue)
             cacheRemoveByPrefix(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/`);
             return data;
         }
