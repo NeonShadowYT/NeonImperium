@@ -11,6 +11,8 @@
 
 **[➡️ Перейти на сайт](https://neonshadowyt.github.io/NeonImperium)**
 
+**[📦 Запасной, прошлый сайт](https://sites.google.com/view/neonimperium/Neon-Imperium)**
+
 ---
 
 ## 📋 Содержание
