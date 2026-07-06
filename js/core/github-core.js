@@ -94,6 +94,15 @@
             const { issueNumber, content } = payload;
             const currentUser = window.GithubAuth?.getCurrentUser();
             if (!currentUser) return false;
+            if (window.RateLimits) {
+                const pending = await window.RateLimits.getPendingActions();
+                const existsInQueue = pending.some(item =>
+                    item.action === 'reactions' &&
+                    item.data.issueNumber === issueNumber &&
+                    item.data.content === content
+                );
+                if (existsInQueue) return false;
+            }
             try {
                 const reactions = await window.GithubAPI.loadReactions(issueNumber);
                 const exists = reactions.some(r => r.user.login === currentUser && r.content === content);
@@ -106,6 +115,15 @@
             const { issueNumber, body } = payload;
             const currentUser = window.GithubAuth?.getCurrentUser();
             if (!currentUser) return false;
+            if (window.RateLimits) {
+                const pending = await window.RateLimits.getPendingActions();
+                const existsInQueue = pending.some(item =>
+                    item.action === 'comments' &&
+                    item.data.issueNumber === issueNumber &&
+                    item.data.body === body
+                );
+                if (existsInQueue) return false;
+            }
             try {
                 const comments = await window.GithubAPI.loadComments(issueNumber);
                 const exists = comments.some(c => c.user.login === currentUser && c.body.trim() === body.trim());
@@ -131,6 +149,14 @@
             if (bookmark.url) {
                 const currentUser = window.GithubAuth?.getCurrentUser();
                 if (!currentUser) return false;
+                if (window.RateLimits) {
+                    const pending = await window.RateLimits.getPendingActions();
+                    const existsInQueue = pending.some(item =>
+                        item.action === 'storageAdds' &&
+                        item.data.bookmark.url === bookmark.url
+                    );
+                    if (existsInQueue) return false;
+                }
                 try {
                     const res = await window.BookmarkStorage.loadBookmarks();
                     const exists = res.bookmarks.some(b => b.url === bookmark.url);
@@ -140,6 +166,15 @@
                 }
             }
             if (bookmark.saveData && bookmark.saveData.hash) {
+                if (window.RateLimits) {
+                    const pending = await window.RateLimits.getPendingActions();
+                    const existsInQueue = pending.some(item =>
+                        item.action === 'storageAdds' &&
+                        item.data.bookmark.saveData &&
+                        item.data.bookmark.saveData.hash === bookmark.saveData.hash
+                    );
+                    if (existsInQueue) return false;
+                }
                 try {
                     const res = await window.BookmarkStorage.loadBookmarks();
                     const exists = res.bookmarks.some(b => b.saveData && b.saveData.hash === bookmark.saveData.hash);

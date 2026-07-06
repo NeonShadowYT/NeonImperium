@@ -81,6 +81,11 @@
       heartBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!currentUser) { showToast('Войдите в GitHub', 'error'); return; }
+        const valid = await isActionStillValid('reactions', { issueNumber, content: 'heart' });
+        if (!valid) {
+          showToast('Вы уже поставили ❤️', 'info');
+          return;
+        }
         try {
           const result = await performAction('reactions', { issueNumber, content: 'heart' }, () => window.GithubAPI.addReaction(issueNumber, 'heart'));
           if (result.queued) {
@@ -124,23 +129,31 @@
     btnsDiv.appendChild(eyesSpan);
 
     if (currentUser && !hasEyes) {
-      performAction('reactions', { issueNumber, content: 'eyes' }, () => window.GithubAPI.addReaction(issueNumber, 'eyes'))
-        .then(result => {
-          if (result.queued) {
-            console.log('[👀] Реакция поставлена в очередь');
-          } else {
-            console.log('[👀] Реакция успешно добавлена');
+      const eyesKey = `eyes_${issueNumber}`;
+      if (!sessionStorage.getItem(eyesKey)) {
+        sessionStorage.setItem(eyesKey, '1');
+        isActionStillValid('reactions', { issueNumber, content: 'eyes' }).then(valid => {
+          if (valid) {
+            performAction('reactions', { issueNumber, content: 'eyes' }, () => window.GithubAPI.addReaction(issueNumber, 'eyes'))
+              .then(result => {
+                if (result.queued) {
+                  console.log('[👀] Реакция поставлена в очередь');
+                } else {
+                  console.log('[👀] Реакция успешно добавлена');
+                }
+                const countSpan = eyesSpan.querySelector('.reaction-count');
+                if (countSpan) {
+                  const current = parseInt(countSpan.textContent) || 0;
+                  countSpan.textContent = current + 1;
+                }
+                window.GithubAPI.loadReactions(issueNumber).then(newReactions => {
+                  renderReactions(container, issueNumber, newReactions, currentUser, onAddHeart, onRemoveHeart);
+                }).catch(() => {});
+              })
+              .catch(err => console.warn('Ошибка при добавлении 👀:', err));
           }
-          const countSpan = eyesSpan.querySelector('.reaction-count');
-          if (countSpan) {
-            const current = parseInt(countSpan.textContent) || 0;
-            countSpan.textContent = current + 1;
-          }
-          window.GithubAPI.loadReactions(issueNumber).then(newReactions => {
-            renderReactions(container, issueNumber, newReactions, currentUser, onAddHeart, onRemoveHeart);
-          }).catch(() => {});
-        })
-        .catch(err => console.warn('Ошибка при добавлении 👀:', err));
+        }).catch(() => {});
+      }
     }
 
     container.appendChild(btnsDiv);
