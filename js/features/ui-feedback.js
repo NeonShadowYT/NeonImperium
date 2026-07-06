@@ -445,14 +445,23 @@
           <span style="font-size:12px; color:var(--text-secondary);" id="title-counter">${currentTitle.length}/100</span>
         </div>
         <div class="editor-toolbar" id="editor-toolbar"></div>
-        <div class="editor-split">
-          <div class="editor-split-left">
-            <textarea id="editor-body" placeholder="Текст поста (Markdown)">${escapeHtml(currentBody)}</textarea>
-          </div>
-          <div class="editor-split-right preview-area" id="preview-area"></div>
+
+        <div class="editor-tabs" style="display:flex; gap:4px; border-bottom:1px solid var(--border); padding-bottom:4px;">
+          <button class="editor-tab active" data-tab="write" style="background:transparent; border:none; padding:6px 14px; border-radius:20px; cursor:pointer; font-family:var(--font-family); color:var(--text-secondary); transition:0.2s;"><i class="fas fa-edit"></i> Редактор</button>
+          <button class="editor-tab" data-tab="preview" style="background:transparent; border:none; padding:6px 14px; border-radius:20px; cursor:pointer; font-family:var(--font-family); color:var(--text-secondary); transition:0.2s;"><i class="fas fa-eye"></i> Предпросмотр</button>
         </div>
+
+        <div class="editor-panels" style="position:relative;">
+          <div class="editor-panel write-panel" style="display:block;">
+            <textarea id="editor-body" placeholder="Текст поста (Markdown)" style="width:100%; min-height:300px; padding:12px; border-radius:16px; background:var(--bg-primary); border:1px solid var(--border); color:var(--text-primary); font-family:monospace; font-size:14px; resize:vertical; box-sizing:border-box;">${escapeHtml(currentBody)}</textarea>
+          </div>
+          <div class="editor-panel preview-panel" style="display:none; background:var(--bg-primary); border:1px solid var(--border); border-radius:16px; padding:16px; min-height:300px; overflow-y:auto;">
+            <div id="preview-area" class="markdown-body"></div>
+          </div>
+        </div>
+
         <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:space-between;">
-          <div style="display:flex; gap:8px; align-items:center;">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <div class="access-switch">
               <button id="access-public" class="access-switch-btn active">Публичный</button>
               <button id="access-private" class="access-switch-btn">Приватный</button>
@@ -473,13 +482,16 @@
 
     const titleInput = modal.querySelector('#editor-title');
     const bodyTextarea = modal.querySelector('#editor-body');
-    const preview = modal.querySelector('#preview-area');
+    const previewArea = modal.querySelector('#preview-area');
     const publicBtn = modal.querySelector('#access-public');
     const privateBtn = modal.querySelector('#access-private');
     const allowedInput = modal.querySelector('#allowed-users');
     const submitBtn = modal.querySelector('#editor-submit');
     const titleCounter = modal.querySelector('#title-counter');
     const bodyCounter = modal.querySelector('#body-counter');
+    const writePanel = modal.querySelector('.write-panel');
+    const previewPanel = modal.querySelector('.preview-panel');
+    const tabs = modal.querySelectorAll('.editor-tab');
 
     if (window.Editor && window.Editor.createEditorToolbar) {
       const toolbar = window.Editor.createEditorToolbar(bodyTextarea);
@@ -502,7 +514,7 @@
 
     function updatePreview() {
       const val = bodyTextarea.value;
-      renderMarkdownWithEditor(val, preview);
+      renderMarkdownWithEditor(val, previewArea);
       saveDraft(draftKey, { title: titleInput.value, body: val });
       if (bodyCounter) {
         bodyCounter.textContent = `${val.length}/10000`;
@@ -514,9 +526,27 @@
         titleCounter.style.color = tlen > 100 ? '#f44336' : 'var(--text-secondary)';
       }
     }
+
     bodyTextarea.addEventListener('input', updatePreview);
     titleInput.addEventListener('input', updatePreview);
     updatePreview();
+
+    // Переключение вкладок
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.tab;
+        if (target === 'write') {
+          writePanel.style.display = 'block';
+          previewPanel.style.display = 'none';
+        } else {
+          writePanel.style.display = 'none';
+          previewPanel.style.display = 'block';
+          updatePreview(); // обновить предпросмотр перед показом
+        }
+      });
+    });
 
     let privMode = false;
     publicBtn.addEventListener('click', () => {
