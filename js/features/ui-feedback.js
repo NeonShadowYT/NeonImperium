@@ -1,4 +1,4 @@
-// js/features/ui-feedback.js – полная версия с performAction, единоразовой ❤️ и автоматической 👀
+// js/features/ui-feedback.js
 (function() {
   const {
     createElement, escapeHtml, renderMarkdown, loadModule,
@@ -47,8 +47,6 @@
     }
   }
 
-  // Рендерим реакции: ❤️ единоразовая (кнопка становится неактивной после установки),
-  // 👀 автоматически ставится через performAction (если лимит есть или в очередь)
   function renderReactions(container, issueNumber, reactions, currentUser, onAddHeart, onRemoveHeart) {
     if (!container) return;
     const filtered = reactions.filter(r => r.content === 'heart' || r.content === 'eyes');
@@ -62,7 +60,6 @@
     container.innerHTML = '';
     const btnsDiv = createElement('div', 'reactions-buttons', { display: 'flex', gap: '6px', flexWrap: 'wrap' });
 
-    // ❤️ – единоразовая
     const heartCount = counts.get('heart') || 0;
     const isHeartActive = userReactions.has('heart');
     const heartBtn = createElement('button', 'reaction-button', {
@@ -91,7 +88,6 @@
           } else {
             showToast('❤️ добавлена', 'success');
           }
-          // Делаем кнопку неактивной сразу (оптимистично)
           heartBtn.disabled = true;
           heartBtn.style.pointerEvents = 'none';
           heartBtn.style.background = 'var(--accent)';
@@ -101,7 +97,6 @@
             const current = parseInt(countSpan.textContent) || 0;
             countSpan.textContent = current + 1;
           }
-          // Обновляем данные с сервера (асинхронно)
           window.GithubAPI.loadReactions(issueNumber).then(newReactions => {
             renderReactions(container, issueNumber, newReactions, currentUser, onAddHeart, onRemoveHeart);
           }).catch(() => {});
@@ -118,7 +113,6 @@
     }
     btnsDiv.appendChild(heartBtn);
 
-    // 👀 – автоматическая, но только если пользователь ещё не поставил
     const eyesCount = counts.get('eyes') || 0;
     const hasEyes = userReactions.has('eyes');
     const eyesSpan = createElement('span', 'reaction-static', {
@@ -129,7 +123,6 @@
     eyesSpan.innerHTML = `<span class="reaction-emoji">👀</span><span class="reaction-count">${eyesCount || ''}</span>`;
     btnsDiv.appendChild(eyesSpan);
 
-    // Если пользователь не ставил 👀, ставим автоматически через performAction
     if (currentUser && !hasEyes) {
       performAction('reactions', { issueNumber, content: 'eyes' }, () => window.GithubAPI.addReaction(issueNumber, 'eyes'))
         .then(result => {
@@ -198,6 +191,10 @@
     if (!window.Editor) await loadModule('js/features/editor.js');
     const newBody = prompt('Редактировать комментарий (поддерживается Markdown)', oldBody);
     if (!newBody || newBody === oldBody) return;
+    if (newBody.length > 400) {
+      showToast('Комментарий не может превышать 400 символов', 'error');
+      return;
+    }
     try {
       await window.GithubAPI.updateComment(commentId, newBody);
       showToast('Обновлено', 'success');
@@ -205,10 +202,12 @@
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
-  // Добавление комментария с performAction
   async function addComment(issueNumber, body, onUpdate) {
     if (!body.trim()) return showToast('Введите текст', 'error');
-
+    if (body.length > 400) {
+      showToast('Комментарий не может превышать 400 символов', 'error');
+      return;
+    }
     const currentUser = getCurrentUser();
     if (!currentUser) return showToast('Войдите в GitHub', 'error');
 
@@ -285,7 +284,6 @@
     } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
   }
 
-  // Полноэкранная модалка
   async function openFullModal(item) {
     const { id, title, body, author, date, game, labels, type } = item;
     const currentUser = getCurrentUser();
@@ -392,7 +390,6 @@
     }
   }
 
-  // Редактор поста с performAction
   async function openEditorModal(mode, initialData, context, existingId = null) {
     if (!hasScope('repo')) {
       showToast('Требуется scope repo', 'error');
@@ -487,6 +484,8 @@
       const title = titleInput.value.trim();
       const body = bodyTextarea.value;
       if (!title) return showToast('Введите заголовок', 'error');
+      if (title.length > 100) return showToast('Заголовок не должен превышать 100 символов', 'error');
+      if (body.length > 10000) return showToast('Текст поста не должен превышать 10000 символов', 'error');
 
       let finalBody = body;
       let labels = [`game:${game}`];

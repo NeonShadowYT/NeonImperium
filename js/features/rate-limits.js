@@ -1,12 +1,11 @@
-// js/features/rate-limits.js – единая система лимитов, очереди и выполнения действий
+// js/features/rate-limits.js
 (function() {
-    // ---------- Конфигурация лимитов ----------
     const LIMITS = {
-        posts: 10,
-        comments: 50,
-        storageAdds: 30,
+        posts: 4,
+        comments: 16,
+        storageAdds: 16,
         cacheClears: 5,
-        reactions: 20   // 👀 и ❤️ вместе
+        reactions: 16
     };
 
     const STORAGE_KEY = 'rate_limits';
@@ -19,7 +18,6 @@
     let currentCounts = null;
     let today = null;
 
-    // ---------- Инициализация IndexedDB для очереди ----------
     function openDB() {
         return new Promise((resolve, reject) => {
             if (db) { resolve(db); return; }
@@ -38,7 +36,6 @@
         });
     }
 
-    // ---------- Счётчики (localStorage) ----------
     function getToday() {
         return new Date().toDateString();
     }
@@ -77,12 +74,10 @@
         currentCounts[action]++;
         saveCounts();
         updateIndicators();
-        // После инкремента пробуем обработать очередь
         processQueue().catch(console.warn);
         if (window._ratePanelOpen) refreshPanel();
     }
 
-    // Сброс в полночь
     function checkDayReset() {
         const newToday = getToday();
         if (newToday !== today) {
@@ -95,14 +90,12 @@
         }
     }
 
-    // ---------- Очередь (IndexedDB) ----------
     async function enqueueAction(action, data) {
         checkDayReset();
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
 
-        // Проверка дубликата: для одного типа действия и одинаковых данных (кроме timestamp)
         const existing = await new Promise((resolve) => {
             const index = store.index('action');
             const range = IDBKeyRange.only(action);
@@ -110,7 +103,6 @@
             request.onsuccess = () => {
                 const items = request.result.filter(item => item.status === 'pending' || item.status === 'failed');
                 let duplicate = false;
-                // Для реакций проверяем issueNumber и content
                 if (action === 'reactions') {
                     duplicate = items.some(item => item.data.issueNumber === data.issueNumber && item.data.content === data.content);
                 } else if (action === 'comments') {
@@ -128,7 +120,6 @@
                         duplicate = items.some(item => item.data.bookmark.saveData && item.data.bookmark.saveData.hash === data.bookmark.saveData.hash);
                     }
                 } else if (action === 'cacheClears') {
-                    // не дублируем
                 }
                 resolve(duplicate);
             };
@@ -136,7 +127,7 @@
         });
 
         if (existing) {
-            console.log('[RateLimits] Действие уже в очереди:', action);
+            console.log('[RateLimits] Duplicate action skipped:', action);
             return null;
         }
 
@@ -154,16 +145,10 @@
         });
         await tx.done;
 
-        // Показываем уведомление
         window.UIUtils?.showToast(`Действие "${actionLabels[action] || action}" сохранено в очередь`, 'info');
-
-        // Обновляем панель
         if (window._ratePanelOpen) refreshPanel();
         updateIndicators();
-
-        // Регистрируем background sync
         registerSync().catch(console.warn);
-
         return id;
     }
 
@@ -201,18 +186,14 @@
 
         if (pending.length === 0) return;
 
-        // Сортируем по времени (старые сначала)
         pending.sort((a, b) => a.timestamp - b.timestamp);
 
-        // Обрабатываем с задержкой между действиями, чтобы не превысить вторичные лимиты
         for (const item of pending) {
-            // Проверяем актуальность действия
             let valid = true;
             if (window.GithubCore && typeof window.GithubCore.isActionStillValid === 'function') {
                 valid = await window.GithubCore.isActionStillValid(item.action, item.data);
             }
             if (!valid) {
-                // Удаляем неактуальное действие
                 await new Promise((resolve, reject) => {
                     const req = store.delete(item.id);
                     req.onsuccess = resolve;
@@ -221,15 +202,12 @@
                 continue;
             }
 
-            // Проверяем лимит для этого действия
             if (!checkLimit(item.action)) {
-                // Не можем выполнить сейчас – оставляем в очереди (прерываем цикл, так как лимиты могут восстановиться позже)
                 break;
             }
 
             try {
                 await executeAction(item.action, item.data);
-                // Успешно – удаляем и инкрементим
                 await new Promise((resolve, reject) => {
                     const req = store.delete(item.id);
                     req.onsuccess = resolve;
@@ -237,11 +215,9 @@
                 });
                 increment(item.action);
                 addHistory(item.action, item.data, 'completed');
-                // Небольшая задержка между успешными действиями
                 await new Promise(r => setTimeout(r, 500));
             } catch (err) {
-                console.warn('[RateLimits] Ошибка выполнения действия из очереди:', err);
-                // Если ошибка непреодолима (например, 404), удаляем
+                console.warn('[RateLimits] Error executing queued action:', err);
                 if (err.status === 404 || err.message.includes('not found')) {
                     await new Promise((resolve, reject) => {
                         const req = store.delete(item.id);
@@ -250,7 +226,6 @@
                     });
                     addHistory(item.action, item.data, 'failed');
                 } else {
-                    // Увеличиваем счётчик ретраев
                     if (item.retries >= 5) {
                         await new Promise((resolve, reject) => {
                             const req = store.delete(item.id);
@@ -276,7 +251,6 @@
         if (window._ratePanelOpen) refreshPanel();
     }
 
-    // Исполнение действия (вызов реальных API)
     async function executeAction(action, data) {
         switch (action) {
             case 'posts':
@@ -293,7 +267,6 @@
                 await window.BookmarkStorage.addBookmark(data.bookmark);
                 break;
             case 'cacheClears':
-                // Очистка кеша – выполняем через RateLimits.clearAllCache
                 await clearAllCacheInternal();
                 break;
             case 'reactions':
@@ -304,7 +277,6 @@
         }
     }
 
-    // ---------- История (локально в localStorage) ----------
     function addHistory(action, data, status) {
         let history = [];
         try {
@@ -323,31 +295,26 @@
         } catch { return []; }
     }
 
-    // ---------- Очистка кеша (внутренняя) ----------
     async function clearAllCacheInternal() {
         const cacheNames = await caches.keys();
         for (const name of cacheNames) {
             await caches.delete(name);
         }
-        // Чистим localStorage, исключая лимиты, историю и важные настройки
         const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token'];
         for (const key of Object.keys(localStorage)) {
             if (!exclude.some(ex => key.startsWith(ex))) {
                 localStorage.removeItem(key);
             }
         }
-        // sessionStorage чистим всё, кроме текущей сессии (можно оставить для языка и т.п.)
         const sessionExclude = ['preferredLanguage'];
         for (const key of Object.keys(sessionStorage)) {
             if (!sessionExclude.some(ex => key.startsWith(ex))) {
                 sessionStorage.removeItem(key);
             }
         }
-        // Также очищаем кеш в памяти
         if (window._cacheMap) window._cacheMap.clear();
     }
 
-    // ---------- Панель лимитов (модалка) ----------
     function openRatePanel() {
         window._ratePanelOpen = true;
         const { modal, closeModal } = window.UIUtils.createModal('Лимиты и кеш', buildPanelHTML(), { size: 'full' });
@@ -370,7 +337,6 @@
             if (window._ratePanelRefresh) window._ratePanelRefresh();
         };
 
-        // Обработчики кнопок очистки кеша
         modal.addEventListener('click', async (e) => {
             const target = e.target.closest('[data-clear-cache]');
             if (target) {
@@ -387,7 +353,6 @@
             }
         });
 
-        // Обновляем таймер
         updateTimerDisplay(modal);
         const timerInterval = setInterval(() => {
             if (!modal.parentNode) { clearInterval(timerInterval); return; }
@@ -404,7 +369,6 @@
             if (e.target === modal) newCloseWithClean();
         });
 
-        // Загружаем очередь
         loadQueueItems(modal);
     }
 
@@ -423,62 +387,97 @@
         const hours = Math.floor(msToMidnight / 3600000);
         const minutes = Math.floor((msToMidnight % 3600000) / 60000);
 
-        return `
-            <div class="rate-panel">
-                <div class="rate-summary">
-                    <div class="rate-timer">
-                        <i class="fas fa-clock"></i> Обновление через: <strong>${hours}ч ${minutes}м</strong>
-                    </div>
-                    <div class="rate-total">
-                        <span>Всего действий осталось: <strong>${totalRemaining}</strong></span>
-                    </div>
+        const style = `
+        <style>
+          .rate-panel { display:flex; flex-direction:column; gap:20px; }
+          .rate-summary { display:flex; justify-content:space-between; align-items:center; background:var(--bg-inner-gradient); padding:12px 20px; border-radius:16px; border:1px solid var(--border); flex-wrap:wrap; gap:8px; }
+          .rate-timer { font-size:14px; color:var(--text-secondary); }
+          .rate-timer strong { color:var(--accent); }
+          .rate-total { font-size:14px; color:var(--text-secondary); }
+          .rate-limits-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; }
+          .rate-limit-item { background:var(--bg-card); border-radius:12px; padding:12px 16px; border:1px solid var(--border); }
+          .rate-label { font-size:13px; color:var(--text-secondary); display:block; margin-bottom:6px; }
+          .rate-bar { height:8px; background:var(--bg-primary); border-radius:10px; overflow:hidden; margin:6px 0; }
+          .rate-fill { height:100%; border-radius:10px; transition:width 0.4s ease; }
+          .rate-count { font-size:12px; color:var(--text-secondary); display:flex; justify-content:space-between; }
+          .rate-count .used { color:var(--text-secondary); }
+          .rate-count .rem { font-weight:bold; }
+          .rate-info { font-size:13px; color:var(--text-secondary); background:var(--bg-inner-gradient); padding:10px 16px; border-radius:12px; border-left:3px solid var(--accent); }
+          .rate-tabs { display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:8px; flex-wrap:wrap; }
+          .rate-tab { background:transparent; border:none; color:var(--text-secondary); padding:6px 14px; border-radius:20px; cursor:pointer; font-family:var(--font-family); transition:0.2s; }
+          .rate-tab.active { background:var(--accent); color:#fff; }
+          .rate-tab-content { margin-top:8px; }
+          .rate-history-list,.rate-queue-list,.rate-cache-actions { max-height:300px; overflow-y:auto; }
+          .rate-history-item { display:flex; justify-content:space-between; padding:6px 12px; border-bottom:1px solid var(--border); font-size:13px; }
+          .rate-history-item.completed .rate-status { color:#4caf50; }
+          .rate-history-item.failed .rate-status { color:#f44336; }
+          .rate-action { color:var(--text-primary); }
+          .rate-time { color:var(--text-secondary); font-size:12px; }
+          .cache-buttons { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0; }
+          .cache-buttons button { background:var(--bg-inner-gradient); border:1px solid var(--border); color:var(--text-secondary); padding:6px 14px; border-radius:30px; cursor:pointer; font-family:var(--font-family); transition:0.2s; }
+          .cache-buttons button:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
+          #clear-all-cache { background:#f44336; color:#fff; border-color:#f44336; }
+          #clear-all-cache:hover { background:#d32f2f; }
+          .queue-item { display:flex; justify-content:space-between; padding:6px 12px; border-bottom:1px solid var(--border); font-size:13px; }
+          .queue-action { color:var(--text-primary); }
+          .queue-time { color:var(--text-secondary); font-size:12px; }
+        </style>`;
+
+        return style + `
+        <div class="rate-panel">
+          <div class="rate-summary">
+            <div class="rate-timer"><i class="fas fa-clock"></i> Обновление через: <strong>${hours}ч ${minutes}м</strong></div>
+            <div class="rate-total">Всего действий осталось: <strong>${totalRemaining}</strong></div>
+          </div>
+          <div class="rate-limits-grid">
+            ${Object.entries(remaining).map(([action, rem]) => {
+              const limit = LIMITS[action];
+              const used = limit - rem;
+              const pct = limit ? (rem / limit) * 100 : 100;
+              let color = '#4caf50';
+              if (pct < 30) color = '#f44336';
+              else if (pct < 60) color = '#ff9800';
+              return `
+                <div class="rate-limit-item">
+                  <span class="rate-label">${actionLabels[action] || action}</span>
+                  <div class="rate-bar"><div class="rate-fill" style="width:${pct}%;background:${color};"></div></div>
+                  <div class="rate-count">
+                    <span class="used">Использовано: ${used}</span>
+                    <span class="rem" style="color:${color};">Осталось: ${rem}</span>
+                  </div>
                 </div>
-                <div class="rate-limits-grid">
-                    ${Object.entries(remaining).map(([action, rem]) => `
-                        <div class="rate-limit-item">
-                            <span class="rate-label">${actionLabels[action] || action}</span>
-                            <div class="rate-bar">
-                                <div class="rate-fill" style="width: ${LIMITS[action] ? (rem / LIMITS[action]) * 100 : 100}%; background: ${rem > 0 ? 'var(--accent)' : '#f44336'};"></div>
-                            </div>
-                            <span class="rate-count">${rem} / ${LIMITS[action]}</span>
-                        </div>
-                    `).join('')}
-                </div>
-                <div class="rate-info">
-                    <p><i class="fas fa-info-circle"></i> Лимиты защищают ваш аккаунт от блокировок GitHub. При исчерпании лимита действия сохраняются в очередь и выполняются позже.</p>
-                </div>
-                <div class="rate-tabs">
-                    <button class="rate-tab active" data-tab="history">История</button>
-                    <button class="rate-tab" data-tab="queue">Очередь</button>
-                    <button class="rate-tab" data-tab="cache">Кеш</button>
-                </div>
-                <div class="rate-tab-content">
-                    <div id="rate-history" class="rate-history-list">
-                        ${getHistory().slice(-20).reverse().map(h => `
-                            <div class="rate-history-item ${h.status}">
-                                <span class="rate-action">${actionLabels[h.action] || h.action}</span>
-                                <span class="rate-status">${h.status === 'completed' ? '✅' : '❌'}</span>
-                                <span class="rate-time">${new Date(h.timestamp).toLocaleTimeString()}</span>
-                            </div>
-                        `).join('') || 'Нет истории'}
-                    </div>
-                    <div id="rate-queue" style="display:none;" class="rate-queue-list">
-                        <div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
-                    </div>
-                    <div id="rate-cache" style="display:none;" class="rate-cache-actions">
-                        <p>Очистите выборочно (удаляются только устаревшие данные):</p>
-                        <div class="cache-buttons">
-                            <button data-clear-cache="static">Статика (CSS, JS)</button>
-                            <button data-clear-cache="images">Изображения</button>
-                            <button data-clear-cache="api">API-кеш</button>
-                            <button data-clear-cache="dynamic">Динамические страницы</button>
-                            <button id="clear-all-cache" style="background:#f44336;">Очистить всё (кроме лимитов)</button>
-                        </div>
-                        <p style="font-size:12px; color:var(--text-secondary);">* Лимиты и очередь не удаляются.</p>
-                    </div>
-                </div>
+              `;
+            }).join('')}
+          </div>
+          <div class="rate-info"><i class="fas fa-info-circle"></i> Лимиты защищают ваш аккаунт. При исчерпании действия сохраняются в очередь и выполняются позже.</div>
+          <div class="rate-tabs">
+            <button class="rate-tab active" data-tab="history">История</button>
+            <button class="rate-tab" data-tab="queue">Очередь</button>
+            <button class="rate-tab" data-tab="cache">Кеш</button>
+          </div>
+          <div class="rate-tab-content">
+            <div id="rate-history" class="rate-history-list">${getHistory().slice(-20).reverse().map(h => `
+              <div class="rate-history-item ${h.status}">
+                <span class="rate-action">${actionLabels[h.action] || h.action}</span>
+                <span class="rate-status">${h.status === 'completed' ? '✅' : '❌'}</span>
+                <span class="rate-time">${new Date(h.timestamp).toLocaleTimeString()}</span>
+              </div>
+            `).join('') || 'Нет истории'}</div>
+            <div id="rate-queue" style="display:none;" class="rate-queue-list"><div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div></div>
+            <div id="rate-cache" style="display:none;" class="rate-cache-actions">
+              <p>Очистите выборочно (удаляются только устаревшие данные):</p>
+              <div class="cache-buttons">
+                <button data-clear-cache="static">Статика (CSS, JS)</button>
+                <button data-clear-cache="images">Изображения</button>
+                <button data-clear-cache="api">API-кеш</button>
+                <button data-clear-cache="dynamic">Динамические страницы</button>
+                <button id="clear-all-cache">Очистить всё (кроме лимитов)</button>
+              </div>
+              <p style="font-size:12px; color:var(--text-secondary);">* Лимиты и очередь не удаляются.</p>
             </div>
-        `;
+          </div>
+        </div>
+      `;
     }
 
     function updateTimerDisplay(modal) {
@@ -502,21 +501,19 @@
             return;
         }
         container.innerHTML = items.map(item => `
-            <div class="queue-item">
-                <span class="queue-action">${actionLabels[item.action] || item.action}</span>
-                <span class="queue-time">${new Date(item.timestamp).toLocaleString()}</span>
-                <span class="queue-status">${item.status === 'pending' ? '⏳' : '❌'}</span>
-            </div>
+          <div class="queue-item">
+            <span class="queue-action">${actionLabels[item.action] || item.action}</span>
+            <span class="queue-time">${new Date(item.timestamp).toLocaleString()}</span>
+            <span class="queue-status">${item.status === 'pending' ? '⏳' : '❌'}</span>
+          </div>
         `).join('');
     }
 
     let refreshPanel = () => {};
 
-    // ---------- Очистка кеша по типу (только устаревшее) ----------
     async function clearCacheType(type) {
         const cacheNames = await caches.keys();
         const now = Date.now();
-        // Определяем TTL для каждого типа
         const ttlMap = {
             'static': window.GithubCore?.CONFIG?.CACHE_TTL || 10 * 60 * 1000,
             'images': window.GithubCore?.CONFIG?.IMAGE_CACHE_TTL || 30 * 24 * 60 * 60 * 1000,
@@ -525,7 +522,6 @@
         };
         const ttl = ttlMap[type] || 10 * 60 * 1000;
 
-        // Для каждого кеша проверяем записи и удаляем устаревшие
         for (const name of cacheNames) {
             if (type === 'static' && name === 'static-v7') {
                 await cleanCacheByName(name, ttl);
@@ -537,7 +533,6 @@
                 await cleanCacheByName(name, ttl);
             }
         }
-        // Дополнительно очищаем localStorage для API-кеша
         if (type === 'api') {
             const prefix = 'gh_api_';
             for (const key of Object.keys(localStorage)) {
@@ -568,7 +563,6 @@
         }
     }
 
-    // ---------- Индикаторы ----------
     function updateIndicators() {
         document.querySelectorAll('.rate-indicator').forEach(el => {
             const action = el.dataset.action;
@@ -578,7 +572,6 @@
         });
     }
 
-    // Добавление индикатора в DOM
     function addIndicator(parent, action, label) {
         const wrapper = document.createElement('span');
         wrapper.className = 'rate-indicator-wrapper';
@@ -595,7 +588,6 @@
         return indicator;
     }
 
-    // ---------- Background Sync ----------
     let syncRegistered = false;
     const SYNC_TAG = 'github-queue-sync';
 
@@ -612,7 +604,6 @@
         }
     }
 
-    // Обработка события sync от SW
     if (navigator.serviceWorker) {
         navigator.serviceWorker.addEventListener('message', (event) => {
             if (event.data?.type === 'SYNC_TRIGGERED') {
@@ -621,18 +612,14 @@
         });
     }
 
-    // ---------- Инициализация ----------
     function init() {
         loadCounts();
-        // Периодическая проверка смены дня (каждую минуту)
         setInterval(() => {
             checkDayReset();
         }, 60000);
 
-        // Обработка очереди при загрузке
         processQueue().catch(console.warn);
 
-        // Добавляем пункт в меню профиля для открытия панели
         window.addEventListener('github-auth-ready', () => {
             const profile = document.querySelector('.nav-profile');
             if (profile) {
@@ -652,12 +639,10 @@
             }
         });
 
-        // Обработка события для открытия панели
         window.addEventListener('open-rate-panel', () => {
             openRatePanel();
         });
 
-        // Клик по индикатору открывает панель
         document.addEventListener('click', (e) => {
             const indicator = e.target.closest('.rate-indicator-wrapper, .rate-indicator');
             if (indicator) {
@@ -677,7 +662,6 @@
         reactions: 'Реакции'
     };
 
-    // Экспорт
     window.RateLimits = {
         init,
         checkLimit,
@@ -696,7 +680,6 @@
         actionLabels
     };
 
-    // Автоинициализация
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
