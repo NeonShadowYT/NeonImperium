@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – DocumentFragment и уже увеличен TTL для видео
+// js/pages/news-feed.js
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues, loadIssue } = window.GithubAPI;
@@ -40,7 +40,18 @@
 
   async function handleBookmark(item) {
     if (!(await ensureLoggedInAndGist())) { showToast('Необходимо войти с правами gist', 'error'); return; }
-    if (!window.BookmarkStorage) { try { await loadModule('js/features/storage.js'); } catch { showToast('Не удалось загрузить хранилище', 'error'); return; } }
+    if (!window.BookmarkStorage) {
+      try {
+        await loadModule('js/features/storage.js');
+      } catch (e) {
+        showToast('Не удалось загрузить хранилище', 'error');
+        return;
+      }
+    }
+    if (!window.BookmarkStorage) {
+      showToast('Хранилище не загружено', 'error');
+      return;
+    }
     const bookmark = {
       url: item.type === 'video' ? `https://www.youtube.com/watch?v=${item.id}` : `${location.origin}${location.pathname}?post=${item.number}`,
       title: item.title, type: item.type === 'video' ? 'video' : 'post', thumbnail: item.thumbnail || DEFAULT_IMAGE,
@@ -101,7 +112,6 @@
   }
   async function loadVideosFromRSS2JSON() {
     const cacheKey = 'youtube_videos_rss2json_v3';
-    // TTL увеличен до 30 минут
     const cached = cacheGet(cacheKey, 30 * 60 * 1000);
     if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
     const all = [];

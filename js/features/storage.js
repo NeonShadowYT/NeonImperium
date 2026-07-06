@@ -1,4 +1,4 @@
-// js/features/storage.js – хранилище закладок с performAction
+// js/features/storage.js
 (function() {
   const {
     CONFIG, escapeHtml, createElement, formatDate, debounce,
@@ -556,14 +556,12 @@
     return null;
   }
 
-  // Основная функция добавления закладки – использует performAction
   async function addBookmark(bookmarkOrUrl, title, fileContent, fileName) {
     if (!currentUser) {
       showToast('Войдите в аккаунт GitHub с правами gist', 'error');
       throw new Error('not_logged_in');
     }
 
-    // Формируем объект закладки
     let bookmarkData;
     let url = null;
     let customTitle = null;
@@ -602,7 +600,6 @@
       bookmarkData = { url, title: customTitle, fileContent: customFileContent, fileName: customFileName, ...extraData };
     }
 
-    // Проверяем дубликат локально
     if (url && currentBookmarks.some(b => b.url === url)) {
       showToast('Уже в избранном', 'info');
       throw new Error('duplicate');
@@ -615,7 +612,6 @@
       }
     }
 
-    // Оптимистично добавляем локально
     const tempId = 'temp-' + Date.now();
     const newBookmark = {
       id: tempId,
@@ -645,17 +641,9 @@
     currentBookmarks = [newBookmark, ...currentBookmarks];
     if (modalRef) renderBookmarks(modalRef);
 
-    // Отправляем через performAction
     try {
       const result = await performAction('storageAdds', { bookmark: bookmarkData }, async () => {
-        // Выполняем фактическое сохранение в Gist (логика из оригинального addBookmark)
-        // Здесь мы должны реализовать сохранение в Gist и вернуть финальный объект
-        // Для краткости используем существующую логику doSaveBookmarks, но она сохраняет все закладки.
-        // Поскольку у нас уже есть локальная закладка, мы можем вызвать doSaveBookmarks для синхронизации.
-        // Однако performAction ожидает, что асинхронная функция вернёт результат.
-        // Мы можем просто вызвать doSaveBookmarks и вернуть текущий список закладок.
         await doSaveBookmarks();
-        // Находим нашу закладку с tempId и возвращаем её с новым id
         const idx = currentBookmarks.findIndex(b => b.id === tempId);
         if (idx !== -1) {
           const final = { ...currentBookmarks[idx], id: Date.now() + '-' + Math.random().toString(36), _pending: false };
@@ -667,7 +655,6 @@
 
       if (result.queued) {
         showToast('Закладка сохранена в очередь', 'info');
-        // Оставляем _pending
       } else {
         showToast('Закладка добавлена', 'success');
         const idx = currentBookmarks.findIndex(b => b.id === tempId);
@@ -680,7 +667,6 @@
         if (modalRef) renderBookmarks(modalRef);
       }
     } catch (err) {
-      // Удаляем локальную закладку при ошибке
       currentBookmarks = currentBookmarks.filter(b => b.id !== tempId);
       if (modalRef) renderBookmarks(modalRef);
       showToast('Ошибка: ' + err.message, 'error');

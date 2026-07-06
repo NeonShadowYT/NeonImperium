@@ -404,7 +404,7 @@
           .rate-count .rem { font-weight:bold; }
           .rate-info { font-size:13px; color:var(--text-secondary); background:var(--bg-inner-gradient); padding:10px 16px; border-radius:12px; border-left:3px solid var(--accent); }
           .rate-tabs { display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:8px; flex-wrap:wrap; }
-          .rate-tab { background:transparent; border:none; color:var(--text-secondary); padding:6px 14px; border-radius:20px; cursor:pointer; font-family:var(--font-family); transition:0.2s; }
+          .rate-tab { background:transparent; border:none; color:var(--text-secondary); padding:6px 14px; border-radius:20px; cursor:pointer; font-family:var(--font-family); transition:0.2s; display:flex; align-items:center; gap:6px; }
           .rate-tab.active { background:var(--accent); color:#fff; }
           .rate-tab-content { margin-top:8px; }
           .rate-history-list,.rate-queue-list,.rate-cache-actions { max-height:300px; overflow-y:auto; }
@@ -414,20 +414,21 @@
           .rate-action { color:var(--text-primary); }
           .rate-time { color:var(--text-secondary); font-size:12px; }
           .cache-buttons { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0; }
-          .cache-buttons button { background:var(--bg-inner-gradient); border:1px solid var(--border); color:var(--text-secondary); padding:6px 14px; border-radius:30px; cursor:pointer; font-family:var(--font-family); transition:0.2s; }
+          .cache-buttons button { background:var(--bg-inner-gradient); border:1px solid var(--border); color:var(--text-secondary); padding:6px 14px; border-radius:30px; cursor:pointer; font-family:var(--font-family); transition:0.2s; display:flex; align-items:center; gap:6px; }
           .cache-buttons button:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
           #clear-all-cache { background:#f44336; color:#fff; border-color:#f44336; }
           #clear-all-cache:hover { background:#d32f2f; }
           .queue-item { display:flex; justify-content:space-between; padding:6px 12px; border-bottom:1px solid var(--border); font-size:13px; }
           .queue-action { color:var(--text-primary); }
           .queue-time { color:var(--text-secondary); font-size:12px; }
+          .empty-queue { color:var(--text-secondary); text-align:center; padding:20px; }
         </style>`;
 
         return style + `
         <div class="rate-panel">
           <div class="rate-summary">
             <div class="rate-timer"><i class="fas fa-clock"></i> Обновление через: <strong>${hours}ч ${minutes}м</strong></div>
-            <div class="rate-total">Всего действий осталось: <strong>${totalRemaining}</strong></div>
+            <div class="rate-total"><i class="fas fa-chart-bar"></i> Всего осталось: <strong>${totalRemaining}</strong></div>
           </div>
           <div class="rate-limits-grid">
             ${Object.entries(remaining).map(([action, rem]) => {
@@ -439,11 +440,11 @@
               else if (pct < 60) color = '#ff9800';
               return `
                 <div class="rate-limit-item">
-                  <span class="rate-label">${actionLabels[action] || action}</span>
+                  <span class="rate-label"><i class="fas ${actionIcons[action] || 'fa-circle'}"></i> ${actionLabels[action] || action}</span>
                   <div class="rate-bar"><div class="rate-fill" style="width:${pct}%;background:${color};"></div></div>
                   <div class="rate-count">
-                    <span class="used">Использовано: ${used}</span>
-                    <span class="rem" style="color:${color};">Осталось: ${rem}</span>
+                    <span class="used">${used} / ${limit}</span>
+                    <span class="rem" style="color:${color};"><i class="fas fa-arrow-left"></i> ${rem}</span>
                   </div>
                 </div>
               `;
@@ -451,9 +452,9 @@
           </div>
           <div class="rate-info"><i class="fas fa-info-circle"></i> Лимиты защищают ваш аккаунт. При исчерпании действия сохраняются в очередь и выполняются позже.</div>
           <div class="rate-tabs">
-            <button class="rate-tab active" data-tab="history">История</button>
-            <button class="rate-tab" data-tab="queue">Очередь</button>
-            <button class="rate-tab" data-tab="cache">Кеш</button>
+            <button class="rate-tab active" data-tab="history"><i class="fas fa-history"></i> История</button>
+            <button class="rate-tab" data-tab="queue"><i class="fas fa-clock"></i> Очередь</button>
+            <button class="rate-tab" data-tab="cache"><i class="fas fa-database"></i> Кеш</button>
           </div>
           <div class="rate-tab-content">
             <div id="rate-history" class="rate-history-list">${getHistory().slice(-20).reverse().map(h => `
@@ -462,16 +463,16 @@
                 <span class="rate-status">${h.status === 'completed' ? '✅' : '❌'}</span>
                 <span class="rate-time">${new Date(h.timestamp).toLocaleTimeString()}</span>
               </div>
-            `).join('') || 'Нет истории'}</div>
+            `).join('') || '<div class="empty-queue">Нет истории</div>'}</div>
             <div id="rate-queue" style="display:none;" class="rate-queue-list"><div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div></div>
             <div id="rate-cache" style="display:none;" class="rate-cache-actions">
-              <p>Очистите выборочно (удаляются только устаревшие данные):</p>
+              <p><i class="fas fa-broom"></i> Очистите выборочно (удаляются только устаревшие данные):</p>
               <div class="cache-buttons">
-                <button data-clear-cache="static">Статика (CSS, JS)</button>
-                <button data-clear-cache="images">Изображения</button>
-                <button data-clear-cache="api">API-кеш</button>
-                <button data-clear-cache="dynamic">Динамические страницы</button>
-                <button id="clear-all-cache">Очистить всё (кроме лимитов)</button>
+                <button data-clear-cache="static"><i class="fas fa-file-code"></i> Статика (CSS, JS)</button>
+                <button data-clear-cache="images"><i class="fas fa-image"></i> Изображения</button>
+                <button data-clear-cache="api"><i class="fas fa-plug"></i> API-кеш</button>
+                <button data-clear-cache="dynamic"><i class="fas fa-globe"></i> Динамические страницы</button>
+                <button id="clear-all-cache"><i class="fas fa-trash-alt"></i> Очистить всё (кроме лимитов)</button>
               </div>
               <p style="font-size:12px; color:var(--text-secondary);">* Лимиты и очередь не удаляются.</p>
             </div>
@@ -497,12 +498,12 @@
         if (!container) return;
         const items = await getPendingActions();
         if (items.length === 0) {
-            container.innerHTML = '<p class="text-secondary">Очередь пуста</p>';
+            container.innerHTML = '<div class="empty-queue"><i class="fas fa-check-circle"></i> Очередь пуста</div>';
             return;
         }
         container.innerHTML = items.map(item => `
           <div class="queue-item">
-            <span class="queue-action">${actionLabels[item.action] || item.action}</span>
+            <span class="queue-action"><i class="fas ${actionIcons[item.action] || 'fa-circle'}"></i> ${actionLabels[item.action] || item.action}</span>
             <span class="queue-time">${new Date(item.timestamp).toLocaleString()}</span>
             <span class="queue-status">${item.status === 'pending' ? '⏳' : '❌'}</span>
           </div>
@@ -660,6 +661,14 @@
         storageAdds: 'Добавления в хранилище',
         cacheClears: 'Очистка кеша',
         reactions: 'Реакции'
+    };
+
+    const actionIcons = {
+        posts: 'fa-newspaper',
+        comments: 'fa-comment',
+        storageAdds: 'fa-box-archive',
+        cacheClears: 'fa-broom',
+        reactions: 'fa-heart'
     };
 
     window.RateLimits = {

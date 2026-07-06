@@ -253,8 +253,27 @@
   }
 
   async function addToBookmarks(postData) {
-    if (!window.BookmarkStorage) await loadModule('js/features/storage.js');
-    if (!window.BookmarkStorage) return showToast('Хранилище не загружено', 'error');
+    if (!window.BookmarkStorage) {
+      try {
+        await loadModule('js/features/storage.js');
+      } catch (e) {
+        showToast('Не удалось загрузить хранилище', 'error');
+        return;
+      }
+    }
+    if (!window.BookmarkStorage) {
+      showToast('Хранилище не загружено', 'error');
+      return;
+    }
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      showToast('Войдите в GitHub', 'error');
+      return;
+    }
+    if (!hasScope('gist')) {
+      showToast('Требуется scope gist', 'error');
+      return;
+    }
     try {
       await window.BookmarkStorage.addBookmark({
         url: `${location.origin}${location.pathname}?post=${postData.id}`,
@@ -315,9 +334,10 @@
       <div class="comments-section">
         <h3>Комментарии</h3>
         <div id="modal-comments-list" class="comments-list"></div>
-        ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px; align-items:center;">
-          <input type="text" id="new-comment-input" placeholder="Ваш комментарий..." style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border);">
+        ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px; align-items:center; flex-wrap:wrap;">
+          <input type="text" id="new-comment-input" placeholder="Ваш комментарий..." style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:150px;">
           <button id="submit-comment-btn" class="button small">Отправить</button>
+          <span style="font-size:12px; color:var(--text-secondary); margin-left:4px;" id="comment-counter">0/400</span>
           <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
             Осталось: <span class="rate-indicator" data-action="comments">${window.RateLimits ? window.RateLimits.getRemaining('comments') : '?'}</span>
           </span>
@@ -377,12 +397,25 @@
     await refreshComments();
     const submitBtn = modal.querySelector('#submit-comment-btn');
     const commentInput = modal.querySelector('#new-comment-input');
+    const counterEl = modal.querySelector('#comment-counter');
     if (submitBtn && commentInput) {
+      if (counterEl) {
+        commentInput.addEventListener('input', () => {
+          const len = commentInput.value.length;
+          counterEl.textContent = `${len}/400`;
+          counterEl.style.color = len > 400 ? '#f44336' : 'var(--text-secondary)';
+        });
+      }
       const debouncedSubmit = window.GithubCore.debounce(async () => {
         const text = commentInput.value.trim();
         if (!text) return;
+        if (text.length > 400) {
+          showToast('Комментарий не может превышать 400 символов', 'error');
+          return;
+        }
         await addComment(id, text, refreshComments);
         commentInput.value = '';
+        if (counterEl) { counterEl.textContent = '0/400'; counterEl.style.color = 'var(--text-secondary)'; }
         const indicator = modal.querySelector('.rate-indicator[data-action="comments"]');
         if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('comments');
       }, 1000);
@@ -407,7 +440,10 @@
 
     const html = `
       <div style="display:flex; flex-direction:column; gap:12px;">
-        <input type="text" id="editor-title" placeholder="Заголовок" value="${escapeHtml(currentTitle)}" style="padding:12px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <input type="text" id="editor-title" placeholder="Заголовок" value="${escapeHtml(currentTitle)}" style="flex:1; padding:12px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:200px;">
+          <span style="font-size:12px; color:var(--text-secondary);" id="title-counter">${currentTitle.length}/100</span>
+        </div>
         <div class="editor-toolbar" id="editor-toolbar"></div>
         <div class="editor-split">
           <div class="editor-split-left">
@@ -415,16 +451,21 @@
           </div>
           <div class="editor-split-right preview-area" id="preview-area"></div>
         </div>
-        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          <div class="access-switch">
-            <button id="access-public" class="access-switch-btn active">Публичный</button>
-            <button id="access-private" class="access-switch-btn">Приватный</button>
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:space-between;">
+          <div style="display:flex; gap:8px; align-items:center;">
+            <div class="access-switch">
+              <button id="access-public" class="access-switch-btn active">Публичный</button>
+              <button id="access-private" class="access-switch-btn">Приватный</button>
+            </div>
+            <input type="text" id="allowed-users" placeholder="Логины через запятую" value="${escapeHtml(allowedUsers)}" style="display:none; flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:150px;">
           </div>
-          <input type="text" id="allowed-users" placeholder="Логины через запятую" value="${escapeHtml(allowedUsers)}" style="display:none; flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border);">
-          <button id="editor-submit" class="button wide">${mode === 'edit' ? 'Обновить' : 'Опубликовать'}</button>
-          <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
-            Осталось постов: <span class="rate-indicator" data-action="posts">${window.RateLimits ? window.RateLimits.getRemaining('posts') : '?'}</span>
-          </span>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="font-size:12px; color:var(--text-secondary);" id="body-counter">${currentBody.length}/10000</span>
+            <button id="editor-submit" class="button wide">${mode === 'edit' ? 'Обновить' : 'Опубликовать'}</button>
+            <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
+              Осталось постов: <span class="rate-indicator" data-action="posts">${window.RateLimits ? window.RateLimits.getRemaining('posts') : '?'}</span>
+            </span>
+          </div>
         </div>
       </div>
     `;
@@ -437,6 +478,8 @@
     const privateBtn = modal.querySelector('#access-private');
     const allowedInput = modal.querySelector('#allowed-users');
     const submitBtn = modal.querySelector('#editor-submit');
+    const titleCounter = modal.querySelector('#title-counter');
+    const bodyCounter = modal.querySelector('#body-counter');
 
     if (window.Editor && window.Editor.createEditorToolbar) {
       const toolbar = window.Editor.createEditorToolbar(bodyTextarea);
@@ -461,9 +504,18 @@
       const val = bodyTextarea.value;
       renderMarkdownWithEditor(val, preview);
       saveDraft(draftKey, { title: titleInput.value, body: val });
+      if (bodyCounter) {
+        bodyCounter.textContent = `${val.length}/10000`;
+        bodyCounter.style.color = val.length > 10000 ? '#f44336' : 'var(--text-secondary)';
+      }
+      if (titleCounter) {
+        const tlen = titleInput.value.length;
+        titleCounter.textContent = `${tlen}/100`;
+        titleCounter.style.color = tlen > 100 ? '#f44336' : 'var(--text-secondary)';
+      }
     }
     bodyTextarea.addEventListener('input', updatePreview);
-    titleInput.addEventListener('input', () => saveDraft(draftKey, { title: titleInput.value, body: bodyTextarea.value }));
+    titleInput.addEventListener('input', updatePreview);
     updatePreview();
 
     let privMode = false;
@@ -532,6 +584,7 @@
     openFullModal,
     openEditorModal,
     canViewPost,
+    addToBookmarks,
     invalidateCache: (num) => { cacheRemoveByPrefix(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${num}/reactions`); }
   };
 })();
