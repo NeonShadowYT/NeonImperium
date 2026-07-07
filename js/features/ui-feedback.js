@@ -4,16 +4,19 @@
     createElement, escapeHtml, renderMarkdown, loadModule,
     performAction, isActionStillValid, extractAllowed, decryptPrivateBody,
     cacheRemoveByPrefix, CONFIG, getPlainTextLength, containsGitHubToken,
-    cacheGet, cacheSet // добавлены функции кеширования
+    cacheGet, cacheSet
   } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
 
-  // Кеш для реакций и комментариев
+  // Увеличен TTL для комментариев до 10 минут
   const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
-  const COMMENTS_CACHE_TTL = 5 * 60 * 1000;
+  const COMMENTS_CACHE_TTL = 10 * 60 * 1000;
   const reactionsCache = new Map();
   const commentsCache = new Map();
+
+  // Для предотвращения дублирующихся запросов комментариев
+  const pendingCommentsRequests = new Map();
 
   let reactionsListCache = new Map();
   const CACHE_TTL = 5 * 60 * 1000;
@@ -186,31 +189,59 @@
     container.appendChild(btnsDiv);
   }
 
+  // Функция загрузки комментариев с кешированием и защитой от дублей
   async function loadComments(issueNumber, container, onUpdate, signal) {
     if (!window.GithubAPI) await loadModule('js/core/github-api.js');
-    // Проверяем кеш
+
     const cacheKey = `comments_${issueNumber}`;
+    // Проверяем кеш
     const cached = cacheGet(cacheKey, COMMENTS_CACHE_TTL);
     if (cached && !signal?.aborted) {
       renderComments(cached, container);
-      // Фоновое обновление
-      window.GithubAPI.loadComments(issueNumber, signal)
-        .then(newComments => {
-          cacheSet(cacheKey, newComments);
-          if (!signal?.aborted) renderComments(newComments, container);
-        })
-        .catch(() => {});
+      // Не делаем фоновое обновление, чтобы не создавать лишние запросы
       return;
     }
 
+    // Проверяем, не идёт ли уже запрос для этого issue
+    if (pendingCommentsRequests.has(issueNumber)) {
+      // Если запрос уже в процессе, дожидаемся его результата
+      try {
+        const comments = await pendingCommentsRequests.get(issueNumber);
+        if (!signal?.aborted) {
+          renderComments(comments, container);
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.warn('Ошибка при ожидании комментариев:', err);
+      }
+      return;
+    }
+
+    // Создаём новый запрос
+    const promise = (async () => {
+      try {
+        const comments = await window.GithubAPI.loadComments(issueNumber, signal);
+        if (signal && signal.aborted) throw new Error('Aborted');
+        cacheSet(cacheKey, comments);
+        return comments;
+      } catch (err) {
+        if (err.name === 'AbortError' || err.message === 'Aborted') throw err;
+        console.error(err);
+        throw err;
+      } finally {
+        pendingCommentsRequests.delete(issueNumber);
+      }
+    })();
+
+    pendingCommentsRequests.set(issueNumber, promise);
+
     try {
-      const comments = await window.GithubAPI.loadComments(issueNumber, signal);
-      if (signal && signal.aborted) return;
-      cacheSet(cacheKey, comments);
-      renderComments(comments, container);
+      const comments = await promise;
+      if (!signal?.aborted) {
+        renderComments(comments, container);
+      }
     } catch (err) {
-      if (err.name === 'AbortError' || err.message === 'The operation was aborted.') return;
-      console.error(err);
+      if (err.name === 'AbortError' || err.message === 'Aborted') return;
       container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
     }
   }
@@ -499,6 +530,7 @@
       }
     }
 
+    // Загрузка комментариев (с кешем и защитой от дублей)
     await refreshComments();
 
     const submitBtn = modal.querySelector('#submit-comment-btn');
