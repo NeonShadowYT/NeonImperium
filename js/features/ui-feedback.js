@@ -9,7 +9,6 @@
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
 
-  // Кеширование
   const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
   const COMMENTS_CACHE_TTL = 10 * 60 * 1000;
   const COMMENTS_ERROR_COOLDOWN = 5 * 60 * 1000;
@@ -571,6 +570,7 @@
     }
   }
 
+  // ================== НОВЫЙ РЕДАКТОР ==================
   async function openEditorModal(mode, initialData, context, existingId = null) {
     if (!hasScope('repo')) {
       showToast('Требуется scope repo', 'error');
@@ -586,28 +586,25 @@
     let currentBody = savedBody;
     let allowedUsers = '';
 
-    const modalContent = document.createElement('div');
-    modalContent.className = 'editor-unified';
+    // Создаём модальное окно с пустым контейнером
+    const { modal, closeModal } = createModal(
+      mode === 'new' ? 'Создать пост' : 'Редактировать пост',
+      '<div class="editor-container"></div>',
+      { size: 'full' }
+    );
 
-    const previewArea = createElement('div', 'preview-area unified-preview', {
-      padding: '20px',
-      background: 'var(--bg-primary)',
-      borderRadius: '16px',
-      border: '1px solid var(--border)',
-      minHeight: '200px',
-      marginBottom: '12px',
-      overflowY: 'auto'
-    });
-    await renderMarkdownWithEditor(currentBody, previewArea);
+    const container = modal.querySelector('.editor-container');
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '12px';
 
-    const controlsRow = createElement('div', 'editor-controls', {
+    // ----- Заголовок -----
+    const titleRow = createElement('div', 'editor-title-row', {
       display: 'flex',
       gap: '12px',
       alignItems: 'center',
-      flexWrap: 'wrap',
-      marginBottom: '12px'
+      flexWrap: 'wrap'
     });
-
     const titleInput = createElement('input', 'editor-title-input', {
       flex: '1',
       padding: '10px 16px',
@@ -621,41 +618,24 @@
     titleInput.type = 'text';
     titleInput.placeholder = 'Заголовок';
     titleInput.value = currentTitle;
-
     const titleCounter = createElement('span', 'title-counter', {
       fontSize: '12px',
       color: 'var(--text-secondary)',
       marginLeft: '4px'
     });
     titleCounter.textContent = `${currentTitle.length}/100`;
+    titleRow.appendChild(titleInput);
+    titleRow.appendChild(titleCounter);
+    container.appendChild(titleRow);
 
-    // ИСПРАВЛЕНИЕ: добавляем класс 'edit-code-btn' к кнопке
-    const editCodeBtn = createElement('button', 'button small edit-code-btn', {
-      background: 'var(--bg-inner-gradient)',
-      border: '1px solid var(--border)',
-      color: 'var(--text-secondary)',
-      padding: '6px 14px',
-      borderRadius: '30px',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '6px',
-      fontFamily: 'var(--font-family)'
-    });
-    editCodeBtn.innerHTML = '<i class="fas fa-code"></i> Редактировать код';
-
-    controlsRow.appendChild(titleInput);
-    controlsRow.appendChild(titleCounter);
-    controlsRow.appendChild(editCodeBtn);
-
+    // ----- Переключатель приватности -----
     const accessRow = createElement('div', 'access-row', {
       display: 'flex',
       gap: '12px',
       alignItems: 'center',
       flexWrap: 'wrap',
-      marginBottom: '12px'
+      marginBottom: '4px'
     });
-
     const accessSwitch = createElement('div', 'access-switch', {
       display: 'inline-flex',
       background: 'var(--bg-primary)',
@@ -669,7 +649,6 @@
     privateBtn.textContent = 'Приватный';
     accessSwitch.appendChild(publicBtn);
     accessSwitch.appendChild(privateBtn);
-
     const allowedInput = createElement('input', 'allowed-users-input', {
       display: 'none',
       flex: '1',
@@ -683,10 +662,90 @@
     });
     allowedInput.placeholder = 'Логины через запятую';
     allowedInput.value = allowedUsers;
-
     accessRow.appendChild(accessSwitch);
     accessRow.appendChild(allowedInput);
+    container.appendChild(accessRow);
 
+    // ----- Редактор (тулбар + две колонки) -----
+    // Создаём textarea
+    const textarea = createElement('textarea', 'editor-textarea', {
+      width: '100%',
+      height: '100%',
+      resize: 'vertical',
+      border: 'none',
+      background: 'transparent',
+      color: 'var(--text-primary)',
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      lineHeight: '1.5',
+      padding: '12px',
+      boxSizing: 'border-box',
+      outline: 'none'
+    });
+    textarea.value = currentBody;
+
+    // Создаём предпросмотр
+    const preview = createElement('div', 'editor-preview markdown-body', {
+      padding: '16px',
+      wordWrap: 'break-word',
+      overflowY: 'auto',
+      height: '100%',
+      boxSizing: 'border-box'
+    });
+    await renderMarkdownWithEditor(currentBody, preview);
+
+    // Контейнер для двух колонок
+    const splitContainer = createElement('div', 'editor-split', {
+      display: 'flex',
+      gap: '16px',
+      alignItems: 'stretch',
+      flex: '1',
+      minHeight: '300px',
+      marginTop: '4px'
+    });
+    const leftCol = createElement('div', 'editor-split-left', {
+      flex: '1',
+      display: 'flex',
+      flexDirection: 'column',
+      borderRadius: '16px',
+      border: '1px solid var(--border)',
+      background: 'var(--bg-primary)',
+      overflow: 'hidden'
+    });
+    leftCol.appendChild(textarea);
+    const rightCol = createElement('div', 'editor-split-right', {
+      flex: '1',
+      borderRadius: '16px',
+      border: '1px solid var(--border)',
+      background: 'var(--bg-primary)',
+      overflow: 'auto',
+      padding: '0'
+    });
+    rightCol.appendChild(preview);
+    splitContainer.appendChild(leftCol);
+    splitContainer.appendChild(rightCol);
+
+    // Тулбар (создаём после textarea, чтобы передать ссылку)
+    let toolbar = null;
+    if (window.Editor) {
+      toolbar = window.Editor.createEditorToolbar(textarea);
+    } else {
+      await loadModule('js/features/editor.js');
+      if (window.Editor) {
+        toolbar = window.Editor.createEditorToolbar(textarea);
+      }
+    }
+    if (toolbar) {
+      // Добавляем кнопку "Хостинги" в тулбар (если есть)
+      const hostBtn = window.Editor.createImageServicesMenu ? window.Editor.createImageServicesMenu() : null;
+      if (hostBtn) {
+        toolbar.appendChild(hostBtn);
+      }
+      container.appendChild(toolbar);
+    }
+    container.appendChild(splitContainer);
+
+    // ----- Кнопка отправки и лимиты -----
     const submitRow = createElement('div', 'submit-row', {
       display: 'flex',
       gap: '12px',
@@ -694,7 +753,6 @@
       flexWrap: 'wrap',
       marginTop: '8px'
     });
-
     const submitBtn = createElement('button', 'button wide', {
       background: 'var(--accent)',
       color: '#fff',
@@ -705,163 +763,57 @@
       fontFamily: 'var(--font-family)'
     });
     submitBtn.textContent = mode === 'edit' ? 'Обновить' : 'Опубликовать';
-
     const rateIndicator = createElement('span', 'rate-indicator-wrapper', {
       fontSize: '12px',
       color: 'var(--text-secondary)',
       marginLeft: '8px'
     });
     rateIndicator.innerHTML = `Осталось постов: <span class="rate-indicator" data-action="posts">${window.RateLimits ? window.RateLimits.getRemaining('posts') : '?'}</span>`;
-
     submitRow.appendChild(submitBtn);
     submitRow.appendChild(rateIndicator);
+    container.appendChild(submitRow);
 
-    modalContent.appendChild(previewArea);
-    modalContent.appendChild(controlsRow);
-    modalContent.appendChild(accessRow);
-    modalContent.appendChild(submitRow);
+    // ----- Обработчики событий -----
 
-    const { modal, closeModal } = createModal(
-      mode === 'new' ? 'Создать пост' : 'Редактировать пост',
-      modalContent.outerHTML,
-      { size: 'full' }
-    );
-
-    const container = modal.querySelector('.editor-unified');
-    const preview = container.querySelector('.unified-preview');
-    const titleEl = container.querySelector('.editor-title-input');
-    const titleCounterEl = container.querySelector('.title-counter');
-    // Ищем кнопку с классом edit-code-btn
-    const editBtn = container.querySelector('.edit-code-btn');
-    const publicBtnEl = container.querySelector('.access-switch-btn.active');
-    const privateBtnEl = container.querySelector('.access-switch-btn:not(.active)');
-    const allowedInputEl = container.querySelector('.allowed-users-input');
-    const submitBtnEl = container.querySelector('.submit-row .button');
-
-    let privMode = false;
-    publicBtnEl.addEventListener('click', () => {
-      privMode = false;
-      publicBtnEl.classList.add('active');
-      privateBtnEl.classList.remove('active');
-      allowedInputEl.style.display = 'none';
-    });
-    privateBtnEl.addEventListener('click', () => {
-      privMode = true;
-      privateBtnEl.classList.add('active');
-      publicBtnEl.classList.remove('active');
-      allowedInputEl.style.display = 'flex';
+    // 1. Ввод в textarea → обновляем предпросмотр, сохраняем черновик, обновляем currentBody
+    textarea.addEventListener('input', async () => {
+      currentBody = textarea.value;
+      await renderMarkdownWithEditor(currentBody, preview);
+      saveDraft(draftKey, { title: titleInput.value, body: currentBody });
     });
 
-    function updatePreviewAndDraft() {
-      const title = titleEl.value;
-      const body = currentBody;
-      renderMarkdownWithEditor(body, preview);
-      saveDraft(draftKey, { title, body });
-      titleCounterEl.textContent = `${title.length}/100`;
-      titleCounterEl.style.color = title.length > 100 ? '#f44336' : 'var(--text-secondary)';
-    }
-
-    function openCodeEditor() {
-      const codeModalHtml = `
-        <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <button id="code-toolbar-toggle" class="button small" style="background:var(--bg-inner-gradient);"><i class="fas fa-bars"></i> Тулбар</button>
-            <span style="font-size:12px; color:var(--text-secondary); margin-left:auto;" id="code-counter">${currentBody.length}/10000</span>
-          </div>
-          <div id="code-toolbar-container" style="display:none; margin-bottom:8px;"></div>
-          <textarea id="code-editor-textarea" style="flex:1; padding:12px; border-radius:16px; background:var(--bg-primary); border:1px solid var(--border); color:var(--text-primary); font-family:monospace; font-size:14px; resize:vertical; min-height:200px;">${escapeHtml(currentBody)}</textarea>
-          <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
-            <button id="code-cancel" class="button" style="background:var(--bg-inner-gradient); color:var(--text-secondary); border:1px solid var(--border);">Отмена</button>
-            <button id="code-apply" class="button" style="background:var(--accent);">Применить</button>
-          </div>
-        </div>
-      `;
-      const { modal: codeModal, closeModal: closeCodeModal } = createModal('Редактирование Markdown', codeModalHtml, { size: 'full' });
-
-      const textarea = codeModal.querySelector('#code-editor-textarea');
-      const counter = codeModal.querySelector('#code-counter');
-      const toolbarContainer = codeModal.querySelector('#code-toolbar-container');
-      const toggleBtn = codeModal.querySelector('#code-toolbar-toggle');
-      const applyBtn = codeModal.querySelector('#code-apply');
-      const cancelBtn = codeModal.querySelector('#code-cancel');
-
-      function updateCounter() {
-        const len = textarea.value.length;
-        counter.textContent = `${len}/10000`;
-        counter.style.color = len > 10000 ? '#f44336' : 'var(--text-secondary)';
-      }
-      textarea.addEventListener('input', updateCounter);
-      updateCounter();
-
-      if (window.Editor) {
-        const toolbar = window.Editor.createEditorToolbar(textarea);
-        toolbarContainer.appendChild(toolbar);
-        const hostBtn = window.Editor.createImageServicesMenu();
-        toolbarContainer.appendChild(hostBtn);
-      } else {
-        loadModule('js/features/editor.js').then(() => {
-          if (window.Editor) {
-            const toolbar = window.Editor.createEditorToolbar(textarea);
-            toolbarContainer.appendChild(toolbar);
-            const hostBtn = window.Editor.createImageServicesMenu();
-            toolbarContainer.appendChild(hostBtn);
-          }
-        });
-      }
-
-      toggleBtn.addEventListener('click', () => {
-        const isHidden = toolbarContainer.style.display === 'none';
-        toolbarContainer.style.display = isHidden ? 'flex' : 'none';
-        toggleBtn.innerHTML = isHidden ? '<i class="fas fa-times"></i> Скрыть тулбар' : '<i class="fas fa-bars"></i> Тулбар';
-      });
-
-      applyBtn.addEventListener('click', () => {
-        const newBody = textarea.value;
-        if (newBody.length > 10000) {
-          showToast('Текст не может превышать 10000 символов', 'error');
-          return;
-        }
-        currentBody = newBody;
-        updatePreviewAndDraft();
-        closeCodeModal();
-      });
-
-      cancelBtn.addEventListener('click', closeCodeModal);
-      codeModal.addEventListener('click', (e) => { if (e.target === codeModal) closeCodeModal(); });
-    }
-
-    // Безопасно добавляем обработчик, если кнопка существует
-    if (editBtn) {
-      editBtn.addEventListener('click', openCodeEditor);
-    } else {
-      console.warn('Кнопка редактирования кода не найдена');
-    }
-
-    titleEl.addEventListener('input', () => {
-      const val = titleEl.value;
+    // 2. Ввод в заголовок → сохраняем черновик
+    titleInput.addEventListener('input', () => {
+      const val = titleInput.value;
       if (val.length > 100) {
         showToast('Заголовок не должен превышать 100 символов', 'error');
-        titleEl.value = val.slice(0, 100);
+        titleInput.value = val.slice(0, 100);
         return;
       }
-      saveDraft(draftKey, { title: val, body: currentBody });
-      titleCounterEl.textContent = `${val.length}/100`;
-      titleCounterEl.style.color = val.length > 100 ? '#f44336' : 'var(--text-secondary)';
+      currentTitle = titleInput.value;
+      titleCounter.textContent = `${currentTitle.length}/100`;
+      titleCounter.style.color = currentTitle.length > 100 ? '#f44336' : 'var(--text-secondary)';
+      saveDraft(draftKey, { title: currentTitle, body: currentBody });
     });
 
-    function updatePreviewFromDraft() {
-      const draftData = loadDraft(draftKey);
-      if (draftData) {
-        if (draftData.title !== undefined) titleEl.value = draftData.title;
-        if (draftData.body !== undefined) currentBody = draftData.body;
-        renderMarkdownWithEditor(currentBody, preview);
-        titleCounterEl.textContent = `${titleEl.value.length}/100`;
-      }
-    }
-    updatePreviewFromDraft();
+    // 3. Переключение приватности
+    let privMode = false;
+    publicBtn.addEventListener('click', () => {
+      privMode = false;
+      publicBtn.classList.add('active');
+      privateBtn.classList.remove('active');
+      allowedInput.style.display = 'none';
+    });
+    privateBtn.addEventListener('click', () => {
+      privMode = true;
+      privateBtn.classList.add('active');
+      publicBtn.classList.remove('active');
+      allowedInput.style.display = 'flex';
+    });
 
+    // 4. Отправка поста
     const debouncedSubmit = window.GithubCore.debounce(async () => {
-      const title = titleEl.value.trim();
+      const title = titleInput.value.trim();
       const body = currentBody;
 
       if (!title) return showToast('Введите заголовок', 'error');
@@ -882,9 +834,9 @@
       let labels = [`game:${game}`];
       if (context === 'news') labels.push('type:news');
       else if (context === 'update') labels.push('type:update');
-      else labels.push(`type:idea`);
+      else labels.push('type:idea');
       if (privMode) {
-        const allowed = allowedInputEl.value.trim();
+        const allowed = allowedInput.value.trim();
         if (!allowed) return showToast('Укажите хотя бы одного пользователя', 'error');
         finalBody = `<!-- allowed: ${allowed} -->\n${window.GithubCore.encryptPrivateBody(body, allowed)}`;
         labels.push('private');
@@ -911,7 +863,13 @@
         showToast('Ошибка: ' + err.message, 'error');
       }
     }, 1000);
-    submitBtnEl.addEventListener('click', debouncedSubmit);
+    submitBtn.addEventListener('click', debouncedSubmit);
+
+    if (draft && draft.body !== undefined) {
+      await renderMarkdownWithEditor(draft.body, preview);
+      textarea.value = draft.body;
+      currentBody = draft.body;
+    }
   }
 
   window.UIFeedback = {
