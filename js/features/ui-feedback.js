@@ -3,7 +3,7 @@
   const {
     createElement, escapeHtml, renderMarkdown, loadModule,
     performAction, isActionStillValid, extractAllowed, decryptPrivateBody,
-    cacheRemoveByPrefix, CONFIG
+    cacheRemoveByPrefix, CONFIG, getPlainTextLength, containsGitHubToken
   } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
@@ -16,11 +16,30 @@
 
   const markdownCache = new Map();
 
+  // Минимальная длина содержательного текста
+  const MIN_COMMENT_LENGTH = 10;
+  const MIN_POST_BODY_LENGTH = 20;
+  const MIN_POST_TITLE_LENGTH = 3;
+
   function canViewPost(body, labels, currentUser) {
     if (!labels || !labels.includes('private')) return true;
     if (isAdmin()) return true;
     const allowed = extractAllowed(body);
     return allowed && allowed.split(',').map(s => s.trim()).includes(currentUser);
+  }
+
+  // Проверка текста на наличие токенов и минимальную длину
+  function validateTextContent(text, minLength, fieldName = 'Текст') {
+    if (containsGitHubToken(text)) {
+      showToast('Обнаружен GitHub-токен в тексте. Пожалуйста, удалите его.', 'error');
+      return false;
+    }
+    const plainLength = getPlainTextLength(text);
+    if (plainLength < minLength) {
+      showToast(`${fieldName} должен содержать не менее ${minLength} значимых символов (сейчас ${plainLength}).`, 'error');
+      return false;
+    }
+    return true;
   }
 
   async function renderMarkdownWithEditor(text, targetElement, cacheKey = null) {
@@ -208,6 +227,9 @@
       showToast('Комментарий не может превышать 400 символов', 'error');
       return;
     }
+    // Проверка на токены и минимальную длину
+    if (!validateTextContent(newBody, MIN_COMMENT_LENGTH, 'Комментарий')) return;
+
     try {
       await window.GithubAPI.updateComment(commentId, newBody);
       showToast('Обновлено', 'success');
@@ -221,6 +243,9 @@
       showToast('Комментарий не может превышать 400 символов', 'error');
       return;
     }
+    // Проверка на токены и минимальную длину
+    if (!validateTextContent(body, MIN_COMMENT_LENGTH, 'Комментарий')) return;
+
     const currentUser = getCurrentUser();
     if (!currentUser) return showToast('Войдите в GitHub', 'error');
 
@@ -426,6 +451,7 @@
           showToast('Комментарий не может превышать 400 символов', 'error');
           return;
         }
+        // Проверка на токены и минимальную длину уже внутри addComment
         await addComment(id, text, refreshComments);
         commentInput.value = '';
         if (counterEl) { counterEl.textContent = '0/400'; counterEl.style.color = 'var(--text-secondary)'; }
@@ -721,9 +747,22 @@
     const debouncedSubmit = window.GithubCore.debounce(async () => {
       const title = titleEl.value.trim();
       const body = currentBody;
+
+      // Проверка заголовка: не пустой, минимальная длина, нет токенов
       if (!title) return showToast('Введите заголовок', 'error');
       if (title.length > 100) return showToast('Заголовок не должен превышать 100 символов', 'error');
+      if (containsGitHubToken(title)) {
+        showToast('Обнаружен GitHub-токен в заголовке. Пожалуйста, удалите его.', 'error');
+        return;
+      }
+      if (getPlainTextLength(title) < MIN_POST_TITLE_LENGTH) {
+        showToast(`Заголовок должен содержать не менее ${MIN_POST_TITLE_LENGTH} значимых символов.`, 'error');
+        return;
+      }
+
+      // Проверка тела поста
       if (body.length > 10000) return showToast('Текст поста не должен превышать 10000 символов', 'error');
+      if (!validateTextContent(body, MIN_POST_BODY_LENGTH, 'Текст поста')) return;
 
       let finalBody = body;
       let labels = [`game:${game}`];

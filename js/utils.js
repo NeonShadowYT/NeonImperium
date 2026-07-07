@@ -153,10 +153,79 @@
         });
     }
 
+    /**
+     * Очищает текст от Markdown-разметки, HTML-тегов, ссылок и изображений,
+     * оставляя только "содержательный" текст для подсчёта символов.
+     * @param {string} text - Исходный текст (Markdown/HTML)
+     * @returns {string} Очищенный текст без разметки
+     */
+    function stripMarkdownAndHtml(text) {
+        if (!text) return '';
+        let cleaned = text;
+
+        // Убираем HTML-теги (включая их содержимое для блоков, но оставляем текст внутри)
+        // Сначала заменяем <details>...</details> на пустую строку, чтобы убрать спойлеры целиком
+        cleaned = cleaned.replace(/<details[\s\S]*?<\/details>/gi, '');
+        // Убираем все остальные HTML-теги, оставляя только текст
+        cleaned = cleaned.replace(/<[^>]*>/g, ' ');
+
+        // Удаляем Markdown-ссылки [текст](url) – оставляем только текст
+        cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+        // Удаляем изображения ![](url) – полностью убираем
+        cleaned = cleaned.replace(/!\[[^\]]*\]\([^)]+\)/g, '');
+        // Удаляем YouTube-вставки <div class="youtube-embed">...</div>
+        cleaned = cleaned.replace(/<div class="youtube-embed">[\s\S]*?<\/div>/gi, '');
+        // Удаляем оставшиеся ссылки типа https://
+        cleaned = cleaned.replace(/\bhttps?:\/\/[^\s]+/g, '');
+        // Удаляем символы Markdown: #, *, _, ~, `, >, -, +, =, | и т.д.
+        cleaned = cleaned.replace(/[#*_~`>\-+=|]/g, ' ');
+        // Удаляем множественные пробелы и переносы строк
+        cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+        return cleaned;
+    }
+
+    /**
+     * Возвращает длину содержательного текста после удаления всей разметки.
+     * @param {string} text - Исходный текст (Markdown/HTML)
+     * @returns {number} Количество значимых символов
+     */
+    function getPlainTextLength(text) {
+        const plain = stripMarkdownAndHtml(text);
+        return plain.length;
+    }
+
+    /**
+     * Проверяет, содержит ли текст потенциальный GitHub-токен.
+     * Ищет паттерны: ghp_, github_pat_, gho_, ghu_, ghs_, gpl_, а также "github_token" в контексте.
+     * @param {string} text - Проверяемый текст
+     * @returns {boolean} true, если найден токен
+     */
+    function containsGitHubToken(text) {
+        if (!text) return false;
+        const patterns = [
+            /ghp_[a-zA-Z0-9]{36}/,
+            /github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}/,
+            /gho_[a-zA-Z0-9]{36}/,
+            /ghu_[a-zA-Z0-9]{36}/,
+            /ghs_[a-zA-Z0-9]{36}/,
+            /gpl_[a-zA-Z0-9]{36}/
+        ];
+        for (const p of patterns) {
+            if (p.test(text)) return true;
+        }
+        // Дополнительно проверяем наличие строки "github_token" в кавычках или без
+        if (/\bgithub_token\b/i.test(text)) return true;
+        return false;
+    }
+
     window.Utils = {
         escapeHtml, stripHtml, createElement, formatDate,
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
         deduplicateByNumber, debounce, throttle, renderMarkdown,
-        createAbortable, loadModule
+        createAbortable, loadModule,
+        stripMarkdownAndHtml,
+        getPlainTextLength,
+        containsGitHubToken
     };
 })();
