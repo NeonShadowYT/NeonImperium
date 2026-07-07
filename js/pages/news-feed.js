@@ -16,7 +16,7 @@
   let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
   let currentUser = null;
   let loading = false;
-  let currentAbortController = null; // для отмены загрузки
+  let currentAbortController = null;
 
   async function ensureLoggedInAndGist() {
     if (getCurrentUser() && hasScope('gist')) return true;
@@ -104,7 +104,6 @@
   function loadNewsFeed() {
     if (loading) return;
     loading = true;
-    // Отменяем предыдущие запросы
     if (currentAbortController) {
       currentAbortController.abort();
     }
@@ -137,7 +136,8 @@
         if (!resp.ok) continue;
         const data = await resp.json();
         if (data.status !== 'ok') continue;
-        const items = data.items.slice(0, 9).map(item => {
+        // Сокращаем количество видео с 9 до 3 на канал
+        const items = data.items.slice(0, 3).map(item => {
           const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
           if (!vid) return null;
           return { type: 'video', id: vid, title: item.title, author: ch.name, date: new Date(item.pubDate), thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg` };
@@ -147,7 +147,7 @@
         if (e.name === 'AbortError') break;
       }
     }
-    const sorted = all.sort((a, b) => b.date - a.date).slice(0, 20);
+    const sorted = all.sort((a, b) => b.date - a.date).slice(0, 12); // максимум 12 видео (было 20)
     cacheSet(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
     return sorted;
   }
@@ -156,9 +156,10 @@
     const cacheKey = 'posts_news+update_v3';
     const cached = cacheGet(cacheKey);
     if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
+    // Уменьшаем количество загружаемых постов с 15 до 10
     const [newsResp, updatesResp] = await Promise.all([
-      fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:news`, { signal }),
-      fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:update`, { signal })
+      fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=10&page=1&labels=type:news`, { signal }),
+      fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=10&page=1&labels=type:update`, { signal })
     ]);
     if (signal && signal.aborted) return [];
     const news = newsResp.ok ? await newsResp.json() : [];
@@ -174,7 +175,7 @@
     const filteredPosts = posts.filter(p => { if (!p.labels.includes('private')) return true; if (isAdmin()) return true; const allowed = extractAllowed(p.body); return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser); });
     let items = [...filteredPosts, ...videos];
     items.sort((a, b) => b.date - a.date);
-    const showItems = items.slice(0, 6);
+    const showItems = items.slice(0, 6); // показываем 6 элементов (было 6)
     const grid = createElement('div', 'projects-grid');
     if (showItems.length === 0) grid.innerHTML = '<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">Пока нет новостей</p></div>';
     else {

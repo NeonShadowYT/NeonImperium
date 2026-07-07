@@ -3,10 +3,17 @@
   const {
     createElement, escapeHtml, renderMarkdown, loadModule,
     performAction, isActionStillValid, extractAllowed, decryptPrivateBody,
-    cacheRemoveByPrefix, CONFIG, getPlainTextLength, containsGitHubToken
+    cacheRemoveByPrefix, CONFIG, getPlainTextLength, containsGitHubToken,
+    cacheGet, cacheSet // добавлены функции кеширования
   } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
+
+  // Кеш для реакций и комментариев
+  const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
+  const COMMENTS_CACHE_TTL = 5 * 60 * 1000;
+  const reactionsCache = new Map();
+  const commentsCache = new Map();
 
   let reactionsListCache = new Map();
   const CACHE_TTL = 5 * 60 * 1000;
@@ -16,14 +23,12 @@
 
   const markdownCache = new Map();
 
-  // Минимальная длина содержательного текста
   const MIN_COMMENT_LENGTH = 10;
   const MIN_POST_BODY_LENGTH = 20;
   const MIN_POST_TITLE_LENGTH = 3;
 
-  // Для предотвращения дублирующих запросов при открытии модалок
   let currentModalAbortController = null;
-  let currentModalLoading = null; // { issueNumber, type: 'comments'|'reactions' }
+  let currentModalLoading = null;
 
   function canViewPost(body, labels, currentUser) {
     if (!labels || !labels.includes('private')) return true;
@@ -32,7 +37,6 @@
     return allowed && allowed.split(',').map(s => s.trim()).includes(currentUser);
   }
 
-  // Проверка текста на наличие токенов и минимальную длину
   function validateTextContent(text, minLength, fieldName = 'Текст') {
     if (containsGitHubToken(text)) {
       showToast('Обнаружен GitHub-токен в тексте. Пожалуйста, удалите его.', 'error');
@@ -125,7 +129,6 @@
             const current = parseInt(countSpan.textContent) || 0;
             countSpan.textContent = current + 1;
           }
-          // Обновляем реакции через кеш
           window.GithubAPI.loadReactions(issueNumber).then(newReactions => {
             renderReactions(container, issueNumber, newReactions, currentUser, onAddHeart, onRemoveHeart);
           }).catch(() => {});
@@ -185,46 +188,67 @@
 
   async function loadComments(issueNumber, container, onUpdate, signal) {
     if (!window.GithubAPI) await loadModule('js/core/github-api.js');
+    // Проверяем кеш
+    const cacheKey = `comments_${issueNumber}`;
+    const cached = cacheGet(cacheKey, COMMENTS_CACHE_TTL);
+    if (cached && !signal?.aborted) {
+      renderComments(cached, container);
+      // Фоновое обновление
+      window.GithubAPI.loadComments(issueNumber, signal)
+        .then(newComments => {
+          cacheSet(cacheKey, newComments);
+          if (!signal?.aborted) renderComments(newComments, container);
+        })
+        .catch(() => {});
+      return;
+    }
+
     try {
       const comments = await window.GithubAPI.loadComments(issueNumber, signal);
-      // Если сигнал отменён, не обновляем контейнер
       if (signal && signal.aborted) return;
-      container.innerHTML = '';
-      if (comments.length === 0) {
-        container.innerHTML = '<p class="text-secondary" style="text-align:center;">Нет комментариев</p>';
-        return;
-      }
-      for (const c of comments) {
-        const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px', position: 'relative' });
-        commentDiv.dataset.id = c.id;
-        const header = createElement('div', 'comment-meta', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' });
-        header.innerHTML = `<span class="comment-author">${escapeHtml(c.user.login)}</span><span>${new Date(c.created_at).toLocaleString()}</span>`;
-        const body = createElement('div', 'comment-body', { marginTop: '4px' });
-        await renderMarkdownWithEditor(c.body, body);
-        commentDiv.appendChild(header);
-        commentDiv.appendChild(body);
-        const currentUser = getCurrentUser();
-        if (currentUser === c.user.login || isAdmin()) {
-          const actions = createElement('div', 'comment-actions', { position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', opacity: '0', transition: 'opacity 0.2s' });
-          const editBtn = createElement('button', '', {}, { title: 'Редактировать' });
-          editBtn.innerHTML = '<i class="fas fa-pen"></i>';
-          editBtn.addEventListener('click', (e) => { e.stopPropagation(); editCommentWithEditor(c.id, c.body, onUpdate); });
-          const delBtn = createElement('button', '', {}, { title: 'Удалить' });
-          delBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
-          delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteComment(c.id, onUpdate); });
-          actions.appendChild(editBtn);
-          actions.appendChild(delBtn);
-          commentDiv.appendChild(actions);
-          commentDiv.addEventListener('mouseenter', () => actions.style.opacity = '1');
-          commentDiv.addEventListener('mouseleave', () => actions.style.opacity = '0');
-        }
-        container.appendChild(commentDiv);
-      }
+      cacheSet(cacheKey, comments);
+      renderComments(comments, container);
     } catch (err) {
       if (err.name === 'AbortError' || err.message === 'The operation was aborted.') return;
       console.error(err);
       container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
     }
+  }
+
+  function renderComments(comments, container) {
+    container.innerHTML = '';
+    if (comments.length === 0) {
+      container.innerHTML = '<p class="text-secondary" style="text-align:center;">Нет комментариев</p>';
+      return;
+    }
+    const currentUser = getCurrentUser();
+    const fragment = document.createDocumentFragment();
+    for (const c of comments) {
+      const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px', position: 'relative' });
+      commentDiv.dataset.id = c.id;
+      const header = createElement('div', 'comment-meta', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' });
+      header.innerHTML = `<span class="comment-author">${escapeHtml(c.user.login)}</span><span>${new Date(c.created_at).toLocaleString()}</span>`;
+      const body = createElement('div', 'comment-body', { marginTop: '4px' });
+      renderMarkdownWithEditor(c.body, body);
+      commentDiv.appendChild(header);
+      commentDiv.appendChild(body);
+      if (currentUser === c.user.login || isAdmin()) {
+        const actions = createElement('div', 'comment-actions', { position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', opacity: '0', transition: 'opacity 0.2s' });
+        const editBtn = createElement('button', '', {}, { title: 'Редактировать' });
+        editBtn.innerHTML = '<i class="fas fa-pen"></i>';
+        editBtn.addEventListener('click', (e) => { e.stopPropagation(); editCommentWithEditor(c.id, c.body, () => { /* обновить после редактирования */ }); });
+        const delBtn = createElement('button', '', {}, { title: 'Удалить' });
+        delBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+        delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteComment(c.id, () => { /* обновить после удаления */ }); });
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
+        commentDiv.appendChild(actions);
+        commentDiv.addEventListener('mouseenter', () => actions.style.opacity = '1');
+        commentDiv.addEventListener('mouseleave', () => actions.style.opacity = '0');
+      }
+      fragment.appendChild(commentDiv);
+    }
+    container.appendChild(fragment);
   }
 
   async function editCommentWithEditor(commentId, oldBody, onUpdate) {
@@ -240,7 +264,7 @@
     try {
       await window.GithubAPI.updateComment(commentId, newBody);
       showToast('Обновлено', 'success');
-      onUpdate();
+      if (onUpdate) onUpdate();
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
@@ -271,7 +295,7 @@
       } else {
         showToast('Комментарий добавлен', 'success');
         localStorage.setItem(LAST_COMMENT_KEY, Date.now().toString());
-        onUpdate();
+        if (onUpdate) onUpdate();
       }
     } catch (err) {
       showToast('Ошибка: ' + err.message, 'error');
@@ -283,7 +307,7 @@
     try {
       await window.GithubAPI.deleteComment(commentId);
       showToast('Удалено', 'success');
-      onUpdate();
+      if (onUpdate) onUpdate();
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
@@ -391,7 +415,6 @@
 
     const { modal, closeModal } = createModal(title, html, { size: 'full' });
 
-    // Отменяем предыдущие запросы при открытии новой модалки
     if (currentModalAbortController) {
       currentModalAbortController.abort();
       currentModalAbortController = null;
@@ -399,7 +422,6 @@
     currentModalAbortController = new AbortController();
     const abortSignal = currentModalAbortController.signal;
 
-    // Закрытие модалки с отменой запросов
     const originalClose = closeModal;
     const newClose = () => {
       if (currentModalAbortController) {
@@ -452,16 +474,20 @@
     const commentsContainer = modal.querySelector('#modal-comments-list');
 
     async function refreshComments() {
-      // Проверяем, не отменён ли сигнал и не закрыта ли модалка
       if (abortSignal.aborted) return;
       await loadComments(id, commentsContainer, refreshComments, abortSignal);
     }
 
-    // Загружаем реакции (с учётом отмены)
+    // Загрузка реакций с кешированием
     if (currentUser && window.GithubAPI) {
       try {
         if (abortSignal.aborted) return;
-        const reactions = await window.GithubAPI.loadReactions(id, abortSignal);
+        const reactionsCacheKey = `reactions_${id}`;
+        let reactions = cacheGet(reactionsCacheKey, REACTIONS_CACHE_TTL);
+        if (!reactions) {
+          reactions = await window.GithubAPI.loadReactions(id, abortSignal);
+          if (!abortSignal.aborted) cacheSet(reactionsCacheKey, reactions);
+        }
         if (abortSignal.aborted) return;
         renderReactions(reactionsContainer, id, reactions, currentUser,
           async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },
@@ -473,7 +499,6 @@
       }
     }
 
-    // Загружаем комментарии (с отменой)
     await refreshComments();
 
     const submitBtn = modal.querySelector('#submit-comment-btn');

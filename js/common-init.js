@@ -126,10 +126,11 @@
   }
 
   function loadDustParticles() {
+    if (document.querySelector('script[src="js/dust-particles.js"]')) return;
     const script = document.createElement('script');
-    script.src = 'js/features/dust-particles.js';
+    script.src = 'js/dust-particles.js';
     script.defer = true;
-    script.onload = () => console.log('Dust particles loaded');
+    script.onload = () => {}; // убираем лишний лог
     script.onerror = () => console.warn('Failed to load dust particles');
     document.head.appendChild(script);
   }

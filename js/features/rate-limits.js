@@ -1,6 +1,5 @@
 // js/features/rate-limits.js
 (function() {
-    // Импорт необходимых утилит из GithubCore
     const { escapeHtml } = window.GithubCore;
 
     const LIMITS = {
@@ -23,9 +22,8 @@
     let today = null;
     let queueCache = null;
     let queueCacheTime = 0;
-    let processQueueDebounced = null; // для debounce обработки очереди
+    let processQueueDebounced = null;
 
-    // BroadcastChannel для синхронизации между вкладками
     let bc = null;
     try {
         bc = new BroadcastChannel('rate-limits');
@@ -110,7 +108,6 @@
         currentCounts[action]++;
         saveCounts();
         updateIndicators();
-        // Обработка очереди с debounce, чтобы не вызывать слишком часто
         if (!processQueueDebounced) {
             processQueueDebounced = debounce(() => {
                 processQueue().catch(console.warn);
@@ -423,7 +420,6 @@
         };
         refreshPanel = () => {
             if (window._ratePanelRefresh) {
-                // Используем requestAnimationFrame для плавного обновления
                 requestAnimationFrame(() => window._ratePanelRefresh());
             }
         };
@@ -859,7 +855,6 @@
         console.log('[RateLimits] Инициализирован');
     }
 
-    // Debounce helper (если не определён в GithubCore)
     function debounce(fn, delay) {
         let timer;
         return function(...args) {
