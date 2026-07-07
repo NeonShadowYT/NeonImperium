@@ -207,7 +207,6 @@
       return { bookmarks };
     } catch (err) {
       console.error('Ошибка загрузки закладок:', err);
-      // При ошибке возвращаем кеш, если есть
       if (cachedBookmarks) return { bookmarks: cachedBookmarks };
       return { bookmarks: [] };
     }
@@ -236,11 +235,9 @@
         console.log('[storage] Gist created successfully', newGistId);
       }
 
-      // Обновляем кеш
       cachedBookmarks = currentBookmarks.slice();
       cachedBookmarksTime = Date.now();
 
-      // Сбрасываем флаг сохранения
       isSaving = false;
     } catch (err) {
       console.error('Ошибка синхронизации закладок:', err);
@@ -592,7 +589,6 @@
     return null;
   }
 
-  // Добавление закладки (с проверкой дубликатов)
   async function addBookmark(bookmarkOrUrl, title, fileContent, fileName) {
     if (!currentUser) {
       showToast('Войдите в аккаунт GitHub с правами gist', 'error');
@@ -637,7 +633,6 @@
       bookmarkData = { url, title: customTitle, fileContent: customFileContent, fileName: customFileName, ...extraData };
     }
 
-    // Проверка дубликатов в текущем списке
     if (url && currentBookmarks.some(b => b.url === url)) {
       showToast('Уже в избранном', 'info');
       throw new Error('duplicate');
@@ -677,15 +672,12 @@
       _pending: true
     };
 
-    // Добавляем в память
     currentBookmarks = [newBookmark, ...currentBookmarks];
-    // Обновляем кеш в памяти (для быстрого доступа)
     cachedBookmarks = currentBookmarks.slice();
     cachedBookmarksTime = Date.now();
 
     if (modalRef) renderBookmarks(modalRef);
 
-    // Запускаем отложенное сохранение (с debounce)
     triggerDebouncedSave();
     showToast('Закладка добавлена (сохранение будет выполнено позже)', 'success');
     return newBookmark;
@@ -694,7 +686,6 @@
   async function removeBookmark(id) {
     if (!currentToken) return;
     currentBookmarks = currentBookmarks.filter(b => b.id !== id);
-    // Обновляем кеш
     cachedBookmarks = currentBookmarks.slice();
     cachedBookmarksTime = Date.now();
     triggerDebouncedSave();
@@ -1211,7 +1202,6 @@
     if (gameContext) currentGame = gameContext;
     else currentGame = null;
 
-    // Загружаем закладки (с кешем)
     const res = await loadBookmarks();
     currentBookmarks = res.bookmarks || [];
 

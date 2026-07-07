@@ -13,10 +13,13 @@
     const DB_VERSION = 2;
     const STORE_NAME = 'queue';
     const HISTORY_SIZE = 100;
+    const QUEUE_CACHE_TTL = 60000; // 1 минута кеш очереди
 
     let db = null;
     let currentCounts = null;
     let today = null;
+    let queueCache = null;
+    let queueCacheTime = 0;
 
     function openDB() {
         return new Promise((resolve, reject) => {
@@ -90,6 +93,30 @@
         }
     }
 
+    async function getPendingActions(forceRefresh = false) {
+        if (!forceRefresh && queueCache && (Date.now() - queueCacheTime < QUEUE_CACHE_TTL)) {
+            return queueCache;
+        }
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const index = store.index('status');
+            const range = IDBKeyRange.only('pending');
+            const items = await new Promise((resolve) => {
+                const req = index.getAll(range);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve([]);
+            });
+            await tx.done;
+            queueCache = items || [];
+            queueCacheTime = Date.now();
+            return queueCache;
+        } catch (e) {
+            return [];
+        }
+    }
+
     async function enqueueAction(action, data) {
         checkDayReset();
         const db = await openDB();
@@ -114,12 +141,13 @@
                         duplicate = items.some(item => item.data.title === data.title && item.data.body === data.body);
                     }
                 } else if (action === 'storageAdds') {
-                    if (data.bookmark.url) {
-                        duplicate = items.some(item => item.data.bookmark.url === data.bookmark.url);
-                    } else if (data.bookmark.saveData && data.bookmark.saveData.hash) {
-                        duplicate = items.some(item => item.data.bookmark.saveData && item.data.bookmark.saveData.hash === data.bookmark.saveData.hash);
+                    if (data.bookmark && data.bookmark.url) {
+                        duplicate = items.some(item => item.data.bookmark && item.data.bookmark.url === data.bookmark.url);
+                    } else if (data.bookmarks) {
+                        // Для массового сохранения пропускаем дублирование
                     }
                 } else if (action === 'cacheClears') {
+                    // Всегда разрешаем
                 }
                 resolve(duplicate);
             };
@@ -144,7 +172,7 @@
             req.onerror = () => reject(req.error);
         });
         await tx.done;
-
+        queueCache = null;
         window.UIUtils?.showToast(`Действие "${actionLabels[action] || action}" сохранено в очередь`, 'info');
         if (window._ratePanelOpen) refreshPanel();
         updateIndicators();
@@ -152,23 +180,28 @@
         return id;
     }
 
-    async function getPendingActions() {
-        try {
-            const db = await openDB();
-            const tx = db.transaction(STORE_NAME, 'readonly');
-            const store = tx.objectStore(STORE_NAME);
-            const index = store.index('status');
-            const range = IDBKeyRange.only('pending');
-            const items = await new Promise((resolve) => {
-                const req = index.getAll(range);
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => resolve([]);
+    async function cancelAction(actionId) {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const item = await new Promise((resolve, reject) => {
+            const req = store.get(actionId);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+        if (item && item.status === 'pending') {
+            await new Promise((resolve, reject) => {
+                const req = store.delete(actionId);
+                req.onsuccess = resolve;
+                req.onerror = reject;
             });
             await tx.done;
-            return items || [];
-        } catch (e) {
-            return [];
+            queueCache = null;
+            window.UIUtils?.showToast('Действие удалено из очереди', 'success');
+            if (window._ratePanelOpen) refreshPanel();
+            return true;
         }
+        return false;
     }
 
     async function processQueue() {
@@ -247,6 +280,7 @@
         }
         await tx.done;
 
+        queueCache = null;
         updateIndicators();
         if (window._ratePanelOpen) refreshPanel();
     }
@@ -264,7 +298,17 @@
                 await window.GithubAPI.addComment(data.issueNumber, data.body);
                 break;
             case 'storageAdds':
-                await window.BookmarkStorage.addBookmark(data.bookmark);
+                if (data.bookmarks) {
+                    if (window.BookmarkStorage && window.BookmarkStorage._doSave) {
+                        await window.BookmarkStorage._doSave(data.bookmarks);
+                    } else {
+                        for (const bm of data.bookmarks) {
+                            await window.BookmarkStorage.addBookmark(bm);
+                        }
+                    }
+                } else if (data.bookmark) {
+                    await window.BookmarkStorage.addBookmark(data.bookmark);
+                }
                 break;
             case 'cacheClears':
                 await clearAllCacheInternal();
@@ -300,7 +344,7 @@
         for (const name of cacheNames) {
             await caches.delete(name);
         }
-        const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token'];
+        const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token', 'last_cache_clear'];
         for (const key of Object.keys(localStorage)) {
             if (!exclude.some(ex => key.startsWith(ex))) {
                 localStorage.removeItem(key);
@@ -313,6 +357,7 @@
             }
         }
         if (window._cacheMap) window._cacheMap.clear();
+        queueCache = null;
     }
 
     function openRatePanel() {
@@ -332,27 +377,13 @@
         window._ratePanelRefresh = () => {
             const body = modal.querySelector('.modal-body');
             if (body) body.innerHTML = buildPanelHTML();
+            bindPanelEvents(modal);
         };
         refreshPanel = () => {
             if (window._ratePanelRefresh) window._ratePanelRefresh();
         };
 
-        modal.addEventListener('click', async (e) => {
-            const target = e.target.closest('[data-clear-cache]');
-            if (target) {
-                const type = target.dataset.clearCache;
-                await clearCacheType(type);
-                if (window._ratePanelRefresh) window._ratePanelRefresh();
-                window.UIUtils.showToast(`Кеш "${type}" очищен`, 'success');
-            }
-            const clearAllBtn = e.target.closest('#clear-all-cache');
-            if (clearAllBtn) {
-                await clearAllCacheInternal();
-                if (window._ratePanelRefresh) window._ratePanelRefresh();
-                window.UIUtils.showToast('Весь кеш (кроме лимитов) очищен', 'success');
-            }
-        });
-
+        bindPanelEvents(modal);
         updateTimerDisplay(modal);
         const timerInterval = setInterval(() => {
             if (!modal.parentNode) { clearInterval(timerInterval); return; }
@@ -370,6 +401,7 @@
         });
 
         loadQueueItems(modal);
+        loadHistoryItems(modal);
     }
 
     function buildPanelHTML() {
@@ -389,40 +421,42 @@
 
         const style = `
         <style>
-          .rate-panel { display:flex; flex-direction:column; gap:20px; }
-          .rate-summary { display:flex; justify-content:space-between; align-items:center; background:var(--bg-inner-gradient); padding:12px 20px; border-radius:16px; border:1px solid var(--border); flex-wrap:wrap; gap:8px; }
-          .rate-timer { font-size:14px; color:var(--text-secondary); }
-          .rate-timer strong { color:var(--accent); }
-          .rate-total { font-size:14px; color:var(--text-secondary); }
-          .rate-limits-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; }
-          .rate-limit-item { background:var(--bg-card); border-radius:12px; padding:12px 16px; border:1px solid var(--border); }
-          .rate-label { font-size:13px; color:var(--text-secondary); display:block; margin-bottom:6px; }
-          .rate-bar { height:8px; background:var(--bg-primary); border-radius:10px; overflow:hidden; margin:6px 0; }
-          .rate-fill { height:100%; border-radius:10px; transition:width 0.4s ease; }
-          .rate-count { font-size:12px; color:var(--text-secondary); display:flex; justify-content:space-between; }
-          .rate-count .used { color:var(--text-secondary); }
-          .rate-count .rem { font-weight:bold; }
-          .rate-info { font-size:13px; color:var(--text-secondary); background:var(--bg-inner-gradient); padding:10px 16px; border-radius:12px; border-left:3px solid var(--accent); }
-          .rate-tabs { display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:8px; flex-wrap:wrap; }
-          .rate-tab { background:transparent; border:none; color:var(--text-secondary); padding:6px 14px; border-radius:20px; cursor:pointer; font-family:var(--font-family); transition:0.2s; display:flex; align-items:center; gap:6px; }
-          .rate-tab.active { background:var(--accent); color:#fff; }
-          .rate-tab-content { margin-top:8px; }
-          .rate-history-list,.rate-queue-list,.rate-cache-actions { max-height:300px; overflow-y:auto; }
-          .rate-history-item { display:flex; justify-content:space-between; padding:6px 12px; border-bottom:1px solid var(--border); font-size:13px; }
-          .rate-history-item.completed .rate-status { color:#4caf50; }
-          .rate-history-item.failed .rate-status { color:#f44336; }
-          .rate-action { color:var(--text-primary); }
-          .rate-time { color:var(--text-secondary); font-size:12px; }
-          .cache-buttons { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0; }
-          .cache-buttons button { background:var(--bg-inner-gradient); border:1px solid var(--border); color:var(--text-secondary); padding:6px 14px; border-radius:30px; cursor:pointer; font-family:var(--font-family); transition:0.2s; display:flex; align-items:center; gap:6px; }
-          .cache-buttons button:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
-          #clear-all-cache { background:#f44336; color:#fff; border-color:#f44336; }
-          #clear-all-cache:hover { background:#d32f2f; }
-          .queue-item { display:flex; justify-content:space-between; padding:6px 12px; border-bottom:1px solid var(--border); font-size:13px; }
-          .queue-action { color:var(--text-primary); }
-          .queue-time { color:var(--text-secondary); font-size:12px; }
-          .empty-queue { color:var(--text-secondary); text-align:center; padding:20px; }
+          .rate-panel{display:flex;flex-direction:column;gap:20px}
+          .rate-summary{display:flex;justify-content:space-between;align-items:center;background:var(--bg-inner-gradient);padding:12px 20px;border-radius:16px;border:1px solid var(--border);flex-wrap:wrap;gap:8px}
+          .rate-timer{font-size:14px;color:var(--text-secondary)}
+          .rate-timer strong{color:var(--accent)}
+          .rate-total{font-size:14px;color:var(--text-secondary)}
+          .rate-limits-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+          .rate-limit-item{background:var(--bg-card);border-radius:12px;padding:12px 16px;border:1px solid var(--border)}
+          .rate-label{font-size:13px;color:var(--text-secondary);display:block;margin-bottom:6px}
+          .rate-bar{height:8px;background:var(--bg-primary);border-radius:10px;overflow:hidden;margin:6px 0}
+          .rate-fill{height:100%;border-radius:10px;transition:width 0.4s ease}
+          .rate-count{font-size:12px;color:var(--text-secondary);display:flex;justify-content:space-between}
+          .rate-count .used{color:var(--text-secondary)}
+          .rate-count .rem{font-weight:bold}
+          .rate-info{font-size:13px;color:var(--text-secondary);background:var(--bg-inner-gradient);padding:10px 16px;border-radius:12px;border-left:3px solid var(--accent)}
+          .rate-tabs{display:flex;gap:8px;border-bottom:1px solid var(--border);padding-bottom:8px;flex-wrap:wrap}
+          .rate-tab{background:transparent;border:none;color:var(--text-secondary);padding:6px 14px;border-radius:20px;cursor:pointer;font-family:var(--font-family);transition:0.2s;display:flex;align-items:center;gap:6px}
+          .rate-tab.active{background:var(--accent);color:#fff}
+          .rate-tab-content{margin-top:8px}
+          .rate-history-list,.rate-queue-list,.rate-cache-actions{max-height:300px;overflow-y:auto}
+          .rate-history-item,.rate-queue-item{display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border);font-size:13px;align-items:center}
+          .rate-history-item.completed .rate-status{color:#4caf50}
+          .rate-history-item.failed .rate-status{color:#f44336}
+          .rate-action{color:var(--text-primary)}
+          .rate-time{color:var(--text-secondary);font-size:12px}
+          .cache-buttons{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+          .cache-buttons button{background:var(--bg-inner-gradient);border:1px solid var(--border);color:var(--text-secondary);padding:6px 14px;border-radius:30px;cursor:pointer;font-family:var(--font-family);transition:0.2s;display:flex;align-items:center;gap:6px}
+          .cache-buttons button:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+          .cache-key-item{display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid var(--border);font-size:12px;align-items:center}
+          .cache-key-item button{background:transparent;border:none;color:var(--text-secondary);cursor:pointer;font-size:14px}
+          .cache-key-item button:hover{color:#f44336}
+          .queue-cancel-btn{background:transparent;border:none;color:#f44336;cursor:pointer;font-size:14px}
+          .queue-cancel-btn:hover{color:#d32f2f}
+          .empty-queue{color:var(--text-secondary);text-align:center;padding:20px}
         </style>`;
+
+        const cacheKeys = getCacheKeys();
 
         return style + `
         <div class="rate-panel">
@@ -452,33 +486,227 @@
           </div>
           <div class="rate-info"><i class="fas fa-info-circle"></i> Лимиты защищают ваш аккаунт. При исчерпании действия сохраняются в очередь и выполняются позже.</div>
           <div class="rate-tabs">
-            <button class="rate-tab active" data-tab="history"><i class="fas fa-history"></i> История</button>
-            <button class="rate-tab" data-tab="queue"><i class="fas fa-clock"></i> Очередь</button>
+            <button class="rate-tab active" data-tab="queue"><i class="fas fa-clock"></i> Очередь (<span id="queue-count">0</span>)</button>
+            <button class="rate-tab" data-tab="history"><i class="fas fa-history"></i> История</button>
             <button class="rate-tab" data-tab="cache"><i class="fas fa-database"></i> Кеш</button>
           </div>
           <div class="rate-tab-content">
-            <div id="rate-history" class="rate-history-list">${getHistory().slice(-20).reverse().map(h => `
-              <div class="rate-history-item ${h.status}">
-                <span class="rate-action">${actionLabels[h.action] || h.action}</span>
-                <span class="rate-status">${h.status === 'completed' ? '✅' : '❌'}</span>
-                <span class="rate-time">${new Date(h.timestamp).toLocaleTimeString()}</span>
-              </div>
-            `).join('') || '<div class="empty-queue">Нет истории</div>'}</div>
-            <div id="rate-queue" style="display:none;" class="rate-queue-list"><div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div></div>
+            <div id="rate-queue" class="rate-queue-list"><div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div></div>
+            <div id="rate-history" style="display:none;" class="rate-history-list"></div>
             <div id="rate-cache" style="display:none;" class="rate-cache-actions">
-              <p><i class="fas fa-broom"></i> Очистите выборочно (удаляются только устаревшие данные):</p>
-              <div class="cache-buttons">
-                <button data-clear-cache="static"><i class="fas fa-file-code"></i> Статика (CSS, JS)</button>
-                <button data-clear-cache="images"><i class="fas fa-image"></i> Изображения</button>
-                <button data-clear-cache="api"><i class="fas fa-plug"></i> API-кеш</button>
-                <button data-clear-cache="dynamic"><i class="fas fa-globe"></i> Динамические страницы</button>
-                <button id="clear-all-cache"><i class="fas fa-trash-alt"></i> Очистить всё (кроме лимитов)</button>
+              <p><i class="fas fa-broom"></i> Точечная очистка кеша (выберите ключи для удаления):</p>
+              <div class="cache-keys-list">
+                ${cacheKeys.length === 0 ? '<p class="empty-queue">Нет кешированных данных (кроме токена и лимитов)</p>' :
+                  cacheKeys.map(key => `
+                    <div class="cache-key-item">
+                      <span>${escapeHtml(key)}</span>
+                      <button class="cache-delete-btn" data-key="${escapeHtml(key)}"><i class="fas fa-times"></i></button>
+                    </div>
+                  `).join('')}
               </div>
-              <p style="font-size:12px; color:var(--text-secondary);">* Лимиты и очередь не удаляются.</p>
+              <div class="cache-buttons">
+                <button id="clear-stale-cache"><i class="fas fa-broom"></i> Очистить устаревший кеш (старше TTL)</button>
+                <button id="clear-all-cache"><i class="fas fa-trash-alt"></i> Очистить всё (кроме лимитов и токена)</button>
+              </div>
+              <p style="font-size:12px; color:var(--text-secondary);">* Лимиты, токен и лицензия не удаляются.</p>
             </div>
           </div>
         </div>
       `;
+    }
+
+    function bindPanelEvents(modal) {
+        modal.querySelectorAll('.rate-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                modal.querySelectorAll('.rate-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const target = tab.dataset.tab;
+                modal.querySelectorAll('.rate-tab-content > div').forEach(div => div.style.display = 'none');
+                const map = {
+                    'queue': 'rate-queue',
+                    'history': 'rate-history',
+                    'cache': 'rate-cache'
+                };
+                const el = modal.querySelector('#' + map[target]);
+                if (el) el.style.display = '';
+                if (target === 'queue') loadQueueItems(modal);
+                if (target === 'history') loadHistoryItems(modal);
+                if (target === 'cache') loadCacheItems(modal);
+            });
+        });
+
+        modal.querySelector('#clear-stale-cache')?.addEventListener('click', () => {
+            clearStaleCache();
+            showToast('Устаревший кеш очищен', 'success');
+            refreshPanel();
+        });
+        modal.querySelector('#clear-all-cache')?.addEventListener('click', () => {
+            if (confirm('Очистить весь кеш (кроме лимитов и токена)?')) {
+                clearAllCache();
+                showToast('Весь кеш очищен', 'success');
+                refreshPanel();
+            }
+        });
+
+        modal.querySelectorAll('.cache-delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const key = btn.dataset.key;
+                if (key && confirm(`Удалить ключ "${key}"?`)) {
+                    deleteCacheKey(key);
+                    showToast(`Ключ "${key}" удален`, 'success');
+                    refreshPanel();
+                }
+            });
+        });
+
+        modal.addEventListener('click', async (e) => {
+            const cancelBtn = e.target.closest('.queue-cancel-btn');
+            if (cancelBtn) {
+                const id = parseInt(cancelBtn.dataset.id, 10);
+                if (id && confirm('Удалить это действие из очереди?')) {
+                    await cancelAction(id);
+                    refreshPanel();
+                }
+            }
+        });
+    }
+
+    async function loadQueueItems(modal) {
+        const container = modal?.querySelector('#rate-queue');
+        if (!container) return;
+        const items = await getPendingActions();
+        const countEl = modal.querySelector('#queue-count');
+        if (countEl) countEl.textContent = items.length;
+        if (items.length === 0) {
+            container.innerHTML = '<div class="empty-queue"><i class="fas fa-check-circle"></i> Очередь пуста</div>';
+            return;
+        }
+        container.innerHTML = items.map(item => `
+          <div class="rate-queue-item">
+            <span class="rate-action"><i class="fas ${actionIcons[item.action] || 'fa-circle'}"></i> ${actionLabels[item.action] || item.action}</span>
+            <span class="rate-time">${new Date(item.timestamp).toLocaleString()}</span>
+            <button class="queue-cancel-btn" data-id="${item.id}"><i class="fas fa-times"></i></button>
+          </div>
+        `).join('');
+    }
+
+    async function loadHistoryItems(modal) {
+        const container = modal?.querySelector('#rate-history');
+        if (!container) return;
+        const history = getHistory().slice(-50).reverse();
+        if (history.length === 0) {
+            container.innerHTML = '<div class="empty-queue">Нет истории</div>';
+            return;
+        }
+        container.innerHTML = history.map(h => `
+          <div class="rate-history-item ${h.status}">
+            <span class="rate-action">${actionLabels[h.action] || h.action}</span>
+            <span class="rate-status">${h.status === 'completed' ? '✅' : '❌'}</span>
+            <span class="rate-time">${new Date(h.timestamp).toLocaleString()}</span>
+          </div>
+        `).join('');
+    }
+
+    function loadCacheItems(modal) {
+        const container = modal?.querySelector('.cache-keys-list');
+        if (!container) return;
+        const keys = getCacheKeys();
+        if (keys.length === 0) {
+            container.innerHTML = '<p class="empty-queue">Нет кешированных данных (кроме токена и лимитов)</p>';
+            return;
+        }
+        container.innerHTML = keys.map(key => `
+          <div class="cache-key-item">
+            <span>${escapeHtml(key)}</span>
+            <button class="cache-delete-btn" data-key="${escapeHtml(key)}"><i class="fas fa-times"></i></button>
+          </div>
+        `).join('');
+        container.querySelectorAll('.cache-delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const key = btn.dataset.key;
+                if (key && confirm(`Удалить ключ "${key}"?`)) {
+                    deleteCacheKey(key);
+                    showToast(`Ключ "${key}" удален`, 'success');
+                    refreshPanel();
+                }
+            });
+        });
+    }
+
+    function getCacheKeys() {
+        const keys = new Set();
+        for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key && !key.startsWith('preferredLanguage')) {
+                keys.add('session:' + key);
+            }
+        }
+        const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token', 'last_cache_clear'];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && !exclude.some(ex => key.startsWith(ex))) {
+                keys.add('local:' + key);
+            }
+        }
+        return Array.from(keys).sort();
+    }
+
+    function deleteCacheKey(fullKey) {
+        const [storage, key] = fullKey.split(':', 2);
+        if (storage === 'session') {
+            sessionStorage.removeItem(key);
+        } else if (storage === 'local') {
+            localStorage.removeItem(key);
+        }
+    }
+
+    function clearStaleCache() {
+        const now = Date.now();
+        const ttl = window.GithubCore?.CONFIG?.CACHE_TTL || 600000;
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+            const key = sessionStorage.key(i);
+            if (key && key.endsWith('_time')) {
+                const time = parseInt(sessionStorage.getItem(key), 10);
+                if (!isNaN(time) && now - time > ttl) {
+                    const dataKey = key.replace('_time', '');
+                    sessionStorage.removeItem(dataKey);
+                    sessionStorage.removeItem(key);
+                }
+            }
+        }
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key && key.endsWith('_time') && !key.startsWith('rate_limits') && !key.startsWith('license_')) {
+                const time = parseInt(localStorage.getItem(key), 10);
+                if (!isNaN(time) && now - time > ttl) {
+                    const dataKey = key.replace('_time', '');
+                    localStorage.removeItem(dataKey);
+                    localStorage.removeItem(key);
+                }
+            }
+        }
+    }
+
+    function clearAllCache() {
+        const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token', 'last_cache_clear'];
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key && !exclude.some(ex => key.startsWith(ex))) {
+                localStorage.removeItem(key);
+            }
+        }
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+            const key = sessionStorage.key(i);
+            if (key && !key.startsWith('preferredLanguage')) {
+                sessionStorage.removeItem(key);
+            }
+        }
+        caches.keys().then(names => {
+            for (const name of names) {
+                caches.delete(name);
+            }
+        }).catch(console.warn);
+        queueCache = null;
     }
 
     function updateTimerDisplay(modal) {
@@ -493,76 +721,7 @@
         timerEl.textContent = `${hours}ч ${minutes}м`;
     }
 
-    async function loadQueueItems(modal) {
-        const container = modal?.querySelector('#rate-queue');
-        if (!container) return;
-        const items = await getPendingActions();
-        if (items.length === 0) {
-            container.innerHTML = '<div class="empty-queue"><i class="fas fa-check-circle"></i> Очередь пуста</div>';
-            return;
-        }
-        container.innerHTML = items.map(item => `
-          <div class="queue-item">
-            <span class="queue-action"><i class="fas ${actionIcons[item.action] || 'fa-circle'}"></i> ${actionLabels[item.action] || item.action}</span>
-            <span class="queue-time">${new Date(item.timestamp).toLocaleString()}</span>
-            <span class="queue-status">${item.status === 'pending' ? '⏳' : '❌'}</span>
-          </div>
-        `).join('');
-    }
-
     let refreshPanel = () => {};
-
-    async function clearCacheType(type) {
-        const cacheNames = await caches.keys();
-        const now = Date.now();
-        const ttlMap = {
-            'static': window.GithubCore?.CONFIG?.CACHE_TTL || 10 * 60 * 1000,
-            'images': window.GithubCore?.CONFIG?.IMAGE_CACHE_TTL || 30 * 24 * 60 * 60 * 1000,
-            'api': window.GithubCore?.CONFIG?.API_CACHE_TTL || 5 * 60 * 1000,
-            'dynamic': window.GithubCore?.CONFIG?.CACHE_TTL || 10 * 60 * 1000
-        };
-        const ttl = ttlMap[type] || 10 * 60 * 1000;
-
-        for (const name of cacheNames) {
-            if (type === 'static' && name === 'static-v7') {
-                await cleanCacheByName(name, ttl);
-            } else if (type === 'images' && name === 'images-v7') {
-                await cleanCacheByName(name, ttl);
-            } else if (type === 'api' && name === 'github-api-v7') {
-                await cleanCacheByName(name, ttl);
-            } else if (type === 'dynamic' && name === 'dynamic-v7') {
-                await cleanCacheByName(name, ttl);
-            }
-        }
-        if (type === 'api') {
-            const prefix = 'gh_api_';
-            for (const key of Object.keys(localStorage)) {
-                if (key.startsWith(prefix)) {
-                    const timeKey = key + '_time';
-                    const storedTime = localStorage.getItem(timeKey);
-                    if (storedTime && (now - parseInt(storedTime) > ttl)) {
-                        localStorage.removeItem(key);
-                        localStorage.removeItem(timeKey);
-                    }
-                }
-            }
-        }
-    }
-
-    async function cleanCacheByName(cacheName, ttl) {
-        const cache = await caches.open(cacheName);
-        const requests = await cache.keys();
-        const now = Date.now();
-        for (const req of requests) {
-            const response = await cache.match(req);
-            if (response) {
-                const cachedTime = response.headers.get('sw-cached-time');
-                if (cachedTime && (now - parseInt(cachedTime) > ttl)) {
-                    await cache.delete(req);
-                }
-            }
-        }
-    }
 
     function updateIndicators() {
         document.querySelectorAll('.rate-indicator').forEach(el => {
@@ -677,16 +836,19 @@
         increment,
         getRemaining,
         enqueueAction,
+        cancelAction,
         processQueue,
         openRatePanel,
         addIndicator,
         updateIndicators,
-        clearCacheType,
-        clearAllCache: clearAllCacheInternal,
-        getHistory,
         getPendingActions,
+        getHistory,
         LIMITS,
-        actionLabels
+        actionLabels,
+        clearAllCache: clearAllCacheInternal,
+        clearStaleCache,
+        getCacheKeys,
+        deleteCacheKey
     };
 
     if (document.readyState === 'loading') {

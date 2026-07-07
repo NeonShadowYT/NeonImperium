@@ -1,6 +1,5 @@
-// js/common-init.js – инициализация с автоподчисткой кеша
+// js/common-init.js – инициализация без автоподчистки кеша
 (function() {
-  // Добавляем preconnect для внешних API
   function addPreconnects() {
     const links = [
       'https://api.github.com',
@@ -262,22 +261,6 @@
     }
   }
 
-  // Автоматическая очистка кеша (только устаревшего) при старте сессии (один раз)
-  function autoClearCache() {
-    if (sessionStorage.getItem('auto_cache_cleared')) return;
-    sessionStorage.setItem('auto_cache_cleared', '1');
-    if (!window.RateLimits) {
-      window.Utils.loadModule('js/features/rate-limits.js').then(() => {
-        if (window.RateLimits) {
-          // Очищаем только устаревший кеш (вызываем внутреннюю функцию без инкремента лимита)
-          window.RateLimits.clearAllCache().catch(console.warn);
-        }
-      }).catch(console.warn);
-    } else {
-      window.RateLimits.clearAllCache().catch(console.warn);
-    }
-  }
-
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       preloadFont();
@@ -292,7 +275,6 @@
       registerServiceWorker();
       initDownloadConsent();
       initRateLimits();
-      autoClearCache();
     });
   } else {
     preloadFont();
@@ -307,6 +289,5 @@
     registerServiceWorker();
     initDownloadConsent();
     initRateLimits();
-    autoClearCache();
   }
 })();

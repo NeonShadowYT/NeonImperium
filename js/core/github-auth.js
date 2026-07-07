@@ -1,14 +1,14 @@
-// js/core/github-auth.js – аутентификация с performAction для очистки кеша
+// js/core/github-auth.js
 (function() {
-  const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule, performAction } = window.Utils;
+  const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule } = window.Utils;
   const GitHubClient = window.GitHubClient;
   const client = window.GitHubAPIClient;
 
   const TOKEN_KEY = 'github_token';
   const USER_CACHE_KEY = 'github_user';
   const SCOPES_CACHE_KEY = 'github_scopes';
-  const LAST_CLEAR_KEY = 'last_cache_clear';
-  const CLEAR_COOLDOWN = 10000;
+  const LAST_LOGIN_ATTEMPT_KEY = 'last_login_attempt';
+  const LOGIN_COOLDOWN = 10000; // 10 секунд
 
   let currentUserLogin = null;
   let currentScopes = [];
@@ -167,6 +167,13 @@
   }
 
   async function validateAndLogin(token, save = true) {
+    const lastAttempt = localStorage.getItem(LAST_LOGIN_ATTEMPT_KEY);
+    if (lastAttempt && Date.now() - parseInt(lastAttempt) < LOGIN_COOLDOWN) {
+      window.UIUtils?.showToast('Подождите немного перед повторной попыткой входа', 'error');
+      return;
+    }
+    localStorage.setItem(LAST_LOGIN_ATTEMPT_KEY, Date.now().toString());
+
     if (!token) return;
     profileContainer.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color:var(--accent);margin:8px;"></i>';
     const controller = new AbortController();
@@ -211,10 +218,6 @@
     const storageItem = hasGist
       ? `<div class="profile-dropdown-item" data-action="storage"><i class="fas fa-box-archive"></i> Хранилище</div>`
       : '';
-    let cacheRemaining = '?';
-    if (window.RateLimits) {
-      cacheRemaining = window.RateLimits.getRemaining('cacheClears');
-    }
     profileContainer.innerHTML = `
       <img src="${user.avatar_url || 'images/default-avatar.webp'}" alt="${user.login}" class="nav-profile-avatar" onerror="this.src='images/default-avatar.webp'" width="32" height="32">
       <span class="nav-profile-login">${escapeHtml(user.login)}</span>
@@ -231,10 +234,6 @@
         <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> Лимиты и кеш</div>
         <div class="profile-dropdown-item" data-action="revoke-token"><i class="fas fa-external-link-alt"></i> Управление токенами</div>
         <div class="profile-dropdown-divider"></div>
-        <div class="profile-dropdown-item" data-action="clear-cache">
-          <i class="fas fa-trash-alt"></i> Очистить кеш
-          <span style="font-size:11px; color:var(--text-secondary); margin-left:8px;">(осталось: <span class="rate-indicator" data-action="cacheClears">${cacheRemaining}</span>)</span>
-        </div>
         <div class="profile-dropdown-item" data-action="logout"><i class="fas fa-sign-out-alt"></i> Выйти</div>
       </div>
     `;
@@ -250,7 +249,6 @@
         <div class="profile-dropdown-item" data-action="about"><i class="fas fa-info-circle"></i> Зачем это нужно?</div>
         <div class="profile-dropdown-divider"></div>
         <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> Лимиты и кеш</div>
-        <div class="profile-dropdown-item" data-action="clear-cache"><i class="fas fa-trash-alt"></i> Очистить кеш</div>
       </div>
     `;
     bindDropdownEvents();
@@ -305,40 +303,16 @@
       case 'revoke-token':
         window.open('https://github.com/settings/tokens', '_blank');
         break;
-      case 'clear-cache': {
-        if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
-        const lastClear = localStorage.getItem(LAST_CLEAR_KEY);
-        if (lastClear && Date.now() - parseInt(lastClear) < CLEAR_COOLDOWN) {
-          window.UIUtils?.showToast('Подождите', 'warning');
-          return;
-        }
-        try {
-          const result = await performAction('cacheClears', {}, async () => {
-            await window.RateLimits.clearAllCache();
-            localStorage.setItem(LAST_CLEAR_KEY, Date.now().toString());
-            return true;
-          });
-          if (result.queued) {
-            window.UIUtils?.showToast('Очистка кеша поставлена в очередь', 'info');
-          } else {
-            window.UIUtils?.showToast('Кеш очищен', 'success');
-            setTimeout(() => location.reload(), 1000);
-          }
-        } catch (err) {
-          window.UIUtils?.showToast('Ошибка: ' + err.message, 'error');
-        }
-        break;
-      }
       case 'logout':
         localStorage.removeItem(TOKEN_KEY);
-        sessionStorage.clear();
+        sessionStorage.removeItem(USER_CACHE_KEY);
+        sessionStorage.removeItem(SCOPES_CACHE_KEY);
         updateClientToken(null);
         currentUserLogin = null;
         currentScopes = [];
         renderLoggedOutUI();
         window.dispatchEvent(new CustomEvent('github-logout'));
         window.UIUtils?.showToast('Вы вышли', 'info');
-        setTimeout(() => location.reload(), 500);
         break;
     }
   }
