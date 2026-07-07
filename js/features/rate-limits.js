@@ -1,5 +1,8 @@
 // js/features/rate-limits.js
 (function() {
+    // Импорт необходимых утилит из GithubCore
+    const { escapeHtml } = window.GithubCore;
+
     const LIMITS = {
         posts: 4,
         comments: 16,
@@ -20,6 +23,7 @@
     let today = null;
     let queueCache = null;
     let queueCacheTime = 0;
+    let processQueueDebounced = null; // для debounce обработки очереди
 
     // BroadcastChannel для синхронизации между вкладками
     let bc = null;
@@ -77,13 +81,11 @@
 
     function saveCounts() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: today, counts: currentCounts }));
-        // Уведомляем другие вкладки
         try {
             if (bc) bc.postMessage({ type: 'counts-updated', counts: currentCounts, date: today });
         } catch (e) {}
     }
 
-    // Синхронизация через storage (запасной вариант)
     window.addEventListener('storage', (e) => {
         if (e.key === STORAGE_KEY) {
             loadCounts();
@@ -108,7 +110,13 @@
         currentCounts[action]++;
         saveCounts();
         updateIndicators();
-        processQueue().catch(console.warn);
+        // Обработка очереди с debounce, чтобы не вызывать слишком часто
+        if (!processQueueDebounced) {
+            processQueueDebounced = debounce(() => {
+                processQueue().catch(console.warn);
+            }, 5000);
+        }
+        processQueueDebounced();
         if (window._ratePanelOpen) refreshPanel();
     }
 
@@ -414,7 +422,10 @@
             bindPanelEvents(modal);
         };
         refreshPanel = () => {
-            if (window._ratePanelRefresh) window._ratePanelRefresh();
+            if (window._ratePanelRefresh) {
+                // Используем requestAnimationFrame для плавного обновления
+                requestAnimationFrame(() => window._ratePanelRefresh());
+            }
         };
 
         bindPanelEvents(modal);
@@ -846,6 +857,15 @@
 
         updateIndicators();
         console.log('[RateLimits] Инициализирован');
+    }
+
+    // Debounce helper (если не определён в GithubCore)
+    function debounce(fn, delay) {
+        let timer;
+        return function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
     }
 
     const actionLabels = {
