@@ -12,11 +12,12 @@
   // Увеличен TTL для комментариев до 10 минут
   const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
   const COMMENTS_CACHE_TTL = 10 * 60 * 1000;
+  const COMMENTS_ERROR_COOLDOWN = 5 * 60 * 1000; // 5 минут после ошибки
+
   const reactionsCache = new Map();
   const commentsCache = new Map();
-
-  // Для предотвращения дублирующихся запросов комментариев
   const pendingCommentsRequests = new Map();
+  const commentsErrorTimestamps = new Map(); // запоминаем время последней ошибки
 
   let reactionsListCache = new Map();
   const CACHE_TTL = 5 * 60 * 1000;
@@ -189,47 +190,58 @@
     container.appendChild(btnsDiv);
   }
 
-  // Функция загрузки комментариев с кешированием и защитой от дублей
+  // Функция загрузки комментариев с кешированием, защитой от дублей и ограничением повторных попыток
   async function loadComments(issueNumber, container, onUpdate, signal) {
     if (!window.GithubAPI) await loadModule('js/core/github-api.js');
 
-    const cacheKey = `comments_${issueNumber}`;
-    // Проверяем кеш
-    const cached = cacheGet(cacheKey, COMMENTS_CACHE_TTL);
-    if (cached && !signal?.aborted) {
-      renderComments(cached, container);
-      // Не делаем фоновое обновление, чтобы не создавать лишние запросы
+    // Проверяем, не была ли недавно ошибка для этого issue
+    const lastErrorTime = commentsErrorTimestamps.get(issueNumber);
+    if (lastErrorTime && (Date.now() - lastErrorTime < COMMENTS_ERROR_COOLDOWN)) {
+      container.innerHTML = '<p class="text-secondary" style="text-align:center;">Комментарии временно недоступны</p>';
       return;
     }
 
-    // Проверяем, не идёт ли уже запрос для этого issue
+    const cacheKey = `comments_${issueNumber}`;
+    const cached = cacheGet(cacheKey, COMMENTS_CACHE_TTL);
+    if (cached && !signal?.aborted) {
+      renderComments(cached, container);
+      return;
+    }
+
+    // Проверяем, не идёт ли уже запрос
     if (pendingCommentsRequests.has(issueNumber)) {
-      // Если запрос уже в процессе, дожидаемся его результата
       try {
         const comments = await pendingCommentsRequests.get(issueNumber);
-        if (!signal?.aborted) {
-          renderComments(comments, container);
-        }
+        if (!signal?.aborted) renderComments(comments, container);
       } catch (err) {
         if (err.name === 'AbortError') return;
-        console.warn('Ошибка при ожидании комментариев:', err);
+        commentsErrorTimestamps.set(issueNumber, Date.now());
+        container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
       }
       return;
     }
 
-    // Создаём новый запрос
+    // Создаём новый запрос с ограничением повторных попыток
+    let attempts = 0;
+    const maxAttempts = 2;
     const promise = (async () => {
-      try {
-        const comments = await window.GithubAPI.loadComments(issueNumber, signal);
-        if (signal && signal.aborted) throw new Error('Aborted');
-        cacheSet(cacheKey, comments);
-        return comments;
-      } catch (err) {
-        if (err.name === 'AbortError' || err.message === 'Aborted') throw err;
-        console.error(err);
-        throw err;
-      } finally {
-        pendingCommentsRequests.delete(issueNumber);
+      while (attempts < maxAttempts) {
+        try {
+          const comments = await window.GithubAPI.loadComments(issueNumber, signal);
+          if (signal && signal.aborted) throw new Error('Aborted');
+          cacheSet(cacheKey, comments);
+          commentsErrorTimestamps.delete(issueNumber);
+          return comments;
+        } catch (err) {
+          attempts++;
+          if (err.name === 'AbortError' || err.message === 'Aborted') throw err;
+          if (attempts < maxAttempts) {
+            await new Promise(r => setTimeout(r, 1000 * attempts));
+          } else {
+            commentsErrorTimestamps.set(issueNumber, Date.now());
+            throw err;
+          }
+        }
       }
     })();
 
@@ -243,6 +255,10 @@
     } catch (err) {
       if (err.name === 'AbortError' || err.message === 'Aborted') return;
       container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
+    } finally {
+      setTimeout(() => {
+        pendingCommentsRequests.delete(issueNumber);
+      }, 100);
     }
   }
 
@@ -530,7 +546,6 @@
       }
     }
 
-    // Загрузка комментариев (с кешем и защитой от дублей)
     await refreshComments();
 
     const submitBtn = modal.querySelector('#submit-comment-btn');
