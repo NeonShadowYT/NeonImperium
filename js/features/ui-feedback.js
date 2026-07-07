@@ -9,15 +9,15 @@
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
 
-  // Увеличен TTL для комментариев до 10 минут
+  // Кеширование
   const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
   const COMMENTS_CACHE_TTL = 10 * 60 * 1000;
-  const COMMENTS_ERROR_COOLDOWN = 5 * 60 * 1000; // 5 минут после ошибки
+  const COMMENTS_ERROR_COOLDOWN = 5 * 60 * 1000;
 
   const reactionsCache = new Map();
   const commentsCache = new Map();
   const pendingCommentsRequests = new Map();
-  const commentsErrorTimestamps = new Map(); // запоминаем время последней ошибки
+  const commentsErrorTimestamps = new Map();
 
   let reactionsListCache = new Map();
   const CACHE_TTL = 5 * 60 * 1000;
@@ -190,11 +190,9 @@
     container.appendChild(btnsDiv);
   }
 
-  // Функция загрузки комментариев с кешированием, защитой от дублей и ограничением повторных попыток
   async function loadComments(issueNumber, container, onUpdate, signal) {
     if (!window.GithubAPI) await loadModule('js/core/github-api.js');
 
-    // Проверяем, не была ли недавно ошибка для этого issue
     const lastErrorTime = commentsErrorTimestamps.get(issueNumber);
     if (lastErrorTime && (Date.now() - lastErrorTime < COMMENTS_ERROR_COOLDOWN)) {
       container.innerHTML = '<p class="text-secondary" style="text-align:center;">Комментарии временно недоступны</p>';
@@ -208,7 +206,6 @@
       return;
     }
 
-    // Проверяем, не идёт ли уже запрос
     if (pendingCommentsRequests.has(issueNumber)) {
       try {
         const comments = await pendingCommentsRequests.get(issueNumber);
@@ -221,7 +218,6 @@
       return;
     }
 
-    // Создаём новый запрос с ограничением повторных попыток
     let attempts = 0;
     const maxAttempts = 2;
     const promise = (async () => {
@@ -525,7 +521,6 @@
       await loadComments(id, commentsContainer, refreshComments, abortSignal);
     }
 
-    // Загрузка реакций с кешированием
     if (currentUser && window.GithubAPI) {
       try {
         if (abortSignal.aborted) return;
@@ -634,7 +629,8 @@
     });
     titleCounter.textContent = `${currentTitle.length}/100`;
 
-    const editCodeBtn = createElement('button', 'button small', {
+    // ИСПРАВЛЕНИЕ: добавляем класс 'edit-code-btn' к кнопке
+    const editCodeBtn = createElement('button', 'button small edit-code-btn', {
       background: 'var(--bg-inner-gradient)',
       border: '1px solid var(--border)',
       color: 'var(--text-secondary)',
@@ -735,6 +731,7 @@
     const preview = container.querySelector('.unified-preview');
     const titleEl = container.querySelector('.editor-title-input');
     const titleCounterEl = container.querySelector('.title-counter');
+    // Ищем кнопку с классом edit-code-btn
     const editBtn = container.querySelector('.edit-code-btn');
     const publicBtnEl = container.querySelector('.access-switch-btn.active');
     const privateBtnEl = container.querySelector('.access-switch-btn:not(.active)');
@@ -833,7 +830,12 @@
       codeModal.addEventListener('click', (e) => { if (e.target === codeModal) closeCodeModal(); });
     }
 
-    editBtn.addEventListener('click', openCodeEditor);
+    // Безопасно добавляем обработчик, если кнопка существует
+    if (editBtn) {
+      editBtn.addEventListener('click', openCodeEditor);
+    } else {
+      console.warn('Кнопка редактирования кода не найдена');
+    }
 
     titleEl.addEventListener('input', () => {
       const val = titleEl.value;
