@@ -21,6 +21,10 @@
   const MIN_POST_BODY_LENGTH = 20;
   const MIN_POST_TITLE_LENGTH = 3;
 
+  // Для предотвращения дублирующих запросов при открытии модалок
+  let currentModalAbortController = null;
+  let currentModalLoading = null; // { issueNumber, type: 'comments'|'reactions' }
+
   function canViewPost(body, labels, currentUser) {
     if (!labels || !labels.includes('private')) return true;
     if (isAdmin()) return true;
@@ -121,6 +125,7 @@
             const current = parseInt(countSpan.textContent) || 0;
             countSpan.textContent = current + 1;
           }
+          // Обновляем реакции через кеш
           window.GithubAPI.loadReactions(issueNumber).then(newReactions => {
             renderReactions(container, issueNumber, newReactions, currentUser, onAddHeart, onRemoveHeart);
           }).catch(() => {});
@@ -178,10 +183,12 @@
     container.appendChild(btnsDiv);
   }
 
-  async function loadComments(issueNumber, container, onUpdate) {
+  async function loadComments(issueNumber, container, onUpdate, signal) {
     if (!window.GithubAPI) await loadModule('js/core/github-api.js');
     try {
-      const comments = await window.GithubAPI.loadComments(issueNumber);
+      const comments = await window.GithubAPI.loadComments(issueNumber, signal);
+      // Если сигнал отменён, не обновляем контейнер
+      if (signal && signal.aborted) return;
       container.innerHTML = '';
       if (comments.length === 0) {
         container.innerHTML = '<p class="text-secondary" style="text-align:center;">Нет комментариев</p>';
@@ -214,6 +221,7 @@
         container.appendChild(commentDiv);
       }
     } catch (err) {
+      if (err.name === 'AbortError' || err.message === 'The operation was aborted.') return;
       console.error(err);
       container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
     }
@@ -227,7 +235,6 @@
       showToast('Комментарий не может превышать 400 символов', 'error');
       return;
     }
-    // Проверка на токены и минимальную длину
     if (!validateTextContent(newBody, MIN_COMMENT_LENGTH, 'Комментарий')) return;
 
     try {
@@ -243,7 +250,6 @@
       showToast('Комментарий не может превышать 400 символов', 'error');
       return;
     }
-    // Проверка на токены и минимальную длину
     if (!validateTextContent(body, MIN_COMMENT_LENGTH, 'Комментарий')) return;
 
     const currentUser = getCurrentUser();
@@ -385,6 +391,30 @@
 
     const { modal, closeModal } = createModal(title, html, { size: 'full' });
 
+    // Отменяем предыдущие запросы при открытии новой модалки
+    if (currentModalAbortController) {
+      currentModalAbortController.abort();
+      currentModalAbortController = null;
+    }
+    currentModalAbortController = new AbortController();
+    const abortSignal = currentModalAbortController.signal;
+
+    // Закрытие модалки с отменой запросов
+    const originalClose = closeModal;
+    const newClose = () => {
+      if (currentModalAbortController) {
+        currentModalAbortController.abort();
+        currentModalAbortController = null;
+      }
+      currentModalLoading = null;
+      originalClose();
+    };
+    modal.querySelector('.modal-close').removeEventListener('click', closeModal);
+    modal.querySelector('.modal-close').addEventListener('click', newClose);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) newClose();
+    });
+
     const headerDiv = modal.querySelector('.modal-header');
     if (headerDiv) {
       const actionsDiv = createElement('div', 'modal-header-actions', { display: 'flex', gap: '8px', marginLeft: 'auto', marginRight: '8px' });
@@ -420,19 +450,32 @@
 
     const reactionsContainer = modal.querySelector('#modal-reactions');
     const commentsContainer = modal.querySelector('#modal-comments-list');
+
     async function refreshComments() {
-      await loadComments(id, commentsContainer, refreshComments);
+      // Проверяем, не отменён ли сигнал и не закрыта ли модалка
+      if (abortSignal.aborted) return;
+      await loadComments(id, commentsContainer, refreshComments, abortSignal);
     }
+
+    // Загружаем реакции (с учётом отмены)
     if (currentUser && window.GithubAPI) {
       try {
-        let reactions = await window.GithubAPI.loadReactions(id);
+        if (abortSignal.aborted) return;
+        const reactions = await window.GithubAPI.loadReactions(id, abortSignal);
+        if (abortSignal.aborted) return;
         renderReactions(reactionsContainer, id, reactions, currentUser,
           async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },
           async (num, rid) => { await window.GithubAPI.removeReaction(num, rid); }
         );
-      } catch(e) { console.warn('Reactions error:', e); }
+      } catch(e) {
+        if (e.name === 'AbortError') return;
+        console.warn('Reactions error:', e);
+      }
     }
+
+    // Загружаем комментарии (с отменой)
     await refreshComments();
+
     const submitBtn = modal.querySelector('#submit-comment-btn');
     const commentInput = modal.querySelector('#new-comment-input');
     const counterEl = modal.querySelector('#comment-counter');
@@ -451,7 +494,6 @@
           showToast('Комментарий не может превышать 400 символов', 'error');
           return;
         }
-        // Проверка на токены и минимальную длину уже внутри addComment
         await addComment(id, text, refreshComments);
         commentInput.value = '';
         if (counterEl) { counterEl.textContent = '0/400'; counterEl.style.color = 'var(--text-secondary)'; }
@@ -748,7 +790,6 @@
       const title = titleEl.value.trim();
       const body = currentBody;
 
-      // Проверка заголовка: не пустой, минимальная длина, нет токенов
       if (!title) return showToast('Введите заголовок', 'error');
       if (title.length > 100) return showToast('Заголовок не должен превышать 100 символов', 'error');
       if (containsGitHubToken(title)) {
@@ -760,7 +801,6 @@
         return;
       }
 
-      // Проверка тела поста
       if (body.length > 10000) return showToast('Текст поста не должен превышать 10000 символов', 'error');
       if (!validateTextContent(body, MIN_POST_BODY_LENGTH, 'Текст поста')) return;
 
