@@ -15,6 +15,8 @@
   const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024;
   const METADATA_CACHE_TTL = 24 * 60 * 60 * 1000;
   const METADATA_CACHE_PREFIX = 'metadata_';
+  const BOOKMARKS_CACHE_TTL = 60 * 1000; // 1 минута кеширования загруженных закладок
+  const SAVE_DEBOUNCE_MS = 2000; // задержка перед сохранением
 
   let currentUser = null;
   let currentToken = null;
@@ -29,6 +31,11 @@
   let modalRef = null;
   let searchInputRef = null;
   let currentGame = null;
+  let lastBookmarksLoad = 0; // время последней загрузки из gist
+
+  // Кеш загруженных закладок в памяти (используется для быстрого доступа)
+  let cachedBookmarks = null;
+  let cachedBookmarksTime = 0;
 
   async function authFetch(url, options = {}) {
     const token = currentToken || localStorage.getItem('github_token');
@@ -138,9 +145,16 @@
     return gist.id;
   }
 
-  async function loadBookmarks() {
+  // Загрузка закладок с кешированием
+  async function loadBookmarks(forceRefresh = false) {
     if (!currentToken) {
       return { bookmarks: [] };
+    }
+
+    // Проверяем кеш в памяти
+    const now = Date.now();
+    if (!forceRefresh && cachedBookmarks && (now - cachedBookmarksTime < BOOKMARKS_CACHE_TTL)) {
+      return { bookmarks: cachedBookmarks };
     }
 
     try {
@@ -150,6 +164,8 @@
         const newGistId = await gistCreate(content);
         gistId = newGistId;
         localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
+        cachedBookmarks = [];
+        cachedBookmarksTime = now;
         return { bookmarks: [] };
       }
 
@@ -160,6 +176,8 @@
         const newGistId = await gistCreate(content);
         gistId = newGistId;
         localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
+        cachedBookmarks = [];
+        cachedBookmarksTime = now;
         return { bookmarks: [] };
       }
 
@@ -167,6 +185,8 @@
       if (!file) {
         const content = JSON.stringify({ version: 2, bookmarks: [] });
         await gistUpdate(gistId, content);
+        cachedBookmarks = [];
+        cachedBookmarksTime = now;
         return { bookmarks: [] };
       }
 
@@ -176,32 +196,28 @@
       } catch {
         const content = JSON.stringify({ version: 2, bookmarks: [] });
         await gistUpdate(gistId, content);
+        cachedBookmarks = [];
+        cachedBookmarksTime = now;
         return { bookmarks: [] };
       }
 
-      if (payload.bookmarks) {
-        return { bookmarks: payload.bookmarks };
-      }
-      return { bookmarks: [] };
+      const bookmarks = payload.bookmarks || [];
+      cachedBookmarks = bookmarks;
+      cachedBookmarksTime = now;
+      return { bookmarks };
     } catch (err) {
       console.error('Ошибка загрузки закладок:', err);
+      // При ошибке возвращаем кеш, если есть
+      if (cachedBookmarks) return { bookmarks: cachedBookmarks };
       return { bookmarks: [] };
     }
   }
 
-  async function saveBookmarksImmediately() {
-    if (isSaving) return;
-    isSaving = true;
-    try {
-      await doSaveBookmarks();
-    } finally {
-      isSaving = false;
-    }
-  }
-
+  // Фактическое сохранение (вызывается через performAction)
   async function doSaveBookmarks() {
     try {
       if (!currentToken) return;
+      if (currentBookmarks.length === 0) return; // не сохраняем пустой список
 
       const payload = {
         version: 2,
@@ -219,15 +235,35 @@
         localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
         console.log('[storage] Gist created successfully', newGistId);
       }
+
+      // Обновляем кеш
+      cachedBookmarks = currentBookmarks.slice();
+      cachedBookmarksTime = Date.now();
+
+      // Сбрасываем флаг сохранения
+      isSaving = false;
     } catch (err) {
       console.error('Ошибка синхронизации закладок:', err);
       showToast('Не удалось сохранить изменения', 'error');
+      isSaving = false;
+      throw err;
     }
   }
 
+  // Сохранение с debounce и проверкой на уже запущенное сохранение
   function triggerDebouncedSave() {
     if (!debouncedSaveBookmarks) {
-      debouncedSaveBookmarks = debounce(saveBookmarksImmediately, 2000);
+      debouncedSaveBookmarks = debounce(async () => {
+        if (isSaving) return;
+        isSaving = true;
+        try {
+          // Используем performAction для учёта лимитов, передаём весь массив закладок как одно действие
+          await performAction('storageAdds', { bookmarks: currentBookmarks }, doSaveBookmarks);
+        } catch (err) {
+          // Ошибка уже обработана в doSaveBookmarks или performAction
+          isSaving = false;
+        }
+      }, SAVE_DEBOUNCE_MS);
     }
     debouncedSaveBookmarks();
   }
@@ -556,6 +592,7 @@
     return null;
   }
 
+  // Добавление закладки (с проверкой дубликатов)
   async function addBookmark(bookmarkOrUrl, title, fileContent, fileName) {
     if (!currentUser) {
       showToast('Войдите в аккаунт GitHub с правами gist', 'error');
@@ -600,6 +637,7 @@
       bookmarkData = { url, title: customTitle, fileContent: customFileContent, fileName: customFileName, ...extraData };
     }
 
+    // Проверка дубликатов в текущем списке
     if (url && currentBookmarks.some(b => b.url === url)) {
       showToast('Уже в избранном', 'info');
       throw new Error('duplicate');
@@ -638,49 +676,32 @@
       game: extraData.game || null,
       _pending: true
     };
+
+    // Добавляем в память
     currentBookmarks = [newBookmark, ...currentBookmarks];
+    // Обновляем кеш в памяти (для быстрого доступа)
+    cachedBookmarks = currentBookmarks.slice();
+    cachedBookmarksTime = Date.now();
+
     if (modalRef) renderBookmarks(modalRef);
 
-    try {
-      const result = await performAction('storageAdds', { bookmark: bookmarkData }, async () => {
-        await doSaveBookmarks();
-        const idx = currentBookmarks.findIndex(b => b.id === tempId);
-        if (idx !== -1) {
-          const final = { ...currentBookmarks[idx], id: Date.now() + '-' + Math.random().toString(36), _pending: false };
-          currentBookmarks[idx] = final;
-          return final;
-        }
-        return null;
-      });
-
-      if (result.queued) {
-        showToast('Закладка сохранена в очередь', 'info');
-      } else {
-        showToast('Закладка добавлена', 'success');
-        const idx = currentBookmarks.findIndex(b => b.id === tempId);
-        if (idx !== -1) {
-          currentBookmarks[idx]._pending = false;
-          if (result.result) {
-            currentBookmarks[idx].id = result.result.id;
-          }
-        }
-        if (modalRef) renderBookmarks(modalRef);
-      }
-    } catch (err) {
-      currentBookmarks = currentBookmarks.filter(b => b.id !== tempId);
-      if (modalRef) renderBookmarks(modalRef);
-      showToast('Ошибка: ' + err.message, 'error');
-      throw err;
-    }
+    // Запускаем отложенное сохранение (с debounce)
+    triggerDebouncedSave();
+    showToast('Закладка добавлена (сохранение будет выполнено позже)', 'success');
+    return newBookmark;
   }
 
   async function removeBookmark(id) {
     if (!currentToken) return;
     currentBookmarks = currentBookmarks.filter(b => b.id !== id);
+    // Обновляем кеш
+    cachedBookmarks = currentBookmarks.slice();
+    cachedBookmarksTime = Date.now();
     triggerDebouncedSave();
     if (modalRef) {
       renderBookmarks(modalRef);
     }
+    showToast('Закладка удалена', 'success');
   }
 
   function renderBookmarks(modalElement) {
@@ -1190,6 +1211,7 @@
     if (gameContext) currentGame = gameContext;
     else currentGame = null;
 
+    // Загружаем закладки (с кешем)
     const res = await loadBookmarks();
     currentBookmarks = res.bookmarks || [];
 
@@ -1321,7 +1343,6 @@
       }
       try {
         await addBookmark(url);
-        showToast('Добавлено', 'success');
         urlInput.value = '';
         renderBookmarks(modal);
         const indicator = modal.querySelector('.rate-indicator[data-action="storageAdds"]');
@@ -1419,6 +1440,8 @@
     currentToken = null;
     gistId = null;
     currentBookmarks = [];
+    cachedBookmarks = null;
+    cachedBookmarksTime = 0;
     if (modalRef) {
       modalRef = null;
     }
@@ -1439,6 +1462,8 @@
       gistId = null;
       localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);
       currentBookmarks = [];
+      cachedBookmarks = null;
+      cachedBookmarksTime = 0;
     }
   };
 })();
