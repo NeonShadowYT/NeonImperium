@@ -13,13 +13,31 @@
     const DB_VERSION = 2;
     const STORE_NAME = 'queue';
     const HISTORY_SIZE = 100;
-    const QUEUE_CACHE_TTL = 60000; // 1 минута кеш очереди
+    const QUEUE_CACHE_TTL = 60000;
 
     let db = null;
     let currentCounts = null;
     let today = null;
     let queueCache = null;
     let queueCacheTime = 0;
+
+    // BroadcastChannel для синхронизации между вкладками
+    let bc = null;
+    try {
+        bc = new BroadcastChannel('rate-limits');
+        bc.onmessage = (event) => {
+            if (event.data.type === 'counts-updated') {
+                currentCounts = event.data.counts;
+                today = event.data.date;
+                updateIndicators();
+                if (window._ratePanelOpen) refreshPanel();
+            }
+            if (event.data.type === 'queue-updated') {
+                queueCache = null;
+                if (window._ratePanelOpen) refreshPanel();
+            }
+        };
+    } catch (e) {}
 
     function openDB() {
         return new Promise((resolve, reject) => {
@@ -59,7 +77,20 @@
 
     function saveCounts() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: today, counts: currentCounts }));
+        // Уведомляем другие вкладки
+        try {
+            if (bc) bc.postMessage({ type: 'counts-updated', counts: currentCounts, date: today });
+        } catch (e) {}
     }
+
+    // Синхронизация через storage (запасной вариант)
+    window.addEventListener('storage', (e) => {
+        if (e.key === STORAGE_KEY) {
+            loadCounts();
+            updateIndicators();
+            if (window._ratePanelOpen) refreshPanel();
+        }
+    });
 
     function getRemaining(action) {
         const limit = LIMITS[action];
@@ -144,10 +175,10 @@
                     if (data.bookmark && data.bookmark.url) {
                         duplicate = items.some(item => item.data.bookmark && item.data.bookmark.url === data.bookmark.url);
                     } else if (data.bookmarks) {
-                        // Для массового сохранения пропускаем дублирование
+                        // массовое сохранение – пропускаем дублирование
                     }
                 } else if (action === 'cacheClears') {
-                    // Всегда разрешаем
+                    // всегда разрешено
                 }
                 resolve(duplicate);
             };
@@ -173,6 +204,7 @@
         });
         await tx.done;
         queueCache = null;
+        try { if (bc) bc.postMessage({ type: 'queue-updated' }); } catch (e) {}
         window.UIUtils?.showToast(`Действие "${actionLabels[action] || action}" сохранено в очередь`, 'info');
         if (window._ratePanelOpen) refreshPanel();
         updateIndicators();
@@ -197,6 +229,7 @@
             });
             await tx.done;
             queueCache = null;
+            try { if (bc) bc.postMessage({ type: 'queue-updated' }); } catch (e) {}
             window.UIUtils?.showToast('Действие удалено из очереди', 'success');
             if (window._ratePanelOpen) refreshPanel();
             return true;
@@ -281,6 +314,7 @@
         await tx.done;
 
         queueCache = null;
+        try { if (bc) bc.postMessage({ type: 'queue-updated' }); } catch (e) {}
         updateIndicators();
         if (window._ratePanelOpen) refreshPanel();
     }

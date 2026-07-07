@@ -85,7 +85,10 @@
   async function loadGameIssues(reset) {
     if (isLoading) return;
     isLoading = true;
-    if (currentAbort) currentAbort.controller.abort();
+    if (currentAbort) {
+      currentAbort.controller.abort();
+      currentAbort = null;
+    }
     const { controller, timeoutId } = createAbortable(10000);
     currentAbort = { controller };
     try {

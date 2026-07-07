@@ -28,7 +28,6 @@
       if (!grid) { grid = createElement('div', 'projects-grid'); cont.innerHTML = ''; cont.appendChild(grid); }
       const fragment = document.createDocumentFragment();
       fragment.appendChild(createUpdateCard(newPost));
-      // Вставляем в начало
       grid.insertBefore(fragment, grid.firstChild);
     });
     window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
@@ -42,18 +41,19 @@
 
   async function loadGameUpdates(container, game) {
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>';
-    if (currentAbort) currentAbort.controller.abort();
+    if (currentAbort) {
+      currentAbort.controller.abort();
+      currentAbort = null;
+    }
     const { controller, timeoutId } = createAbortable(10000);
     currentAbort = { controller };
     try {
-      // Используем общий кэш game_issues_{game} (загружается в feedback.js, но если там ещё не было – загружаем сами)
       const cacheKey = `game_issues_${game}`;
       let issues = cacheGet(cacheKey);
       if (!issues) {
         issues = await loadIssues({ labels: `game:${game}`, state: 'open', per_page: 100, signal: controller.signal });
         cacheSet(cacheKey, issues);
       }
-      // Фильтруем только type:update и от авторов
       let posts = issues.filter(i =>
         i.labels.some(l => l.name === 'type:update') &&
         CONFIG.ALLOWED_AUTHORS.includes(i.user.login)
@@ -73,7 +73,6 @@
         const allowed = extractAllowed(p.body);
         return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
       });
-      // Сортируем по дате (новые сверху)
       posts.sort((a, b) => b.date - a.date);
       if (posts.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; return; }
       container.innerHTML = '';
@@ -100,6 +99,7 @@
         }
       } else if (existing) existing.remove();
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error('Update load error:', err);
       container.innerHTML = '<p class="error-message">Ошибка загрузки обновлений</p>';
     } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }

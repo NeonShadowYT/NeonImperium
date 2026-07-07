@@ -1,9 +1,10 @@
-// js/platform.js – увеличен TTL кэша релизов до 1 часа
+// js/platform.js – увеличен TTL кэша релизов до 1 часа, добавлен AbortController
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
     const RELEASES_CACHE_KEY = 'github_all_releases';
     const CACHE_DURATION = 60 * 60 * 1000; // 1 час
+    let currentAbortController = null;
 
     function getOS() {
         const ua = navigator.userAgent;
@@ -32,20 +33,25 @@
     async function fetchAllReleases() {
         const cached = cacheGet(RELEASES_CACHE_KEY);
         if (cached) return cached;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        // Отменяем предыдущий запрос
+        if (currentAbortController) {
+            currentAbortController.abort();
+        }
+        currentAbortController = new AbortController();
+        const signal = currentAbortController.signal;
         try {
             const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/releases?per_page=100`;
-            const resp = await fetch(url, { signal: controller.signal });
-            clearTimeout(timeoutId);
+            const resp = await fetch(url, { signal });
             if (!resp.ok) throw new Error('Failed to fetch releases');
             const releases = await resp.json();
             const filtered = releases.filter(r => !r.draft && !r.prerelease);
             cacheSet(RELEASES_CACHE_KEY, filtered);
             return filtered;
         } catch (e) {
-            clearTimeout(timeoutId);
+            if (e.name === 'AbortError') return [];
             throw e;
+        } finally {
+            currentAbortController = null;
         }
     }
 

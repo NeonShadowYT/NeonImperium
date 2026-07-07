@@ -16,6 +16,7 @@
   let container, posts = [], videos = [], postsLoaded = false, videosLoaded = false;
   let currentUser = null;
   let loading = false;
+  let currentAbortController = null; // для отмены загрузки
 
   async function ensureLoggedInAndGist() {
     if (getCurrentUser() && hasScope('gist')) return true;
@@ -103,22 +104,36 @@
   function loadNewsFeed() {
     if (loading) return;
     loading = true;
+    // Отменяем предыдущие запросы
+    if (currentAbortController) {
+      currentAbortController.abort();
+    }
+    currentAbortController = new AbortController();
+    const signal = currentAbortController.signal;
+
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">Загрузка новостей...</p></div>';
-    Promise.all([ loadPosts(), loadVideos() ]).then(([loadedPosts, loadedVideos]) => { posts = loadedPosts; videos = loadedVideos; postsLoaded = videosLoaded = true; renderMixed(); }).catch(err => { console.error(err); postsLoaded = videosLoaded = true; posts = []; videos = []; renderMixed(); }).finally(() => { loading = false; });
+    Promise.all([ loadPosts(signal), loadVideos(signal) ]).then(([loadedPosts, loadedVideos]) => {
+      if (signal.aborted) return;
+      posts = loadedPosts; videos = loadedVideos; postsLoaded = videosLoaded = true; renderMixed();
+    }).catch(err => {
+      if (signal.aborted) return;
+      console.error(err); postsLoaded = videosLoaded = true; posts = []; videos = []; renderMixed();
+    }).finally(() => { loading = false; currentAbortController = null; });
   }
 
-  async function loadVideos() {
-    try { return await loadVideosFromRSS2JSON(); } catch { return []; }
+  async function loadVideos(signal) {
+    try { return await loadVideosFromRSS2JSON(signal); } catch { return []; }
   }
-  async function loadVideosFromRSS2JSON() {
+  async function loadVideosFromRSS2JSON(signal) {
     const cacheKey = 'youtube_videos_rss2json_v3';
     const cached = cacheGet(cacheKey, 30 * 60 * 1000);
     if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
     const all = [];
     for (const ch of YT_CHANNELS) {
+      if (signal && signal.aborted) break;
       const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(`https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`)}`;
       try {
-        const resp = await fetch(apiUrl);
+        const resp = await fetch(apiUrl, { signal });
         if (!resp.ok) continue;
         const data = await resp.json();
         if (data.status !== 'ok') continue;
@@ -128,21 +143,24 @@
           return { type: 'video', id: vid, title: item.title, author: ch.name, date: new Date(item.pubDate), thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg` };
         }).filter(v => v);
         all.push(...items);
-      } catch {}
+      } catch (e) {
+        if (e.name === 'AbortError') break;
+      }
     }
     const sorted = all.sort((a, b) => b.date - a.date).slice(0, 20);
     cacheSet(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
     return sorted;
   }
 
-  async function loadPosts() {
+  async function loadPosts(signal) {
     const cacheKey = 'posts_news+update_v3';
     const cached = cacheGet(cacheKey);
     if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
     const [newsResp, updatesResp] = await Promise.all([
-      fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:news`),
-      fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:update`)
+      fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:news`, { signal }),
+      fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=15&page=1&labels=type:update`, { signal })
     ]);
+    if (signal && signal.aborted) return [];
     const news = newsResp.ok ? await newsResp.json() : [];
     const updates = updatesResp.ok ? await updatesResp.json() : [];
     const all = deduplicateByNumber([...news, ...updates]).filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));

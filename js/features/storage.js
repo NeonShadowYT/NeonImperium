@@ -31,11 +31,41 @@
   let modalRef = null;
   let searchInputRef = null;
   let currentGame = null;
-  let lastBookmarksLoad = 0; // время последней загрузки из gist
+  let lastBookmarksLoad = 0;
 
-  // Кеш загруженных закладок в памяти (используется для быстрого доступа)
+  // Кеш загруженных закладок в памяти
   let cachedBookmarks = null;
   let cachedBookmarksTime = 0;
+
+  // BroadcastChannel для синхронизации между вкладками
+  let bc = null;
+  try {
+    bc = new BroadcastChannel('bookmarks');
+    bc.onmessage = (event) => {
+      if (event.data.type === 'bookmarks-updated') {
+        cachedBookmarks = null;
+        cachedBookmarksTime = 0;
+        if (modalRef) {
+          loadBookmarks(true).then(() => {
+            renderBookmarks(modalRef);
+          });
+        }
+      }
+    };
+  } catch (e) {}
+
+  // Синхронизация через storage (запасной вариант)
+  window.addEventListener('storage', (e) => {
+    if (e.key && e.key.startsWith(STORAGE_KEY_PREFIX)) {
+      cachedBookmarks = null;
+      cachedBookmarksTime = 0;
+      if (modalRef) {
+        loadBookmarks(true).then(() => {
+          renderBookmarks(modalRef);
+        });
+      }
+    }
+  });
 
   async function authFetch(url, options = {}) {
     const token = currentToken || localStorage.getItem('github_token');
@@ -151,7 +181,6 @@
       return { bookmarks: [] };
     }
 
-    // Проверяем кеш в памяти
     const now = Date.now();
     if (!forceRefresh && cachedBookmarks && (now - cachedBookmarksTime < BOOKMARKS_CACHE_TTL)) {
       return { bookmarks: cachedBookmarks };
@@ -216,7 +245,7 @@
   async function doSaveBookmarks() {
     try {
       if (!currentToken) return;
-      if (currentBookmarks.length === 0) return; // не сохраняем пустой список
+      if (currentBookmarks.length === 0) return;
 
       const payload = {
         version: 2,
@@ -238,6 +267,9 @@
       cachedBookmarks = currentBookmarks.slice();
       cachedBookmarksTime = Date.now();
 
+      // Уведомляем другие вкладки
+      try { if (bc) bc.postMessage({ type: 'bookmarks-updated' }); } catch (e) {}
+
       isSaving = false;
     } catch (err) {
       console.error('Ошибка синхронизации закладок:', err);
@@ -254,10 +286,8 @@
         if (isSaving) return;
         isSaving = true;
         try {
-          // Используем performAction для учёта лимитов, передаём весь массив закладок как одно действие
           await performAction('storageAdds', { bookmarks: currentBookmarks }, doSaveBookmarks);
         } catch (err) {
-          // Ошибка уже обработана в doSaveBookmarks или performAction
           isSaving = false;
         }
       }, SAVE_DEBOUNCE_MS);
@@ -589,6 +619,7 @@
     return null;
   }
 
+  // Добавление закладки (с проверкой дубликатов)
   async function addBookmark(bookmarkOrUrl, title, fileContent, fileName) {
     if (!currentUser) {
       showToast('Войдите в аккаунт GitHub с правами gist', 'error');
@@ -633,6 +664,7 @@
       bookmarkData = { url, title: customTitle, fileContent: customFileContent, fileName: customFileName, ...extraData };
     }
 
+    // Проверка дубликатов в текущем списке
     if (url && currentBookmarks.some(b => b.url === url)) {
       showToast('Уже в избранном', 'info');
       throw new Error('duplicate');
@@ -1442,6 +1474,7 @@
     addBookmark,
     removeBookmark,
     loadBookmarks,
+    _doSave: doSaveBookmarks, // для использования из очереди
     resetStorage: async () => {
       if (gistId && currentToken) {
         await fetch(`https://api.github.com/gists/${gistId}`, {
