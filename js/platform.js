@@ -1,4 +1,4 @@
-// js/platform.js – улучшенная сортировка релизов с приоритетом типов и наглядными метками
+// js/platform.js – улучшенная сортировка и стилизованные метки для выбора версий
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
@@ -95,7 +95,6 @@
     function parseVersion(tag) {
         let versionStr = tag.replace(/^v/, '');
         let suffix = '';
-        // Ищем суффиксы: p<число>, b<число>, a<число>
         const match = versionStr.match(/(.+?)(?:\s+([pba]\d+))?$/);
         if (match) {
             versionStr = match[1].trim();
@@ -112,16 +111,24 @@
     // Определяем тип релиза с приоритетом (чем меньше число, тем выше приоритет)
     function getReleaseType(version) {
         const s = version.suffix;
-        if (s && s.includes('a')) return { type: 'alpha', label: 'Альфа', priority: 3, emoji: '🔴' };
-        if (s && s.includes('b')) return { type: 'beta', label: 'Бета', priority: 2, emoji: '🔵' };
-        if (s && s.includes('p')) return { type: 'prerelease', label: 'Пре-релиз', priority: 1, emoji: '🟠' };
+        if (s && s.includes('a')) {
+            return { type: 'alpha', label: 'Альфа', priority: 3, emoji: '🔴' };
+        }
+        if (s && s.includes('b')) {
+            return { type: 'beta', label: 'Бета', priority: 2, emoji: '🔵' };
+        }
+        if (s && s.includes('p')) {
+            return { type: 'prerelease', label: 'Пре-релиз', priority: 1, emoji: '🟠' };
+        }
         // Без суффикса – стабильный релиз или патч
-        if (version.patch === 0) return { type: 'release', label: 'Релиз', priority: 0, emoji: '🟢' };
-        return { type: 'patch', label: 'Патч', priority: 0, emoji: '🟢' }; // патч тоже стабильный
+        if (version.patch === 0) {
+            return { type: 'release', label: 'Релиз', priority: 0, emoji: '🟢' };
+        }
+        return { type: 'patch', label: 'Патч', priority: 0, emoji: '🟡' };
     }
 
+    // Сортировка: сначала с sort-order (убывание), затем по приоритету (возрастание) и дате (убывание)
     function sortReleasesByOrder(releases) {
-        // Сортировка: сначала sort-order (если есть) в порядке убывания, затем по приоритету типа и дате
         const withOrder = [];
         const withoutOrder = [];
         for (const release of releases) {
@@ -132,9 +139,7 @@
                 withoutOrder.push(release);
             }
         }
-        // Сортируем с sort-order по убыванию
         withOrder.sort((a, b) => b.order - a.order);
-        // Сортируем без sort-order: по приоритету типа (стабильные выше), затем по дате (новые выше)
         withoutOrder.sort((a, b) => {
             const vA = parseVersion(a.tag_name);
             const vB = parseVersion(b.tag_name);
@@ -143,10 +148,8 @@
             if (typeA.priority !== typeB.priority) {
                 return typeA.priority - typeB.priority;
             }
-            // Сравниваем даты публикации (новые выше)
             return new Date(b.published_at) - new Date(a.published_at);
         });
-        // Объединяем: сначала withOrder, затем withoutOrder
         return [...withOrder.map(item => item.release), ...withoutOrder];
     }
 
@@ -242,7 +245,7 @@
                 return;
             }
 
-            // Группируем по мажорной версии (major.minor)
+            // Группируем по major.minor
             const groups = {};
             filtered.forEach(release => {
                 const version = parseVersion(release.tag_name);
@@ -251,7 +254,7 @@
                 groups[key].push({ release, version });
             });
 
-            // Сортируем группы по убыванию версии (новые выше)
+            // Сортируем группы по убыванию версии
             const sortedKeys = Object.keys(groups).sort((a, b) => {
                 const [aMaj, aMin] = a.split('.').map(Number);
                 const [bMaj, bMin] = b.split('.').map(Number);
@@ -261,19 +264,16 @@
 
             sortedKeys.forEach(key => {
                 const group = groups[key];
-                // Сортируем внутри группы по приоритету и дате (уже отсортировано в allReleases, но на всякий случай)
-                // Используем ту же логику, что и в sortReleasesByOrder, но уже отсортировано глобально,
-                // поэтому просто сохраняем порядок.
+                // Внутри группы порядок уже определён глобальной сортировкой, сохраняем его
                 const optgroup = document.createElement('optgroup');
                 optgroup.label = `Версия ${key}`;
 
                 group.forEach(({ release, version }) => {
                     const meta = parseMeta(release.body);
                     const typeInfo = getReleaseType(version);
-                    // Формируем отображаемое имя: version-name + метка с эмодзи и текстом
+                    // Формируем отображаемое имя: version-name + эмодзи + метка без скобок
                     const displayName = meta.versionName || version.full;
-                    // Добавляем эмодзи и сокращённую метку
-                    const label = `${typeInfo.emoji} ${displayName} (${typeInfo.label})`;
+                    const label = `${typeInfo.emoji} ${displayName} ${typeInfo.label}`;
                     const option = document.createElement('option');
                     option.value = release.tag_name;
                     option.textContent = label;
@@ -355,7 +355,6 @@
 
         versionSelect.addEventListener('change', updateUIForSelectedRelease);
 
-        // Обработчик кнопки "Что нового?" – загружает пост по ID
         whatsNewBtn.addEventListener('click', async () => {
             const postId = whatsNewBtn.dataset.postId;
             if (!postId || !window.UIFeedback) return;
