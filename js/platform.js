@@ -1,10 +1,13 @@
-// js/platform.js – увеличен TTL кэша релизов до 1 часа, добавлен AbortController
+// js/platform.js – улучшенный выбор версий с группировкой и метками, исправлена кнопка "Что нового?"
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
     const RELEASES_CACHE_KEY = 'github_all_releases';
     const CACHE_DURATION = 60 * 60 * 1000; // 1 час
     let currentAbortController = null;
+
+    // Определяем игру из пути (starve-neon, alpha-01, gc-adven)
+    const gameTag = location.pathname.split('/').pop().replace('.html', '');
 
     function getOS() {
         const ua = navigator.userAgent;
@@ -30,10 +33,10 @@
         try { sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {}
     }
 
+    // Загружаем все релизы (включая пре-релизы, исключая черновики)
     async function fetchAllReleases() {
         const cached = cacheGet(RELEASES_CACHE_KEY);
         if (cached) return cached;
-        // Отменяем предыдущий запрос
         if (currentAbortController) {
             currentAbortController.abort();
         }
@@ -44,7 +47,7 @@
             const resp = await fetch(url, { signal });
             if (!resp.ok) throw new Error('Failed to fetch releases');
             const releases = await resp.json();
-            const filtered = releases.filter(r => !r.draft && !r.prerelease);
+            const filtered = releases.filter(r => !r.draft); // не фильтруем по prerelease
             cacheSet(RELEASES_CACHE_KEY, filtered);
             return filtered;
         } catch (e) {
@@ -86,6 +89,33 @@
             }
         }
         return meta;
+    }
+
+    // Парсинг версии из тега (v0.14.0, v0.14.0 p2, v0.14.0 b6)
+    function parseVersion(tag) {
+        let versionStr = tag.replace(/^v/, '');
+        let suffix = '';
+        // Ищем суффиксы: p<число>, b<число>, или просто буква с числом
+        const match = versionStr.match(/(.+?)(?:\s+([pb]\d+))?$/);
+        if (match) {
+            versionStr = match[1].trim();
+            suffix = match[2] || '';
+        }
+        const parts = versionStr.split('.').map(Number);
+        const major = parts[0] || 0;
+        const minor = parts[1] || 0;
+        const patch = parts[2] || 0;
+        const full = versionStr + (suffix ? ' ' + suffix : '');
+        return { major, minor, patch, suffix, full, tag };
+    }
+
+    // Определяем тип релиза для отображения
+    function getReleaseType(release, version) {
+        if (release.prerelease) return 'Пре-релиз';
+        if (version.suffix && version.suffix.includes('b')) return 'Бета';
+        if (version.suffix && version.suffix.includes('p')) return 'Пре-релиз';
+        if (version.patch === 0) return 'Релиз';
+        return 'Патч';
     }
 
     function sortReleasesByOrder(releases) {
@@ -137,7 +167,6 @@
     async function init() {
         const os = getOS();
         let currentPlatform = (os === 'Android') ? 'Android' : 'Windows';
-        const gameTag = 'starve-neon';
 
         const cloudButtons = document.querySelectorAll('.cloud-buttons .download-button[data-platform]');
         function updateCloudVisibility() {
@@ -196,22 +225,58 @@
                 githubBtn.removeAttribute('href');
                 return;
             }
+
+            // Группируем по мажорной версии (major.minor)
+            const groups = {};
             filtered.forEach(release => {
-                const meta = parseMeta(release.body);
-                const label = meta.versionName || release.tag_name.replace(/^v/, '');
-                const option = document.createElement('option');
-                option.value = release.tag_name;
-                option.textContent = label;
-                option.dataset.date = formatDate(release.published_at);
-                option.dataset.post = meta.versionPost || '';
-                option.dataset.versionName = meta.versionName || release.tag_name;
-                if (meta.publishDate) {
-                    option.dataset.customDate = meta.publishDate.toISOString();
-                } else {
-                    option.dataset.customDate = '';
-                }
-                versionSelect.appendChild(option);
+                const version = parseVersion(release.tag_name);
+                const key = `${version.major}.${version.minor}`;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push({ release, version });
             });
+
+            // Сортируем группы по убыванию версии
+            const sortedKeys = Object.keys(groups).sort((a, b) => {
+                const [aMaj, aMin] = a.split('.').map(Number);
+                const [bMaj, bMin] = b.split('.').map(Number);
+                if (aMaj !== bMaj) return bMaj - aMaj;
+                return bMin - aMin;
+            });
+
+            sortedKeys.forEach(key => {
+                const group = groups[key];
+                // Сортируем внутри группы по дате публикации (сначала новые)
+                group.sort((a, b) => new Date(b.release.published_at) - new Date(a.release.published_at));
+
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = key;
+
+                group.forEach(({ release, version }) => {
+                    const meta = parseMeta(release.body);
+                    const typeLabel = getReleaseType(release, version);
+                    const displayName = meta.versionName || version.full;
+                    const option = document.createElement('option');
+                    option.value = release.tag_name;
+                    option.textContent = `${displayName} (${typeLabel})`;
+                    option.dataset.date = formatDate(release.published_at);
+                    option.dataset.post = meta.versionPost || '';
+                    option.dataset.versionName = meta.versionName || release.tag_name;
+                    if (meta.publishDate) {
+                        option.dataset.customDate = meta.publishDate.toISOString();
+                    } else {
+                        option.dataset.customDate = '';
+                    }
+                    optgroup.appendChild(option);
+                });
+
+                versionSelect.appendChild(optgroup);
+            });
+
+            // Выбираем первый (самый новый) релиз по умолчанию
+            const firstOption = versionSelect.querySelector('option');
+            if (firstOption) {
+                versionSelect.value = firstOption.value;
+            }
             updateUIForSelectedRelease();
         }
 
@@ -221,7 +286,7 @@
             const release = allReleases.find(r => r.tag_name === tag);
             if (!release) return;
             const meta = parseMeta(release.body);
-            
+
             let displayDate;
             if (meta.publishDate) {
                 const formatted = formatCustomDate(meta.publishDate);
@@ -271,27 +336,28 @@
 
         versionSelect.addEventListener('change', updateUIForSelectedRelease);
 
+        // Исправленный обработчик кнопки "Что нового?"
         whatsNewBtn.addEventListener('click', async () => {
             const postId = whatsNewBtn.dataset.postId;
             if (!postId || !window.UIFeedback) return;
-            const { openFullModal } = window.UIFeedback;
-            openFullModal({
-                type: 'post',
-                id: parseInt(postId, 10),
-                title: 'Загрузка...',
-                body: '',
-                author: '',
-                date: new Date().toISOString(),
-                labels: ['type:news'],
-                game: gameTag
-            });
             try {
                 if (window.GithubAPI?.loadIssue) {
                     const issue = await window.GithubAPI.loadIssue(parseInt(postId, 10));
-                    const modalTitle = document.getElementById('modal-header-title');
-                    if (modalTitle) modalTitle.textContent = issue.title;
+                    const { openFullModal } = window.UIFeedback;
+                    openFullModal({
+                        type: 'post',
+                        id: issue.number,
+                        title: issue.title,
+                        body: issue.body,
+                        author: issue.user.login,
+                        date: issue.created_at,
+                        labels: issue.labels.map(l => l.name),
+                        game: gameTag
+                    });
                 }
-            } catch {}
+            } catch (err) {
+                window.UIUtils?.showToast('Не удалось загрузить пост', 'error');
+            }
         });
 
         populateVersionSelect(currentPlatform);
