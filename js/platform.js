@@ -264,16 +264,13 @@
 
             sortedKeys.forEach(key => {
                 const group = groups[key];
-                // Внутри группы порядок уже определён глобальной сортировкой, сохраняем его
                 const optgroup = document.createElement('optgroup');
                 optgroup.label = `Версия ${key}`;
 
                 group.forEach(({ release, version }) => {
                     const meta = parseMeta(release.body);
-                    const typeInfo = getReleaseType(version);
-                    // Формируем отображаемое имя: version-name + эмодзи + метка без скобок
                     const displayName = meta.versionName || version.full;
-                    const label = `${typeInfo.emoji} ${displayName} ${typeInfo.label}`;
+                    const label = displayName;
                     const option = document.createElement('option');
                     option.value = release.tag_name;
                     option.textContent = label;
