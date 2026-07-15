@@ -1,4 +1,4 @@
-// effects.js — 3D tilt, параллакс и анимация появления при скролле
+// effects.js — 3D tilt и параллакс для шапок (только десктоп)
 
 function throttleAnimation(fn) {
     let running = false;
@@ -56,7 +56,7 @@ function initTiltEffect() {
     });
 }
 
-// Параллакс для шапок игр (на десктопе)
+// Параллакс для шапок игр (на десктопе) — исправлен сброс при скролле
 function initHeaderParallax() {
     const headers = document.querySelectorAll('.game-header');
     if (headers.length === 0) return;
@@ -99,26 +99,6 @@ function initHeaderParallax() {
     });
 }
 
-// Новая функция: анимация появления при скролле (для элементов .fade-up)
-function initScrollAnimations() {
-    const fadeElements = document.querySelectorAll('.fade-up');
-    if (fadeElements.length === 0) return;
-
-    if ('IntersectionObserver' in window) {
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('visible');
-                }
-            });
-        }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-        fadeElements.forEach(el => observer.observe(el));
-    } else {
-        // Fallback: показываем сразу
-        fadeElements.forEach(el => el.classList.add('visible'));
-    }
-}
-
 // Инициализация после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
     const isTouch = 'ontouchstart' in window;
@@ -127,7 +107,4 @@ document.addEventListener('DOMContentLoaded', () => {
         initTiltEffect();
         initHeaderParallax();
     }
-    
-    // Всегда запускаем анимацию появления
-    initScrollAnimations();
 });
