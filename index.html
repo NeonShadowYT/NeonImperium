@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#1e1e30">
+    <meta name="theme-color" content="#0a0a12">
     <title data-lang="siteTitle">Neon Imperium - официальный сайт игр</title>
     <meta name="description" content="Neon Imperium - официальный сайт игр Starve Neon, Alpha 01, ГК Адвенчур. Скачать, трейлеры, обновления.">
     <meta name="keywords" content="Neon Imperium, Starve Neon, Alpha 01, ГК Адвенчур, игры, выживание, шутер, приключение, скачать">
@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'"><noscript>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
-    <!-- Ядро должно загружаться первым -->
+    <!-- Ядро -->
     <script src="js/utils.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/github-client.js" defer></script>
@@ -60,7 +60,6 @@
             border: 1px solid var(--border);
         }
         .lazy-yt.loaded iframe { border-color: var(--accent); }
-        /* Critical CSS */
         body { margin:0; background:#0f0f1a; font-family: 'Russo One', sans-serif; }
         .nav-bar { background:#1e1e30; border-radius:40px; padding:6px 20px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
         .page { max-width:1200px; margin:0 auto; width:100%; }
@@ -82,7 +81,7 @@
             </div>
         </nav>
 
-        <header class="card header-card game-header" style="background-image: url('images/neon-imperium-header.webp');">
+        <header class="card header-card game-header animate-on-scroll" style="background-image: url('images/neon-imperium-header.webp');">
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
@@ -102,11 +101,11 @@
         </header>
 
         <main>
-            <section class="card">
+            <section class="card animate-on-scroll delay-1">
                 <h2 data-lang="mainProjectsTitle">Главные проекты</h2>
                 <p class="text-secondary" data-lang="mainProjectsDesc">Игры с приоритетом разработки</p>
                 <div class="projects-grid">
-                    <a href="starve-neon.html" class="project-card-link">
+                    <a href="starve-neon.html" class="project-card-link animate-on-scroll delay-2">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
                                 <img src="images/starve-neon-header.webp" alt="Starve Neon" class="project-image" width="300" height="180" loading="lazy">
@@ -116,7 +115,7 @@
                             <span class="button" data-lang="detailsBtn">Подробнее</span>
                         </div>
                     </a>
-                    <a href="alpha-01.html" class="project-card-link">
+                    <a href="alpha-01.html" class="project-card-link animate-on-scroll delay-3">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
                                 <img src="images/alpha-01-header.webp" alt="Alpha 01" class="project-image" width="300" height="180" loading="lazy">
@@ -126,7 +125,7 @@
                             <span class="button" data-lang="detailsBtn">Подробнее</span>
                         </div>
                     </a>
-                    <a href="gc-adven.html" class="project-card-link">
+                    <a href="gc-adven.html" class="project-card-link animate-on-scroll delay-4">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
                                 <img src="images/gc-adven-header.webp" alt="ГК Адвенчур" class="project-image" width="300" height="180" loading="lazy">
@@ -139,7 +138,7 @@
                 </div>
             </section>
 
-            <section class="card">
+            <section class="card animate-on-scroll delay-2">
                 <h2 data-lang="smallProjectsTitle">Небольшие проекты</h2>
                 <p class="text-secondary" data-lang="smallProjectsDesc">Игры созданные по рофлу</p>
                 <div class="small-projects-container">
@@ -174,8 +173,7 @@
                 </div>
             </section>
 
-            <!-- остальной контент без изменений -->
-            <section class="card" id="news-section">
+            <section class="card animate-on-scroll delay-3" id="news-section">
                 <div id="news-feed" class="video-grid">
                     <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
                         <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);"></i>
@@ -185,7 +183,7 @@
             </section>
 
             <div class="row">
-                <section class="card half">
+                <section class="card half animate-on-scroll delay-4">
                     <h2 data-lang="developersTitle">Разработчики</h2>
                     <p class="text-secondary" data-lang="developersDesc">Работаем в свободное время</p>
                     <div class="profile-cards">
@@ -208,7 +206,7 @@
                     </div>
                 </section>
 
-                <section class="card half">
+                <section class="card half animate-on-scroll delay-5">
                     <h2 data-lang="youtubersTitle">Ютуберы</h2>
                     <p class="text-secondary" data-lang="youtubersDesc">Собираем комьюнити</p>
                     <div class="profile-cards">

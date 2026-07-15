@@ -130,7 +130,7 @@
     const script = document.createElement('script');
     script.src = 'js/dust-particles.js';
     script.defer = true;
-    script.onload = () => {}; // убираем лишний лог
+    script.onload = () => {};
     script.onerror = () => console.warn('Failed to load dust particles');
     document.head.appendChild(script);
   }
@@ -262,6 +262,27 @@
     }
   }
 
+  // Новая функция: анимации появления при скролле
+  function initScrollAnimations() {
+    const elements = document.querySelectorAll('.animate-on-scroll');
+    if (!elements.length) return;
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            // Можно отключить наблюдение после появления
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+      elements.forEach(el => observer.observe(el));
+    } else {
+      // Fallback: показать всё сразу
+      elements.forEach(el => el.classList.add('visible'));
+    }
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       preloadFont();
@@ -276,6 +297,7 @@
       registerServiceWorker();
       initDownloadConsent();
       initRateLimits();
+      initScrollAnimations(); // <-- добавлено
     });
   } else {
     preloadFont();
@@ -290,5 +312,6 @@
     registerServiceWorker();
     initDownloadConsent();
     initRateLimits();
+    initScrollAnimations(); // <-- добавлено
   }
 })();

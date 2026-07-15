@@ -34,29 +34,33 @@ function initTiltEffect() {
             const y = e.clientY - rect.top;
             const centerX = rect.width / 2;
             const centerY = rect.height / 2;
-            const rotateX = (y - centerY) / 20;
-            const rotateY = (centerX - x) / 20;
+            const rotateX = (y - centerY) / 25;
+            const rotateY = (centerX - x) / 25;
             
-            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
+            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.03)`;
+            card.style.transition = 'transform 0.05s ease';
             
             if (img && !isProfile && !card.classList.contains('feature-item') && !card.classList.contains('update-card')) {
-                const imgX = (x - centerX) / 25;
-                const imgY = (y - centerY) / 25;
-                img.style.transform = `translate(${imgX}px, ${imgY}px) scale(1.03)`;
+                const imgX = (x - centerX) / 30;
+                const imgY = (y - centerY) / 30;
+                img.style.transform = `translate(${imgX}px, ${imgY}px) scale(1.04)`;
+                img.style.transition = 'transform 0.05s ease';
             }
         });
         
         card.addEventListener('mousemove', handleMove);
         card.addEventListener('mouseleave', () => {
             card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)';
+            card.style.transition = 'transform 0.3s ease';
             if (img && !isProfile) {
                 img.style.transform = 'translate(0, 0) scale(1)';
+                img.style.transition = 'transform 0.3s ease';
             }
         });
     });
 }
 
-// Параллакс для шапок игр (на десктопе) — исправлен сброс при скролле
+// Параллакс для шапок игр (на десктопе)
 function initHeaderParallax() {
     const headers = document.querySelectorAll('.game-header');
     if (headers.length === 0) return;
@@ -90,11 +94,13 @@ function initHeaderParallax() {
             moveY = Math.max(-maxOffset, Math.min(maxOffset, moveY));
             
             header.style.backgroundPosition = `calc(50% + ${moveX}px) calc(50% + ${moveY}px)`;
+            header.style.transition = 'background-position 0.05s ease';
         });
         
         header.addEventListener('mousemove', handleMove);
         header.addEventListener('mouseleave', () => {
             header.style.backgroundPosition = 'center';
+            header.style.transition = 'background-position 0.3s ease';
         });
     });
 }

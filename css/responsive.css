@@ -5,7 +5,8 @@
     .nav-bar { flex-wrap: nowrap; padding: 6px 10px; gap: 5px; }
     .nav-links { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; justify-content: flex-start; }
     .lang-switcher { flex-shrink: 0; margin-left: auto; }
-    .projects-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+    .projects-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+    .small-projects-container { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 700px) {
@@ -16,28 +17,23 @@
     .small-projects-container .project-card { width: 100%; }
     .header-content { flex-direction: column; padding: 20px; }
     .game-icon-circle { width: 80px; height: 80px; }
-    .game-title { font-size: 28px; }
+    .game-title { font-size: 36px; }
     .nav-link { padding: 8px 12px; font-size: 14px; }
-    .card { margin-bottom: 16px; }
+    .card { margin-bottom: 16px; padding: 20px; }
     .game-header { background-size: cover !important; }
     .features-grid { grid-template-columns: 1fr; }
-    .bookmarks-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important; }
+    .bookmarks-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important; }
     .storage-header { flex-direction: column; align-items: stretch; }
     .storage-controls { flex-direction: column; gap: 10px; }
     .storage-add-form { grid-template-columns: 1fr; }
     .feedback-tabs { overflow-x: auto; scrollbar-width: none; }
-    /* Скрываем скроллбар только для WebKit без ошибок в других браузерах */
-    @media screen and (-webkit-min-device-pixel-ratio:0) {
-        .feedback-tabs::-webkit-scrollbar {
-            display: none;
-        }
-    }
+    .feedback-tabs::-webkit-scrollbar { display: none; }
 }
 
 @media (max-width: 600px) {
-    body { padding: 10px; }
-    .game-title { font-size: 32px; }
-    .card { padding: 20px; }
+    body { padding: 12px; }
+    .game-title { font-size: 28px; }
+    .card { padding: 16px; }
     .download-buttons { flex-direction: column; align-items: stretch; }
     .download-button { width: 100%; }
     .progress-row { flex-direction: column; align-items: stretch; gap: 8px; }
@@ -89,13 +85,14 @@
     .modal-header-spacer { display: none; }
     .modal-header-actions { margin-left: 0; margin-right: auto; }
     .modal-close { margin-left: auto; }
+    .game-title { font-size: 24px; }
 }
 
 @media (max-width: 400px) {
-    .game-title { font-size: 24px; }
+    .game-title { font-size: 20px; }
     .header-content { padding: 15px 10px; }
     .version-badge { font-size: 12px; padding: 4px 12px; }
-    .card { padding: 16px; }
+    .card { padding: 12px; }
     h2 { font-size: 20px; }
     .project-card h3 { font-size: 18px; }
 }
