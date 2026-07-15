@@ -1,4 +1,4 @@
-// js/common-init.js – инициализация без автоподчистки кеша
+// js/common-init.js – инициализация с поддержкой новых анимаций
 (function() {
   function addPreconnects() {
     const links = [
@@ -130,7 +130,6 @@
     const script = document.createElement('script');
     script.src = 'js/dust-particles.js';
     script.defer = true;
-    script.onload = () => {}; // убираем лишний лог
     script.onerror = () => console.warn('Failed to load dust particles');
     document.head.appendChild(script);
   }
@@ -142,10 +141,10 @@
     note.id = 'update-notification';
     note.style.cssText =
       'position: fixed; bottom: 90px; right: 24px; z-index: 10001;' +
-      'background: var(--accent); color: #fff; padding: 12px 20px;' +
+      'background: #3d9eb3; color: #fff; padding: 12px 20px;' +
       'border-radius: 40px; box-shadow: 0 6px 14px rgba(0,0,0,0.4);' +
       'font-family: "Russo One", sans-serif; display: flex; align-items: center; gap: 12px;';
-    note.innerHTML = '<span>Доступна новая версия.</span><button id="update-btn" style="background:white;color:var(--accent);border:none;padding:6px 16px;border-radius:20px;cursor:pointer;font-family:inherit;">Обновить</button>';
+    note.innerHTML = '<span>Доступна новая версия.</span><button id="update-btn" style="background:white;color:#3d9eb3;border:none;padding:6px 16px;border-radius:20px;cursor:pointer;font-family:inherit;">Обновить</button>';
     document.body.appendChild(note);
     document.getElementById('update-btn').addEventListener('click', () => { window.location.reload(); });
   }
@@ -189,7 +188,7 @@
           </div>
           <div class="modal-footer" style="padding: 20px; display: flex; justify-content: flex-end; gap: 12px;">
             <button class="button" id="consent-cancel">Отмена</button>
-            <button class="button" id="consent-confirm" disabled style="background: var(--accent);">Продолжить</button>
+            <button class="button" id="consent-confirm" disabled style="background: #3d9eb3;">Продолжить</button>
           </div>
         </div>
       `;
@@ -262,6 +261,24 @@
     }
   }
 
+  // Запускаем анимацию появления, если она ещё не запущена
+  function ensureScrollAnimations() {
+    if (typeof initScrollAnimations === 'function') {
+      initScrollAnimations();
+    } else {
+      // Если effects.js ещё не загружен, загружаем и запускаем
+      if (!document.querySelector('script[src="js/effects.js"]')) {
+        const script = document.createElement('script');
+        script.src = 'js/effects.js';
+        script.defer = true;
+        script.onload = () => {
+          if (typeof initScrollAnimations === 'function') initScrollAnimations();
+        };
+        document.head.appendChild(script);
+      }
+    }
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       preloadFont();
@@ -276,6 +293,7 @@
       registerServiceWorker();
       initDownloadConsent();
       initRateLimits();
+      ensureScrollAnimations();
     });
   } else {
     preloadFont();
@@ -290,5 +308,6 @@
     registerServiceWorker();
     initDownloadConsent();
     initRateLimits();
+    ensureScrollAnimations();
   }
 })();
