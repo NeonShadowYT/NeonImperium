@@ -21,10 +21,10 @@
     let page = path.split('/').pop().replace('.html', '');
     if (page === '' || page === 'index') page = 'index';
     const scriptMap = {
-      'index': 'js/pages/news-feed.js',
-      'starve-neon': 'js/pages/feedback.js,js/pages/game-updates.js,js/platform.js,js/features/background-gifs.js',
-      'alpha-01': 'js/pages/feedback.js,js/pages/game-updates.js',
-      'gc-adven': 'js/pages/feedback.js,js/pages/game-updates.js',
+      'index': 'js/pages/news-feed.js,js/card-video.js',
+      'starve-neon': 'js/pages/feedback.js,js/pages/game-updates.js,js/platform.js,js/features/background-gifs.js,js/card-video.js',
+      'alpha-01': 'js/pages/feedback.js,js/pages/game-updates.js,js/card-video.js',
+      'gc-adven': 'js/pages/feedback.js,js/pages/game-updates.js,js/card-video.js',
       'license': ''
     };
     const scripts = scriptMap[page] ? scriptMap[page].split(',') : [];
@@ -130,7 +130,7 @@
     const script = document.createElement('script');
     script.src = 'js/dust-particles.js';
     script.defer = true;
-    script.onload = () => {}; // убираем лишний лог
+    script.onload = () => {};
     script.onerror = () => console.warn('Failed to load dust particles');
     document.head.appendChild(script);
   }
@@ -262,6 +262,20 @@
     }
   }
 
+  // Инициализация анимации появления при скролле
+  function initFadeInSections() {
+    const sections = document.querySelectorAll('.fade-in-section');
+    if (sections.length === 0) return;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+        }
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -20px 0px' });
+    sections.forEach(section => observer.observe(section));
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       preloadFont();
@@ -276,6 +290,9 @@
       registerServiceWorker();
       initDownloadConsent();
       initRateLimits();
+      initFadeInSections();
+      // Инициализация видео-карточек (может быть вызвана повторно)
+      if (window.initVideoCards) window.initVideoCards();
     });
   } else {
     preloadFont();
@@ -290,5 +307,7 @@
     registerServiceWorker();
     initDownloadConsent();
     initRateLimits();
+    initFadeInSections();
+    if (window.initVideoCards) window.initVideoCards();
   }
 })();

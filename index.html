@@ -41,6 +41,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="js/pages/news-feed.js" defer></script>
     <script src="js/dust-particles.js" defer></script>
+    <script src="js/card-video.js" defer></script>
     <style>
         .lazy-yt {
             position: relative;
@@ -82,7 +83,7 @@
             </div>
         </nav>
 
-        <header class="card header-card game-header" style="background-image: url('images/neon-imperium-header.webp');">
+        <header class="card header-card game-header fade-in-section" style="background-image: url('images/neon-imperium-header.webp');">
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
@@ -102,44 +103,59 @@
         </header>
 
         <main>
-            <section class="card">
+            <section class="card fade-in-section">
                 <h2 data-lang="mainProjectsTitle">Главные проекты</h2>
                 <p class="text-secondary" data-lang="mainProjectsDesc">Игры с приоритетом разработки</p>
                 <div class="projects-grid">
+                    <!-- Starve Neon -->
                     <a href="starve-neon.html" class="project-card-link">
-                        <div class="project-card tilt-card">
-                            <div class="image-wrapper">
-                                <img src="images/starve-neon-header.webp" alt="Starve Neon" class="project-image" width="300" height="180" loading="lazy">
+                        <div class="project-card video-card" style="background-image: url('images/starve-neon-header.webp');" data-video-id="eAUn6Solqbg">
+                            <div class="video-overlay">
+                                <div class="video-container">
+                                    <iframe src="" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+                                </div>
+                                <div class="card-content">
+                                    <h3>Starve Neon</h3>
+                                    <p data-lang="starveDesc">Выживание в брутальном мире с прокачкой и генетикой.</p>
+                                    <span class="button" data-lang="detailsBtn">Подробнее</span>
+                                </div>
                             </div>
-                            <h3>Starve Neon</h3>
-                            <p data-lang="starveDesc">Выживание в брутальном мире с прокачкой и генетикой.</p>
-                            <span class="button" data-lang="detailsBtn">Подробнее</span>
                         </div>
                     </a>
+                    <!-- Alpha 01 -->
                     <a href="alpha-01.html" class="project-card-link">
-                        <div class="project-card tilt-card">
-                            <div class="image-wrapper">
-                                <img src="images/alpha-01-header.webp" alt="Alpha 01" class="project-image" width="300" height="180" loading="lazy">
+                        <div class="project-card video-card" style="background-image: url('images/alpha-01-header.webp');" data-video-id="videoseries?list=PLjbbtkkybwieyQQZPizxutdLUOHErKLcu">
+                            <div class="video-overlay">
+                                <div class="video-container">
+                                    <iframe src="" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+                                </div>
+                                <div class="card-content">
+                                    <h3>Alpha 01</h3>
+                                    <p data-lang="alphaDesc">Top-down шутер, где вы робот, помогающий солдатам.</p>
+                                    <span class="button" data-lang="detailsBtn">Подробнее</span>
+                                </div>
                             </div>
-                            <h3>Alpha 01</h3>
-                            <p data-lang="alphaDesc">Top-down шутер, где вы робот, помогающий солдатам.</p>
-                            <span class="button" data-lang="detailsBtn">Подробнее</span>
                         </div>
                     </a>
+                    <!-- ГК Адвенчур -->
                     <a href="gc-adven.html" class="project-card-link">
-                        <div class="project-card tilt-card">
-                            <div class="image-wrapper">
-                                <img src="images/gc-adven-header.webp" alt="ГК Адвенчур" class="project-image" width="300" height="180" loading="lazy">
+                        <div class="project-card video-card" style="background-image: url('images/gc-adven-header.webp');" data-video-id="scqYneefAds">
+                            <div class="video-overlay">
+                                <div class="video-container">
+                                    <iframe src="" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+                                </div>
+                                <div class="card-content">
+                                    <h3>ГК Адвенчур</h3>
+                                    <p data-lang="gcDesc">Просто приключение ГКТМО.</p>
+                                    <span class="button" data-lang="detailsBtn">Подробнее</span>
+                                </div>
                             </div>
-                            <h3>ГК Адвенчур</h3>
-                            <p data-lang="gcDesc">Просто приключение ГКТМО.</p>
-                            <span class="button" data-lang="detailsBtn">Подробнее</span>
                         </div>
                     </a>
                 </div>
             </section>
 
-            <section class="card">
+            <section class="card fade-in-section">
                 <h2 data-lang="smallProjectsTitle">Небольшие проекты</h2>
                 <p class="text-secondary" data-lang="smallProjectsDesc">Игры созданные по рофлу</p>
                 <div class="small-projects-container">
@@ -175,7 +191,7 @@
             </section>
 
             <!-- остальной контент без изменений -->
-            <section class="card" id="news-section">
+            <section class="card fade-in-section" id="news-section">
                 <div id="news-feed" class="video-grid">
                     <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
                         <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);"></i>
@@ -185,7 +201,7 @@
             </section>
 
             <div class="row">
-                <section class="card half">
+                <section class="card half fade-in-section">
                     <h2 data-lang="developersTitle">Разработчики</h2>
                     <p class="text-secondary" data-lang="developersDesc">Работаем в свободное время</p>
                     <div class="profile-cards">
@@ -208,7 +224,7 @@
                     </div>
                 </section>
 
-                <section class="card half">
+                <section class="card half fade-in-section">
                     <h2 data-lang="youtubersTitle">Ютуберы</h2>
                     <p class="text-secondary" data-lang="youtubersDesc">Собираем комьюнити</p>
                     <div class="profile-cards">
