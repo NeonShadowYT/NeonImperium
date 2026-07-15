@@ -45,7 +45,6 @@
     <script src="js/features/background-gifs.js" defer></script>
     <script src="js/common-init.js" defer></script>
     <script src="js/dust-particles.js" defer></script>
-    <script src="js/card-video.js" defer></script>
     <style>
         .lazy-yt {
             position: relative;
@@ -86,7 +85,7 @@
             </div>
         </nav>
 
-        <header class="card header-card game-header fade-in-section" style="background-image: url('images/starve-neon-header.webp');">
+        <header class="card header-card game-header" style="background-image: url('images/starve-neon-header.webp');">
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
@@ -108,13 +107,13 @@
         </header>
 
         <main>
-            <div class="game-layout">
-                <section class="card trailer-card fade-in-section">
+            <div class="row">
+                <section class="card trailer-card">
                     <h2 data-lang="trailerTitle">Трейлер</h2>
                     <div class="lazy-yt" data-src="https://www.youtube.com/embed/eAUn6Solqbg?si=cGF_m9U0UQNe8F5D"></div>
                 </section>
 
-                <section class="card developer-card fade-in-section">
+                <section class="card developer-card">
                     <h2 data-lang="developerTitle">Разработчик</h2>
                     <div class="developer-info">
                         <div class="avatar-wrapper large">
@@ -132,7 +131,7 @@
             </div>
 
             <!-- Секция скачивания – статический скелет -->
-            <section class="card download-card fade-in-section" id="download-section">
+            <section class="card download-card" id="download-section">
                 <div class="download-sections">
                     <div class="download-subsection">
                         <h3><i class="fas fa-store"></i> <span data-lang="storeTitle">Площадки</span></h3>
@@ -162,7 +161,7 @@
                 </div>
             </section>
 
-            <section class="card fade-in-section">
+            <section class="card">
                 <h2 data-lang="descriptionTitle">Описание</h2>
                 <div class="features-grid">
                     <div class="feature-item tilt-card">
@@ -188,7 +187,7 @@
                 </div>
             </section>
 
-            <section class="card fade-in-section">
+            <section class="card">
                 <h2 data-lang="requirementsTitle">Системные требования</h2>
                 <p class="text-secondary" data-lang="requirementsNote">Примерные значения основанные на стандартных настройках для этих устройств</p>
                 <div class="requirements-grid">
@@ -235,7 +234,7 @@
                 </div>
             </section>
 
-            <section class="card fade-in-section">
+            <section class="card">
                 <h2 data-lang="videoTitle">Видео</h2>
                 <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
                 <div class="video-grid">
@@ -247,7 +246,7 @@
                 </div>
             </section>
 
-            <section class="card fade-in-section" id="feedback-section" data-game="starve-neon">
+            <section class="card" id="feedback-section" data-game="starve-neon">
                 <div class="feedback-container">
                     <div class="loading-spinner">
                         <i class="fas fa-circle-notch fa-spin"></i>
@@ -256,7 +255,7 @@
                 </div>
             </section>
 
-            <section class="card fade-in-section">
+            <section class="card">
                 <div class="updates-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                     <h2 data-lang="updatesTitle">Обновления</h2>
                 </div>

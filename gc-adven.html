@@ -42,7 +42,6 @@
     <script src="js/pages/game-updates.js" defer></script>
     <script src="js/common-init.js" defer></script>
     <script src="js/dust-particles.js" defer></script>
-    <script src="js/card-video.js" defer></script>
     <style>
         .lazy-yt {
             position: relative;
@@ -83,7 +82,7 @@
             </div>
         </nav>
 
-        <header class="card header-card game-header fade-in-section" style="background-image: url('images/gc-adven-header.webp');">
+        <header class="card header-card game-header" style="background-image: url('images/gc-adven-header.webp');">
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
@@ -98,13 +97,13 @@
         </header>
 
         <main>
-            <div class="game-layout">
-                <section class="card trailer-card fade-in-section">
+            <div class="row">
+                <section class="card trailer-card">
                     <h2 data-lang="trailerTitle">Трейлер</h2>
                     <div class="lazy-yt" data-src="https://www.youtube.com/embed/scqYneefAds"></div>
                 </section>
 
-                <section class="card developer-card fade-in-section">
+                <section class="card developer-card">
                     <h2 data-lang="developerTitle">Разработчик</h2>
                     <div class="developer-info">
                         <div class="avatar-wrapper large">
@@ -120,7 +119,7 @@
                 </section>
             </div>
 
-            <section class="card download-card fade-in-section">
+            <section class="card download-card">
                 <div class="download-header">
                     <h2 data-lang="downloadTitle">Скачать</h2>
                 </div>
@@ -134,7 +133,7 @@
                 </p>
             </section>
 
-            <section class="card fade-in-section">
+            <section class="card">
                 <h2 data-lang="descriptionTitle">Описание</h2>
                 <div class="features-grid">
                     <div class="feature-item tilt-card">
@@ -145,7 +144,7 @@
                 </div>
             </section>
 
-            <section class="card fade-in-section">
+            <section class="card">
                 <h2 data-lang="videoTitle">Видео</h2>
                 <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
                 <div class="video-grid">
@@ -154,7 +153,7 @@
                 </div>
             </section>
 
-            <section class="card fade-in-section" id="feedback-section" data-game="gc-adven">
+            <section class="card" id="feedback-section" data-game="gc-adven">
                 <div class="feedback-container">
                     <div class="loading-spinner">
                         <i class="fas fa-circle-notch fa-spin"></i>
@@ -163,7 +162,7 @@
                 </div>
             </section>
 
-            <section class="card fade-in-section">
+            <section class="card">
                 <div class="updates-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                     <h2 data-lang="updatesTitle">Обновления</h2>
                 </div>
