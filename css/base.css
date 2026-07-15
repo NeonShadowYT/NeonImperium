@@ -8,64 +8,27 @@ body {
     font-family: var(--font-family);
     background: var(--bg-primary);
     color: var(--text-secondary);
-    line-height: 1.6;
+    line-height: 1.5;
     padding: 20px;
     font-size: 16px;
     min-height: 100vh;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
-    position: relative;
-}
-
-/* Анимированный градиентный фон */
-body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: -2;
-    background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end), var(--bg-gradient-accent1), var(--bg-gradient-accent2));
-    background-size: 400% 400%;
-    animation: gradientShift 20s ease infinite;
-}
-
-@keyframes gradientShift {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-}
-
-/* Тонкий узор поверх фона (опционально) */
-body::after {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: -1;
-    background-image: radial-gradient(circle at 20% 30%, rgba(90, 181, 201, 0.03) 0%, transparent 50%),
-                      radial-gradient(circle at 80% 70%, rgba(90, 181, 201, 0.02) 0%, transparent 50%);
-    pointer-events: none;
 }
 
 .page {
     max-width: 1200px;
     margin: 0 auto;
     width: 100%;
-    position: relative;
-    z-index: 1;
 }
 
 a {
     color: var(--accent);
     text-decoration: none;
-    transition: color var(--transition);
 }
+
 a:hover {
-    color: var(--accent-light);
+    text-decoration: none;
 }
 
 img {
@@ -74,38 +37,24 @@ img {
     display: block;
 }
 
-/* Стеклянная карточка (общая) */
 .card {
-    background: var(--glass-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--bg-card-gradient);
     border-radius: var(--radius-md);
     padding: 28px;
     margin-bottom: 24px;
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
-    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    transition: box-shadow var(--transition);
 }
 
 .card:hover {
     box-shadow: var(--shadow-hover);
-    border-color: rgba(90, 181, 201, 0.2);
-    transform: translateY(-2px);
 }
 
-/* Анимации появления */
-.animate-on-scroll {
-    opacity: 0;
-    transform: translateY(30px);
-    transition: opacity 0.8s ease, transform 0.8s ease;
+.hover-lift {
+    transition: transform var(--transition), box-shadow var(--transition);
 }
-.animate-on-scroll.visible {
-    opacity: 1;
-    transform: translateY(0);
+.hover-lift:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-hover);
 }
-
-.animate-on-scroll.delay-1 { transition-delay: 0.1s; }
-.animate-on-scroll.delay-2 { transition-delay: 0.2s; }
-.animate-on-scroll.delay-3 { transition-delay: 0.3s; }
-.animate-on-scroll.delay-4 { transition-delay: 0.4s; }
-.animate-on-scroll.delay-5 { transition-delay: 0.5s; }

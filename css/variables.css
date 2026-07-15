@@ -1,35 +1,22 @@
 :root {
-    /* Основные цвета */
-    --bg-primary: #0a0a12;
-    --bg-card: rgba(30, 30, 48, 0.6);
-    --bg-card-gradient: linear-gradient(145deg, rgba(30,30,48,0.7), rgba(44,44,68,0.5));
+    --bg-primary: #0f0f1a;
+    --bg-card: #1e1e30;
+    --bg-card-gradient: linear-gradient(145deg, #1e1e30, #2c2c44);
     --bg-card-solid: #1a1a2b;
-    --bg-inner-gradient: linear-gradient(145deg, rgba(42,42,64,0.8), rgba(53,53,81,0.6));
-    --accent: #5ab5c9;
-    --accent-light: #7fcfe1;
-    --accent-dark: #3a8a9e;
+    --bg-inner-gradient: linear-gradient(145deg, #2a2a40, #353551);
+    --accent: #3d9eb3;
+    --accent-light: #5ab5c9;
     --text-primary: #ffffff;
-    --text-secondary: #b0b0c8;
-    --border: rgba(255, 255, 255, 0.08);
-    --shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-    --shadow-hover: 0 20px 50px rgba(0,0,0,0.8);
+    --text-secondary: #c0c0d0;
+    --border: #3a3a55;
+    --shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+    --shadow-hover: 0 18px 35px rgba(0,0,0,0.9);
     --radius-sm: 12px;
     --radius-md: 20px;
-    --radius-lg: 28px;
+    --radius-lg: 24px;
     --radius-full: 50%;
-    --radius-pill: 60px;
+    --radius-pill: 40px;
     --transition-fast: 0.15s ease;
-    --transition: 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --transition: 0.2s ease;
     --font-family: 'Russo One', sans-serif;
-
-    /* Градиент для фона */
-    --bg-gradient-start: #0a0a12;
-    --bg-gradient-end: #151525;
-    --bg-gradient-accent1: #1a2a35;
-    --bg-gradient-accent2: #2a1a2a;
-
-    /* Стекло */
-    --glass-bg: rgba(20, 20, 35, 0.6);
-    --glass-border: rgba(255, 255, 255, 0.06);
-    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }

@@ -1,19 +1,19 @@
-/* ========== Базовая карточка проекта ========== */
+/* ========== Базовая карточка проекта (универсальная) ========== */
 .project-card-link {
     display: block;
     color: inherit;
-    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: transform var(--transition);
     height: 100%;
     text-decoration: none;
 }
 
 .project-card-link:hover {
-    transform: translateY(-8px);
+    transform: translateY(-5px);
 }
 
 .project-card-link.disabled {
     pointer-events: none;
-    opacity: 0.6;
+    opacity: 0.7;
 }
 
 .project-card-link.card-interactive {
@@ -21,25 +21,22 @@
 }
 
 .project-card {
-    background: var(--glass-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--bg-inner-gradient);
     border-radius: var(--radius-md);
     padding: 16px;
-    border: 1px solid var(--glass-border);
-    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    border: 1px solid var(--border);
+    transition: border-color 0.2s, transform 0.25s cubic-bezier(0.2,0.9,0.4,1), box-shadow 0.25s;
     display: flex;
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-    box-shadow: var(--glass-shadow);
-    will-change: transform, box-shadow;
+    contain: layout style;
 }
 
 .project-card-link:hover .project-card {
-    border-color: rgba(90, 181, 201, 0.3);
-    transform: translateY(-6px) scale(1.02);
-    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    border-color: var(--accent);
+    transform: translateY(-6px) scale(1.01);
+    box-shadow: 0 15px 30px rgba(0,0,0,0.5);
 }
 
 .project-card .image-wrapper {
@@ -48,7 +45,7 @@
     padding-bottom: 56.25%;
     position: relative;
     overflow: hidden;
-    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    border-radius: 0;
 }
 
 .project-card .image-wrapper img {
@@ -58,7 +55,6 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.6s ease;
 }
 
 .project-card-link:hover .image-wrapper img {
@@ -66,16 +62,14 @@
 }
 
 .project-card h3 {
-    margin: 12px 0 4px;
-    font-size: 22px;
+    margin: 8px 0 4px;
+    font-size: 20px;
     color: var(--text-primary);
 }
 
 .project-card p {
     flex-grow: 1;
     margin-bottom: 16px;
-    color: var(--text-secondary);
-    font-size: 14px;
 }
 
 .project-card .button {
@@ -124,31 +118,28 @@
 .profile-card-link {
     flex: 1 1 150px;
     color: inherit;
-    transition: transform 0.3s ease;
+    transition: transform var(--transition);
     text-decoration: none;
 }
 
 .profile-card-link:hover {
-    transform: translateY(-5px);
+    transform: translateY(-3px);
 }
 
 .profile-card {
-    background: var(--glass-bg);
-    backdrop-filter: blur(8px);
+    background: var(--bg-inner-gradient);
     border-radius: var(--radius-md);
     padding: 16px;
-    border: 1px solid var(--glass-border);
+    border: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    transition: all var(--transition);
-    box-shadow: var(--glass-shadow);
+    transition: border-color var(--transition);
 }
 
 .profile-card-link:hover .profile-card {
     border-color: var(--accent);
-    box-shadow: var(--shadow-hover);
 }
 
 .avatar-wrapper {
@@ -162,11 +153,6 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: border-color var(--transition);
-}
-
-.profile-card-link:hover .avatar-wrapper {
-    border-color: var(--accent-light);
 }
 
 .avatar-wrapper.large {
@@ -178,23 +164,18 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.3s ease;
-}
-
-.profile-card-link:hover .avatar {
-    transform: scale(1.05);
+    transition: transform 0.2s;
 }
 
 .profile-name {
     color: var(--text-primary);
-    font-size: 15px;
 }
 
-/* Карточка разработчика */
+/* Карточка разработчика (рядом с трейлером) */
 .trailer-card .video-embed {
     border-radius: var(--radius-sm);
     overflow: hidden;
-    border: 1px solid var(--glass-border);
+    border: 1px solid var(--border);
 }
 
 .developer-card {
@@ -230,12 +211,11 @@
 
 /* Обновления и требования */
 .update-card {
-    background: var(--glass-bg);
-    backdrop-filter: blur(8px);
+    background: var(--bg-inner-gradient);
     border-radius: var(--radius-md);
     padding: 20px;
     margin-bottom: 20px;
-    border: 1px solid var(--glass-border);
+    border: 1px solid var(--border);
 }
 
 .update-card h3 {
@@ -246,18 +226,11 @@
 
 .req-item {
     flex: 1 1 200px;
-    background: var(--glass-bg);
-    backdrop-filter: blur(8px);
+    background: var(--bg-inner-gradient);
     padding: 16px;
     border-radius: var(--radius-md);
-    border: 1px solid var(--glass-border);
-    transition: all var(--transition);
-    box-shadow: var(--glass-shadow);
-}
-
-.req-item:hover {
-    transform: translateY(-4px);
-    border-color: var(--accent);
+    border: 1px solid var(--border);
+    transition: transform var(--transition);
 }
 
 .req-label {
@@ -268,18 +241,12 @@
 }
 
 .consumption-card {
-    background: var(--glass-bg);
-    backdrop-filter: blur(8px);
+    background: var(--bg-inner-gradient);
     border-radius: var(--radius-md);
     padding: 20px;
     margin-top: 24px;
-    border: 1px solid var(--glass-border);
-    transition: all var(--transition);
-}
-
-.consumption-card:hover {
-    transform: translateY(-4px);
-    border-color: var(--accent);
+    border: 1px solid var(--border);
+    transition: transform var(--transition);
 }
 
 .consumption-table {
@@ -310,9 +277,6 @@
 .header-overlay {
     padding: 60px 28px;
     text-align: center;
-    background: rgba(0,0,0,0.3);
-    backdrop-filter: blur(4px);
-    border-radius: var(--radius-md);
 }
 
 .header-content {
@@ -321,11 +285,10 @@
     gap: 30px;
     flex-wrap: wrap;
     justify-content: center;
-    background: var(--glass-bg);
-    backdrop-filter: blur(12px);
+    background-color: rgba(0,0,0,0.4);
     padding: 20px 40px;
-    border-radius: var(--radius-pill);
-    border: 1px solid var(--glass-border);
+    border-radius: 100px;
+    backdrop-filter: blur(2px);
 }
 
 .game-icon-circle {
@@ -342,7 +305,7 @@
     max-width: 80px;
     max-height: 80px;
     object-fit: contain;
-    transition: transform 0.3s ease;
+    transition: transform var(--transition);
 }
 
 .header-content .game-title {
@@ -375,40 +338,27 @@
 .social-icon {
     color: white;
     font-size: 24px;
-    transition: all var(--transition);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
+    transition: opacity var(--transition);
 }
 
 .social-icon:hover {
-    opacity: 1;
-    background: var(--accent);
-    border-color: var(--accent);
-    transform: translateY(-3px) scale(1.05);
+    opacity: 0.8;
 }
 
-/* Элемент особенностей с баннером */
+/* Элемент особенностей (исправлено: изображение на всю ширину без рамки) */
 .feature-item {
-    background: var(--glass-bg);
-    backdrop-filter: blur(8px);
+    background: var(--bg-inner-gradient);
     border-radius: var(--radius-md);
     padding: 20px;
-    border: 1px solid var(--glass-border);
+    border: 1px solid var(--border);
     overflow: hidden;
-    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    box-shadow: var(--glass-shadow);
+    transition: transform 0.3s cubic-bezier(0.2,0.9,0.4,1), box-shadow 0.3s, border-color 0.2s;
 }
 
 .feature-item:hover {
-    transform: translateY(-6px);
+    transform: translateY(-5px);
     box-shadow: var(--shadow-hover);
-    border-color: rgba(90, 181, 201, 0.3);
+    border-color: var(--accent);
 }
 
 .feature-item .feature-banner {
@@ -435,7 +385,7 @@
 }
 
 .feature-icon {
-    font-size: 36px;
+    font-size: 32px;
     display: block;
     margin-bottom: 10px;
 }
@@ -443,10 +393,9 @@
 .features-extra {
     margin-top: 30px;
     padding: 20px;
-    background: var(--glass-bg);
-    backdrop-filter: blur(8px);
+    background: var(--bg-inner-gradient);
     border-radius: var(--radius-md);
-    border: 1px solid var(--glass-border);
+    border: 1px solid var(--border);
 }
 
 .features-extra h3 {
@@ -460,17 +409,17 @@
 }
 
 .features-list li {
-    padding: 4px 0 4px 24px;
+    padding: 4px 0 4px 20px;
     position: relative;
 }
 
 .features-list li::before {
     content: "•";
     color: var(--accent);
-    font-size: 20px;
+    font-size: 18px;
     position: absolute;
     left: 0;
-    top: -2px;
+    top: -1px;
 }
 
 /* Кнопка избранного в новостях */
@@ -478,11 +427,11 @@
     position: absolute;
     top: 12px;
     right: 12px;
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
-    background: var(--glass-bg);
-    backdrop-filter: blur(8px);
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -490,18 +439,25 @@
     color: #fff;
     font-size: 16px;
     z-index: 5;
-    transition: all 0.3s ease;
-    border: 1px solid var(--glass-border);
+    transition: background 0.2s, color 0.2s, transform 0.2s;
 }
 
 .news-bookmark-btn:hover {
     background: var(--accent);
     color: #fff;
     transform: scale(1.1);
-    border-color: var(--accent);
 }
 
-/* Tilt-эффект (только десктоп) */
+.news-bookmark-btn.bookmarked {
+    color: var(--accent);
+    background: rgba(0,0,0,0.6);
+}
+
+.news-bookmark-btn.bookmarked i {
+    font-weight: 900;
+}
+
+/* Поддержка tilt (только десктоп) */
 .tilt-card {
     transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.2s ease;
 }
@@ -516,6 +472,7 @@
         box-shadow: none;
     }
 }
+
 @media (hover: none) and (pointer: coarse) {
     .tilt-card {
         transform: none !important;
