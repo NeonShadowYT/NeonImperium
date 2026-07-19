@@ -1,11 +1,37 @@
-// js/features/ui-feedback.js – полный модуль с кнопками в модалке, редактором постов и комментариев
+// js/features/ui-feedback.js
 (function() {
-  const { createElement, escapeHtml, renderMarkdown, loadModule, cacheGet, cacheSet, cacheRemoveByPrefix, extractAllowed, extractSummary, decryptPrivateBody, CONFIG } = window.GithubCore;
+  const {
+    createElement, escapeHtml, renderMarkdown, loadModule,
+    performAction, isActionStillValid, extractAllowed, decryptPrivateBody,
+    cacheRemoveByPrefix, CONFIG, getPlainTextLength, containsGitHubToken,
+    cacheGet, cacheSet
+  } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
 
+  const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
+  const COMMENTS_CACHE_TTL = 10 * 60 * 1000;
+  const COMMENTS_ERROR_COOLDOWN = 5 * 60 * 1000;
+
+  const reactionsCache = new Map();
+  const commentsCache = new Map();
+  const pendingCommentsRequests = new Map();
+  const commentsErrorTimestamps = new Map();
+
   let reactionsListCache = new Map();
   const CACHE_TTL = 5 * 60 * 1000;
+
+  const LAST_COMMENT_KEY = 'last_comment_time';
+  const COMMENT_COOLDOWN = 10000;
+
+  const markdownCache = new Map();
+
+  const MIN_COMMENT_LENGTH = 10;
+  const MIN_POST_BODY_LENGTH = 20;
+  const MIN_POST_TITLE_LENGTH = 3;
+
+  let currentModalAbortController = null;
+  let currentModalLoading = null;
 
   function canViewPost(body, labels, currentUser) {
     if (!labels || !labels.includes('private')) return true;
@@ -14,123 +40,308 @@
     return allowed && allowed.split(',').map(s => s.trim()).includes(currentUser);
   }
 
-  async function renderMarkdownWithEditor(text, targetElement) {
+  function validateTextContent(text, minLength, fieldName = 'Текст') {
+    if (containsGitHubToken(text)) {
+      showToast('Обнаружен GitHub-токен в тексте. Пожалуйста, удалите его.', 'error');
+      return false;
+    }
+    const plainLength = getPlainTextLength(text);
+    if (plainLength < minLength) {
+      showToast(`${fieldName} должен содержать не менее ${minLength} значимых символов (сейчас ${plainLength}).`, 'error');
+      return false;
+    }
+    return true;
+  }
+
+  async function renderMarkdownWithEditor(text, targetElement, cacheKey = null) {
     if (!text) { targetElement.innerHTML = ''; return; }
+    if (cacheKey && markdownCache.has(cacheKey)) {
+      targetElement.innerHTML = markdownCache.get(cacheKey);
+      return;
+    }
     try {
+      let html;
       if (window.marked) {
         if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-        if (typeof marked.parse === 'function') targetElement.innerHTML = await marked.parse(text);
-        else if (typeof marked === 'function') targetElement.innerHTML = marked(text);
+        if (typeof marked.parse === 'function') html = await marked.parse(text);
+        else if (typeof marked === 'function') html = marked(text);
         else throw new Error('marked not callable');
       } else {
-        targetElement.innerHTML = text.replace(/\n/g, '<br>');
+        html = text.replace(/\n/g, '<br>');
       }
+      if (cacheKey) markdownCache.set(cacheKey, html);
+      targetElement.innerHTML = html;
     } catch (e) {
       console.warn('Markdown error:', e);
       targetElement.innerHTML = text.replace(/\n/g, '<br>');
     }
   }
 
-  // ---------- Реакции ----------
-  async function renderReactions(container, issueNumber, reactions, currentUser, onAdd, onRemove) {
+  function renderReactions(container, issueNumber, reactions, currentUser, onAddHeart, onRemoveHeart) {
     if (!container) return;
+    const filtered = reactions.filter(r => r.content === 'heart' || r.content === 'eyes');
     const counts = new Map();
     const userReactions = new Set();
-    reactions.forEach(r => {
+    filtered.forEach(r => {
       counts.set(r.content, (counts.get(r.content) || 0) + 1);
       if (r.user && r.user.login === currentUser) userReactions.add(r.content);
     });
-    const ordered = ['+1', '-1', 'laugh', 'hooray', 'heart', 'rocket', 'eyes'];
+
     container.innerHTML = '';
     const btnsDiv = createElement('div', 'reactions-buttons', { display: 'flex', gap: '6px', flexWrap: 'wrap' });
-    for (const emoji of ordered) {
-      const count = counts.get(emoji) || 0;
-      const isActive = userReactions.has(emoji);
-      const btn = createElement('button', `reaction-button ${isActive ? 'active' : ''}`, {
-        display: 'inline-flex', alignItems: 'center', gap: '4px',
-        padding: '4px 10px', background: 'var(--bg-primary)', border: '1px solid var(--border)',
-        borderRadius: '30px', fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer'
-      });
-      btn.innerHTML = `<span class="reaction-emoji">${getReactionEmoji(emoji)}</span><span class="reaction-count">${count || ''}</span>`;
-      btn.addEventListener('click', async (e) => {
+
+    const heartCount = counts.get('heart') || 0;
+    const isHeartActive = userReactions.has('heart');
+    const heartBtn = createElement('button', 'reaction-button', {
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      padding: '4px 10px',
+      borderRadius: '30px',
+      fontSize: '13px',
+      cursor: isHeartActive ? 'default' : 'pointer',
+      border: '1px solid var(--border)',
+      background: isHeartActive ? 'var(--accent)' : 'var(--bg-primary)',
+      color: isHeartActive ? '#fff' : 'var(--text-secondary)',
+      transition: 'background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s',
+      opacity: isHeartActive ? '1' : '0.8',
+      pointerEvents: isHeartActive ? 'none' : 'auto'
+    }, { type: 'button', disabled: isHeartActive });
+    heartBtn.innerHTML = `<span class="reaction-emoji">❤️</span><span class="reaction-count">${heartCount || ''}</span>`;
+
+    if (!isHeartActive) {
+      heartBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!currentUser) { showToast('Войдите в GitHub', 'error'); return; }
+        const valid = await isActionStillValid('reactions', { issueNumber, content: 'heart' });
+        if (!valid) {
+          showToast('Вы уже поставили ❤️', 'info');
+          return;
+        }
         try {
-          if (isActive) {
-            const reactionId = reactions.find(r => r.content === emoji && r.user?.login === currentUser)?.id;
-            if (reactionId) await onRemove(issueNumber, reactionId);
+          const result = await performAction('reactions', { issueNumber, content: 'heart' }, () => window.GithubAPI.addReaction(issueNumber, 'heart'));
+          if (result.queued) {
+            showToast('❤️ будет добавлена при восстановлении лимитов', 'info');
           } else {
-            await onAdd(issueNumber, emoji);
+            showToast('❤️ добавлена', 'success');
           }
-        } catch (err) { showToast('Ошибка', 'error'); }
+          heartBtn.disabled = true;
+          heartBtn.style.pointerEvents = 'none';
+          heartBtn.style.background = 'var(--accent)';
+          heartBtn.style.color = '#fff';
+          const countSpan = heartBtn.querySelector('.reaction-count');
+          if (countSpan) {
+            const current = parseInt(countSpan.textContent) || 0;
+            countSpan.textContent = current + 1;
+          }
+          window.GithubAPI.loadReactions(issueNumber).then(newReactions => {
+            renderReactions(container, issueNumber, newReactions, currentUser, onAddHeart, onRemoveHeart);
+          }).catch(() => {});
+        } catch (err) {
+          showToast('Ошибка: ' + err.message, 'error');
+          heartBtn.disabled = false;
+          heartBtn.style.pointerEvents = 'auto';
+          heartBtn.style.background = 'var(--bg-primary)';
+          heartBtn.style.color = 'var(--text-secondary)';
+        }
       });
-      btnsDiv.appendChild(btn);
+    } else {
+      heartBtn.disabled = true;
     }
+    btnsDiv.appendChild(heartBtn);
+
+    const eyesCount = counts.get('eyes') || 0;
+    const hasEyes = userReactions.has('eyes');
+    const eyesSpan = createElement('span', 'reaction-static', {
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      padding: '4px 10px', background: 'var(--bg-primary)', border: '1px solid var(--border)',
+      borderRadius: '30px', fontSize: '13px', color: 'var(--text-secondary)'
+    });
+    eyesSpan.innerHTML = `<span class="reaction-emoji">👀</span><span class="reaction-count">${eyesCount || ''}</span>`;
+    btnsDiv.appendChild(eyesSpan);
+
+    if (currentUser && !hasEyes) {
+      const eyesKey = `eyes_${issueNumber}`;
+      if (!sessionStorage.getItem(eyesKey)) {
+        sessionStorage.setItem(eyesKey, '1');
+        isActionStillValid('reactions', { issueNumber, content: 'eyes' }).then(valid => {
+          if (valid) {
+            performAction('reactions', { issueNumber, content: 'eyes' }, () => window.GithubAPI.addReaction(issueNumber, 'eyes'))
+              .then(result => {
+                if (result.queued) {
+                  console.log('[👀] Реакция поставлена в очередь');
+                } else {
+                  console.log('[👀] Реакция успешно добавлена');
+                }
+                const countSpan = eyesSpan.querySelector('.reaction-count');
+                if (countSpan) {
+                  const current = parseInt(countSpan.textContent) || 0;
+                  countSpan.textContent = current + 1;
+                }
+                window.GithubAPI.loadReactions(issueNumber).then(newReactions => {
+                  renderReactions(container, issueNumber, newReactions, currentUser, onAddHeart, onRemoveHeart);
+                }).catch(() => {});
+              })
+              .catch(err => console.warn('Ошибка при добавлении 👀:', err));
+          }
+        }).catch(() => {});
+      }
+    }
+
     container.appendChild(btnsDiv);
   }
 
-  function getReactionEmoji(content) {
-    const map = { '+1': '👍', '-1': '👎', 'laugh': '😄', 'hooray': '🎉', 'heart': '❤️', 'rocket': '🚀', 'eyes': '👀' };
-    return map[content] || content;
+  async function loadComments(issueNumber, container, onUpdate, signal) {
+    if (!window.GithubAPI) await loadModule('js/core/github-api.js');
+
+    const lastErrorTime = commentsErrorTimestamps.get(issueNumber);
+    if (lastErrorTime && (Date.now() - lastErrorTime < COMMENTS_ERROR_COOLDOWN)) {
+      container.innerHTML = '<p class="text-secondary" style="text-align:center;">Комментарии временно недоступны</p>';
+      return;
+    }
+
+    const cacheKey = `comments_${issueNumber}`;
+    const cached = cacheGet(cacheKey, COMMENTS_CACHE_TTL);
+    if (cached && !signal?.aborted) {
+      renderComments(cached, container);
+      return;
+    }
+
+    if (pendingCommentsRequests.has(issueNumber)) {
+      try {
+        const comments = await pendingCommentsRequests.get(issueNumber);
+        if (!signal?.aborted) renderComments(comments, container);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        commentsErrorTimestamps.set(issueNumber, Date.now());
+        container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
+      }
+      return;
+    }
+
+    let attempts = 0;
+    const maxAttempts = 2;
+    const promise = (async () => {
+      while (attempts < maxAttempts) {
+        try {
+          const comments = await window.GithubAPI.loadComments(issueNumber, signal);
+          if (signal && signal.aborted) throw new Error('Aborted');
+          cacheSet(cacheKey, comments);
+          commentsErrorTimestamps.delete(issueNumber);
+          return comments;
+        } catch (err) {
+          attempts++;
+          if (err.name === 'AbortError' || err.message === 'Aborted') throw err;
+          if (attempts < maxAttempts) {
+            await new Promise(r => setTimeout(r, 1000 * attempts));
+          } else {
+            commentsErrorTimestamps.set(issueNumber, Date.now());
+            throw err;
+          }
+        }
+      }
+    })();
+
+    pendingCommentsRequests.set(issueNumber, promise);
+
+    try {
+      const comments = await promise;
+      if (!signal?.aborted) {
+        renderComments(comments, container);
+      }
+    } catch (err) {
+      if (err.name === 'AbortError' || err.message === 'Aborted') return;
+      container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
+    } finally {
+      setTimeout(() => {
+        pendingCommentsRequests.delete(issueNumber);
+      }, 100);
+    }
   }
 
-  // ---------- Комментарии ----------
-  async function loadComments(issueNumber, container, onUpdate) {
-    if (!window.GithubAPI) await loadModule('js/core/github-api.js');
-    try {
-      const comments = await window.GithubAPI.loadComments(issueNumber);
-      container.innerHTML = '';
-      if (comments.length === 0) {
-        container.innerHTML = '<p class="text-secondary" style="text-align:center;">Нет комментариев</p>';
-        return;
+  function renderComments(comments, container) {
+    container.innerHTML = '';
+    if (comments.length === 0) {
+      container.innerHTML = '<p class="text-secondary" style="text-align:center;">Нет комментариев</p>';
+      return;
+    }
+    const currentUser = getCurrentUser();
+    const fragment = document.createDocumentFragment();
+    for (const c of comments) {
+      const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px', position: 'relative' });
+      commentDiv.dataset.id = c.id;
+      const header = createElement('div', 'comment-meta', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' });
+      header.innerHTML = `<span class="comment-author">${escapeHtml(c.user.login)}</span><span>${new Date(c.created_at).toLocaleString()}</span>`;
+      const body = createElement('div', 'comment-body', { marginTop: '4px' });
+      renderMarkdownWithEditor(c.body, body);
+      commentDiv.appendChild(header);
+      commentDiv.appendChild(body);
+      if (currentUser === c.user.login || isAdmin()) {
+        const actions = createElement('div', 'comment-actions', { position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', opacity: '0', transition: 'opacity 0.2s' });
+        const editBtn = createElement('button', '', {}, { title: 'Редактировать' });
+        editBtn.innerHTML = '<i class="fas fa-pen"></i>';
+        editBtn.addEventListener('click', (e) => { e.stopPropagation(); editCommentWithEditor(c.id, c.body, () => { /* обновить после редактирования */ }); });
+        const delBtn = createElement('button', '', {}, { title: 'Удалить' });
+        delBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+        delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteComment(c.id, () => { /* обновить после удаления */ }); });
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
+        commentDiv.appendChild(actions);
+        commentDiv.addEventListener('mouseenter', () => actions.style.opacity = '1');
+        commentDiv.addEventListener('mouseleave', () => actions.style.opacity = '0');
       }
-      for (const c of comments) {
-        const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px', position: 'relative' });
-        commentDiv.dataset.id = c.id;
-        const header = createElement('div', 'comment-meta', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' });
-        header.innerHTML = `<span class="comment-author">${escapeHtml(c.user.login)}</span><span>${new Date(c.created_at).toLocaleString()}</span>`;
-        const body = createElement('div', 'comment-body', { marginTop: '4px' });
-        await renderMarkdownWithEditor(c.body, body);
-        commentDiv.appendChild(header);
-        commentDiv.appendChild(body);
-        const currentUser = getCurrentUser();
-        if (currentUser === c.user.login || isAdmin()) {
-          const actions = createElement('div', 'comment-actions', { position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', opacity: '0', transition: 'opacity 0.2s' });
-          const editBtn = createElement('button', '', {}, { title: 'Редактировать' });
-          editBtn.innerHTML = '<i class="fas fa-pen"></i>';
-          editBtn.addEventListener('click', (e) => { e.stopPropagation(); editCommentWithEditor(c.id, c.body, onUpdate); });
-          const delBtn = createElement('button', '', {}, { title: 'Удалить' });
-          delBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
-          delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteComment(c.id, onUpdate); });
-          actions.appendChild(editBtn);
-          actions.appendChild(delBtn);
-          commentDiv.appendChild(actions);
-          commentDiv.addEventListener('mouseenter', () => actions.style.opacity = '1');
-          commentDiv.addEventListener('mouseleave', () => actions.style.opacity = '0');
-        }
-        container.appendChild(commentDiv);
-      }
-    } catch (err) { console.error(err); container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>'; }
+      fragment.appendChild(commentDiv);
+    }
+    container.appendChild(fragment);
   }
 
   async function editCommentWithEditor(commentId, oldBody, onUpdate) {
     if (!window.Editor) await loadModule('js/features/editor.js');
     const newBody = prompt('Редактировать комментарий (поддерживается Markdown)', oldBody);
     if (!newBody || newBody === oldBody) return;
+    if (newBody.length > 400) {
+      showToast('Комментарий не может превышать 400 символов', 'error');
+      return;
+    }
+    if (!validateTextContent(newBody, MIN_COMMENT_LENGTH, 'Комментарий')) return;
+
     try {
       await window.GithubAPI.updateComment(commentId, newBody);
       showToast('Обновлено', 'success');
-      onUpdate();
+      if (onUpdate) onUpdate();
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
   async function addComment(issueNumber, body, onUpdate) {
     if (!body.trim()) return showToast('Введите текст', 'error');
+    if (body.length > 400) {
+      showToast('Комментарий не может превышать 400 символов', 'error');
+      return;
+    }
+    if (!validateTextContent(body, MIN_COMMENT_LENGTH, 'Комментарий')) return;
+
+    const currentUser = getCurrentUser();
+    if (!currentUser) return showToast('Войдите в GitHub', 'error');
+
     try {
-      await window.GithubAPI.addComment(issueNumber, body);
-      showToast('Комментарий добавлен', 'success');
-      onUpdate();
-    } catch (err) { showToast('Ошибка', 'error'); }
+      const result = await performAction('comments', { issueNumber, body }, () => window.GithubAPI.addComment(issueNumber, body));
+      if (result.queued) {
+        showToast('Комментарий сохранён в очередь', 'info');
+        const container = document.getElementById('modal-comments-list');
+        if (container) {
+          const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px', opacity: '0.6' });
+          commentDiv.innerHTML = `
+            <div class="comment-meta"><span class="comment-author">${escapeHtml(currentUser)}</span><span>сейчас</span></div>
+            <div class="comment-body">${escapeHtml(body)} <span style="font-size:11px; color:var(--text-secondary);">(ожидает синхронизации)</span></div>
+          `;
+          container.prepend(commentDiv);
+        }
+      } else {
+        showToast('Комментарий добавлен', 'success');
+        localStorage.setItem(LAST_COMMENT_KEY, Date.now().toString());
+        if (onUpdate) onUpdate();
+      }
+    } catch (err) {
+      showToast('Ошибка: ' + err.message, 'error');
+    }
   }
 
   async function deleteComment(commentId, onUpdate) {
@@ -138,11 +349,10 @@
     try {
       await window.GithubAPI.deleteComment(commentId);
       showToast('Удалено', 'success');
-      onUpdate();
+      if (onUpdate) onUpdate();
     } catch (err) { showToast('Ошибка', 'error'); }
   }
 
-  // ---------- Кнопки модалки ----------
   async function sharePost(title, url) {
     if (navigator.share) {
       try { await navigator.share({ title, url }); } catch(e) {}
@@ -153,8 +363,27 @@
   }
 
   async function addToBookmarks(postData) {
-    if (!window.BookmarkStorage) await loadModule('js/features/storage.js');
-    if (!window.BookmarkStorage) return showToast('Хранилище не загружено', 'error');
+    if (!window.BookmarkStorage) {
+      try {
+        await loadModule('js/features/storage.js');
+      } catch (e) {
+        showToast('Не удалось загрузить хранилище', 'error');
+        return;
+      }
+    }
+    if (!window.BookmarkStorage) {
+      showToast('Хранилище не загружено', 'error');
+      return;
+    }
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      showToast('Войдите в GitHub', 'error');
+      return;
+    }
+    if (!hasScope('gist')) {
+      showToast('Требуется scope gist', 'error');
+      return;
+    }
     try {
       await window.BookmarkStorage.addBookmark({
         url: `${location.origin}${location.pathname}?post=${postData.id}`,
@@ -169,7 +398,6 @@
     } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
   }
 
-  // Редактирование поста через полноценный редактор
   async function editPost(id, currentTitle, currentBody, game, labels) {
     if (!hasScope('repo')) return showToast('Нет прав', 'error');
     await openEditorModal('edit', { game, title: currentTitle, body: currentBody }, 'post', id);
@@ -185,7 +413,6 @@
     } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
   }
 
-  // ---------- Полноэкранная модалка ----------
   async function openFullModal(item) {
     const { id, title, body, author, date, game, labels, type } = item;
     const currentUser = getCurrentUser();
@@ -198,12 +425,12 @@
       const allowed = extractAllowed(body);
       if (allowed) displayBody = decryptPrivateBody(body, allowed);
     }
-    
+
     const isOwner = author === currentUser;
     const canEdit = isOwner || isAdmin();
     const canDelete = isOwner || isAdmin();
     const canBookmark = currentUser && hasScope('gist');
-    
+
     const html = `
       <div style="margin-bottom: 16px;">
         <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
@@ -217,15 +444,41 @@
       <div class="comments-section">
         <h3>Комментарии</h3>
         <div id="modal-comments-list" class="comments-list"></div>
-        ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px;">
-          <input type="text" id="new-comment-input" placeholder="Ваш комментарий..." style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border);">
+        ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px; align-items:center; flex-wrap:wrap;">
+          <input type="text" id="new-comment-input" placeholder="Ваш комментарий..." style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:150px;">
           <button id="submit-comment-btn" class="button small">Отправить</button>
+          <span style="font-size:12px; color:var(--text-secondary); margin-left:4px;" id="comment-counter">0/400</span>
+          <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
+            Осталось: <span class="rate-indicator" data-action="comments">${window.RateLimits ? window.RateLimits.getRemaining('comments') : '?'}</span>
+          </span>
         </div>` : '<p class="text-secondary">Войдите, чтобы комментировать</p>'}
       </div>
     `;
-    
+
     const { modal, closeModal } = createModal(title, html, { size: 'full' });
-    
+
+    if (currentModalAbortController) {
+      currentModalAbortController.abort();
+      currentModalAbortController = null;
+    }
+    currentModalAbortController = new AbortController();
+    const abortSignal = currentModalAbortController.signal;
+
+    const originalClose = closeModal;
+    const newClose = () => {
+      if (currentModalAbortController) {
+        currentModalAbortController.abort();
+        currentModalAbortController = null;
+      }
+      currentModalLoading = null;
+      originalClose();
+    };
+    modal.querySelector('.modal-close').removeEventListener('click', closeModal);
+    modal.querySelector('.modal-close').addEventListener('click', newClose);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) newClose();
+    });
+
     const headerDiv = modal.querySelector('.modal-header');
     if (headerDiv) {
       const actionsDiv = createElement('div', 'modal-header-actions', { display: 'flex', gap: '8px', marginLeft: 'auto', marginRight: '8px' });
@@ -254,36 +507,70 @@
       const closeBtn = headerDiv.querySelector('.modal-close');
       headerDiv.insertBefore(actionsDiv, closeBtn);
     }
-    
+
     const contentDiv = modal.querySelector('.post-content');
-    await renderMarkdownWithEditor(displayBody, contentDiv);
+    const cacheKey = `post_${id}_${currentUser || 'anon'}`;
+    await renderMarkdownWithEditor(displayBody, contentDiv, cacheKey);
+
     const reactionsContainer = modal.querySelector('#modal-reactions');
     const commentsContainer = modal.querySelector('#modal-comments-list');
+
     async function refreshComments() {
-      await loadComments(id, commentsContainer, refreshComments);
+      if (abortSignal.aborted) return;
+      await loadComments(id, commentsContainer, refreshComments, abortSignal);
     }
+
     if (currentUser && window.GithubAPI) {
       try {
-        const reactions = await window.GithubAPI.loadReactions(id);
+        if (abortSignal.aborted) return;
+        const reactionsCacheKey = `reactions_${id}`;
+        let reactions = cacheGet(reactionsCacheKey, REACTIONS_CACHE_TTL);
+        if (!reactions) {
+          reactions = await window.GithubAPI.loadReactions(id, abortSignal);
+          if (!abortSignal.aborted) cacheSet(reactionsCacheKey, reactions);
+        }
+        if (abortSignal.aborted) return;
         renderReactions(reactionsContainer, id, reactions, currentUser,
-          async (num, cont) => { await window.GithubAPI.addReaction(num, cont); refreshComments(); },
-          async (num, rid) => { await window.GithubAPI.removeReaction(num, rid); refreshComments(); });
-      } catch(e) {}
+          async (num, cont) => { await window.GithubAPI.addReaction(num, cont); },
+          async (num, rid) => { await window.GithubAPI.removeReaction(num, rid); }
+        );
+      } catch(e) {
+        if (e.name === 'AbortError') return;
+        console.warn('Reactions error:', e);
+      }
     }
+
     await refreshComments();
+
     const submitBtn = modal.querySelector('#submit-comment-btn');
     const commentInput = modal.querySelector('#new-comment-input');
+    const counterEl = modal.querySelector('#comment-counter');
     if (submitBtn && commentInput) {
-      submitBtn.addEventListener('click', async () => {
+      if (counterEl) {
+        commentInput.addEventListener('input', () => {
+          const len = commentInput.value.length;
+          counterEl.textContent = `${len}/400`;
+          counterEl.style.color = len > 400 ? '#f44336' : 'var(--text-secondary)';
+        });
+      }
+      const debouncedSubmit = window.GithubCore.debounce(async () => {
         const text = commentInput.value.trim();
         if (!text) return;
+        if (text.length > 400) {
+          showToast('Комментарий не может превышать 400 символов', 'error');
+          return;
+        }
         await addComment(id, text, refreshComments);
         commentInput.value = '';
-      });
+        if (counterEl) { counterEl.textContent = '0/400'; counterEl.style.color = 'var(--text-secondary)'; }
+        const indicator = modal.querySelector('.rate-indicator[data-action="comments"]');
+        if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('comments');
+      }, 1000);
+      submitBtn.addEventListener('click', debouncedSubmit);
     }
   }
 
-  // ---------- Редактор поста с предпросмотром (поддержка создания и редактирования) ----------
+  // ================== НОВЫЙ РЕДАКТОР ==================
   async function openEditorModal(mode, initialData, context, existingId = null) {
     if (!hasScope('repo')) {
       showToast('Требуется scope repo', 'error');
@@ -299,64 +586,217 @@
     let currentBody = savedBody;
     let allowedUsers = '';
 
-    const html = `
-      <div style="display:flex; flex-direction:column; gap:12px;">
-        <input type="text" id="editor-title" placeholder="Заголовок" value="${escapeHtml(currentTitle)}" style="padding:12px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border);">
-        <div class="editor-toolbar" id="editor-toolbar"></div>
-        <div class="editor-split">
-          <div class="editor-split-left">
-            <textarea id="editor-body" placeholder="Текст поста (Markdown)">${escapeHtml(currentBody)}</textarea>
-          </div>
-          <div class="editor-split-right preview-area" id="preview-area"></div>
-        </div>
-        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          <div class="access-switch">
-            <button id="access-public" class="access-switch-btn active">Публичный</button>
-            <button id="access-private" class="access-switch-btn">Приватный</button>
-          </div>
-          <input type="text" id="allowed-users" placeholder="Логины через запятую" value="${escapeHtml(allowedUsers)}" style="display:none; flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border);">
-          <button id="editor-submit" class="button wide">${mode === 'edit' ? 'Обновить' : 'Опубликовать'}</button>
-        </div>
-      </div>
-    `;
-    const { modal, closeModal } = createModal(mode === 'new' ? 'Создать пост' : 'Редактировать пост', html, { size: 'full' });
+    // Создаём модальное окно с пустым контейнером
+    const { modal, closeModal } = createModal(
+      mode === 'new' ? 'Создать пост' : 'Редактировать пост',
+      '<div class="editor-container"></div>',
+      { size: 'full' }
+    );
 
-    const titleInput = modal.querySelector('#editor-title');
-    const bodyTextarea = modal.querySelector('#editor-body');
-    const preview = modal.querySelector('#preview-area');
-    const publicBtn = modal.querySelector('#access-public');
-    const privateBtn = modal.querySelector('#access-private');
-    const allowedInput = modal.querySelector('#allowed-users');
-    const submitBtn = modal.querySelector('#editor-submit');
+    const container = modal.querySelector('.editor-container');
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '12px';
 
-    if (window.Editor && window.Editor.createEditorToolbar) {
-      const toolbar = window.Editor.createEditorToolbar(bodyTextarea);
-      const toolbarContainer = modal.querySelector('#editor-toolbar');
-      toolbarContainer.innerHTML = '';
-      toolbarContainer.appendChild(toolbar);
-      const hostBtn = window.Editor.createImageServicesMenu();
-      toolbarContainer.appendChild(hostBtn);
+    // ----- Заголовок -----
+    const titleRow = createElement('div', 'editor-title-row', {
+      display: 'flex',
+      gap: '12px',
+      alignItems: 'center',
+      flexWrap: 'wrap'
+    });
+    const titleInput = createElement('input', 'editor-title-input', {
+      flex: '1',
+      padding: '10px 16px',
+      borderRadius: '40px',
+      background: 'var(--bg-primary)',
+      border: '1px solid var(--border)',
+      color: 'var(--text-primary)',
+      fontFamily: 'var(--font-family)',
+      minWidth: '150px'
+    });
+    titleInput.type = 'text';
+    titleInput.placeholder = 'Заголовок';
+    titleInput.value = currentTitle;
+    const titleCounter = createElement('span', 'title-counter', {
+      fontSize: '12px',
+      color: 'var(--text-secondary)',
+      marginLeft: '4px'
+    });
+    titleCounter.textContent = `${currentTitle.length}/100`;
+    titleRow.appendChild(titleInput);
+    titleRow.appendChild(titleCounter);
+    container.appendChild(titleRow);
+
+    // ----- Переключатель приватности -----
+    const accessRow = createElement('div', 'access-row', {
+      display: 'flex',
+      gap: '12px',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      marginBottom: '4px'
+    });
+    const accessSwitch = createElement('div', 'access-switch', {
+      display: 'inline-flex',
+      background: 'var(--bg-primary)',
+      borderRadius: '40px',
+      border: '1px solid var(--border)',
+      padding: '4px'
+    });
+    const publicBtn = createElement('button', 'access-switch-btn active', {});
+    publicBtn.textContent = 'Публичный';
+    const privateBtn = createElement('button', 'access-switch-btn', {});
+    privateBtn.textContent = 'Приватный';
+    accessSwitch.appendChild(publicBtn);
+    accessSwitch.appendChild(privateBtn);
+    const allowedInput = createElement('input', 'allowed-users-input', {
+      display: 'none',
+      flex: '1',
+      padding: '8px 16px',
+      borderRadius: '40px',
+      background: 'var(--bg-primary)',
+      border: '1px solid var(--border)',
+      color: 'var(--text-primary)',
+      fontFamily: 'var(--font-family)',
+      minWidth: '150px'
+    });
+    allowedInput.placeholder = 'Логины через запятую';
+    allowedInput.value = allowedUsers;
+    accessRow.appendChild(accessSwitch);
+    accessRow.appendChild(allowedInput);
+    container.appendChild(accessRow);
+
+    // ----- Редактор (тулбар + две колонки) -----
+    // Создаём textarea
+    const textarea = createElement('textarea', 'editor-textarea', {
+      width: '100%',
+      height: '100%',
+      resize: 'vertical',
+      border: 'none',
+      background: 'transparent',
+      color: 'var(--text-primary)',
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      lineHeight: '1.5',
+      padding: '12px',
+      boxSizing: 'border-box',
+      outline: 'none'
+    });
+    textarea.value = currentBody;
+
+    // Создаём предпросмотр
+    const preview = createElement('div', 'editor-preview markdown-body', {
+      padding: '16px',
+      wordWrap: 'break-word',
+      overflowY: 'auto',
+      height: '100%',
+      boxSizing: 'border-box'
+    });
+    await renderMarkdownWithEditor(currentBody, preview);
+
+    // Контейнер для двух колонок
+    const splitContainer = createElement('div', 'editor-split', {
+      display: 'flex',
+      gap: '16px',
+      alignItems: 'stretch',
+      flex: '1',
+      minHeight: '300px',
+      marginTop: '4px'
+    });
+    const leftCol = createElement('div', 'editor-split-left', {
+      flex: '1',
+      display: 'flex',
+      flexDirection: 'column',
+      borderRadius: '16px',
+      border: '1px solid var(--border)',
+      background: 'var(--bg-primary)',
+      overflow: 'hidden'
+    });
+    leftCol.appendChild(textarea);
+    const rightCol = createElement('div', 'editor-split-right', {
+      flex: '1',
+      borderRadius: '16px',
+      border: '1px solid var(--border)',
+      background: 'var(--bg-primary)',
+      overflow: 'auto',
+      padding: '0'
+    });
+    rightCol.appendChild(preview);
+    splitContainer.appendChild(leftCol);
+    splitContainer.appendChild(rightCol);
+
+    // Тулбар (создаём после textarea, чтобы передать ссылку)
+    let toolbar = null;
+    if (window.Editor) {
+      toolbar = window.Editor.createEditorToolbar(textarea);
     } else {
       await loadModule('js/features/editor.js');
       if (window.Editor) {
-        const toolbar = window.Editor.createEditorToolbar(bodyTextarea);
-        const toolbarContainer = modal.querySelector('#editor-toolbar');
-        toolbarContainer.innerHTML = '';
-        toolbarContainer.appendChild(toolbar);
-        const hostBtn = window.Editor.createImageServicesMenu();
-        toolbarContainer.appendChild(hostBtn);
+        toolbar = window.Editor.createEditorToolbar(textarea);
       }
     }
-
-    function updatePreview() {
-      const val = bodyTextarea.value;
-      renderMarkdownWithEditor(val, preview);
-      saveDraft(draftKey, { title: titleInput.value, body: val });
+    if (toolbar) {
+      // Добавляем кнопку "Хостинги" в тулбар (если есть)
+      const hostBtn = window.Editor.createImageServicesMenu ? window.Editor.createImageServicesMenu() : null;
+      if (hostBtn) {
+        toolbar.appendChild(hostBtn);
+      }
+      container.appendChild(toolbar);
     }
-    bodyTextarea.addEventListener('input', updatePreview);
-    titleInput.addEventListener('input', () => saveDraft(draftKey, { title: titleInput.value, body: bodyTextarea.value }));
-    updatePreview();
+    container.appendChild(splitContainer);
 
+    // ----- Кнопка отправки и лимиты -----
+    const submitRow = createElement('div', 'submit-row', {
+      display: 'flex',
+      gap: '12px',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      marginTop: '8px'
+    });
+    const submitBtn = createElement('button', 'button wide', {
+      background: 'var(--accent)',
+      color: '#fff',
+      padding: '10px 30px',
+      borderRadius: '40px',
+      border: 'none',
+      cursor: 'pointer',
+      fontFamily: 'var(--font-family)'
+    });
+    submitBtn.textContent = mode === 'edit' ? 'Обновить' : 'Опубликовать';
+    const rateIndicator = createElement('span', 'rate-indicator-wrapper', {
+      fontSize: '12px',
+      color: 'var(--text-secondary)',
+      marginLeft: '8px'
+    });
+    rateIndicator.innerHTML = `Осталось постов: <span class="rate-indicator" data-action="posts">${window.RateLimits ? window.RateLimits.getRemaining('posts') : '?'}</span>`;
+    submitRow.appendChild(submitBtn);
+    submitRow.appendChild(rateIndicator);
+    container.appendChild(submitRow);
+
+    // ----- Обработчики событий -----
+
+    // 1. Ввод в textarea → обновляем предпросмотр, сохраняем черновик, обновляем currentBody
+    textarea.addEventListener('input', async () => {
+      currentBody = textarea.value;
+      await renderMarkdownWithEditor(currentBody, preview);
+      saveDraft(draftKey, { title: titleInput.value, body: currentBody });
+    });
+
+    // 2. Ввод в заголовок → сохраняем черновик
+    titleInput.addEventListener('input', () => {
+      const val = titleInput.value;
+      if (val.length > 100) {
+        showToast('Заголовок не должен превышать 100 символов', 'error');
+        titleInput.value = val.slice(0, 100);
+        return;
+      }
+      currentTitle = titleInput.value;
+      titleCounter.textContent = `${currentTitle.length}/100`;
+      titleCounter.style.color = currentTitle.length > 100 ? '#f44336' : 'var(--text-secondary)';
+      saveDraft(draftKey, { title: currentTitle, body: currentBody });
+    });
+
+    // 3. Переключение приватности
     let privMode = false;
     publicBtn.addEventListener('click', () => {
       privMode = false;
@@ -371,36 +811,65 @@
       allowedInput.style.display = 'flex';
     });
 
-    submitBtn.addEventListener('click', async () => {
+    // 4. Отправка поста
+    const debouncedSubmit = window.GithubCore.debounce(async () => {
       const title = titleInput.value.trim();
-      const body = bodyTextarea.value;
+      const body = currentBody;
+
       if (!title) return showToast('Введите заголовок', 'error');
+      if (title.length > 100) return showToast('Заголовок не должен превышать 100 символов', 'error');
+      if (containsGitHubToken(title)) {
+        showToast('Обнаружен GitHub-токен в заголовке. Пожалуйста, удалите его.', 'error');
+        return;
+      }
+      if (getPlainTextLength(title) < MIN_POST_TITLE_LENGTH) {
+        showToast(`Заголовок должен содержать не менее ${MIN_POST_TITLE_LENGTH} значимых символов.`, 'error');
+        return;
+      }
+
+      if (body.length > 10000) return showToast('Текст поста не должен превышать 10000 символов', 'error');
+      if (!validateTextContent(body, MIN_POST_BODY_LENGTH, 'Текст поста')) return;
+
       let finalBody = body;
       let labels = [`game:${game}`];
       if (context === 'news') labels.push('type:news');
       else if (context === 'update') labels.push('type:update');
-      else labels.push(`type:idea`);
+      else labels.push('type:idea');
       if (privMode) {
         const allowed = allowedInput.value.trim();
         if (!allowed) return showToast('Укажите хотя бы одного пользователя', 'error');
         finalBody = `<!-- allowed: ${allowed} -->\n${window.GithubCore.encryptPrivateBody(body, allowed)}`;
         labels.push('private');
       }
+
+      const actionPayload = mode === 'edit' ? { mode: 'edit', id: existingId, title, body: finalBody } : { title, body: finalBody, labels };
       try {
-        if (mode === 'edit' && existingId) {
-          await window.GithubAPI.updateIssue(existingId, { title, body: finalBody });
-          showToast('Пост обновлён', 'success');
-          window.dispatchEvent(new CustomEvent('github-issue-updated', { detail: { id: existingId, title, body: finalBody } }));
+        const result = await performAction('posts', actionPayload, () => {
+          if (mode === 'edit' && existingId) {
+            return window.GithubAPI.updateIssue(existingId, { title, body: finalBody });
+          } else {
+            return window.GithubAPI.createIssue(title, finalBody, labels);
+          }
+        });
+        if (result.queued) {
+          showToast('Пост сохранён в очередь', 'info');
         } else {
-          await window.GithubAPI.createIssue(title, finalBody, labels);
-          showToast('Пост создан', 'success');
-          window.dispatchEvent(new CustomEvent('github-issue-created', { detail: { title, body: finalBody, labels: labels.map(l=> ({name:l})), user: { login: getCurrentUser() } } }));
+          showToast(mode === 'edit' ? 'Пост обновлён' : 'Пост создан', 'success');
         }
         clearDraft(draftKey);
         closeModal();
         setTimeout(() => location.reload(), 800);
-      } catch (err) { showToast('Ошибка: ' + err.message, 'error'); }
-    });
+      } catch (err) {
+        showToast('Ошибка: ' + err.message, 'error');
+      }
+    }, 1000);
+    submitBtn.addEventListener('click', debouncedSubmit);
+
+    if (draft && draft.body !== undefined) {
+      await renderMarkdownWithEditor(draft.body, preview);
+      textarea.value = draft.body;
+      currentBody = draft.body;
+    }
   }
 
   window.UIFeedback = {
@@ -412,6 +881,7 @@
     openFullModal,
     openEditorModal,
     canViewPost,
+    addToBookmarks,
     invalidateCache: (num) => { cacheRemoveByPrefix(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${num}/reactions`); }
   };
 })();

@@ -1,5 +1,21 @@
-// js/common-init.js – lazy load page scripts, multiple fallbacks for marked.js, etc.
+// js/common-init.js – инициализация без автоподчистки кеша
 (function() {
+  function addPreconnects() {
+    const links = [
+      'https://api.github.com',
+      'https://api.rss2json.com',
+      'https://cdnjs.cloudflare.com'
+    ];
+    links.forEach(url => {
+      const link = document.createElement('link');
+      link.rel = 'preconnect';
+      link.href = url;
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+    });
+  }
+  addPreconnects();
+
   function loadPageScripts() {
     const path = location.pathname;
     let page = path.split('/').pop().replace('.html', '');
@@ -109,15 +125,15 @@
     }
   }
 
-  // Загрузка фоновых частиц (пылинки)
   function loadDustParticles() {
-      const script = document.createElement('script');
-      script.src = 'js/features/dust-particles.js';
-      script.defer = true;
-      script.onload = () => console.log('Dust particles loaded');
-      script.onerror = () => console.warn('Failed to load dust particles');
-      document.head.appendChild(script);
-  };
+    if (document.querySelector('script[src="js/dust-particles.js"]')) return;
+    const script = document.createElement('script');
+    script.src = 'js/dust-particles.js';
+    script.defer = true;
+    script.onload = () => {}; // убираем лишний лог
+    script.onerror = () => console.warn('Failed to load dust particles');
+    document.head.appendChild(script);
+  }
 
   function showUpdateNotification() {
     if (sessionStorage.getItem('update_notification_shown')) return;
@@ -211,6 +227,41 @@
     document.body.addEventListener('click', handleDownloadClick);
   }
 
+  function initRateLimits() {
+    if (window.RateLimits) {
+      window.RateLimits.init();
+      window.addEventListener('github-auth-ready', () => {
+        const profile = document.querySelector('.nav-profile');
+        if (profile) {
+          const dropdown = profile.querySelector('.profile-dropdown');
+          if (dropdown && !dropdown.querySelector('[data-action="rate-panel"]')) {
+            const item = document.createElement('div');
+            item.className = 'profile-dropdown-item';
+            item.dataset.action = 'rate-panel';
+            item.innerHTML = '<i class="fas fa-chart-bar"></i> Лимиты и кеш';
+            const divider = dropdown.querySelector('.profile-dropdown-divider');
+            if (divider) {
+              dropdown.insertBefore(item, divider);
+            } else {
+              dropdown.appendChild(item);
+            }
+          }
+        }
+      });
+    } else {
+      const script = document.createElement('script');
+      script.src = 'js/features/rate-limits.js';
+      script.defer = true;
+      script.onload = () => {
+        if (window.RateLimits) {
+          window.RateLimits.init();
+          window.dispatchEvent(new CustomEvent('github-auth-ready'));
+        }
+      };
+      document.head.appendChild(script);
+    }
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       preloadFont();
@@ -224,6 +275,7 @@
       loadDustParticles();
       registerServiceWorker();
       initDownloadConsent();
+      initRateLimits();
     });
   } else {
     preloadFont();
@@ -237,5 +289,6 @@
     loadDustParticles();
     registerServiceWorker();
     initDownloadConsent();
+    initRateLimits();
   }
 })();

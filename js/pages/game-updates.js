@@ -1,4 +1,4 @@
-// js/pages/game-updates.js — обновления игры с админ-кнопкой
+// js/pages/game-updates.js – использует общий кэш и DocumentFragment
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractAllowed, extractSummary, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
@@ -6,6 +6,7 @@
   const { showToast } = window.UIUtils;
 
   let currentAbort = null, currentGame = null;
+  const UPDATES_CACHE_TTL = 15 * 60 * 1000; // 15 минут
 
   document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('game-updates');
@@ -19,13 +20,15 @@
       if (!currentGame) return;
       if (!issue.labels.some(l => l.name === 'type:update' && l.name === `game:${currentGame}`)) return;
       if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
-      cacheRemoveByPrefix(`game_updates_${currentGame}`);
+      cacheRemoveByPrefix(`game_issues_${currentGame}`);
       const cont = document.getElementById('game-updates');
       if (!cont) return;
       const newPost = { number: issue.number, title: issue.title, body: issue.body, date: new Date(issue.created_at), author: issue.user.login, game: currentGame, labels: issue.labels.map(l=>l.name) };
       let grid = cont.querySelector('.projects-grid');
       if (!grid) { grid = createElement('div', 'projects-grid'); cont.innerHTML = ''; cont.appendChild(grid); }
-      grid.insertBefore(createUpdateCard(newPost), grid.firstChild);
+      const fragment = document.createDocumentFragment();
+      fragment.appendChild(createUpdateCard(newPost));
+      grid.insertBefore(fragment, grid.firstChild);
     });
     window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
     window.addEventListener('github-logout', () => { if (currentGame) refreshGameUpdates(currentGame); });
@@ -38,18 +41,31 @@
 
   async function loadGameUpdates(container, game) {
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>';
-    if (currentAbort) currentAbort.controller.abort();
+    if (currentAbort) {
+      currentAbort.controller.abort();
+      currentAbort = null;
+    }
     const { controller, timeoutId } = createAbortable(10000);
     currentAbort = { controller };
     try {
-      const cacheKey = `game_updates_${game}`;
-      let posts = cacheGet(cacheKey);
-      if (!posts) {
-        const issues = await loadIssues({ labels: `type:update,game:${game}`, per_page: 10, signal: controller.signal });
-        posts = deduplicateByNumber(issues).filter(i => CONFIG.ALLOWED_AUTHORS.includes(i.user.login))
-          .map(i => ({ number: i.number, title: i.title, body: i.body, date: new Date(i.created_at), author: i.user.login, game, labels: i.labels.map(l=>l.name) }));
-        cacheSet(cacheKey, posts.map(p => ({ ...p, date: p.date.toISOString() })));
-      } else posts = posts.map(p => ({ ...p, date: new Date(p.date) }));
+      const cacheKey = `game_issues_${game}`;
+      let issues = cacheGet(cacheKey);
+      if (!issues) {
+        issues = await loadIssues({ labels: `game:${game}`, state: 'open', per_page: 100, signal: controller.signal });
+        cacheSet(cacheKey, issues);
+      }
+      let posts = issues.filter(i =>
+        i.labels.some(l => l.name === 'type:update') &&
+        CONFIG.ALLOWED_AUTHORS.includes(i.user.login)
+      ).map(i => ({
+        number: i.number,
+        title: i.title,
+        body: i.body,
+        date: new Date(i.created_at),
+        author: i.user.login,
+        game,
+        labels: i.labels.map(l => l.name)
+      }));
       const currentUser = getCurrentUser();
       posts = posts.filter(p => {
         if (!p.labels.includes('private')) return true;
@@ -57,11 +73,14 @@
         const allowed = extractAllowed(p.body);
         return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
       });
+      posts.sort((a, b) => b.date - a.date);
       if (posts.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; return; }
       container.innerHTML = '';
       const grid = createElement('div', 'projects-grid');
+      const fragment = document.createDocumentFragment();
+      posts.forEach(p => fragment.appendChild(createUpdateCard(p)));
+      grid.appendChild(fragment);
       container.appendChild(grid);
-      posts.forEach(p => grid.appendChild(createUpdateCard(p)));
 
       const parent = container.parentNode;
       let header = parent.querySelector('.updates-header');
@@ -80,6 +99,7 @@
         }
       } else if (existing) existing.remove();
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error('Update load error:', err);
       container.innerHTML = '<p class="error-message">Ошибка загрузки обновлений</p>';
     } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }

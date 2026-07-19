@@ -617,3 +617,174 @@
         height: 80px;
     }
 }
+
+/* Стили для модалки лимитов */
+.limits-modal .modal-content-full {
+    max-width: 800px;
+}
+.limits-modal .modal-body {
+    padding: 20px;
+}
+.limits-modal .rate-indicator {
+    font-weight: bold;
+    color: var(--accent);
+}
+.limits-modal .rate-timer {
+    font-weight: bold;
+    color: var(--accent-light);
+    font-family: monospace;
+    font-size: 14px;
+}
+
+/* ========== Панель лимитов ========== */
+.rate-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+.rate-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-inner-gradient);
+    padding: 12px 20px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+}
+.rate-timer {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+.rate-timer strong {
+    color: var(--accent);
+}
+.rate-total {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+.rate-limits-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.rate-limit-item {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+}
+.rate-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 6px;
+}
+.rate-bar {
+    height: 6px;
+    background: var(--bg-primary);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 6px 0;
+}
+.rate-fill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.3s;
+}
+.rate-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.rate-info {
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--bg-inner-gradient);
+    padding: 10px 16px;
+    border-radius: 12px;
+    border-left: 3px solid var(--accent);
+}
+.rate-tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+}
+.rate-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: var(--font-family);
+    transition: 0.2s;
+}
+.rate-tab.active {
+    background: var(--accent);
+    color: white;
+}
+.rate-tab-content {
+    margin-top: 8px;
+}
+.rate-history-list, .rate-queue-list, .rate-cache-actions {
+    max-height: 300px;
+    overflow-y: auto;
+}
+.rate-history-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+}
+.rate-history-item.completed .rate-status {
+    color: #4caf50;
+}
+.rate-history-item.failed .rate-status {
+    color: #f44336;
+}
+.rate-action {
+    color: var(--text-primary);
+}
+.rate-time {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+.cache-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 12px 0;
+}
+.cache-buttons button {
+    background: var(--bg-inner-gradient);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 6px 14px;
+    border-radius: 30px;
+    cursor: pointer;
+    font-family: var(--font-family);
+    transition: 0.2s;
+}
+.cache-buttons button:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+#clear-all-cache {
+    background: #f44336;
+    color: white;
+    border-color: #f44336;
+}
+#clear-all-cache:hover {
+    background: #d32f2f;
+}
+@media (max-width: 600px) {
+    .rate-limits-grid {
+        grid-template-columns: 1fr;
+    }
+    .rate-summary {
+        flex-direction: column;
+        gap: 8px;
+    }
+}

@@ -102,7 +102,6 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Статические ресурсы (CSS, JS, шрифты)
   if (event.request.method === 'GET' && (
       url.pathname.match(/\.(css|js|woff2?|ttf)$/) ||
       url.origin.includes('cdnjs.cloudflare.com') ||

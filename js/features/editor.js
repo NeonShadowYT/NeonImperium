@@ -1,4 +1,4 @@
-// js/features/editor.js — улучшенный редактор с тулбаром и ленивой инициализацией
+// js/features/editor.js – тулбар редактора с интеграцией в UIFeedback
 (function() {
     const TEMPLATES = {
         bold:       { name: 'Жирный', icon: 'fas fa-bold', action: (ta) => insertMarkdown(ta, '**', 'текст', true) },
@@ -26,7 +26,7 @@
         hr:         { name: 'Горизонтальная линия', icon: 'fas fa-minus', action: (ta) => insertAtCursor(ta, '\n---\n') }
     };
 
-    const { createElement, escapeHtml } = GithubCore;
+    const { createElement, escapeHtml } = window.GithubCore;
 
     function insertAtCursor(textarea, text) {
         const start = textarea.selectionStart, end = textarea.selectionEnd;
@@ -227,7 +227,6 @@
         return toolbar;
     }
 
-    // Публичное API
     window.Editor = {
         TEMPLATES,
         createEditorToolbar,
