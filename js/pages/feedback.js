@@ -2,7 +2,8 @@
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber,
-    createAbortable, loadModule, createElement, stripHtml
+    createAbortable, loadModule, createElement, stripHtml,
+    extractSummary, extractAllowed, decryptPrivateBody, performAction
   } = window.GithubCore || {};
   const { loadIssues, loadReactions, addReaction, removeReaction } = window.GithubAPI || {};
   const { getCurrentUser, isAdmin } = window.GithubAuth || {};
