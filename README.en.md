@@ -254,3 +254,7 @@ Detailed terms of use for the games are described on the [License Agreement](htt
 [![GitHub followers](https://img.shields.io/github/followers/NeonShadowYT?style=for-the-badge&logo=github&label=Follow&color=282c34)](https://github.com/NeonShadowYT)
 
 </div>
+
+<div align="center">
+  <img src="https://img.itch.zone/aW1nLzI2MTc1MTAzLmdpZg==/original/ZSdakp.gif" width="100%" alt="Starve Neon Banner">
+</div>
