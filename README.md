@@ -231,30 +231,27 @@ NeonImperium/
 
 ## 📄 Лицензия
 
-**Исходный код сайта** распространяется под лицензией [MIT](LICENSE).  
-**Контент игр** (тексты, изображения, логотипы, исполняемые файлы) является интеллектуальной собственностью Neon Imperium.  
+**Исходный код сайта** распространяется под лицензией [MIT](LICENSE).
+
+**Контент игр** (тексты, изображения, логотипы, исполняемые файлы) является интеллектуальной собственностью Neon Imperium.
+
 Подробные условия использования самих игр описаны на странице [Лицензионное соглашение](https://neonshadowyt.github.io/NeonImperium/license).
 
-## 📫 Контакты
 
 <div align="center"> 
-   
-[![Neon Shadow](https://img.shields.io/badge/Neon%20Shadow-2d2f48?style=for-the-badge&logo=github&logoColor=white)](https://github.com/NeonShadowYT)
+  
+[![Starve Neon](https://raw.githubusercontent.com/NeonShadowYT/NeonShadowYT/main/images/banner-development.gif)](https://neonshadowyt.github.io/NeonImperium/starve-neon)
+
+## 📸 Присоединяйся к сообществу
+
 [![YouTube](https://img.shields.io/youtube/channel/subscribers/UC2pH2qNfh2sEAeYEGs1k_Lg?style=for-the-badge&logo=youtube&logoColor=white&label=YouTube&labelColor=FF0000&color=282c34)](https://www.youtube.com/@NeonShadow-neon)
+[![Twitch](https://img.shields.io/twitch/status/neoncyndows?style=for-the-badge&logo=twitch&logoColor=white&label=Twitch&labelColor=9146FF&color=282c34)](https://www.twitch.tv/neoncyndows)
 [![Discord](https://img.shields.io/discord/1033727594467704842?style=for-the-badge&logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=282c34)](https://discord.com/invite/9gv5sRhk9R)
 [![Telegram](https://telegram-badge.vercel.app/api/telegram-badge?channelId=@voididea&style=for-the-badge&logo=telegram&logoColor=white&label=Telegram&labelColor=26A5E4&color=282c34)](https://t.me/voididea)
-   
-</div>
 
 ⭐ **Если тебе нравится проект, поставьте звезду на GitHub - это помогает продолжать разработку!**
-
-<div align="center"> 
    
 [![GitHub stars](https://img.shields.io/github/stars/NeonShadowYT/HobbitStarverEdition?style=for-the-badge&logo=github&color=FFC107)](https://github.com/NeonShadowYT/HobbitStarverEdition/stargazers)
 [![GitHub followers](https://img.shields.io/github/followers/NeonShadowYT?style=for-the-badge&logo=github&label=Follow&color=282c34)](https://github.com/NeonShadowYT)
 
-</div>
-
-<div align="center">
-  <img src="https://img.itch.zone/aW1nLzI2MTc1MTAzLmdpZg==/original/ZSdakp.gif" width="100%" alt="Starve Neon Banner">
 </div>
