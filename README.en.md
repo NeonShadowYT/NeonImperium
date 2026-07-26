@@ -23,7 +23,7 @@
 The site is fully integrated with the **GitHub API**, supports **offline mode**, and gives the community a complete set of tools for communication, feedback, and bookmark storage.
 
 > [!IMPORTANT]
-> **The project is under active development.** You can not only play, but also participate in the community — create posts, leave reactions, comment, and save content to your personal cloud storage.
+> **The project is under active development.** You can not only play, but also participate in the community - create posts, leave reactions, comment, and save content to your personal cloud storage.
 
 ## 📋 Table of Contents
 <div align="center">
