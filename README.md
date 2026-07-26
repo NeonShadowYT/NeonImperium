@@ -38,7 +38,7 @@
   
   <a href="#-участие-в-разработке"><img src="https://img.shields.io/badge/🤝%20Участие%20в%20разработке-2d2f48?style=for-the-badge" alt="Участие в разработке"></a>
   <a href="#-лицензия"><img src="https://img.shields.io/badge/📄%20Лицензия-2d2f48?style=for-the-badge" alt="Лицензия"></a>
-  <a href="#-присоединяйся--сообществу"><img src="https://img.shields.io/badge/📸%20Сообщество-2d2f48?style=for-the-badge" alt="Сообщество"></a>
+  <a href="#-присоединяйся-сообществу"><img src="https://img.shields.io/badge/📸%20Сообщество-2d2f48?style=for-the-badge" alt="Сообщество"></a>
 </div>
 
 ## 🔥 Ключевые возможности
