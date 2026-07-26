@@ -239,7 +239,7 @@ Detailed terms of use for the games are described on the [License Agreement](htt
 
 [![Starve Neon](https://raw.githubusercontent.com/NeonShadowYT/NeonShadowYT/main/images/banner-development.gif)](https://neonshadowyt.github.io/NeonImperium/starve-neon)
 
-### 📸 Join the Community
+## 📸 Join the Community
    
 [![Neon Shadow](https://img.shields.io/badge/Neon%20Shadow-2d2f48?style=for-the-badge&logo=github&logoColor=white)](https://github.com/NeonShadowYT)
 [![YouTube](https://img.shields.io/youtube/channel/subscribers/UC2pH2qNfh2sEAeYEGs1k_Lg?style=for-the-badge&logo=youtube&logoColor=white&label=YouTube&labelColor=FF0000&color=282c34)](https://www.youtube.com/@NeonShadow-neon)
