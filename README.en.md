@@ -235,26 +235,20 @@ We welcome any contributions!
 **Game content** (texts, images, logos, executables) is the intellectual property of Neon Imperium.  
 Detailed terms of use for the games are described on the [License Agreement](https://neonshadowyt.github.io/NeonImperium/license) page.
 
-## 📫 Contacts
+<div align="center">
 
-<div align="center"> 
+[![Starve Neon](https://raw.githubusercontent.com/NeonShadowYT/NeonShadowYT/main/images/banner-development.gif)](https://neonshadowyt.github.io/NeonImperium/starve-neon)
+
+### 📸 Join the Community
    
 [![Neon Shadow](https://img.shields.io/badge/Neon%20Shadow-2d2f48?style=for-the-badge&logo=github&logoColor=white)](https://github.com/NeonShadowYT)
 [![YouTube](https://img.shields.io/youtube/channel/subscribers/UC2pH2qNfh2sEAeYEGs1k_Lg?style=for-the-badge&logo=youtube&logoColor=white&label=YouTube&labelColor=FF0000&color=282c34)](https://www.youtube.com/@NeonShadow-neon)
 [![Discord](https://img.shields.io/discord/1033727594467704842?style=for-the-badge&logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=282c34)](https://discord.com/invite/9gv5sRhk9R)
 [![Telegram](https://telegram-badge.vercel.app/api/telegram-badge?channelId=@voididea&style=for-the-badge&logo=telegram&logoColor=white&label=Telegram&labelColor=26A5E4&color=282c34)](https://t.me/voididea)
-   
-</div>
 
 ⭐ **If you like the project, give it a star on GitHub – it helps me keep developing!**
-
-<div align="center"> 
    
 [![GitHub stars](https://img.shields.io/github/stars/NeonShadowYT/HobbitStarverEdition?style=for-the-badge&logo=github&color=FFC107)](https://github.com/NeonShadowYT/HobbitStarverEdition/stargazers)
 [![GitHub followers](https://img.shields.io/github/followers/NeonShadowYT?style=for-the-badge&logo=github&label=Follow&color=282c34)](https://github.com/NeonShadowYT)
 
-</div>
-
-<div align="center">
-  <img src="https://img.itch.zone/aW1nLzI2MTc1MTAzLmdpZg==/original/ZSdakp.gif" width="100%" alt="Starve Neon Banner">
 </div>
