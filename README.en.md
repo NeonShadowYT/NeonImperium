@@ -38,7 +38,7 @@ The site is fully integrated with the **GitHub API**, supports **offline mode**,
   
   <a href="#-contributing"><img src="https://img.shields.io/badge/🤝%20Contributing-2d2f48?style=for-the-badge" alt="Contributing"></a>
   <a href="#-license"><img src="https://img.shields.io/badge/📄%20License-2d2f48?style=for-the-badge" alt="License"></a>
-  <a href="#-contacts"><img src="https://img.shields.io/badge/📸%20Community-2d2f48?style=for-the-badge" alt="Community"></a>
+  <a href="#-Сommunity"><img src="https://img.shields.io/badge/📸%20Community-2d2f48?style=for-the-badge" alt="Community"></a>
 </div>
 
 ## 🔥 Key Features
