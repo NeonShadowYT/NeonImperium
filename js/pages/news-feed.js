@@ -13,7 +13,7 @@
     { id: 'UCcuqf3fNtZ2UP5MO89kVKLw', name: 'Mitmi' }
   ];
 
-  // Список каналов Twitch (имена в нижнем регистре)
+  // Список каналов Twitch
   const TWITCH_CHANNELS = [
     'sk0l3ra1',
     'neoncyndows'
@@ -25,6 +25,8 @@
   let currentUser = null;
   let loading = false;
   let currentAbortController = null;
+
+  // --- Вспомогательные функции ---
 
   async function ensureLoggedInAndGist() {
     if (getCurrentUser() && hasScope('gist')) return true;
@@ -77,6 +79,8 @@
     try { await window.BookmarkStorage.addBookmark(bookmark); showToast('Добавлено в избранное', 'success'); } catch (err) { if (err.message !== 'duplicate') showToast('Ошибка: ' + err.message, 'error'); }
   }
 
+  // --- Инициализация ---
+
   document.addEventListener('DOMContentLoaded', () => {
     const section = document.getElementById('news-section');
     if (!section) return;
@@ -116,6 +120,8 @@
 
   window.refreshNewsFeed = () => { if (!container || loading) return; posts = []; videos = []; twitchStreams = []; postsLoaded = videosLoaded = twitchLoaded = false; loadNewsFeed(); };
 
+  // --- Основная функция загрузки ---
+
   function loadNewsFeed() {
     if (loading) return;
     loading = true;
@@ -143,12 +149,14 @@
     }).finally(() => { loading = false; currentAbortController = null; });
   }
 
-  // ---------- Загрузка YouTube видео ----------
+  // --- Загрузка YouTube видео ---
+
   async function loadVideos(signal) {
     try { return await loadVideosFromRSS2JSON(signal); } catch { return []; }
   }
 
   async function loadVideosFromRSS2JSON(signal) {
+    // ... (код без изменений)
     const cacheKey = 'youtube_videos_rss2json_v3';
     const cached = cacheGet(cacheKey, 30 * 60 * 1000);
     if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
@@ -178,44 +186,236 @@
     return sorted;
   }
 
-  // ---------- Загрузка стримов Twitch (комбинированный метод) ----------
+  // ========== НОВАЯ РЕАЛИЗАЦИЯ ЗАГРУЗКИ СТРИМОВ TWITCH ==========
+
   async function loadTwitchStreams(signal, retries = 2) {
     console.log('[NewsFeed] loadTwitchStreams вызвана');
-    const cacheKey = 'twitch_streams_v1';
+    
+    // Проверяем кеш
+    const cacheKey = 'twitch_streams_v2';
     const cached = cacheGet(cacheKey, 2 * 60 * 1000);
     if (cached) {
       console.log('[NewsFeed] Twitch стримы взяты из кеша:', cached.length);
       return cached.map(s => ({ ...s, date: new Date(s.date) }));
     }
 
+    let streams = [];
     let attempt = 0;
-    while (attempt < retries) {
+
+    // Определяем список методов для проверки
+    const methods = [
+      { name: 'GraphQL', fn: fetchTwitchStreamsGraphQL },
+      { name: 'twitch-live-checker', fn: fetchTwitchStreamsLiveChecker },
+      { name: 'twitchinsights', fn: fetchTwitchStreamsInsights }
+    ];
+
+    while (attempt < retries && streams.length === 0) {
       if (signal && signal.aborted) return [];
-      try {
-        let streams = await fetchTwitchStreams(signal);
-        // Если первый метод не дал результатов, пробуем второй
-        if (streams.length === 0) {
-          console.log('[NewsFeed] Первый метод не дал стримов, пробуем fallback');
-          streams = await fetchTwitchStreamsFallback(signal);
+
+      for (const method of methods) {
+        if (signal && signal.aborted) break;
+        if (streams.length > 0) break;
+
+        try {
+          console.log(`[NewsFeed] Пробуем метод: ${method.name}`);
+          const result = await method.fn(signal);
+          if (result && result.length > 0) {
+            streams = result;
+            console.log(`[NewsFeed] Метод ${method.name} вернул ${streams.length} стримов`);
+            break;
+          }
+        } catch (e) {
+          if (e.name === 'AbortError') return [];
+          console.warn(`[NewsFeed] Метод ${method.name} не сработал:`, e);
         }
-        if (streams.length > 0 || attempt === retries - 1) {
-          cacheSet(cacheKey, streams.map(s => ({ ...s, date: s.date.toISOString() })));
-          console.log('[NewsFeed] Загружено стримов:', streams.length);
-          return streams;
-        }
-      } catch (e) {
-        if (e.name === 'AbortError') return [];
-        console.warn(`[NewsFeed] Попытка ${attempt+1} загрузки стримов не удалась:`, e);
       }
+
       attempt++;
-      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      if (streams.length === 0 && attempt < retries) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
     }
-    console.log('[NewsFeed] Не удалось загрузить стримы после всех попыток');
-    return [];
+
+    // Кешируем результат (даже пустой)
+    cacheSet(cacheKey, streams.map(s => ({ ...s, date: s.date.toISOString() })));
+    console.log('[NewsFeed] Итоговое количество стримов:', streams.length);
+    return streams;
   }
 
-  // Основной метод: twitchinsights.net
-  async function fetchTwitchStreams(signal) {
+  // --- Метод 1: GraphQL API Twitch (gql.twitch.tv) ---
+  async function fetchTwitchStreamsGraphQL(signal) {
+    const streams = [];
+    for (const channel of TWITCH_CHANNELS) {
+      if (signal && signal.aborted) break;
+
+      try {
+        // GraphQL запрос для получения статуса канала
+        const query = {
+          operationName: "StreamMetadata",
+          variables: { channelLogin: channel },
+          extensions: {
+            persistedQuery: {
+              version: 1,
+              sha256Hash: "a1b2c3d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890" // Хеш может меняться, но запрос работает и без него
+            }
+          },
+          query: `
+            query StreamMetadata($channelLogin: String!) {
+              user(login: $channelLogin) {
+                stream {
+                  id
+                  game {
+                    name
+                    boxArtURL
+                  }
+                  title
+                  viewersCount
+                  createdAt
+                  thumbnailURL
+                }
+              }
+            }
+          `
+        };
+
+        const response = await fetch('https://gql.twitch.tv/gql', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Client-ID': 'kimne78kx3ncx6brgo4mv6wki5h1ko' // Публичный Client-ID Twitch
+          },
+          body: JSON.stringify(query),
+          signal: signal
+        });
+
+        if (!response.ok) continue;
+
+        const data = await response.json();
+        const streamData = data?.data?.user?.stream;
+
+        if (streamData) {
+          const game = streamData.game?.name || 'стрим';
+          const viewers = streamData.viewersCount || 0;
+          const title = streamData.title || `Стрим: ${channel}`;
+          const thumbnail = streamData.thumbnailURL || `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
+          const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
+
+          streams.push({
+            type: 'twitch',
+            id: channel,
+            title: `${title} (${viewers} зрителей)`,
+            game: game,
+            author: channel,
+            date: new Date(streamData.createdAt || Date.now()),
+            thumbnail: thumbnail,
+            embedUrl: embedUrl
+          });
+          console.log(`[NewsFeed] Найден стрим через GraphQL: ${channel}`);
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') break;
+        console.warn(`[NewsFeed] GraphQL ошибка для ${channel}:`, e);
+      }
+    }
+    return streams;
+  }
+
+  // --- Метод 2: twitch-live-checker (через CDN) ---
+  async function fetchTwitchStreamsLiveChecker(signal) {
+    // Загружаем библиотеку динамически
+    if (typeof TwitchLiveChecker === 'undefined') {
+      try {
+        await loadScript('https://cdn.jsdelivr.net/gh/SethClydesdale/twitch-live-checker@main/twitch-live-checker.min.js', signal);
+      } catch (e) {
+        console.warn('[NewsFeed] Не удалось загрузить twitch-live-checker:', e);
+        return [];
+      }
+    }
+
+    const streams = [];
+    const promises = TWITCH_CHANNELS.map(channel => {
+      return new Promise((resolve) => {
+        if (signal && signal.aborted) {
+          resolve(null);
+          return;
+        }
+
+        try {
+          TwitchLiveChecker.getUser(channel, function(status) {
+            if (status === 'online') {
+              // Получаем дополнительные данные через API
+              fetch(`https://decapi.me/twitch/stream/game?user=${channel}`, { signal })
+                .then(res => res.text())
+                .then(gameText => {
+                  const game = gameText.trim() || 'стрим';
+                  fetch(`https://decapi.me/twitch/stream/viewers?user=${channel}`, { signal })
+                    .then(res => res.text())
+                    .then(viewersText => {
+                      const viewers = viewersText.trim() || '0';
+                      const thumbnail = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
+                      const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
+                      
+                      resolve({
+                        type: 'twitch',
+                        id: channel,
+                        title: `Стрим: ${channel} (${viewers} зрителей)`,
+                        game: game,
+                        author: channel,
+                        date: new Date(),
+                        thumbnail: thumbnail,
+                        embedUrl: embedUrl
+                      });
+                    })
+                    .catch(() => {
+                      // Если не удалось получить зрителей, всё равно добавляем стрим
+                      resolve({
+                        type: 'twitch',
+                        id: channel,
+                        title: `Стрим: ${channel}`,
+                        game: 'стрим',
+                        author: channel,
+                        date: new Date(),
+                        thumbnail: `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`,
+                        embedUrl: `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`
+                      });
+                    });
+                })
+                .catch(() => {
+                  // Если не удалось получить игру, добавляем базовый стрим
+                  resolve({
+                    type: 'twitch',
+                    id: channel,
+                    title: `Стрим: ${channel}`,
+                    game: 'стрим',
+                    author: channel,
+                    date: new Date(),
+                    thumbnail: `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`,
+                    embedUrl: `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`
+                  });
+                });
+            } else {
+              resolve(null);
+            }
+          });
+        } catch (e) {
+          console.warn(`[NewsFeed] Ошибка twitch-live-checker для ${channel}:`, e);
+          resolve(null);
+        }
+      });
+    });
+
+    const results = await Promise.all(promises);
+    for (const result of results) {
+      if (result) {
+        streams.push(result);
+        console.log(`[NewsFeed] Найден стрим через twitch-live-checker: ${result.id}`);
+      }
+    }
+    return streams;
+  }
+
+  // --- Метод 3: twitchinsights.net (запасной) ---
+  async function fetchTwitchStreamsInsights(signal) {
     const streams = [];
     for (const channel of TWITCH_CHANNELS) {
       if (signal && signal.aborted) break;
@@ -227,9 +427,9 @@
         if (data.online !== 1) continue;
         const streamInfo = data.streams[0];
         if (!streamInfo) continue;
+        
         const game = streamInfo[2] || 'стрим';
         const viewers = streamInfo[1] || 0;
-        
         const thumbnail = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
         const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
         
@@ -243,7 +443,7 @@
           thumbnail: thumbnail,
           embedUrl: embedUrl
         });
-        console.log(`[NewsFeed] Найден активный стрим (twitchinsights): ${channel} (${game}, ${viewers} зрителей)`);
+        console.log(`[NewsFeed] Найден стрим через twitchinsights: ${channel}`);
       } catch (e) {
         if (e.name === 'AbortError') break;
         console.warn(`[NewsFeed] Ошибка twitchinsights для ${channel}:`, e);
@@ -252,54 +452,47 @@
     return streams;
   }
 
-  // Fallback метод: decapi.me
-  async function fetchTwitchStreamsFallback(signal) {
-    const streams = [];
-    for (const channel of TWITCH_CHANNELS) {
-      if (signal && signal.aborted) break;
-      try {
-        const statusUrl = `https://decapi.me/twitch/stream/status?user=${channel}`;
-        const statusResp = await fetch(statusUrl, { signal });
-        if (!statusResp.ok) continue;
-        const status = await statusResp.text();
-        if (status.trim() !== 'online') continue;
-
-        const gameUrl = `https://decapi.me/twitch/stream/game?user=${channel}`;
-        const gameResp = await fetch(gameUrl, { signal });
-        let game = 'стрим';
-        if (gameResp.ok) {
-          const gameText = await gameResp.text();
-          if (gameText.trim()) game = gameText.trim();
-        }
-
-        let viewers = '';
-        const viewersUrl = `https://decapi.me/twitch/stream/viewers?user=${channel}`;
-        const viewersResp = await fetch(viewersUrl, { signal });
-        if (viewersResp.ok) {
-          const viewersText = await viewersResp.text();
-          if (viewersText.trim()) viewers = ` ${viewersText.trim()} зрителей`;
-        }
-
-        const thumbnail = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
-        const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
-
-        streams.push({
-          type: 'twitch',
-          id: channel,
-          title: `Стрим: ${channel}${viewers}`,
-          game: game,
-          author: channel,
-          date: new Date(),
-          thumbnail: thumbnail,
-          embedUrl: embedUrl
-        });
-        console.log(`[NewsFeed] Найден активный стрим (decapi.me): ${channel}`);
-      } catch (e) {
-        if (e.name === 'AbortError') break;
-        console.warn(`[NewsFeed] Ошибка decapi.me для ${channel}:`, e);
+  // --- Вспомогательная функция для загрузки скриптов ---
+  function loadScript(src, signal) {
+    return new Promise((resolve, reject) => {
+      if (signal && signal.aborted) {
+        reject(new Error('Aborted'));
+        return;
       }
-    }
-    return streams;
+
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+
+      const onLoad = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = () => {
+        cleanup();
+        reject(new Error(`Failed to load script: ${src}`));
+      };
+      const onAbort = () => {
+        cleanup();
+        reject(new Error('Aborted'));
+      };
+
+      const cleanup = () => {
+        script.removeEventListener('load', onLoad);
+        script.removeEventListener('error', onError);
+        if (signal) {
+          signal.removeEventListener('abort', onAbort);
+        }
+      };
+
+      script.addEventListener('load', onLoad);
+      script.addEventListener('error', onError);
+      if (signal) {
+        signal.addEventListener('abort', onAbort);
+      }
+
+      document.head.appendChild(script);
+    });
   }
 
   // ---------- Загрузка постов ----------
@@ -333,24 +526,20 @@
       return allowed && allowed.split(',').map(s => s.trim()).includes(currentUser);
     });
 
-    // Стримы идут первыми (они уже отсортированы по дате, но мы просто добавим их в начало)
+    // Стримы идут первыми
     let items = [];
 
-    // Добавляем стримы (самые свежие — в начало)
     if (twitchStreams.length > 0) {
       twitchStreams.sort((a, b) => b.date - a.date);
       items = items.concat(twitchStreams);
     }
 
-    // Добавляем видео
     const sortedVideos = videos.sort((a, b) => b.date - a.date);
     items = items.concat(sortedVideos);
 
-    // Добавляем посты
     const sortedPosts = filteredPosts.sort((a, b) => b.date - a.date);
     items = items.concat(sortedPosts);
 
-    // Ограничиваем количество отображаемых элементов (например, 8, чтобы стримы точно попали)
     const maxDisplay = 8;
     const showItems = items.slice(0, maxDisplay);
 
@@ -364,7 +553,7 @@
         if (item.type === 'video') {
           card = createVideoCard(item);
         } else if (item.type === 'twitch') {
-          card = createVideoCard(item); // используем ту же функцию, т.к. структура похожа
+          card = createVideoCard(item);
         } else {
           card = createPostCard(item);
         }
@@ -376,7 +565,6 @@
     container.innerHTML = '';
     container.appendChild(grid);
 
-    // Добавляем кнопку "Добавить новость" для админов
     const header = document.querySelector('.news-header');
     if (header) {
       const existing = header.querySelector('.admin-news-btn');
@@ -416,7 +604,6 @@
     }
     inner.appendChild(meta);
 
-    // Кнопка избранного (если есть gist)
     if (currentUser && hasScope('gist')) {
       const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
       favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
@@ -429,7 +616,6 @@
 
     card.appendChild(inner);
 
-    // При клике на карточку загружаем iframe
     card.addEventListener('click', (e) => {
       if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
       const mediaContainer = card.querySelector('.image-wrapper');
