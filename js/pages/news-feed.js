@@ -5,6 +5,7 @@
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
   const { showToast, createModal } = window.UIUtils;
 
+  // Каналы YouTube
   const YT_CHANNELS = [
     { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
     { id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' },
@@ -125,14 +126,17 @@
     const signal = currentAbortController.signal;
 
     container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">Загрузка новостей...</p></div>';
+    
+    console.log('[NewsFeed] Начинаем загрузку всех источников');
     Promise.all([ loadPosts(signal), loadVideos(signal), loadTwitchStreams(signal) ]).then(([loadedPosts, loadedVideos, loadedTwitch]) => {
       if (signal.aborted) return;
       posts = loadedPosts; videos = loadedVideos; twitchStreams = loadedTwitch;
       postsLoaded = videosLoaded = twitchLoaded = true;
+      console.log(`[NewsFeed] Загружено: постов ${posts.length}, видео ${videos.length}, стримов ${twitchStreams.length}`);
       renderMixed();
     }).catch(err => {
       if (signal.aborted) return;
-      console.error(err);
+      console.error('[NewsFeed] Ошибка загрузки:', err);
       postsLoaded = videosLoaded = twitchLoaded = true;
       posts = []; videos = []; twitchStreams = [];
       renderMixed();
@@ -166,6 +170,7 @@
         all.push(...items);
       } catch (e) {
         if (e.name === 'AbortError') break;
+        console.warn('[NewsFeed] YouTube RSS ошибка для', ch.name, e);
       }
     }
     const sorted = all.sort((a, b) => b.date - a.date).slice(0, 12);
@@ -173,22 +178,50 @@
     return sorted;
   }
 
-  // ---------- Загрузка стримов Twitch ----------
-  async function loadTwitchStreams(signal) {
+  // ---------- Загрузка стримов Twitch (с повторными попытками) ----------
+  async function loadTwitchStreams(signal, retries = 2) {
+    console.log('[NewsFeed] loadTwitchStreams вызвана');
     const cacheKey = 'twitch_streams_v1';
-    const cached = cacheGet(cacheKey, 2 * 60 * 1000); // кеш на 2 минуты
-    if (cached) return cached.map(s => ({ ...s, date: new Date(s.date) }));
+    const cached = cacheGet(cacheKey, 2 * 60 * 1000);
+    if (cached) {
+      console.log('[NewsFeed] Twitch стримы взяты из кеша:', cached.length);
+      return cached.map(s => ({ ...s, date: new Date(s.date) }));
+    }
 
+    let attempt = 0;
+    while (attempt < retries) {
+      if (signal && signal.aborted) return [];
+      try {
+        const streams = await fetchTwitchStreams(signal);
+        if (streams.length > 0 || attempt === retries - 1) {
+          // Кешируем даже пустой результат, чтобы не долбить API при ошибках
+          cacheSet(cacheKey, streams.map(s => ({ ...s, date: s.date.toISOString() })));
+          console.log('[NewsFeed] Загружено стримов:', streams.length);
+          return streams;
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') return [];
+        console.warn(`[NewsFeed] Попытка ${attempt+1} загрузки стримов не удалась:`, e);
+      }
+      attempt++;
+      // Ждём перед повторной попыткой
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+    console.log('[NewsFeed] Не удалось загрузить стримы после всех попыток');
+    return [];
+  }
+
+  async function fetchTwitchStreams(signal) {
     const streams = [];
     for (const channel of TWITCH_CHANNELS) {
       if (signal && signal.aborted) break;
       try {
-        // Используем decapi.me для получения статуса стрима
+        // Получаем статус стрима
         const statusUrl = `https://decapi.me/twitch/stream/status?user=${channel}`;
         const statusResp = await fetch(statusUrl, { signal });
         if (!statusResp.ok) continue;
         const status = await statusResp.text();
-        if (status.trim() !== 'online') continue; // пропускаем офлайн
+        if (status.trim() !== 'online') continue;
 
         // Получаем название игры
         const gameUrl = `https://decapi.me/twitch/stream/game?user=${channel}`;
@@ -199,7 +232,7 @@
           if (gameText.trim()) game = gameText.trim();
         }
 
-        // Получаем зрителей (опционально)
+        // Получаем зрителей
         let viewers = '';
         const viewersUrl = `https://decapi.me/twitch/stream/viewers?user=${channel}`;
         const viewersResp = await fetch(viewersUrl, { signal });
@@ -224,16 +257,13 @@
           thumbnail: thumbnail,
           embedUrl: embedUrl
         });
+        console.log(`[NewsFeed] Найден активный стрим: ${channel}`);
       } catch (e) {
         if (e.name === 'AbortError') break;
-        console.warn(`Ошибка загрузки стрима ${channel}:`, e);
+        console.warn(`[NewsFeed] Ошибка при проверке канала ${channel}:`, e);
       }
     }
-
-    // Сортируем (сначала те, у кого больше зрителей? но у нас нет, просто по дате)
-    const sorted = streams.sort((a, b) => b.date - a.date);
-    cacheSet(cacheKey, sorted.map(s => ({ ...s, date: s.date.toISOString() })));
-    return sorted;
+    return streams;
   }
 
   // ---------- Загрузка постов ----------
@@ -255,7 +285,7 @@
     return result;
   }
 
-  // ---------- Рендер смешанной ленты ----------
+  // ---------- Рендер смешанной ленты (стримы имеют высший приоритет) ----------
   function renderMixed() {
     if (!postsLoaded || !videosLoaded || !twitchLoaded) return;
 
@@ -267,13 +297,27 @@
       return allowed && allowed.split(',').map(s => s.trim()).includes(currentUser);
     });
 
-    // Объединяем все элементы
-    let items = [...filteredPosts, ...videos, ...twitchStreams];
-    // Сортируем по дате (новые сверху)
-    items.sort((a, b) => b.date - a.date);
+    // Стримы идут первыми (они уже отсортированы по дате, но мы просто добавим их в начало)
+    let items = [];
 
-    // Показываем первые 6 элементов (можно увеличить, если нужно)
-    const showItems = items.slice(0, 6);
+    // Добавляем стримы (самые свежие — в начало)
+    if (twitchStreams.length > 0) {
+      // Сортируем стримы по дате (новые сверху) — хотя они все имеют текущую дату
+      twitchStreams.sort((a, b) => b.date - a.date);
+      items = items.concat(twitchStreams);
+    }
+
+    // Добавляем видео
+    const sortedVideos = videos.sort((a, b) => b.date - a.date);
+    items = items.concat(sortedVideos);
+
+    // Добавляем посты
+    const sortedPosts = filteredPosts.sort((a, b) => b.date - a.date);
+    items = items.concat(sortedPosts);
+
+    // Ограничиваем количество отображаемых элементов (например, 8, чтобы стримы точно попали)
+    const maxDisplay = 8;
+    const showItems = items.slice(0, maxDisplay);
 
     const grid = createElement('div', 'projects-grid');
     if (showItems.length === 0) {
@@ -350,7 +394,7 @@
 
     card.appendChild(inner);
 
-    // При клике на карточку загружаем iframe (для YouTube или Twitch)
+    // При клике на карточку загружаем iframe
     card.addEventListener('click', (e) => {
       if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
       const mediaContainer = card.querySelector('.image-wrapper');
