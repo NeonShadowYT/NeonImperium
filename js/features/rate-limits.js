@@ -578,13 +578,13 @@
 
         modal.querySelector('#clear-stale-cache')?.addEventListener('click', () => {
             clearStaleCache();
-            showToast('Устаревший кеш очищен', 'success');
+            window.UIUtils?.showToast('Устаревший кеш очищен', 'success');
             refreshPanel();
         });
         modal.querySelector('#clear-all-cache')?.addEventListener('click', () => {
             if (confirm('Очистить весь кеш (кроме лимитов и токена)?')) {
                 clearAllCache();
-                showToast('Весь кеш очищен', 'success');
+                window.UIUtils?.showToast('Весь кеш очищен', 'success');
                 refreshPanel();
             }
         });
@@ -594,7 +594,7 @@
                 const key = btn.dataset.key;
                 if (key && confirm(`Удалить ключ "${key}"?`)) {
                     deleteCacheKey(key);
-                    showToast(`Ключ "${key}" удален`, 'success');
+                    window.UIUtils?.showToast(`Ключ "${key}" удален`, 'success');
                     refreshPanel();
                 }
             });
@@ -667,7 +667,7 @@
                 const key = btn.dataset.key;
                 if (key && confirm(`Удалить ключ "${key}"?`)) {
                     deleteCacheKey(key);
-                    showToast(`Ключ "${key}" удален`, 'success');
+                    window.UIUtils?.showToast(`Ключ "${key}" удален`, 'success');
                     refreshPanel();
                 }
             });
