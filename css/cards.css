@@ -346,18 +346,16 @@
     border: 1px solid rgba(255,255,255,0.06);
     box-shadow: 0 8px 32px rgba(0,0,0,0.6);
 }
+
+/* FIX: убираем лишний круг у иконки */
 .game-icon-circle {
-    width: 100px;
-    height: 100px;
-    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 10px;
-    background: rgba(0,0,0,0.3);
-    border: 2px solid var(--accent);
-    box-shadow: var(--neon-glow);
+    width: 100px;
+    height: 100px;
     flex-shrink: 0;
+    /* Убраны border, box-shadow, padding, background */
 }
 .game-icon {
     max-width: 80px;

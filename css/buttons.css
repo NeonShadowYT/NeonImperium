@@ -45,6 +45,14 @@
     font-size: 13px;
 }
 
+/* FIX: явный цвет текста для кнопок в карточке разработчика */
+.developer-actions .button {
+    color: white;
+}
+.developer-actions .button:hover {
+    color: white; /* сохраняем белый текст */
+}
+
 .button.disabled,
 .button[disabled] {
     background: #555;

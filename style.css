@@ -8,6 +8,7 @@
 @import url('css/layout.css');
 @import url('css/responsive.css');
 @import url('css/feedback.css');
+@import url('css/animations.css'); /* NEW */
 
 /* ========== Глобальные дополнительные стили ========== */
 
@@ -164,10 +165,12 @@
     align-items: center;
     gap: 4px;
 }
+
+/* FIX: тёмный фон для выпадающего списка */
 .version-select {
     padding: 4px 8px;
     border-radius: 14px;
-    background: rgba(0,0,0,0.3);
+    background: var(--bg-card); /* вместо rgba(0,0,0,0.3) */
     border: 1px solid var(--glass-border);
     color: var(--text-primary);
     font-family: var(--font-family);
