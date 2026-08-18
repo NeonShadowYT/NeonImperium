@@ -187,16 +187,27 @@
     if (!hasMore && sentinel) sentinel.style.display = 'none';
   }
 
+  // ===== ИСПРАВЛЕННАЯ ФУНКЦИЯ checkAuthAndRender =====
   function checkAuthAndRender() {
-    if (currentUser) renderInterface();
-    else renderLoginPrompt(); // теперь ничего не рендерит
+    if (currentUser) {
+      renderInterface();
+    } else {
+      // Компактный блок вместо большой панели
+      container.innerHTML = `
+        <div style="text-align:center;padding:16px 20px;color:var(--text-secondary);background:var(--glass-bg);border-radius:16px;border:1px solid var(--glass-border);display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">
+          <i class="fab fa-github" style="font-size:20px;color:var(--accent);"></i>
+          <p style="margin:0;font-size:14px;">Войдите через GitHub, чтобы участвовать в обсуждениях</p>
+          <button class="button small" id="feedback-login-btn" style="background:var(--accent);color:#fff;padding:6px 16px;border-radius:40px;border:none;cursor:pointer;font-family:var(--font-family);">Войти</button>
+        </div>
+      `;
+      const loginBtn = container.querySelector('#feedback-login-btn');
+      if (loginBtn) {
+        loginBtn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('github-login-requested')));
+      }
+    }
   }
 
-  // УБРАЛИ БЛОК ВХОДА — теперь просто очищаем контейнер
-  function renderLoginPrompt() {
-    if (!container) return;
-    container.innerHTML = ''; // полностью убираем панель входа
-  }
+  // Удаляем старую функцию renderLoginPrompt — больше не используется
 
   async function renderInterface() {
     if (!container) return;
@@ -325,11 +336,13 @@
     }
   }
 
+  // Инициализация
   document.addEventListener('DOMContentLoaded', () => {
     initLazy();
     window.addEventListener('scroll', initLazy, { passive: true });
   });
 
+  // Экспорт для внешнего использования
   window.FeedbackPage = {
     addReactionWithSync,
     removeReactionWithSync,
