@@ -45,12 +45,11 @@
     font-size: 13px;
 }
 
-/* FIX: явный цвет текста для кнопок в карточке разработчика */
 .developer-actions .button {
     color: white;
 }
 .developer-actions .button:hover {
-    color: white; /* сохраняем белый текст */
+    color: white;
 }
 
 .button.disabled,
@@ -68,7 +67,7 @@
     padding-right: 30px;
 }
 
-/* Кнопки скачивания */
+/* Кнопки скачивания — пульсация убрана */
 .download-button {
     display: inline-flex;
     align-items: center;

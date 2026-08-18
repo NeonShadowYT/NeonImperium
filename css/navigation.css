@@ -99,8 +99,7 @@
     gap: 10px;
     padding: 4px 8px 4px 12px;
     border-radius: var(--radius-pill);
-    background: var(--glass-bg);
-    backdrop-filter: blur(4px);
+    background: var(--bg-card);
     border: 1px solid var(--glass-border);
     cursor: pointer;
     transition: border-color var(--transition), box-shadow var(--transition);
@@ -143,14 +142,13 @@
     transform: rotate(90deg);
 }
 
+/* Выпадающее меню профиля — убрана прозрачность и смещение */
 .profile-dropdown {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    background: var(--glass-bg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--glass-border);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 8px 0;
     min-width: 220px;
@@ -174,7 +172,7 @@
     color: var(--text-secondary);
     font-size: 14px;
     cursor: pointer;
-    transition: background var(--transition), color var(--transition), padding-left var(--transition);
+    transition: background var(--transition), color var(--transition);
     white-space: nowrap;
     display: flex;
     align-items: center;
@@ -183,7 +181,6 @@
 .profile-dropdown-item:hover {
     background: rgba(61, 158, 179, 0.12);
     color: var(--text-primary);
-    padding-left: 20px;
 }
 .profile-dropdown-item i {
     width: 16px;
@@ -191,6 +188,6 @@
 }
 .profile-dropdown-divider {
     height: 1px;
-    background: var(--glass-border);
+    background: var(--border);
     margin: 8px 0;
 }
