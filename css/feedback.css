@@ -118,6 +118,41 @@ blockquote.color-red{border-left-color:#f44336}blockquote.color-green{border-lef
 .reaction-menu-btn{background:transparent;border:none;font-size:20px;cursor:pointer;padding:5px 10px;border-radius:20px;transition:background var(--transition)}.reaction-menu-btn:hover{background:rgba(61,158,179,0.2)}
 
 /* МОДАЛЬНЫЕ ОКНА */
+
+/* Обычная модалка (например, вход через GitHub) */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+.modal.active {
+    display: flex;
+}
+.modal .modal-content {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: var(--radius-lg);
+    max-width: 480px;
+    width: 100%;
+    padding: 30px;
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow);
+    position: relative;
+}
+
+/* Полноэкранная модалка */
 .modal-fullscreen {
     position: fixed;
     top: 0;
