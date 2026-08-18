@@ -12,7 +12,6 @@
   // Проверка критических зависимостей
   if (!window.GithubCore || !window.GithubAPI || !window.GithubAuth || !window.UIUtils) {
     console.error('[feedback.js] Missing dependencies');
-    // Попытаемся загрузить их, но если не получится – ничего не сломаем
     Promise.all([
       loadModule('js/core/github-core.js'),
       loadModule('js/core/github-api.js'),
@@ -123,16 +122,14 @@
         try {
           issues = await loadIssues({ labels: `game:${currentGame}`, state: 'open', per_page: 100, signal: controller.signal });
           cacheSet(key, issues);
-          loadRetries = 0; // сброс счётчика при успехе
+          loadRetries = 0;
         } catch (err) {
           if (controller.signal.aborted) return;
           console.warn('[feedback.js] loadIssues error:', err);
           if (loadRetries < MAX_RETRIES) {
             loadRetries++;
             showToast(`Ошибка загрузки, попытка ${loadRetries} из ${MAX_RETRIES}...`, 'warning');
-            // Повтор через секунду
             await new Promise(r => setTimeout(r, 1000));
-            // Рекурсивный вызов, но с увеличением задержки
             return loadGameIssues(reset);
           } else {
             showToast('Не удалось загрузить отзывы. Проверьте соединение.', 'error');
@@ -192,19 +189,17 @@
 
   function checkAuthAndRender() {
     if (currentUser) renderInterface();
-    else renderLoginPrompt();
+    else renderLoginPrompt(); // теперь ничего не рендерит
   }
 
+  // УБРАЛИ БЛОК ВХОДА — теперь просто очищаем контейнер
   function renderLoginPrompt() {
     if (!container) return;
-    container.innerHTML = `<div class="login-prompt"><i class="fab fa-github"></i><h3 data-lang="feedbackLoginPrompt">Войдите через GitHub</h3><p class="text-secondary" data-lang="feedbackTokenNote">Токен останется в браузере.</p><button class="button" id="feedback-login-btn">Войти</button></div>`;
-    const btn = container.querySelector('#feedback-login-btn');
-    if (btn) btn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('github-login-requested')));
+    container.innerHTML = ''; // полностью убираем панель входа
   }
 
   async function renderInterface() {
     if (!container) return;
-    // Проверяем, загружен ли UIFeedback
     if (!window.UIFeedback) {
       try {
         await loadModule('js/features/ui-feedback.js');
@@ -330,13 +325,11 @@
     }
   }
 
-  // Инициализация
   document.addEventListener('DOMContentLoaded', () => {
     initLazy();
     window.addEventListener('scroll', initLazy, { passive: true });
   });
 
-  // Экспорт для внешнего использования
   window.FeedbackPage = {
     addReactionWithSync,
     removeReactionWithSync,
