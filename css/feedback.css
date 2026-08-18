@@ -101,9 +101,11 @@ blockquote.color-red{border-left-color:#f44336}blockquote.color-green{border-lef
 .comment-form button:disabled{opacity:.5;pointer-events:none}
 .loading-spinner{text-align:center;padding:30px;color:var(--text-secondary)}
 .error-message{background:rgba(244,67,54,.1);border:1px solid #f44336;border-radius:20px;padding:20px;text-align:center;color:#f44336}
-
-/* Убрали .login-prompt полностью */
-
+.login-prompt{background:var(--glass-bg);backdrop-filter:blur(4px);border-radius:24px;padding:30px 20px;text-align:center;border:1px solid var(--glass-border)}
+.login-prompt i{font-size:48px;color:var(--accent);margin-bottom:15px}
+.login-prompt h3{margin:0 0 10px;font-size:18px}
+.login-prompt p{margin-bottom:20px;font-size:14px;color:var(--text-secondary)}
+.login-prompt .button{font-family:var(--font-family)}
 .reactions-container{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;padding:8px 0;min-height:36px}
 .reactions-container:empty{display:none}
 .reaction-button{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(0,0,0,0.2);border:1px solid var(--glass-border);border-radius:30px;font-size:13px;color:var(--text-secondary);cursor:pointer;transition:all var(--transition)}
