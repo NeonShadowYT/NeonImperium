@@ -266,3 +266,31 @@ blockquote.color-red{border-left-color:#f44336}blockquote.color-green{border-lef
 .editor-split-left textarea{flex:1;width:100%;resize:none;border:none;background:transparent;color:var(--text-primary);font-family:monospace;font-size:14px;line-height:1.5;padding:12px;box-sizing:border-box}
 .editor-split-right{padding:16px;word-wrap:break-word;overflow-y:auto}
 @media (max-width:700px){.editor-split{flex-direction:column}.editor-split-left,.editor-split-right{min-height:150px}.private-users-input{flex:none;width:100%}}
+/* Стили для модалки входа (если требуется перенести из JS) */
+.modal-content {
+  max-width: 480px;
+  width: 90%;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow), 0 0 40px rgba(61,158,179,0.05);
+  padding: 32px 28px;
+  position: relative;
+  overflow: hidden;
+}
+.modal-content .shimmer-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent-light), var(--accent), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite linear;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
