@@ -7,27 +7,37 @@
 body {
     font-family: var(--font-family);
     background: var(--bg-primary);
+    background-image: var(--bg-noise), var(--bg-gradient-overlay);
     color: var(--text-secondary);
-    line-height: 1.5;
+    line-height: 1.6;
     padding: 20px;
     font-size: 16px;
     min-height: 100vh;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
+    animation: bgPulse 20s ease-in-out infinite alternate;
+}
+
+@keyframes bgPulse {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 100% 100%; }
 }
 
 .page {
     max-width: 1200px;
     margin: 0 auto;
     width: 100%;
+    position: relative;
+    z-index: 1;
 }
 
 a {
     color: var(--accent);
     text-decoration: none;
+    transition: color var(--transition);
 }
-
 a:hover {
+    color: var(--accent-light);
     text-decoration: none;
 }
 
@@ -38,17 +48,20 @@ img {
 }
 
 .card {
-    background: var(--bg-card-gradient);
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border-radius: var(--radius-md);
     padding: 28px;
     margin-bottom: 24px;
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    transition: box-shadow var(--transition);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    transition: box-shadow var(--transition), border-color var(--transition), transform 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
 }
 
 .card:hover {
-    box-shadow: var(--shadow-hover);
+    border-color: rgba(61, 158, 179, 0.4);
+    box-shadow: var(--shadow-hover), 0 0 30px rgba(61, 158, 179, 0.05);
 }
 
 .hover-lift {

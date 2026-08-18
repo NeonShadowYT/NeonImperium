@@ -8,35 +8,48 @@
 }
 
 .project-card-link:hover {
-    transform: translateY(-5px);
-}
-
-.project-card-link.disabled {
-    pointer-events: none;
-    opacity: 0.7;
-}
-
-.project-card-link.card-interactive {
-    cursor: pointer;
+    transform: translateY(-6px);
 }
 
 .project-card {
-    background: var(--bg-inner-gradient);
+    background: var(--glass-bg);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border-radius: var(--radius-md);
     padding: 16px;
-    border: 1px solid var(--border);
-    transition: border-color 0.2s, transform 0.25s cubic-bezier(0.2,0.9,0.4,1), box-shadow 0.25s;
+    border: 1px solid var(--glass-border);
+    transition: border-color 0.3s, transform 0.3s cubic-bezier(0.2, 0.9, 0.4, 1), box-shadow 0.3s;
     display: flex;
     flex-direction: column;
     height: 100%;
     overflow: hidden;
     contain: layout style;
+    position: relative;
 }
 
 .project-card-link:hover .project-card {
     border-color: var(--accent);
+    box-shadow: var(--shadow-hover), 0 0 30px rgba(61,158,179,0.08);
     transform: translateY(-6px) scale(1.01);
-    box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+}
+
+.project-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-md);
+    padding: 2px;
+    background: linear-gradient(135deg, transparent 40%, var(--accent), transparent 60%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+}
+.project-card-link:hover .project-card::after {
+    opacity: 0.6;
 }
 
 .project-card .image-wrapper {
@@ -84,7 +97,6 @@
 .project-card.square-card {
     padding: 10px;
 }
-
 .project-card.square-card .image-wrapper {
     margin: -10px -10px 8px -10px;
     width: calc(100% + 20px);
@@ -92,7 +104,6 @@
     border-radius: var(--radius-sm);
     overflow: hidden;
 }
-
 .project-card.square-card .image-wrapper img {
     position: absolute;
     top: 0;
@@ -101,7 +112,6 @@
     height: 100%;
     object-fit: cover;
 }
-
 .project-card.square-card h3 {
     margin: 4px 0;
     font-size: 16px;
@@ -109,7 +119,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
-
 .project-card.square-card p {
     display: none;
 }
@@ -121,25 +130,24 @@
     transition: transform var(--transition);
     text-decoration: none;
 }
-
 .profile-card-link:hover {
     transform: translateY(-3px);
 }
-
 .profile-card {
-    background: var(--bg-inner-gradient);
+    background: var(--glass-bg);
+    backdrop-filter: blur(4px);
     border-radius: var(--radius-md);
     padding: 16px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--glass-border);
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    transition: border-color var(--transition);
+    transition: border-color var(--transition), box-shadow var(--transition);
 }
-
 .profile-card-link:hover .profile-card {
     border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(61,158,179,0.05);
 }
 
 .avatar-wrapper {
@@ -153,20 +161,21 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-shadow: 0 0 16px rgba(61,158,179,0.2);
 }
-
 .avatar-wrapper.large {
     width: 100px;
     height: 100px;
 }
-
 .avatar {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform 0.2s;
 }
-
+.profile-card-link:hover .avatar {
+    transform: scale(1.04);
+}
 .profile-name {
     color: var(--text-primary);
 }
@@ -175,15 +184,13 @@
 .trailer-card .video-embed {
     border-radius: var(--radius-sm);
     overflow: hidden;
-    border: 1px solid var(--border);
+    border: 1px solid var(--glass-border);
 }
-
 .developer-card {
     display: flex;
     flex-direction: column;
     min-height: 320px;
 }
-
 .developer-info {
     flex: 1;
     display: flex;
@@ -193,14 +200,12 @@
     text-align: center;
     gap: 8px;
 }
-
 .developer-details {
     display: flex;
     flex-direction: column;
     align-items: center;
     width: 100%;
 }
-
 .developer-actions {
     margin-top: 16px;
     display: flex;
@@ -211,13 +216,13 @@
 
 /* Обновления и требования */
 .update-card {
-    background: var(--bg-inner-gradient);
+    background: var(--glass-bg);
+    backdrop-filter: blur(4px);
     border-radius: var(--radius-md);
     padding: 20px;
     margin-bottom: 20px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--glass-border);
 }
-
 .update-card h3 {
     margin: 0 0 15px;
     color: var(--accent);
@@ -226,71 +231,121 @@
 
 .req-item {
     flex: 1 1 200px;
-    background: var(--bg-inner-gradient);
-    padding: 16px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(6px);
+    padding: 20px;
     border-radius: var(--radius-md);
-    border: 1px solid var(--border);
-    transition: transform var(--transition);
+    border: 1px solid var(--glass-border);
+    transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+.req-item:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+    box-shadow: var(--shadow-hover), 0 0 20px rgba(61,158,179,0.05);
+}
+.req-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-light), var(--accent));
+    background-size: 200% 100%;
+    animation: shimmer 3s infinite linear;
+}
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }
 
 .req-label {
     display: block;
     color: var(--accent);
-    margin-bottom: 8px;
+    margin-bottom: 12px;
     font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.req-label i {
+    font-size: 20px;
+    text-shadow: 0 0 10px rgba(61,158,179,0.4);
 }
 
 .consumption-card {
-    background: var(--bg-inner-gradient);
+    background: var(--glass-bg);
+    backdrop-filter: blur(6px);
     border-radius: var(--radius-md);
-    padding: 20px;
+    padding: 24px;
     margin-top: 24px;
-    border: 1px solid var(--border);
-    transition: transform var(--transition);
+    border: 1px solid var(--glass-border);
+    transition: transform var(--transition), border-color var(--transition);
 }
-
+.consumption-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
 .consumption-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 16px;
 }
-
 .consumption-table td {
     padding: 12px 10px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--glass-border);
     font-size: 14px;
 }
-
 .consumption-table td:first-child {
     color: var(--text-primary);
     width: 40%;
+    font-weight: bold;
+}
+.consumption-table tr:last-child td {
+    border-bottom: none;
 }
 
-/* Шапка игры */
+/* ===== Шапка игры ===== */
 .game-header {
-    background-size: 110%;
+    background-size: cover;
     background-position: center;
     padding: 0;
     transition: background-position 0.1s ease-out;
+    border: 1px solid rgba(61, 158, 179, 0.2);
+    position: relative;
+    overflow: hidden;
 }
-
+.game-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 30% 20%, rgba(61,158,179,0.15), transparent 70%);
+    pointer-events: none;
+    z-index: 1;
+}
 .header-overlay {
     padding: 60px 28px;
     text-align: center;
+    position: relative;
+    z-index: 2;
+    background: rgba(0,0,0,0.3);
+    backdrop-filter: blur(2px);
 }
-
 .header-content {
     display: inline-flex;
     align-items: center;
     gap: 30px;
     flex-wrap: wrap;
     justify-content: center;
-    background-color: rgba(0,0,0,0.4);
+    background: rgba(0,0,0,0.3);
+    backdrop-filter: blur(6px);
     padding: 20px 40px;
     border-radius: 100px;
-    backdrop-filter: blur(2px);
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
 }
-
 .game-icon-circle {
     width: 100px;
     height: 100px;
@@ -299,68 +354,75 @@
     align-items: center;
     justify-content: center;
     padding: 10px;
+    background: rgba(0,0,0,0.3);
+    border: 2px solid var(--accent);
+    box-shadow: var(--neon-glow);
+    flex-shrink: 0;
 }
-
 .game-icon {
     max-width: 80px;
     max-height: 80px;
     object-fit: contain;
     transition: transform var(--transition);
+    filter: drop-shadow(0 0 8px rgba(61,158,179,0.4));
 }
-
-.header-content .game-title {
+.game-icon:hover {
+    transform: scale(1.08) rotate(-4deg);
+}
+.header-text .game-title {
     margin-bottom: 0;
     color: #fff;
+    text-shadow: 0 0 20px rgba(61,158,179,0.5);
+    letter-spacing: 2px;
+    font-size: 48px;
 }
-
-.header-text {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
+.version-badge {
+    background: var(--accent);
+    color: white;
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: var(--radius-pill);
+    font-size: 14px;
+    box-shadow: var(--neon-glow);
+    letter-spacing: 0.5px;
 }
-
 .version-row {
     display: flex;
     align-items: center;
     gap: 15px;
 }
-
 .social-icons {
     display: flex;
     gap: 15px;
 }
-
 .social-icons.small .social-icon {
     font-size: 20px;
 }
-
 .social-icon {
     color: white;
     font-size: 24px;
-    transition: opacity var(--transition);
+    transition: opacity var(--transition), transform 0.2s;
 }
-
 .social-icon:hover {
     opacity: 0.8;
+    transform: scale(1.1);
 }
 
 /* Элемент особенностей (исправлено: изображение на всю ширину без рамки) */
 .feature-item {
-    background: var(--bg-inner-gradient);
+    background: var(--glass-bg);
+    backdrop-filter: blur(4px);
     border-radius: var(--radius-md);
     padding: 20px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--glass-border);
     overflow: hidden;
     transition: transform 0.3s cubic-bezier(0.2,0.9,0.4,1), box-shadow 0.3s, border-color 0.2s;
 }
-
 .feature-item:hover {
     transform: translateY(-5px);
     box-shadow: var(--shadow-hover);
     border-color: var(--accent);
 }
-
 .feature-item .feature-banner {
     width: calc(100% + 40px);
     margin: -20px -20px 12px -20px;
@@ -371,11 +433,9 @@
     opacity: 0;
     transition: opacity 1.2s ease-in-out;
 }
-
 .feature-item .feature-banner.loaded {
     opacity: 1;
 }
-
 .feature-item .feature-banner video,
 .feature-item .feature-banner img {
     width: 100%;
@@ -383,36 +443,31 @@
     object-fit: cover;
     display: block;
 }
-
 .feature-icon {
     font-size: 32px;
     display: block;
     margin-bottom: 10px;
 }
-
 .features-extra {
     margin-top: 30px;
     padding: 20px;
-    background: var(--bg-inner-gradient);
+    background: var(--glass-bg);
+    backdrop-filter: blur(4px);
     border-radius: var(--radius-md);
-    border: 1px solid var(--border);
+    border: 1px solid var(--glass-border);
 }
-
 .features-extra h3 {
     margin: 0 0 15px;
     color: var(--accent);
 }
-
 .features-list {
     list-style: none;
     padding-left: 0;
 }
-
 .features-list li {
     padding: 4px 0 4px 20px;
     position: relative;
 }
-
 .features-list li::before {
     content: "•";
     color: var(--accent);
@@ -441,18 +496,15 @@
     z-index: 5;
     transition: background 0.2s, color 0.2s, transform 0.2s;
 }
-
 .news-bookmark-btn:hover {
     background: var(--accent);
     color: #fff;
     transform: scale(1.1);
 }
-
 .news-bookmark-btn.bookmarked {
     color: var(--accent);
     background: rgba(0,0,0,0.6);
 }
-
 .news-bookmark-btn.bookmarked i {
     font-weight: 900;
 }
@@ -461,7 +513,6 @@
 .tilt-card {
     transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.2s ease;
 }
-
 @media (hover: hover) and (pointer: fine) {
     .tilt-card:hover {
         transform: translateY(-5px) scale(1.02);
@@ -472,7 +523,6 @@
         box-shadow: none;
     }
 }
-
 @media (hover: none) and (pointer: coarse) {
     .tilt-card {
         transform: none !important;

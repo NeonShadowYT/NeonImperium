@@ -26,11 +26,27 @@
     .storage-controls { flex-direction: column; gap: 10px; }
     .storage-add-form { grid-template-columns: 1fr; }
     .feedback-tabs { overflow-x: auto; scrollbar-width: none; }
-    /* Скрываем скроллбар только для WebKit без ошибок в других браузерах */
     @media screen and (-webkit-min-device-pixel-ratio:0) {
-        .feedback-tabs::-webkit-scrollbar {
-            display: none;
-        }
+        .feedback-tabs::-webkit-scrollbar { display: none; }
+    }
+    .card {
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+    }
+    .nav-bar {
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+    }
+    .game-header .header-content {
+        backdrop-filter: blur(4px);
+        padding: 16px 24px;
+        gap: 16px;
+    }
+    .project-card {
+        backdrop-filter: blur(4px);
+    }
+    .modal-content-full {
+        backdrop-filter: blur(8px);
     }
 }
 
@@ -89,6 +105,10 @@
     .modal-header-spacer { display: none; }
     .modal-header-actions { margin-left: 0; margin-right: auto; }
     .modal-close { margin-left: auto; }
+    .game-header::before { opacity: 0.3; }
+    .game-icon-circle { width: 72px; height: 72px; }
+    .game-icon { max-width: 56px; max-height: 56px; }
+    .game-title { font-size: 28px; }
 }
 
 @media (max-width: 400px) {

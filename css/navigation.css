@@ -1,15 +1,17 @@
 .nav-bar {
-    background: var(--bg-card);
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-radius: var(--radius-pill);
     padding: 6px 20px;
     margin-bottom: 24px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--glass-border);
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 10px;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow), 0 0 30px rgba(61, 158, 179, 0.02);
     position: sticky;
     top: 0;
     z-index: 100;
@@ -26,19 +28,33 @@
     padding: 10px 20px;
     border-radius: var(--radius-pill);
     font-size: 16px;
-    transition: background var(--transition), color var(--transition);
+    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
     white-space: nowrap;
     text-decoration: none;
+    position: relative;
 }
 
 .nav-link:hover {
-    background: #4a4a55;
+    background: rgba(61, 158, 179, 0.12);
     color: var(--text-primary);
 }
 
 .nav-link.active {
     background: var(--accent);
     color: white;
+    box-shadow: var(--neon-glow);
+}
+
+.nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 20%;
+    width: 60%;
+    height: 2px;
+    background: white;
+    border-radius: 2px;
+    filter: blur(1px);
 }
 
 .lang-switcher {
@@ -58,6 +74,8 @@
     transition: all var(--transition);
     white-space: nowrap;
     font-family: var(--font-family);
+    position: relative;
+    overflow: hidden;
 }
 
 .lang-btn:hover {
@@ -65,31 +83,33 @@
     color: white;
     border-color: var(--accent);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(58,168,201,0.4);
+    box-shadow: 0 5px 15px rgba(61, 158, 179, 0.3);
 }
 
 .lang-btn.active {
     background: var(--accent);
     color: white;
     border-color: var(--accent);
+    box-shadow: var(--neon-glow);
 }
 
-/* Профиль */
 .nav-profile {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 4px 8px 4px 12px;
     border-radius: var(--radius-pill);
-    background: var(--bg-inner-gradient);
-    border: 1px solid var(--border);
+    background: var(--glass-bg);
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--glass-border);
     cursor: pointer;
-    transition: border-color var(--transition);
+    transition: border-color var(--transition), box-shadow var(--transition);
     position: relative;
 }
 
 .nav-profile:hover {
     border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(61, 158, 179, 0.15);
 }
 
 .nav-profile-avatar {
@@ -98,6 +118,7 @@
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid var(--accent);
+    box-shadow: 0 0 10px rgba(61, 158, 179, 0.3);
 }
 
 .nav-profile-login {
@@ -116,30 +137,36 @@
 .nav-profile-chevron {
     color: var(--text-secondary);
     font-size: 12px;
-    transition: transform 0.2s;
+    transition: transform 0.3s ease;
 }
-
 .nav-profile:hover .nav-profile-chevron {
     transform: rotate(90deg);
 }
 
-/* Выпадающее меню профиля */
 .profile-dropdown {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
     padding: 8px 0;
     min-width: 220px;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow), 0 0 30px rgba(0,0,0,0.4);
     display: none;
     z-index: 1000;
+    overflow: hidden;
 }
-
 .nav-profile.active .profile-dropdown {
     display: block;
+    animation: slideDown 0.25s cubic-bezier(0.2, 0.9, 0.4, 1);
+}
+
+@keyframes slideDown {
+    0% { opacity: 0; transform: translateY(-10px) scale(0.96); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .profile-dropdown-item {
@@ -147,84 +174,23 @@
     color: var(--text-secondary);
     font-size: 14px;
     cursor: pointer;
-    transition: background var(--transition);
+    transition: background var(--transition), color var(--transition), padding-left var(--transition);
     white-space: nowrap;
     display: flex;
     align-items: center;
     gap: 8px;
 }
-
 .profile-dropdown-item:hover {
-    background: var(--bg-inner-gradient);
+    background: rgba(61, 158, 179, 0.12);
     color: var(--text-primary);
+    padding-left: 20px;
 }
-
 .profile-dropdown-item i {
     width: 16px;
     color: var(--accent);
 }
-
 .profile-dropdown-divider {
     height: 1px;
-    background: var(--border);
+    background: var(--glass-border);
     margin: 8px 0;
-}
-
-/* Модальное окно входа (создаётся динамически) */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.8);
-    z-index: 2000;
-    align-items: center;
-    justify-content: center;
-}
-
-.modal.active {
-    display: flex;
-}
-
-.modal-content {
-    background: var(--bg-card-gradient);
-    border-radius: var(--radius-lg);
-    padding: 28px;
-    max-width: 400px;
-    width: 90%;
-    border: 1px solid var(--accent);
-}
-
-.modal-content h3 {
-    margin-top: 0;
-    color: var(--accent);
-}
-
-.modal-content p {
-    margin-bottom: 20px;
-    font-size: 14px;
-}
-
-.modal-content input {
-    width: 100%;
-    padding: 12px;
-    background: var(--bg-primary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    margin-bottom: 16px;
-    font-family: monospace;
-}
-
-.modal-content input:focus {
-    outline: none;
-    border-color: var(--accent);
-}
-
-.modal-buttons {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
 }

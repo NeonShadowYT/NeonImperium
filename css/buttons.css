@@ -5,18 +5,39 @@
     padding: 10px 20px;
     border-radius: var(--radius-pill);
     font-size: 14px;
-    transition: background var(--transition), transform 0.1s, box-shadow var(--transition);
+    transition: background var(--transition), transform 0.15s, box-shadow var(--transition);
     border: none;
     cursor: pointer;
     text-align: center;
     font-family: var(--font-family);
     text-decoration: none;
+    position: relative;
+    overflow: hidden;
+    letter-spacing: 0.3px;
+}
+
+.button::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,0.25) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+}
+.button:active::after {
+    opacity: 1;
+    transition: opacity 0s;
 }
 
 .button:hover {
     background: var(--accent-light);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
+    box-shadow: 0 8px 20px rgba(61, 158, 179, 0.35);
+}
+
+.button:active {
+    transform: translateY(0px) scale(0.98);
 }
 
 .button.small {
@@ -28,8 +49,10 @@
 .button[disabled] {
     background: #555;
     pointer-events: none;
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
+    filter: grayscale(0.4);
+    box-shadow: none !important;
 }
 
 .button.wide {
@@ -43,7 +66,8 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    background: var(--bg-primary);
+    background: var(--glass-bg);
+    backdrop-filter: blur(4px);
     color: var(--text-primary);
     padding: 14px 20px;
     border-radius: var(--radius-pill);
@@ -54,28 +78,32 @@
     flex: 0 1 auto;
     font-family: var(--font-family);
     text-decoration: none;
+    position: relative;
+    overflow: hidden;
 }
 
 .download-button:hover {
     background: var(--accent);
     color: white;
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(64,116,140,0.4);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(61, 158, 179, 0.4);
+    border-color: var(--accent-light);
 }
 
-/* Иконки для платформ */
+.download-button:active {
+    transform: scale(0.96);
+}
+
 .download-button.gamejolt::before {
     content: "\f0e7";
     font-family: "Font Awesome 6 Free";
     font-weight: 900;
 }
-
 .download-button.itch::before {
     content: "\f83a";
     font-family: "Font Awesome 6 Brands";
 }
 
-/* Общий фокус */
 :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
