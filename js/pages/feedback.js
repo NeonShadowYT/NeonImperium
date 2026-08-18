@@ -187,17 +187,17 @@
     if (!hasMore && sentinel) sentinel.style.display = 'none';
   }
 
-  // ===== ИСПРАВЛЕННАЯ ФУНКЦИЯ checkAuthAndRender =====
+  // ===== НЕТ БОЛЬШОЙ ПАНЕЛИ ВХОДА =====
   function checkAuthAndRender() {
     if (currentUser) {
       renderInterface();
     } else {
-      // Компактный блок вместо большой панели
+      // Компактный блок-заглушка с кнопкой входа (без лишних отступов и иконок)
       container.innerHTML = `
-        <div style="text-align:center;padding:16px 20px;color:var(--text-secondary);background:var(--glass-bg);border-radius:16px;border:1px solid var(--glass-border);display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">
-          <i class="fab fa-github" style="font-size:20px;color:var(--accent);"></i>
-          <p style="margin:0;font-size:14px;">Войдите через GitHub, чтобы участвовать в обсуждениях</p>
-          <button class="button small" id="feedback-login-btn" style="background:var(--accent);color:#fff;padding:6px 16px;border-radius:40px;border:none;cursor:pointer;font-family:var(--font-family);">Войти</button>
+        <div style="text-align:center;padding:12px 16px;color:var(--text-secondary);background:var(--glass-bg);border-radius:16px;border:1px solid var(--glass-border);display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;">
+          <i class="fab fa-github" style="font-size:18px;color:var(--accent);"></i>
+          <span style="font-size:14px;">Войдите через GitHub, чтобы участвовать в обсуждениях</span>
+          <button class="button small" id="feedback-login-btn" style="background:var(--accent);color:#fff;padding:4px 14px;border-radius:40px;border:none;cursor:pointer;font-family:var(--font-family);font-size:13px;">Войти</button>
         </div>
       `;
       const loginBtn = container.querySelector('#feedback-login-btn');
@@ -207,7 +207,7 @@
     }
   }
 
-  // Удаляем старую функцию renderLoginPrompt — больше не используется
+  // УДАЛЯЕМ СТАРУЮ ФУНКЦИЮ renderLoginPrompt – она больше не нужна
 
   async function renderInterface() {
     if (!container) return;
