@@ -200,7 +200,6 @@
     let streams = [];
     let attempt = 0;
 
-    // Определяем методы в порядке приоритета: сначала twitch-live-checker (он работает), потом GraphQL, потом twitchinsights
     const methods = [
       { name: 'twitch-live-checker', fn: fetchTwitchStreamsLiveChecker },
       { name: 'GraphQL', fn: fetchTwitchStreamsGraphQL },
@@ -261,7 +260,6 @@
         try {
           TwitchLiveChecker.getUser(channel, function(status) {
             if (status === 'online') {
-              // Просто добавляем стрим без дополнительных запросов
               const thumbnail = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
               const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
               
@@ -473,6 +471,162 @@
     return result;
   }
 
+  // ========== ОБНОВЛЁННАЯ ФУНКЦИЯ createVideoCard ==========
+  function createVideoCard(video) {
+    const card = createElement('div', 'project-card-link card-interactive');
+    const inner = createElement('div', 'project-card');
+    const imgW = createElement('div', 'image-wrapper');
+    const img = createElement('img', 'project-image', {}, { src: video.thumbnail, alt: video.title, loading: 'lazy' });
+    imgW.appendChild(img);
+    inner.appendChild(imgW);
+
+    const titleEl = createElement('h3', '', { cursor: 'default' });
+    titleEl.textContent = video.title.length > 70 ? video.title.slice(0,70)+'…' : video.title;
+    inner.appendChild(titleEl);
+
+    const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
+    const authorName = video.author || (video.type === 'twitch' ? video.id : '');
+    const dateStr = video.date instanceof Date ? video.date.toLocaleDateString() : new Date(video.date).toLocaleDateString();
+    meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(authorName)} · <i class="fas fa-calendar-alt"></i> ${dateStr}`;
+    if (video.type === 'twitch' && video.game) {
+      meta.innerHTML += ` · 🎮 ${escapeHtml(video.game)}`;
+    }
+    inner.appendChild(meta);
+
+    if (currentUser && hasScope('gist')) {
+      const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+      favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
+      favBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleBookmark(video);
+      });
+      inner.appendChild(favBtn);
+    }
+
+    card.appendChild(inner);
+
+    // Обработчик клика для встраивания видео
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
+      const mediaContainer = card.querySelector('.image-wrapper');
+      if (!mediaContainer || mediaContainer.querySelector('iframe')) return;
+
+      let iframeSrc;
+      if (video.type === 'twitch') {
+        iframeSrc = video.embedUrl || `https://player.twitch.tv/?channel=${video.id}&parent=${location.hostname}&autoplay=false`;
+      } else {
+        // Используем youtube-nocookie с параметрами
+        iframeSrc = `https://www.youtube-nocookie.com/embed/${video.id}?rel=0&modestbranding=1&playsinline=1`;
+      }
+
+      const iframe = createElement('iframe', '', {
+        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+        border: 'none', borderRadius: '12px'
+      });
+      iframe.src = iframeSrc;
+      iframe.setAttribute('allowfullscreen', 'true');
+      iframe.loading = 'lazy';
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
+      
+      // Очищаем контейнер и вставляем iframe
+      mediaContainer.innerHTML = '';
+      mediaContainer.style.background = '#000';
+      mediaContainer.appendChild(iframe);
+
+      // Fallback при ошибке
+      let errorShown = false;
+      iframe.onerror = function() {
+        if (!errorShown) {
+          errorShown = true;
+          mediaContainer.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:#000;color:#fff;padding:20px;text-align:center;gap:8px;">
+              <i class="fab fa-youtube" style="font-size:28px;color:#ff0000;"></i>
+              <p style="font-size:13px;">Не удалось загрузить видео</p>
+              <button class="button small" onclick="window.open('${video.type === 'twitch' ? 'https://twitch.tv/' + video.id : 'https://youtu.be/' + video.id}', '_blank')" style="background:#ff0000;color:#fff;">
+                <i class="fas fa-external-link-alt"></i> Открыть
+              </button>
+            </div>
+          `;
+        }
+      };
+      // Таймаут на случай, если iframe завис
+      const timeout = setTimeout(() => {
+        if (!iframe.contentWindow && !errorShown) {
+          errorShown = true;
+          mediaContainer.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:#000;color:#fff;padding:20px;text-align:center;gap:8px;">
+              <i class="fab fa-youtube" style="font-size:28px;color:#ff0000;"></i>
+              <p style="font-size:13px;">Видео не загружается</p>
+              <button class="button small" onclick="window.open('${video.type === 'twitch' ? 'https://twitch.tv/' + video.id : 'https://youtu.be/' + video.id}', '_blank')" style="background:#ff0000;color:#fff;">
+                <i class="fas fa-external-link-alt"></i> Открыть
+              </button>
+            </div>
+          `;
+        }
+      }, 10000);
+
+      // Очистка таймаута при загрузке iframe
+      iframe.onload = function() {
+        clearTimeout(timeout);
+      };
+      // При удалении элемента очищаем таймаут
+      card.addEventListener('remove', function() {
+        clearTimeout(timeout);
+      });
+    });
+
+    return card;
+  }
+
+  // ---------- Создание карточки поста ----------
+  function createPostCard(post) {
+    let previewBody = post.body;
+    const allowed = extractAllowed(post.body);
+    if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
+      try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
+    }
+    const card = createElement('div', 'project-card-link card-interactive');
+    const inner = createElement('div', 'project-card');
+
+    const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
+    const imgW = createElement('div', 'image-wrapper');
+    const img = createElement('img', 'project-image', {}, { src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy' });
+    img.onerror = () => img.src = DEFAULT_IMAGE;
+    imgW.appendChild(img);
+    inner.appendChild(imgW);
+
+    const titleEl = createElement('h3', '', { cursor: 'pointer' });
+    titleEl.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
+    inner.appendChild(titleEl);
+
+    const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
+    meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
+    const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
+    const preview = createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+    preview.textContent = summary;
+    inner.append(meta, preview);
+
+    if (currentUser && hasScope('gist')) {
+      const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+      favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
+      favBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleBookmark({ type: 'post', ...post, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE });
+      });
+      inner.appendChild(favBtn);
+    }
+
+    card.appendChild(inner);
+    card.addEventListener('click', async (e) => {
+      if (!e.target.closest('button') && !e.target.closest('.news-bookmark-btn')) {
+        if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
+        window.UIFeedback.openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels });
+      }
+    });
+    return card;
+  }
+
   // ---------- Рендер смешанной ленты (стримы имеют высший приоритет) ----------
   function renderMixed() {
     if (!postsLoaded || !videosLoaded || !twitchLoaded) return;
@@ -537,117 +691,6 @@
         }
       } else if (existing) existing.remove();
     }
-  }
-
-  // ---------- Создание карточки для видео (YouTube или Twitch) ----------
-  function createVideoCard(video) {
-    const card = createElement('div', 'project-card-link card-interactive');
-    const inner = createElement('div', 'project-card');
-    const imgW = createElement('div', 'image-wrapper');
-    const img = createElement('img', 'project-image', {}, { src: video.thumbnail, alt: video.title, loading: 'lazy' });
-    imgW.appendChild(img);
-    inner.appendChild(imgW);
-
-    const titleEl = createElement('h3', '', { cursor: 'default' });
-    titleEl.textContent = video.title.length > 70 ? video.title.slice(0,70)+'…' : video.title;
-    inner.appendChild(titleEl);
-
-    const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
-    const authorName = video.author || (video.type === 'twitch' ? video.id : '');
-    const dateStr = video.date instanceof Date ? video.date.toLocaleDateString() : new Date(video.date).toLocaleDateString();
-    meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(authorName)} · <i class="fas fa-calendar-alt"></i> ${dateStr}`;
-    if (video.type === 'twitch' && video.game) {
-      meta.innerHTML += ` · 🎮 ${escapeHtml(video.game)}`;
-    }
-    inner.appendChild(meta);
-
-    if (currentUser && hasScope('gist')) {
-      const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
-      favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
-      favBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        handleBookmark(video);
-      });
-      inner.appendChild(favBtn);
-    }
-
-    card.appendChild(inner);
-
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
-      const mediaContainer = card.querySelector('.image-wrapper');
-      if (!mediaContainer || mediaContainer.querySelector('iframe')) return;
-
-      let iframeSrc;
-      if (video.type === 'twitch') {
-        iframeSrc = video.embedUrl || `https://player.twitch.tv/?channel=${video.id}&parent=${location.hostname}&autoplay=false`;
-      } else {
-        iframeSrc = `https://www.youtube.com/embed/${video.id}`;
-      }
-
-      const iframe = createElement('iframe', '', {
-        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-        border: 'none', borderRadius: '12px'
-      });
-      iframe.src = iframeSrc;
-      iframe.setAttribute('allowfullscreen', 'true');
-      iframe.loading = 'lazy';
-      iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
-      iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
-      mediaContainer.innerHTML = '';
-      mediaContainer.style.background = '#000';
-      mediaContainer.appendChild(iframe);
-    });
-
-    return card;
-  }
-
-  // ---------- Создание карточки поста ----------
-  function createPostCard(post) {
-    let previewBody = post.body;
-    const allowed = extractAllowed(post.body);
-    if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-      try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
-    }
-    const card = createElement('div', 'project-card-link card-interactive');
-    const inner = createElement('div', 'project-card');
-
-    const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
-    const imgW = createElement('div', 'image-wrapper');
-    const img = createElement('img', 'project-image', {}, { src: imgMatch?.[1] || DEFAULT_IMAGE, alt: post.title, loading: 'lazy' });
-    img.onerror = () => img.src = DEFAULT_IMAGE;
-    imgW.appendChild(img);
-    inner.appendChild(imgW);
-
-    const titleEl = createElement('h3', '', { cursor: 'pointer' });
-    titleEl.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
-    inner.appendChild(titleEl);
-
-    const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
-    meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
-    const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
-    const preview = createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
-    preview.textContent = summary;
-    inner.append(meta, preview);
-
-    if (currentUser && hasScope('gist')) {
-      const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
-      favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
-      favBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        handleBookmark({ type: 'post', ...post, thumbnail: imgMatch?.[1] || DEFAULT_IMAGE });
-      });
-      inner.appendChild(favBtn);
-    }
-
-    card.appendChild(inner);
-    card.addEventListener('click', async (e) => {
-      if (!e.target.closest('button') && !e.target.closest('.news-bookmark-btn')) {
-        if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
-        window.UIFeedback.openFullModal({ type: 'post', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels });
-      }
-    });
-    return card;
   }
 
 })();

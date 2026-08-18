@@ -91,7 +91,22 @@
     document.head.appendChild(link);
   }
 
+  // ========== ОБНОВЛЁННАЯ ФУНКЦИЯ ДЛЯ LAZY YOUTUBE ==========
   function initLazyYT() {
+    // Функция отображения fallback
+    function showYouTubeFallback(container, videoUrl) {
+      container.innerHTML = `
+        <div class="yt-fallback" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:var(--bg-primary);border-radius:12px;padding:20px;text-align:center;gap:12px;animation:fadeInUp 0.4s ease;">
+          <i class="fab fa-youtube" style="font-size:32px;color:var(--accent);"></i>
+          <p style="color:var(--text-secondary);font-size:14px;margin:0;">Видео не может быть встроено</p>
+          <button class="button small" onclick="window.open('${videoUrl || '#'}', '_blank')" style="background:var(--accent);color:#fff;">
+            <i class="fas fa-external-link-alt"></i> Открыть на YouTube
+          </button>
+        </div>
+      `;
+      container.classList.add('loaded');
+    }
+
     if ('IntersectionObserver' in window) {
       const obs = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
@@ -99,28 +114,118 @@
           const el = entry.target;
           const src = el.dataset.src;
           if (!src) return;
+
+          // Парсим ID видео
+          let videoId = '';
+          const patterns = [
+            /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+            /youtube\.com\/embed\/([^&\n?#]+)/
+          ];
+          for (const p of patterns) {
+            const match = src.match(p);
+            if (match) { videoId = match[1]; break; }
+          }
+          if (!videoId) {
+            showYouTubeFallback(el, src);
+            return;
+          }
+
+          // Используем youtube-nocookie с параметрами
+          const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`;
           const iframe = document.createElement('iframe');
-          iframe.src = src;
+          iframe.src = embedUrl;
           iframe.setAttribute('frameborder', '0');
           iframe.setAttribute('allowfullscreen', '');
           iframe.loading = 'lazy';
           iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
+          iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+          iframe.style.width = '100%';
+          iframe.style.height = '100%';
+          iframe.style.border = 'none';
+          iframe.style.borderRadius = '12px';
+
+          // Обработка ошибок
+          let errorOccurred = false;
+          iframe.onerror = function() {
+            if (!errorOccurred) {
+              errorOccurred = true;
+              showYouTubeFallback(el, src);
+            }
+          };
+          // Таймаут на случай, если iframe завис
+          const timeout = setTimeout(() => {
+            if (!iframe.contentWindow && !errorOccurred) {
+              errorOccurred = true;
+              showYouTubeFallback(el, src);
+            }
+          }, 10000);
+
+          // Успешная загрузка
+          iframe.onload = function() {
+            clearTimeout(timeout);
+            el.classList.add('loaded');
+            obs.unobserve(el);
+          };
+
+          // Очистка при удалении элемента
+          el.addEventListener('remove', function() {
+            clearTimeout(timeout);
+          });
+
+          el.innerHTML = '';
+          el.style.position = 'relative';
+          el.style.paddingBottom = '56.25%';
+          el.style.background = '#000';
+          el.style.borderRadius = '12px';
+          el.style.overflow = 'hidden';
+          iframe.style.position = 'absolute';
+          iframe.style.top = '0';
+          iframe.style.left = '0';
+          iframe.style.width = '100%';
+          iframe.style.height = '100%';
           el.appendChild(iframe);
           el.classList.add('loaded');
-          obs.unobserve(el);
         });
       }, { rootMargin: '200px' });
-      document.querySelectorAll('.lazy-yt').forEach((el) => obs.observe(el));
-    } else {
+
       document.querySelectorAll('.lazy-yt').forEach((el) => {
+        // Если контейнер уже содержит iframe, пропускаем
+        if (el.querySelector('iframe')) return;
+        obs.observe(el);
+      });
+    } else {
+      // Fallback для браузеров без IntersectionObserver
+      document.querySelectorAll('.lazy-yt').forEach((el) => {
+        if (el.querySelector('iframe')) return;
         const src = el.dataset.src;
         if (!src) return;
+        const videoId = src.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
+        if (!videoId) {
+          el.innerHTML = `<div class="yt-fallback">⚠️ Неверная ссылка</div>`;
+          return;
+        }
+        const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`;
         const iframe = document.createElement('iframe');
-        iframe.src = src;
+        iframe.src = embedUrl;
         iframe.setAttribute('frameborder', '0');
         iframe.setAttribute('allowfullscreen', '');
-        iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.style.borderRadius = '12px';
+        el.innerHTML = '';
+        el.style.position = 'relative';
+        el.style.paddingBottom = '56.25%';
+        el.style.background = '#000';
+        el.style.borderRadius = '12px';
+        el.style.overflow = 'hidden';
+        iframe.style.position = 'absolute';
+        iframe.style.top = '0';
+        iframe.style.left = '0';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
         el.appendChild(iframe);
+        el.classList.add('loaded');
       });
     }
   }
@@ -130,7 +235,7 @@
     const script = document.createElement('script');
     script.src = 'js/dust-particles.js';
     script.defer = true;
-    script.onload = () => {}; // убираем лишний лог
+    script.onload = () => {};
     script.onerror = () => console.warn('Failed to load dust particles');
     document.head.appendChild(script);
   }
