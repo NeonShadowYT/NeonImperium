@@ -445,7 +445,7 @@
         <h3>Комментарии</h3>
         <div id="modal-comments-list" class="comments-list"></div>
         ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px; align-items:center; flex-wrap:wrap;">
-          <input type="text" id="new-comment-input" placeholder="Ваш комментарий..." style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:150px;">
+          <input type="text" id="new-comment-input" placeholder="Ваш комментарий..." class="comment-input-field" style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:150px;">
           <button id="submit-comment-btn" class="button small">Отправить</button>
           <span style="font-size:12px; color:var(--text-secondary); margin-left:4px;" id="comment-counter">0/400</span>
           <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">

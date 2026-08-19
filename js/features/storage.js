@@ -1268,7 +1268,8 @@
         </div>
         <div id="add-form" class="storage-add-form" style="display:none;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <input type="url" id="new-url" placeholder="Ссылка..." autocomplete="off" style="flex:1;min-width:200px;">
+            <!-- добавлен класс storage-url-input -->
+            <input type="url" id="new-url" placeholder="Ссылка..." autocomplete="off" class="storage-url-input" style="flex:1;min-width:200px;">
             <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> Добавить</button>
           </div>
           <div style="margin-top:12px;border:2px dashed var(--border);border-radius:16px;padding:20px;text-align:center;color:var(--text-secondary);transition:background 0.2s;" id="drop-zone">

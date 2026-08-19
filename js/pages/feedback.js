@@ -12,7 +12,6 @@
   // Проверка критических зависимостей
   if (!window.GithubCore || !window.GithubAPI || !window.GithubAuth || !window.UIUtils) {
     console.error('[feedback.js] Missing dependencies');
-    // Попытаемся загрузить их, но если не получится – ничего не сломаем
     Promise.all([
       loadModule('js/core/github-core.js'),
       loadModule('js/core/github-api.js'),
@@ -123,16 +122,14 @@
         try {
           issues = await loadIssues({ labels: `game:${currentGame}`, state: 'open', per_page: 100, signal: controller.signal });
           cacheSet(key, issues);
-          loadRetries = 0; // сброс счётчика при успехе
+          loadRetries = 0;
         } catch (err) {
           if (controller.signal.aborted) return;
           console.warn('[feedback.js] loadIssues error:', err);
           if (loadRetries < MAX_RETRIES) {
             loadRetries++;
             showToast(`Ошибка загрузки, попытка ${loadRetries} из ${MAX_RETRIES}...`, 'warning');
-            // Повтор через секунду
             await new Promise(r => setTimeout(r, 1000));
-            // Рекурсивный вызов, но с увеличением задержки
             return loadGameIssues(reset);
           } else {
             showToast('Не удалось загрузить отзывы. Проверьте соединение.', 'error');
@@ -204,7 +201,6 @@
 
   async function renderInterface() {
     if (!container) return;
-    // Проверяем, загружен ли UIFeedback
     if (!window.UIFeedback) {
       try {
         await loadModule('js/features/ui-feedback.js');
@@ -215,7 +211,13 @@
       }
     }
     container.innerHTML = `
-      <div class="feedback-header"><div><i class="fab fa-github" style="font-size:28px;color:var(--accent);"></i><h2 data-lang="feedbackTitle">Идеи, баги и отзывы</h2></div><button class="button" id="toggle-form-btn">+ Оставить сообщение</button></div>
+      <div class="feedback-header">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <i class="fab fa-github" style="font-size:28px;color:var(--accent);"></i>
+          <h2 style="margin:0;"><i class="fas fa-comment-dots" style="font-size:24px;color:var(--accent);"></i> <span data-lang="feedbackTitle">Идеи, баги и отзывы</span></h2>
+        </div>
+        <button class="button" id="toggle-form-btn">+ Оставить сообщение</button>
+      </div>
       <p class="text-secondary" data-lang="feedbackDesc">Делитесь мыслями, сообщайте об ошибках.</p>
       <div class="feedback-tabs"><button class="feedback-tab active" data-tab="all">Все</button><button class="feedback-tab" data-tab="idea">💡 Идеи</button><button class="feedback-tab" data-tab="bug">🐛 Баги</button><button class="feedback-tab" data-tab="review">⭐ Отзывы</button></div>
       <div class="projects-grid" id="feedback-panel"></div><div id="sentinel" style="height:10px;"></div>
@@ -330,13 +332,11 @@
     }
   }
 
-  // Инициализация
   document.addEventListener('DOMContentLoaded', () => {
     initLazy();
     window.addEventListener('scroll', initLazy, { passive: true });
   });
 
-  // Экспорт для внешнего использования
   window.FeedbackPage = {
     addReactionWithSync,
     removeReactionWithSync,
