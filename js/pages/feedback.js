@@ -213,7 +213,6 @@
     container.innerHTML = `
       <div class="feedback-header">
         <div style="display:flex;align-items:center;gap:8px;">
-          <i class="fab fa-github" style="font-size:28px;color:var(--accent);"></i>
           <h2 style="margin:0;"><i class="fas fa-comment-dots" style="font-size:24px;color:var(--accent);"></i> <span data-lang="feedbackTitle">Идеи, баги и отзывы</span></h2>
         </div>
         <button class="button" id="toggle-form-btn">+ Оставить сообщение</button>
