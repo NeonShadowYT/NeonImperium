@@ -117,7 +117,7 @@ blockquote.color-red{border-left-color:#f44336}blockquote.color-green{border-lef
 .reaction-menu{position:absolute;background:var(--glass-bg);backdrop-filter:blur(12px);border:1px solid var(--glass-border);border-radius:30px;padding:5px;display:flex;gap:5px;box-shadow:var(--shadow);z-index:10010}
 .reaction-menu-btn{background:transparent;border:none;font-size:20px;cursor:pointer;padding:5px 10px;border-radius:20px;transition:background var(--transition)}.reaction-menu-btn:hover{background:rgba(61,158,179,0.2)}
 
-/* МОДАЛЬНЫЕ ОКНА */
+/* ========== МОДАЛЬНЫЕ ОКНА ========== */
 
 /* Обычная модалка (например, вход через GitHub) */
 .modal {
@@ -152,7 +152,7 @@ blockquote.color-red{border-left-color:#f44336}blockquote.color-green{border-lef
     position: relative;
 }
 
-/* Полноэкранная модалка */
+/* Полноэкранная модалка – исправленная ширина и стили */
 .modal-fullscreen {
     position: fixed;
     top: 0;
@@ -174,12 +174,14 @@ blockquote.color-red{border-left-color:#f44336}blockquote.color-green{border-lef
     0% { opacity: 0; transform: scale(0.96); }
     100% { opacity: 1; transform: scale(1); }
 }
-.modal-content-full {
+
+/* Основной контейнер полноэкранной модалки – теперь с повышенной специфичностью */
+.modal-fullscreen .modal-content-full {
     background: var(--glass-bg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-radius: var(--radius-lg);
-    max-width: 900px;
+    max-width: 900px;          /* ✅ исправлено: ширина для больших модалок */
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
@@ -190,6 +192,27 @@ blockquote.color-red{border-left-color:#f44336}blockquote.color-green{border-lef
     display: flex;
     flex-direction: column;
 }
+
+/* Декоративная полоска сверху (как в модалке входа) */
+.modal-fullscreen .modal-content-full::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, transparent, var(--accent), var(--accent-light), var(--accent), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 3s infinite linear;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    z-index: 5;
+}
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Заголовок модалки */
 .modal-header {
     padding: 20px 30px;
     border-bottom: 1px solid var(--glass-border);
