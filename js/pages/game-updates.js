@@ -87,7 +87,7 @@
       if (!header) {
         header = createElement('div', 'updates-header', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' });
         // Добавлена иконка к заголовку
-        header.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-clock" style="font-size:24px;color:var(--accent);"></i> <h2 style="margin:0;" data-lang="updatesTitle">Обновления</h2></div>';
+        header.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);"></i> <h2 style="margin:0;" data-lang="updatesTitle">Обновления</h2></div>';
         parent.insertBefore(header, container);
       }
       const existing = header.querySelector('.admin-update-btn');
