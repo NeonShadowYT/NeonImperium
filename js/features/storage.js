@@ -1,4 +1,4 @@
-// js/features/storage.js
+// js/features/storage.js – с локализацией
 (function() {
   const {
     CONFIG, escapeHtml, createElement, formatDate, debounce,
@@ -15,8 +15,8 @@
   const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024;
   const METADATA_CACHE_TTL = 24 * 60 * 60 * 1000;
   const METADATA_CACHE_PREFIX = 'metadata_';
-  const BOOKMARKS_CACHE_TTL = 60 * 1000; // 1 минута кеширования загруженных закладок
-  const SAVE_DEBOUNCE_MS = 2000; // задержка перед сохранением
+  const BOOKMARKS_CACHE_TTL = 60 * 1000;
+  const SAVE_DEBOUNCE_MS = 2000;
 
   let currentUser = null;
   let currentToken = null;
@@ -33,11 +33,9 @@
   let currentGame = null;
   let lastBookmarksLoad = 0;
 
-  // Кеш загруженных закладок в памяти
   let cachedBookmarks = null;
   let cachedBookmarksTime = 0;
 
-  // BroadcastChannel для синхронизации между вкладками
   let bc = null;
   try {
     bc = new BroadcastChannel('bookmarks');
@@ -54,7 +52,6 @@
     };
   } catch (e) {}
 
-  // Синхронизация через storage (запасной вариант)
   window.addEventListener('storage', (e) => {
     if (e.key && e.key.startsWith(STORAGE_KEY_PREFIX)) {
       cachedBookmarks = null;
@@ -175,7 +172,6 @@
     return gist.id;
   }
 
-  // Загрузка закладок с кешированием
   async function loadBookmarks(forceRefresh = false) {
     if (!currentToken) {
       return { bookmarks: [] };
@@ -241,7 +237,6 @@
     }
   }
 
-  // Фактическое сохранение (вызывается через performAction)
   async function doSaveBookmarks() {
     try {
       if (!currentToken) return;
@@ -267,19 +262,17 @@
       cachedBookmarks = currentBookmarks.slice();
       cachedBookmarksTime = Date.now();
 
-      // Уведомляем другие вкладки
       try { if (bc) bc.postMessage({ type: 'bookmarks-updated' }); } catch (e) {}
 
       isSaving = false;
     } catch (err) {
       console.error('Ошибка синхронизации закладок:', err);
-      showToast('Не удалось сохранить изменения', 'error');
+      showToast(t('syncError'), 'error');
       isSaving = false;
       throw err;
     }
   }
 
-  // Сохранение с debounce и проверкой на уже запущенное сохранение
   function triggerDebouncedSave() {
     if (!debouncedSaveBookmarks) {
       debouncedSaveBookmarks = debounce(async () => {
@@ -296,12 +289,13 @@
   }
 
   function enforceMaxBookmarks() {
+    const t = window.I18n?.translate || (k => k);
     if (currentBookmarks.length > MAX_BOOKMARKS) {
       const sorted = [...currentBookmarks].sort((a, b) => new Date(a.added) - new Date(b.added));
       const toRemove = sorted.slice(0, currentBookmarks.length - MAX_BOOKMARKS);
       const idsToRemove = new Set(toRemove.map(b => b.id));
       currentBookmarks = currentBookmarks.filter(b => !idsToRemove.has(b.id));
-      showToast(`Превышен лимит в ${MAX_BOOKMARKS} закладок, старые удалены`, 'warning');
+      showToast(t('maxBookmarksReached').replace('{max}', MAX_BOOKMARKS), 'warning');
       triggerDebouncedSave();
     }
   }
@@ -619,10 +613,10 @@
     return null;
   }
 
-  // Добавление закладки (с проверкой дубликатов)
   async function addBookmark(bookmarkOrUrl, title, fileContent, fileName) {
+    const t = window.I18n?.translate || (k => k);
     if (!currentUser) {
-      showToast('Войдите в аккаунт GitHub с правами gist', 'error');
+      showToast(t('loginToGitHub'), 'error');
       throw new Error('not_logged_in');
     }
 
@@ -664,15 +658,14 @@
       bookmarkData = { url, title: customTitle, fileContent: customFileContent, fileName: customFileName, ...extraData };
     }
 
-    // Проверка дубликатов в текущем списке
     if (url && currentBookmarks.some(b => b.url === url)) {
-      showToast('Уже в избранном', 'info');
+      showToast(t('addedToFavorites'), 'info');
       throw new Error('duplicate');
     }
     if (isFile && customFileContent && customFileName) {
       const hash = simpleHash(new TextEncoder().encode(customFileContent));
       if (currentBookmarks.some(b => b.saveData && b.saveData.hash === hash)) {
-        showToast('Такое сохранение уже есть', 'info');
+        showToast(t('addedToFavorites'), 'info');
         throw new Error('duplicate');
       }
     }
@@ -682,7 +675,7 @@
       id: tempId,
       added: new Date().toISOString(),
       url: url || null,
-      title: customTitle || (isFile ? customFileName : url || 'Закладка'),
+      title: customTitle || (isFile ? customFileName : url || t('bookmark')),
       type: isFile ? 'save' : (extraData.type || 'link'),
       thumbnail: extraData.thumbnail || null,
       embedUrl: extraData.embedUrl || null,
@@ -711,11 +704,12 @@
     if (modalRef) renderBookmarks(modalRef);
 
     triggerDebouncedSave();
-    showToast('Закладка добавлена (сохранение будет выполнено позже)', 'success');
+    showToast(t('bookmarkAdded'), 'success');
     return newBookmark;
   }
 
   async function removeBookmark(id) {
+    const t = window.I18n?.translate || (k => k);
     if (!currentToken) return;
     currentBookmarks = currentBookmarks.filter(b => b.id !== id);
     cachedBookmarks = currentBookmarks.slice();
@@ -724,10 +718,11 @@
     if (modalRef) {
       renderBookmarks(modalRef);
     }
-    showToast('Закладка удалена', 'success');
+    showToast(t('bookmarkDeleted'), 'success');
   }
 
   function renderBookmarks(modalElement) {
+    const t = window.I18n?.translate || (k => k);
     const grid = modalElement.querySelector('#bookmarks-grid');
     if (!grid) return;
 
@@ -747,7 +742,7 @@
 
     grid.innerHTML = '';
     if (filtered.length === 0) {
-      grid.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>Ничего не найдено</p></div>';
+      grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>${t('noBookmarks')}</p></div>`;
       return;
     }
 
@@ -820,7 +815,8 @@
     deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
     deleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (confirm('Удалить закладку?')) {
+      const t = window.I18n?.translate || (k => k);
+      if (confirm(t('deleteConfirm'))) {
         removeBookmark(bookmark.id);
       }
     });
@@ -849,10 +845,10 @@
             window.UIFeedback.openFullModal(bookmark.postData);
           });
         } else {
-          showToast('Модуль обратной связи не загружен', 'error');
+          showToast(t('viewerNotAvailable'), 'error');
         }
       } else {
-        showToast('Данные поста недоступны', 'error');
+        showToast(t('postNotFound'), 'error');
       }
     });
 
@@ -907,7 +903,7 @@
         const isDirectVideo = /\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(bookmark.embedUrl);
         let html;
         const downloadSection = bookmark.downloadUrl
-          ? `<a href="${escapeHtml(bookmark.downloadUrl)}" download class="button" style="background:var(--accent);">Скачать видео</a>`
+          ? `<a href="${escapeHtml(bookmark.downloadUrl)}" download class="button" style="background:var(--accent);">${t('downloadBtn')}</a>`
           : '';
 
         let extraDownload = '';
@@ -927,7 +923,7 @@
             <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
               ${downloadSection}
               ${extraDownload}
-              <a href="${escapeHtml(bookmark.url)}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">Открыть источник</a>
+              <a href="${escapeHtml(bookmark.url)}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">${t('open')}</a>
             </div>
           `;
         } else {
@@ -938,7 +934,7 @@
             <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
               ${downloadSection}
               ${extraDownload}
-              <a href="${escapeHtml(bookmark.url)}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">Открыть источник</a>
+              <a href="${escapeHtml(bookmark.url)}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">${t('open')}</a>
             </div>
           `;
         }
@@ -1101,7 +1097,7 @@
       if (decodedText !== null) {
         contentHtml = `
           <div style="margin-bottom:16px;">
-            <strong>Файл:</strong> ${escapeHtml(fileName)}
+            <strong>${t('save')}:</strong> ${escapeHtml(fileName)}
             ${bookmark.saveData.game ? `<span style="margin-left:12px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:30px;font-size:12px;">${escapeHtml(bookmark.saveData.game)}</span>` : ''}
           </div>
           <pre style="background:var(--bg-primary);padding:16px;border-radius:12px;border:1px solid var(--border);max-height:400px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:13px;">${escapeHtml(decodedText)}</pre>
@@ -1109,7 +1105,7 @@
       } else {
         contentHtml = `
           <div style="margin-bottom:16px;">
-            <strong>Файл:</strong> ${escapeHtml(fileName)}
+            <strong>${t('save')}:</strong> ${escapeHtml(fileName)}
             ${bookmark.saveData.game ? `<span style="margin-left:12px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:30px;font-size:12px;">${escapeHtml(bookmark.saveData.game)}</span>` : ''}
           </div>
           <div style="background:var(--bg-primary);padding:20px;border-radius:12px;border:1px solid var(--border);text-align:center;color:var(--text-secondary);">
@@ -1133,7 +1129,7 @@
             ${contentHtml}
             <div style="margin-top:16px;display:flex;gap:12px;justify-content:center;">
               <button class="button" style="background:var(--accent);padding:12px 40px;font-size:18px;" id="download-save-btn">
-                <i class="fas fa-download"></i> Скачать
+                <i class="fas fa-download"></i> ${t('downloadBtn')}
               </button>
             </div>
           </div>
@@ -1175,7 +1171,7 @@
     content.appendChild(titleEl);
 
     const meta = createElement('div', '', { fontSize: '12px', color: 'var(--text-secondary)' });
-    let metaText = `Сохранение · ${formatDate(bookmark.added)}`;
+    let metaText = `${t('save')} · ${formatDate(bookmark.added)}`;
     if (bookmark.saveData && bookmark.saveData.game) {
       metaText += ` · ${escapeHtml(bookmark.saveData.game)}`;
     }
@@ -1226,10 +1222,11 @@
   }
 
   async function openStorageModal(gameContext = null) {
+    const t = window.I18n?.translate || (k => k);
     updateAuthState();
-    if (!currentUser) return showToast('Войдите в аккаунт GitHub', 'error');
-    if (!currentToken) return showToast('Токен не найден', 'error');
-    if (!hasScope('gist')) return showToast('Нужен scope "gist"', 'error');
+    if (!currentUser) return showToast(t('loginToGitHub'), 'error');
+    if (!currentToken) return showToast(t('githubError'), 'error');
+    if (!hasScope('gist')) return showToast(t('needGistScope'), 'error');
 
     if (gameContext) currentGame = gameContext;
     else currentGame = null;
@@ -1245,46 +1242,45 @@
         <div class="storage-header">
           <div class="storage-controls">
             <div class="storage-sort">
-              <button class="sort-btn ${sortOrder==='new'?'active':''}" data-order="new"><i class="fas fa-arrow-down"></i> Новые</button>
-              <button class="sort-btn ${sortOrder==='old'?'active':''}" data-order="old"><i class="fas fa-arrow-up"></i> Старые</button>
+              <button class="sort-btn ${sortOrder==='new'?'active':''}" data-order="new"><i class="fas fa-arrow-down"></i> ${t('new')}</button>
+              <button class="sort-btn ${sortOrder==='old'?'active':''}" data-order="old"><i class="fas fa-arrow-up"></i> ${t('old')}</button>
             </div>
             <div class="storage-categories">
-              <button class="cat-btn ${category==='all'?'active':''}" data-cat="all"><i class="fas fa-globe"></i> Все</button>
-              <button class="cat-btn ${category==='post'?'active':''}" data-cat="post"><i class="fas fa-newspaper"></i> Посты</button>
-              <button class="cat-btn ${category==='video'?'active':''}" data-cat="video"><i class="fas fa-video"></i> Видео</button>
-              <button class="cat-btn ${category==='link'?'active':''}" data-cat="link"><i class="fas fa-link"></i> Ссылки</button>
-              <button class="cat-btn ${category==='save'?'active':''}" data-cat="save"><i class="fas fa-save"></i> Сохранения</button>
+              <button class="cat-btn ${category==='all'?'active':''}" data-cat="all"><i class="fas fa-globe"></i> ${t('all')}</button>
+              <button class="cat-btn ${category==='post'?'active':''}" data-cat="post"><i class="fas fa-newspaper"></i> ${t('posts')}</button>
+              <button class="cat-btn ${category==='video'?'active':''}" data-cat="video"><i class="fas fa-video"></i> ${t('videos')}</button>
+              <button class="cat-btn ${category==='link'?'active':''}" data-cat="link"><i class="fas fa-link"></i> ${t('links')}</button>
+              <button class="cat-btn ${category==='save'?'active':''}" data-cat="save"><i class="fas fa-save"></i> ${t('saves')}</button>
             </div>
           </div>
           <div class="storage-actions">
             <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-right:12px;">
-              Добавлений осталось: <span class="rate-indicator" data-action="storageAdds">${remainingAdds}</span>
+              ${t('postsRemaining')}: <span class="rate-indicator" data-action="storageAdds">${remainingAdds}</span>
             </span>
             <div class="search-wrapper" style="display:flex;gap:8px;align-items:center;">
-              <input type="text" id="search-input" placeholder="Поиск..." style="padding:6px 14px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;width:160px;">
+              <input type="text" id="search-input" placeholder="${t('searchPlaceholder')}" style="padding:6px 14px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;width:160px;">
             </div>
-            <button class="storage-btn primary" id="toggle-add-btn"><i class="fas fa-plus"></i> Добавить</button>
+            <button class="storage-btn primary" id="toggle-add-btn"><i class="fas fa-plus"></i> ${t('addButton')}</button>
           </div>
         </div>
         <div id="add-form" class="storage-add-form" style="display:none;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <!-- добавлен класс storage-url-input -->
-            <input type="url" id="new-url" placeholder="Ссылка..." autocomplete="off" class="storage-url-input" style="flex:1;min-width:200px;">
-            <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> Добавить</button>
+            <input type="url" id="new-url" placeholder="${t('addLinkPlaceholder')}" autocomplete="off" class="storage-url-input" style="flex:1;min-width:200px;">
+            <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> ${t('addButton')}</button>
           </div>
           <div style="margin-top:12px;border:2px dashed var(--border);border-radius:16px;padding:20px;text-align:center;color:var(--text-secondary);transition:background 0.2s;" id="drop-zone">
             <i class="fas fa-file-upload" style="font-size:32px;display:block;margin-bottom:8px;"></i>
-            <p>Перетащите файлы .ini или .starver сюда</p>
-            <p style="font-size:12px;">или выберите файлы</p>
+            <p>${t('dropZoneText')}</p>
+            <p style="font-size:12px;">${t('selectFiles')}</p>
             <input type="file" id="file-input" accept=".ini,.starver" multiple style="display:none;">
-            <button class="storage-btn" id="file-select-btn"><i class="fas fa-folder-open"></i> Выбрать</button>
+            <button class="storage-btn" id="file-select-btn"><i class="fas fa-folder-open"></i> ${t('selectFiles')}</button>
           </div>
         </div>
         <div class="bookmarks-grid" id="bookmarks-grid"></div>
       </div>
     `;
 
-    const { modal, closeModal } = createModal('Хранилище', html, { size: 'full' });
+    const { modal, closeModal } = createModal(t('storageModalTitle'), html, { size: 'full' });
     modalRef = modal;
 
     const style = createElement('style');
@@ -1353,7 +1349,7 @@
     toggleAddBtn.addEventListener('click', () => {
       formVisible = !formVisible;
       addForm.style.display = formVisible ? 'block' : 'none';
-      toggleAddBtn.innerHTML = formVisible ? '<i class="fas fa-times"></i> Отмена' : '<i class="fas fa-plus"></i> Добавить';
+      toggleAddBtn.innerHTML = formVisible ? `<i class="fas fa-times"></i> ${t('cancelButton')}` : `<i class="fas fa-plus"></i> ${t('addButton')}`;
     });
 
     const addBtn = modal.querySelector('#confirm-add');
@@ -1361,7 +1357,7 @@
     const debouncedAdd = debounce(async () => {
       const url = urlInput.value.trim();
       if (!url) {
-        showToast('Введите ссылку', 'error');
+        showToast(t('enterText'), 'error');
         return;
       }
       try {
@@ -1371,7 +1367,7 @@
         const indicator = modal.querySelector('.rate-indicator[data-action="storageAdds"]');
         if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('storageAdds');
       } catch (e) {
-        if (e.message !== 'duplicate' && e.message !== 'limit_exceeded') showToast('Ошибка: ' + e.message, 'error');
+        if (e.message !== 'duplicate' && e.message !== 'limit_exceeded') showToast(t('loadError') + ': ' + e.message, 'error');
       }
     }, 1000);
     addBtn.addEventListener('click', debouncedAdd);
@@ -1408,10 +1404,11 @@
   }
 
   async function processFiles(files, modal) {
+    const t = window.I18n?.translate || (k => k);
     for (const file of files) {
       const ext = file.name.split('.').pop().toLowerCase();
       if (ext !== 'ini' && ext !== 'starver') {
-        showToast(`Файл ${file.name} не поддерживается`, 'error');
+        showToast(t('fileNotSupported').replace('{name}', file.name), 'error');
         continue;
       }
       try {
@@ -1435,11 +1432,11 @@
           }
         };
         await addBookmark(bookmarkData);
-        showToast(`Сохранение "${file.name}" добавлено`, 'success');
+        showToast(t('saveAdded').replace('{name}', file.name), 'success');
         const indicator = modal?.querySelector('.rate-indicator[data-action="storageAdds"]');
         if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('storageAdds');
       } catch (e) {
-        if (e.message !== 'duplicate' && e.message !== 'limit_exceeded') showToast(`Ошибка при добавлении ${file.name}: ${e.message}`, 'error');
+        if (e.message !== 'duplicate' && e.message !== 'limit_exceeded') showToast(t('loadError') + ': ' + e.message, 'error');
       }
     }
     if (modal) renderBookmarks(modal);
@@ -1475,7 +1472,7 @@
     addBookmark,
     removeBookmark,
     loadBookmarks,
-    _doSave: doSaveBookmarks, // для использования из очереди
+    _doSave: doSaveBookmarks,
     resetStorage: async () => {
       if (gistId && currentToken) {
         await fetch(`https://api.github.com/gists/${gistId}`, {

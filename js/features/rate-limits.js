@@ -1,4 +1,4 @@
-// js/features/rate-limits.js
+// js/features/rate-limits.js – с локализацией
 (function() {
     const { escapeHtml } = window.GithubCore;
 
@@ -400,8 +400,9 @@
     }
 
     function openRatePanel() {
+        const t = window.I18n?.translate || (k => k);
         window._ratePanelOpen = true;
-        const { modal, closeModal } = window.UIUtils.createModal('Лимиты и кеш', buildPanelHTML(), { size: 'full' });
+        const { modal, closeModal } = window.UIUtils.createModal(t('limitsAndCache'), buildPanelHTML(t), { size: 'full' });
         modal.dataset.ratePanel = 'true';
         const originalClose = closeModal;
         const newClose = () => {
@@ -415,8 +416,8 @@
 
         window._ratePanelRefresh = () => {
             const body = modal.querySelector('.modal-body');
-            if (body) body.innerHTML = buildPanelHTML();
-            bindPanelEvents(modal);
+            if (body) body.innerHTML = buildPanelHTML(t);
+            bindPanelEvents(modal, t);
         };
         refreshPanel = () => {
             if (window._ratePanelRefresh) {
@@ -424,7 +425,7 @@
             }
         };
 
-        bindPanelEvents(modal);
+        bindPanelEvents(modal, t);
         updateTimerDisplay(modal);
         const timerInterval = setInterval(() => {
             if (!modal.parentNode) { clearInterval(timerInterval); return; }
@@ -445,7 +446,7 @@
         loadHistoryItems(modal);
     }
 
-    function buildPanelHTML() {
+    function buildPanelHTML(t) {
         const remaining = {};
         let totalRemaining = 0;
         for (const [action, limit] of Object.entries(LIMITS)) {
@@ -502,8 +503,8 @@
         return style + `
         <div class="rate-panel">
           <div class="rate-summary">
-            <div class="rate-timer"><i class="fas fa-clock"></i> Обновление через: <strong>${hours}ч ${minutes}м</strong></div>
-            <div class="rate-total"><i class="fas fa-chart-bar"></i> Всего осталось: <strong>${totalRemaining}</strong></div>
+            <div class="rate-timer"><i class="fas fa-clock"></i> ${t('refreshIn')} <strong>${hours}ч ${minutes}м</strong></div>
+            <div class="rate-total"><i class="fas fa-chart-bar"></i> ${t('totalRemaining')} <strong>${totalRemaining}</strong></div>
           </div>
           <div class="rate-limits-grid">
             ${Object.entries(remaining).map(([action, rem]) => {
@@ -513,9 +514,10 @@
               let color = '#4caf50';
               if (pct < 30) color = '#f44336';
               else if (pct < 60) color = '#ff9800';
+              const label = actionLabels[action] || action;
               return `
                 <div class="rate-limit-item">
-                  <span class="rate-label"><i class="fas ${actionIcons[action] || 'fa-circle'}"></i> ${actionLabels[action] || action}</span>
+                  <span class="rate-label"><i class="fas ${actionIcons[action] || 'fa-circle'}"></i> ${label}</span>
                   <div class="rate-bar"><div class="rate-fill" style="width:${pct}%;background:${color};"></div></div>
                   <div class="rate-count">
                     <span class="used">${used} / ${limit}</span>
@@ -525,19 +527,19 @@
               `;
             }).join('')}
           </div>
-          <div class="rate-info"><i class="fas fa-info-circle"></i> Лимиты защищают ваш аккаунт. При исчерпании действия сохраняются в очередь и выполняются позже.</div>
+          <div class="rate-info"><i class="fas fa-info-circle"></i> ${t('limitsInfo')}</div>
           <div class="rate-tabs">
-            <button class="rate-tab active" data-tab="queue"><i class="fas fa-clock"></i> Очередь (<span id="queue-count">0</span>)</button>
+            <button class="rate-tab active" data-tab="queue"><i class="fas fa-clock"></i> ${t('queue')} (<span id="queue-count">0</span>)</button>
             <button class="rate-tab" data-tab="history"><i class="fas fa-history"></i> История</button>
-            <button class="rate-tab" data-tab="cache"><i class="fas fa-database"></i> Кеш</button>
+            <button class="rate-tab" data-tab="cache"><i class="fas fa-database"></i> ${t('cacheState')}</button>
           </div>
           <div class="rate-tab-content">
-            <div id="rate-queue" class="rate-queue-list"><div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div></div>
+            <div id="rate-queue" class="rate-queue-list"><div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> ${t('loading')}</div></div>
             <div id="rate-history" style="display:none;" class="rate-history-list"></div>
             <div id="rate-cache" style="display:none;" class="rate-cache-actions">
-              <p><i class="fas fa-broom"></i> Точечная очистка кеша (выберите ключи для удаления):</p>
+              <p><i class="fas fa-broom"></i> ${t('clearStaleCache')}:</p>
               <div class="cache-keys-list">
-                ${cacheKeys.length === 0 ? '<p class="empty-queue">Нет кешированных данных (кроме токена и лимитов)</p>' :
+                ${cacheKeys.length === 0 ? `<p class="empty-queue">${t('noBookmarks')}</p>` :
                   cacheKeys.map(key => `
                     <div class="cache-key-item">
                       <span>${escapeHtml(key)}</span>
@@ -546,17 +548,17 @@
                   `).join('')}
               </div>
               <div class="cache-buttons">
-                <button id="clear-stale-cache"><i class="fas fa-broom"></i> Очистить устаревший кеш (старше TTL)</button>
-                <button id="clear-all-cache"><i class="fas fa-trash-alt"></i> Очистить всё (кроме лимитов и токена)</button>
+                <button id="clear-stale-cache"><i class="fas fa-broom"></i> ${t('clearStaleCache')}</button>
+                <button id="clear-all-cache"><i class="fas fa-trash-alt"></i> ${t('clearAllCache')}</button>
               </div>
-              <p style="font-size:12px; color:var(--text-secondary);">* Лимиты, токен и лицензия не удаляются.</p>
+              <p style="font-size:12px; color:var(--text-secondary);">* ${t('save')} не удаляются.</p>
             </div>
           </div>
         </div>
       `;
     }
 
-    function bindPanelEvents(modal) {
+    function bindPanelEvents(modal, t) {
         modal.querySelectorAll('.rate-tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 modal.querySelectorAll('.rate-tab').forEach(t => t.classList.remove('active'));
@@ -578,13 +580,13 @@
 
         modal.querySelector('#clear-stale-cache')?.addEventListener('click', () => {
             clearStaleCache();
-            window.UIUtils?.showToast('Устаревший кеш очищен', 'success');
+            window.UIUtils?.showToast(t('staleCacheCleared'), 'success');
             refreshPanel();
         });
         modal.querySelector('#clear-all-cache')?.addEventListener('click', () => {
-            if (confirm('Очистить весь кеш (кроме лимитов и токена)?')) {
+            if (confirm(t('clearCacheConfirm'))) {
                 clearAllCache();
-                window.UIUtils?.showToast('Весь кеш очищен', 'success');
+                window.UIUtils?.showToast(t('cacheCleared'), 'success');
                 refreshPanel();
             }
         });
@@ -604,7 +606,7 @@
             const cancelBtn = e.target.closest('.queue-cancel-btn');
             if (cancelBtn) {
                 const id = parseInt(cancelBtn.dataset.id, 10);
-                if (id && confirm('Удалить это действие из очереди?')) {
+                if (id && confirm(t('deleteConfirm'))) {
                     await cancelAction(id);
                     refreshPanel();
                 }
@@ -619,7 +621,7 @@
         const countEl = modal.querySelector('#queue-count');
         if (countEl) countEl.textContent = items.length;
         if (items.length === 0) {
-            container.innerHTML = '<div class="empty-queue"><i class="fas fa-check-circle"></i> Очередь пуста</div>';
+            container.innerHTML = `<div class="empty-queue"><i class="fas fa-check-circle"></i> ${t('noPendingActions')}</div>`;
             return;
         }
         container.innerHTML = items.map(item => `
@@ -636,7 +638,7 @@
         if (!container) return;
         const history = getHistory().slice(-50).reverse();
         if (history.length === 0) {
-            container.innerHTML = '<div class="empty-queue">Нет истории</div>';
+            container.innerHTML = `<div class="empty-queue">${t('noBookmarks')}</div>`;
             return;
         }
         container.innerHTML = history.map(h => `
@@ -653,7 +655,7 @@
         if (!container) return;
         const keys = getCacheKeys();
         if (keys.length === 0) {
-            container.innerHTML = '<p class="empty-queue">Нет кешированных данных (кроме токена и лимитов)</p>';
+            container.innerHTML = `<p class="empty-queue">${t('noBookmarks')}</p>`;
             return;
         }
         container.innerHTML = keys.map(key => `
@@ -826,10 +828,11 @@
             if (profile) {
                 const dropdown = profile.querySelector('.profile-dropdown');
                 if (dropdown && !dropdown.querySelector('[data-action="rate-panel"]')) {
+                    const t = window.I18n?.translate || (k => k);
                     const item = document.createElement('div');
                     item.className = 'profile-dropdown-item';
                     item.dataset.action = 'rate-panel';
-                    item.innerHTML = '<i class="fas fa-chart-bar"></i> Лимиты и кеш';
+                    item.innerHTML = `<i class="fas fa-chart-bar"></i> ${t('ratePanel')}`;
                     const divider = dropdown.querySelector('.profile-dropdown-divider');
                     if (divider) {
                         dropdown.insertBefore(item, divider);
@@ -864,11 +867,11 @@
     }
 
     const actionLabels = {
-        posts: 'Посты',
-        comments: 'Комментарии',
-        storageAdds: 'Добавления в хранилище',
-        cacheClears: 'Очистка кеша',
-        reactions: 'Реакции'
+        posts: window.I18n?.translate('actionPosts') || 'Посты',
+        comments: window.I18n?.translate('actionComments') || 'Комментарии',
+        storageAdds: window.I18n?.translate('actionStorageAdds') || 'Добавления в хранилище',
+        cacheClears: window.I18n?.translate('actionCacheClears') || 'Очистка кеша',
+        reactions: window.I18n?.translate('actionReactions') || 'Реакции'
     };
 
     const actionIcons = {

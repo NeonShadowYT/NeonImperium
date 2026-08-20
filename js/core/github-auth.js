@@ -8,7 +8,7 @@
   const USER_CACHE_KEY = 'github_user';
   const SCOPES_CACHE_KEY = 'github_scopes';
   const LAST_LOGIN_ATTEMPT_KEY = 'last_login_attempt';
-  const LOGIN_COOLDOWN = 10000; // 10 секунд
+  const LOGIN_COOLDOWN = 10000;
 
   let currentUserLogin = null;
   let currentScopes = [];
@@ -120,8 +120,8 @@
     }
   }
 
-  // ===== НОВАЯ МОДАЛКА ВХОДА С УЛУЧШЕННЫМ ДИЗАЙНОМ =====
   function createLoginModal() {
+    const t = window.I18n?.translate || (k => k);
     modal = createElement('div', 'modal', {}, { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'github-modal-title' });
     modal.style.cssText = `
       display: none;
@@ -153,7 +153,6 @@
         overflow: hidden;
         transition: transform 0.3s, opacity 0.3s;
       ">
-        <!-- Декоративный элемент сверху -->
         <div style="
           position: absolute;
           top: 0;
@@ -185,7 +184,7 @@
             font-size: 26px;
             letter-spacing: 0.5px;
             text-shadow: var(--neon-text-glow);
-          ">Вход через GitHub</h3>
+          ">${t('githubLoginTitle')}</h3>
         </div>
 
         <div style="
@@ -200,7 +199,7 @@
         ">
           <p style="margin: 0 0 6px 0;">
             <i class="fas fa-info-circle" style="color: var(--accent); margin-right: 8px;"></i>
-            Для входа нужен <strong>Personal Access Token (classic)</strong> с правами <strong>repo</strong> и <strong>gist</strong>.
+            ${t('githubTokenNote')}
           </p>
           <p style="margin: 0; font-size: 13px;">
             <a href="https://github.com/settings/tokens" target="_blank" style="color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent);">
@@ -263,7 +262,7 @@
             font-family: var(--font-family);
             cursor: pointer;
             transition: all var(--transition);
-          ">Отмена</button>
+          ">${t('feedbackCancel')}</button>
           <button class="button" id="modal-submit" style="
             background: var(--accent);
             color: #fff;
@@ -277,7 +276,7 @@
             position: relative;
             overflow: hidden;
           ">
-            <span style="position: relative; z-index: 1;">Войти</span>
+            <span style="position: relative; z-index: 1;">${t('githubLoginBtn')}</span>
             <span style="
               position: absolute;
               inset: 0;
@@ -292,7 +291,6 @@
     `;
     document.body.appendChild(modal);
 
-    // Добавляем стили для анимаций (если их ещё нет)
     if (!document.getElementById('modal-animations-style')) {
       const style = document.createElement('style');
       style.id = 'modal-animations-style';
@@ -337,7 +335,6 @@
       document.head.appendChild(style);
     }
 
-    // Обработчики событий
     tokenInput = document.getElementById('github-token-input');
     tokenToggle = document.getElementById('token-toggle');
     tokenToggle.addEventListener('click', () => {
@@ -353,7 +350,6 @@
     window.addEventListener('click', e => { if (e.target === modal) closeModal(); });
     window.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('active')) closeModal(); });
 
-    // Добавляем ripple эффект на кнопку "Войти"
     const submitBtn = document.getElementById('modal-submit');
     submitBtn.addEventListener('mousemove', (e) => {
       const rect = submitBtn.getBoundingClientRect();
@@ -372,6 +368,7 @@
   }
 
   async function validateAndLogin(token, save = true) {
+    const t = window.I18n?.translate || (k => k);
     const lastAttempt = localStorage.getItem(LAST_LOGIN_ATTEMPT_KEY);
     if (lastAttempt && Date.now() - parseInt(lastAttempt) < LOGIN_COOLDOWN) {
       window.UIUtils?.showToast('Подождите немного перед повторной попыткой входа', 'error');
@@ -410,7 +407,7 @@
         sessionStorage.removeItem(SCOPES_CACHE_KEY);
         updateClientToken(null);
         renderLoggedOutUI();
-        window.UIUtils?.showToast('Неверный токен', 'error');
+        window.UIUtils?.showToast(t('githubError'), 'error');
       } else {
         window.UIUtils?.showToast('Ошибка соединения: ' + err.message, 'error');
       }
@@ -418,42 +415,44 @@
   }
 
   function renderLoggedInUI(user) {
+    const t = window.I18n?.translate || (k => k);
     const hasRepo = currentScopes.includes('repo');
     const hasGist = currentScopes.includes('gist');
     const storageItem = hasGist
-      ? `<div class="profile-dropdown-item" data-action="storage"><i class="fas fa-box-archive"></i> Хранилище</div>`
+      ? `<div class="profile-dropdown-item" data-action="storage"><i class="fas fa-box-archive"></i> ${t('storage')}</div>`
       : '';
     profileContainer.innerHTML = `
       <img src="${user.avatar_url || 'images/default-avatar.webp'}" alt="${user.login}" class="nav-profile-avatar" onerror="this.src='images/default-avatar.webp'" width="32" height="32">
       <span class="nav-profile-login">${escapeHtml(user.login)}</span>
       <i class="fas fa-chevron-right nav-profile-chevron"></i>
       <div class="profile-dropdown">
-        <div class="profile-dropdown-item" data-action="profile"><i class="fas fa-user"></i> Профиль</div>
-        <div class="profile-dropdown-item" data-action="token-info"><i class="fas fa-key"></i> Токен активен
+        <div class="profile-dropdown-item" data-action="profile"><i class="fas fa-user"></i> ${t('profileTitle')}</div>
+        <div class="profile-dropdown-item" data-action="token-info"><i class="fas fa-key"></i> ${t('tokenActive')}
           <div style="font-size:11px;margin-left:8px;">
             <span style="color:${hasRepo?'#4caf50':'#ff9800'}"><i class="fas fa-${hasRepo?'check':'exclamation-triangle'}-circle"></i> repo</span>
             <span style="color:${hasGist?'#4caf50':'#ff9800'}"><i class="fas fa-${hasGist?'check':'exclamation-triangle'}-circle"></i> gist</span>
           </div>
         </div>
         ${storageItem}
-        <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> Лимиты и кеш</div>
-        <div class="profile-dropdown-item" data-action="revoke-token"><i class="fas fa-external-link-alt"></i> Управление токенами</div>
+        <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> ${t('ratePanel')}</div>
+        <div class="profile-dropdown-item" data-action="revoke-token"><i class="fas fa-external-link-alt"></i> ${t('manageTokens')}</div>
         <div class="profile-dropdown-divider"></div>
-        <div class="profile-dropdown-item" data-action="logout"><i class="fas fa-sign-out-alt"></i> Выйти</div>
+        <div class="profile-dropdown-item" data-action="logout"><i class="fas fa-sign-out-alt"></i> ${t('logout')}</div>
       </div>
     `;
     bindDropdownEvents();
   }
 
   function renderLoggedOutUI() {
+    const t = window.I18n?.translate || (k => k);
     profileContainer.innerHTML = `
-      <span class="nav-profile-login placeholder">Войти</span>
+      <span class="nav-profile-login placeholder">${t('loginViaGitHub')}</span>
       <i class="fas fa-chevron-right nav-profile-chevron"></i>
       <div class="profile-dropdown">
-        <div class="profile-dropdown-item" data-action="login"><i class="fab fa-github"></i> Войти через GitHub</div>
-        <div class="profile-dropdown-item" data-action="about"><i class="fas fa-info-circle"></i> Зачем это нужно?</div>
+        <div class="profile-dropdown-item" data-action="login"><i class="fab fa-github"></i> ${t('loginViaGitHub')}</div>
+        <div class="profile-dropdown-item" data-action="about"><i class="fas fa-info-circle"></i> ${t('whyNeed')}</div>
         <div class="profile-dropdown-divider"></div>
-        <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> Лимиты и кеш</div>
+        <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> ${t('ratePanel')}</div>
       </div>
     `;
     bindDropdownEvents();
@@ -477,13 +476,14 @@
   }
 
   async function handleAction(action) {
+    const t = window.I18n?.translate || (k => k);
     switch (action) {
       case 'login':
         modal.classList.add('active');
         tokenInput.focus();
         break;
       case 'about':
-        window.UIUtils?.showToast('Вход нужен для постов и хранилища. Требуются scopes repo и gist.', 'info', 8000);
+        window.UIUtils?.showToast(t('githubWarning'), 'info', 8000);
         break;
       case 'profile':
         if (currentUserLogin) window.open(`https://github.com/${currentUserLogin}`, '_blank');
@@ -492,9 +492,9 @@
         window.UIUtils?.showToast(`Вы ${currentUserLogin}, scopes: ${currentScopes.join(', ') || 'нет'}`, 'info', 6000);
         break;
       case 'storage':
-        if (!currentScopes.includes('gist')) return window.UIUtils?.showToast('Нужен gist scope', 'error');
+        if (!currentScopes.includes('gist')) return window.UIUtils?.showToast(t('needGistScope'), 'error');
         if (!window.BookmarkStorage) {
-          try { await window.Utils.loadModule('js/features/storage.js'); } catch { return window.UIUtils?.showToast('Ошибка загрузки хранилища', 'error'); }
+          try { await window.Utils.loadModule('js/features/storage.js'); } catch { return window.UIUtils?.showToast(t('loadModulesError'), 'error'); }
         }
         window.BookmarkStorage?.openStorageModal();
         break;
@@ -517,7 +517,7 @@
         currentScopes = [];
         renderLoggedOutUI();
         window.dispatchEvent(new CustomEvent('github-logout'));
-        window.UIUtils?.showToast('Вы вышли', 'info');
+        window.UIUtils?.showToast(t('logout'), 'info');
         break;
     }
   }
