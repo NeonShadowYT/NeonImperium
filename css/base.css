@@ -7,7 +7,8 @@
 body {
     font-family: var(--font-family);
     background: var(--bg-primary);
-    background-image: var(--bg-noise), var(--bg-gradient-overlay);
+    /* Рябь удалена, оставлен только градиент */
+    background-image: var(--bg-gradient-overlay);
     color: var(--text-secondary);
     line-height: 1.6;
     padding: 20px;
@@ -15,12 +16,7 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
-    animation: bgPulse 20s ease-in-out infinite alternate;
-}
-
-@keyframes bgPulse {
-    0% { background-position: 0% 0%; }
-    100% { background-position: 100% 100%; }
+    /* анимация bgPulse удалена – фон статичен, пылинки создают динамику */
 }
 
 .page {

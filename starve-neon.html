@@ -17,6 +17,15 @@
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
+
+    <!-- Убираем шумовую рябь на фоне только для этой страницы -->
+    <style>
+        body {
+            background-image: var(--bg-gradient-overlay) !important;
+        }
+        /* Пылинки остаются, их создаёт dust-particles.js */
+    </style>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">

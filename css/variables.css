@@ -26,6 +26,6 @@
     --glass-bg: rgba(30, 30, 48, 0.65);
     --glass-border: rgba(61, 158, 179, 0.15);
     --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.06'/%3E%3C/svg%3E");
+    /* --bg-noise удалён – рябь убрана */
     --bg-gradient-overlay: radial-gradient(circle at 30% 10%, rgba(61,158,179,0.08) 0%, transparent 60%);
 }
