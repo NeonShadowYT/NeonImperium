@@ -8,7 +8,8 @@
   let currentAbort = null, currentGame = null;
   const UPDATES_CACHE_TTL = 15 * 60 * 1000;
 
-  document.addEventListener('DOMContentLoaded', () => {
+  // ---- экспорт функции инициализации ----
+  window.initGameUpdates = function() {
     const container = document.getElementById('game-updates');
     if (container?.dataset.game) {
       currentGame = container.dataset.game;
@@ -47,7 +48,7 @@
         }
       }
     });
-  });
+  };
 
   window.refreshGameUpdates = (game) => {
     const cont = document.getElementById('game-updates');
@@ -153,4 +154,6 @@
     });
     return card;
   }
+
+  // Убираем авто-вызов!
 })();

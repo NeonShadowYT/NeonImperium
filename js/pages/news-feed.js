@@ -77,7 +77,8 @@
     try { await window.BookmarkStorage.addBookmark(bookmark); showToast(t('addToFavorites'), 'success'); } catch (err) { if (err.message !== 'duplicate') showToast(t('loadError') + ': ' + err.message, 'error'); }
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
+  // ---- экспорт функции инициализации ----
+  window.initNewsFeed = function() {
     const section = document.getElementById('news-section');
     if (!section) return;
     let header = section.querySelector('.news-header');
@@ -114,7 +115,7 @@
         }
       }
     });
-  });
+  };
 
   async function openPostFromUrl(postId) {
     const t = window.I18n?.translate || (k => k);
@@ -690,4 +691,5 @@
     }
   }
 
+  // Убираем авто-вызов!
 })();

@@ -1,4 +1,4 @@
-// js/pages/feedback.js – обратная связь с performAction, улучшенная обработка ошибок, локализация
+// js/pages/feedback.js – обратная связь, инициализация через window.initFeedback
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber,
@@ -11,17 +11,7 @@
 
   if (!window.GithubCore || !window.GithubAPI || !window.GithubAuth || !window.UIUtils) {
     console.error('[feedback.js] Missing dependencies');
-    Promise.all([
-      loadModule('js/core/github-core.js'),
-      loadModule('js/core/github-api.js'),
-      loadModule('js/core/github-auth.js'),
-      loadModule('js/features/ui-utils.js')
-    ]).catch(() => {
-      const t = window.I18n?.translate || (k => k);
-      document.querySelector('#feedback-section')?.innerHTML?.(
-        `<p class="error-message">${t('loadModulesError')}</p>`
-      );
-    });
+    // Попытка загрузить модули может быть здесь, но мы полагаемся на common-init
     return;
   }
 
@@ -336,15 +326,10 @@
     }
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
+  // ---- экспорт функции инициализации ----
+  window.initFeedback = function() {
     initLazy();
-    window.addEventListener('scroll', initLazy, { passive: true });
-  });
-
-  window.FeedbackPage = {
-    addReactionWithSync,
-    removeReactionWithSync,
-    loadGameIssues,
-    refresh: () => { if (currentGame) loadGameIssues(true); }
   };
+
+  // Убираем авто-вызов!
 })();

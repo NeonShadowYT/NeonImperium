@@ -183,6 +183,9 @@
     let currentPlatform = (getOS() === 'Android') ? 'Android' : 'Windows';
 
     async function initPlatform() {
+        if (platformInitialized) return; // предотвращаем повторный вызов
+        platformInitialized = true;
+
         const t = window.I18n?.translate || (k => k);
         const os = getOS();
         currentPlatform = (os === 'Android') ? 'Android' : 'Windows';
@@ -372,15 +375,12 @@
         });
 
         populateVersionSelect(currentPlatform);
-        platformInitialized = true;
     }
 
     // ---- обновление при смене языка ----
     window.addEventListener('languageChanged', () => {
         if (platformInitialized && githubContainer) {
-            // Пересоздаём блок с новыми переводами
             const t = window.I18n?.translate || (k => k);
-            // Обновляем текст кнопки
             const downloadBtn = githubContainer.querySelector('#github-download-btn');
             if (downloadBtn) {
                 downloadBtn.innerHTML = `<i class="fab fa-github"></i> ${t('downloadBtn')}`;
@@ -391,7 +391,6 @@
             }
             const versionDateEl = githubContainer.querySelector('#version-date');
             if (versionDateEl) {
-                // Дата обновится при выборе версии, но можно перезагрузить
                 const selected = versionSelect.value;
                 if (selected) {
                     const release = allReleases.find(r => r.tag_name === selected);
@@ -412,9 +411,8 @@
         }
     });
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initPlatform);
-    } else {
-        initPlatform();
-    }
+    // Экспортируем функцию инициализации
+    window.initPlatform = initPlatform;
+
+    // Убираем авто-вызов!
 })();
