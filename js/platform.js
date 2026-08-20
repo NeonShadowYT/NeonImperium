@@ -1,4 +1,4 @@
-// js/platform.js – улучшенная сортировка и стилизованные метки для выбора версий
+// js/platform.js – улучшенная сортировка и стилизованные метки для выбора версий, с локализацией
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
@@ -6,7 +6,6 @@
     const CACHE_DURATION = 60 * 60 * 1000; // 1 час
     let currentAbortController = null;
 
-    // Определяем игру из пути (starve-neon, alpha-01, gc-adven)
     const gameTag = location.pathname.split('/').pop().replace('.html', '');
 
     function getOS() {
@@ -33,7 +32,6 @@
         try { sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {}
     }
 
-    // Загружаем все релизы (включая пре-релизы, исключая черновики)
     async function fetchAllReleases() {
         const cached = cacheGet(RELEASES_CACHE_KEY);
         if (cached) return cached;
@@ -91,7 +89,6 @@
         return meta;
     }
 
-    // Парсинг версии из тега (v0.14.0, v0.14.0 p2, v0.14.0 b6, v0.14.0 a1)
     function parseVersion(tag) {
         let versionStr = tag.replace(/^v/, '');
         let suffix = '';
@@ -108,7 +105,6 @@
         return { major, minor, patch, suffix, full, tag };
     }
 
-    // Определяем тип релиза с приоритетом (чем меньше число, тем выше приоритет)
     function getReleaseType(version) {
         const s = version.suffix;
         if (s && s.includes('a')) {
@@ -120,14 +116,12 @@
         if (s && s.includes('p')) {
             return { type: 'prerelease', label: 'Пре-релиз', priority: 1, emoji: '🟠' };
         }
-        // Без суффикса – стабильный релиз или патч
         if (version.patch === 0) {
             return { type: 'release', label: 'Релиз', priority: 0, emoji: '🟢' };
         }
         return { type: 'patch', label: 'Патч', priority: 0, emoji: '🟡' };
     }
 
-    // Сортировка: сначала с sort-order (убывание), затем по приоритету (возрастание) и дате (убывание)
     function sortReleasesByOrder(releases) {
         const withOrder = [];
         const withoutOrder = [];
@@ -184,6 +178,7 @@
     }
 
     async function init() {
+        const t = window.I18n?.translate || (k => k);
         const os = getOS();
         let currentPlatform = (os === 'Android') ? 'Android' : 'Windows';
 
@@ -210,9 +205,9 @@
                     <p class="version-date" id="version-date"></p>
                 </div>
                 <a href="#" id="github-download-btn" class="download-button github" target="_blank">
-                    <i class="fab fa-github"></i> Скачать с GitHub
+                    <i class="fab fa-github"></i> ${t('downloadBtn')}
                 </a>
-                <button id="whats-new-btn" class="button small" style="display:none;"><i class="fas fa-newspaper"></i> Что нового?</button>
+                <button id="whats-new-btn" class="button small" style="display:none;"><i class="fas fa-newspaper"></i> ${t('whatsNew')}</button>
             </div>
         `;
 
@@ -226,7 +221,7 @@
         try {
             allReleases = await getGameReleases(gameTag);
         } catch (e) {
-            versionDateEl.textContent = 'Ошибка загрузки';
+            versionDateEl.textContent = t('loadError');
             githubBtn.classList.add('disabled');
             return;
         }
@@ -239,13 +234,12 @@
             const filtered = getFilteredReleases(platform);
             versionSelect.innerHTML = '';
             if (filtered.length === 0) {
-                versionDateEl.textContent = 'Нет доступных версий';
+                versionDateEl.textContent = t('noVersions');
                 githubBtn.classList.add('disabled');
                 githubBtn.removeAttribute('href');
                 return;
             }
 
-            // Группируем по major.minor
             const groups = {};
             filtered.forEach(release => {
                 const version = parseVersion(release.tag_name);
@@ -254,7 +248,6 @@
                 groups[key].push({ release, version });
             });
 
-            // Сортируем группы по убыванию версии
             const sortedKeys = Object.keys(groups).sort((a, b) => {
                 const [aMaj, aMin] = a.split('.').map(Number);
                 const [bMaj, bMin] = b.split('.').map(Number);
@@ -288,7 +281,6 @@
                 versionSelect.appendChild(optgroup);
             });
 
-            // Выбираем первый (самый приоритетный) релиз по умолчанию
             const firstOption = versionSelect.querySelector('option');
             if (firstOption) {
                 versionSelect.value = firstOption.value;
@@ -314,7 +306,7 @@
             } else {
                 displayDate = formatDate(release.published_at);
             }
-            versionDateEl.textContent = `Обновление от ${displayDate}`;
+            versionDateEl.textContent = `${t('updateFrom')} ${displayDate}`;
 
             const asset = findAsset(release, currentPlatform);
             if (asset) {
@@ -371,7 +363,7 @@
                     });
                 }
             } catch (err) {
-                window.UIUtils?.showToast('Не удалось загрузить пост', 'error');
+                window.UIUtils?.showToast(t('failedLoadPost'), 'error');
             }
         });
 

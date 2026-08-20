@@ -1,4 +1,4 @@
-// js/pages/feedback.js – обратная связь с performAction, улучшенная обработка ошибок
+// js/pages/feedback.js – обратная связь с performAction, улучшенная обработка ошибок, локализация
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber,
@@ -9,7 +9,6 @@
   const { getCurrentUser, isAdmin } = window.GithubAuth || {};
   const { showToast } = window.UIUtils || {};
 
-  // Проверка критических зависимостей
   if (!window.GithubCore || !window.GithubAPI || !window.GithubAuth || !window.UIUtils) {
     console.error('[feedback.js] Missing dependencies');
     Promise.all([
@@ -18,8 +17,9 @@
       loadModule('js/core/github-auth.js'),
       loadModule('js/features/ui-utils.js')
     ]).catch(() => {
+      const t = window.I18n?.translate || (k => k);
       document.querySelector('#feedback-section')?.innerHTML?.(
-        '<p class="error-message">Ошибка загрузки модулей. Попробуйте обновить страницу.</p>'
+        `<p class="error-message">${t('loadModulesError')}</p>`
       );
     });
     return;
@@ -115,6 +115,7 @@
     }
     const { controller, timeoutId } = createAbortable(15000);
     currentAbort = { controller };
+    const t = window.I18n?.translate || (k => k);
     try {
       const key = `game_issues_${currentGame}`;
       let issues = cacheGet(key);
@@ -128,12 +129,12 @@
           console.warn('[feedback.js] loadIssues error:', err);
           if (loadRetries < MAX_RETRIES) {
             loadRetries++;
-            showToast(`Ошибка загрузки, попытка ${loadRetries} из ${MAX_RETRIES}...`, 'warning');
+            showToast(`${t('loadError')}, ${t('tryRefresh')}`, 'warning');
             await new Promise(r => setTimeout(r, 1000));
             return loadGameIssues(reset);
           } else {
-            showToast('Не удалось загрузить отзывы. Проверьте соединение.', 'error');
-            if (grid) grid.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Ошибка загрузки данных</p></div>';
+            showToast(t('feedbackLoadFailed'), 'error');
+            if (grid) grid.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>${t('dataLoadError')}</p></div>`;
             return;
           }
         }
@@ -143,8 +144,8 @@
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error('[feedback.js] loadGameIssues error:', err);
-      showToast('Ошибка загрузки: ' + (err.message || err), 'error');
-      if (grid) grid.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Не удалось загрузить данные</p></div>';
+      showToast(t('loadError') + ': ' + (err.message || err), 'error');
+      if (grid) grid.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>${t('dataLoadError')}</p></div>`;
     } finally {
       clearTimeout(timeoutId);
       if (currentAbort?.controller === controller) currentAbort = null;
@@ -172,7 +173,8 @@
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     const pageItems = filtered.slice(start, start + ITEMS_PER_PAGE);
     if (pageItems.length === 0 && reset) {
-      grid.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p data-lang="feedbackNoItems">Пока нет сообщений</p></div>';
+      const t = window.I18n?.translate || (k => k);
+      grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p data-lang="feedbackNoItems">${t('feedbackNoItems')}</p></div>`;
       hasMore = false;
       return;
     }
@@ -194,38 +196,40 @@
 
   function renderLoginPrompt() {
     if (!container) return;
-    container.innerHTML = `<div class="login-prompt"><i class="fab fa-github"></i><h3 data-lang="feedbackLoginPrompt">Войдите через GitHub</h3><p class="text-secondary" data-lang="feedbackTokenNote">Токен останется в браузере.</p><button class="button" id="feedback-login-btn">Войти</button></div>`;
+    const t = window.I18n?.translate || (k => k);
+    container.innerHTML = `<div class="login-prompt"><i class="fab fa-github"></i><h3 data-lang="feedbackLoginPrompt">${t('feedbackLoginPrompt')}</h3><p class="text-secondary" data-lang="feedbackTokenNote">${t('githubTokenNote')}</p><button class="button" id="feedback-login-btn">${t('feedbackLoginBtn')}</button></div>`;
     const btn = container.querySelector('#feedback-login-btn');
     if (btn) btn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('github-login-requested')));
   }
 
   async function renderInterface() {
     if (!container) return;
+    const t = window.I18n?.translate || (k => k);
     if (!window.UIFeedback) {
       try {
         await loadModule('js/features/ui-feedback.js');
       } catch (err) {
         console.error('[feedback.js] Failed to load UIFeedback:', err);
-        container.innerHTML = '<p class="error-message">Не удалось загрузить модуль обратной связи. Попробуйте обновить.</p>';
+        container.innerHTML = `<p class="error-message">${t('loadModulesError')}</p>`;
         return;
       }
     }
     container.innerHTML = `
       <div class="feedback-header">
         <div style="display:flex;align-items:center;gap:8px;">
-          <h2 style="margin:0;"><i class="fas fa-comment-dots" style="font-size:24px;color:var(--accent);"></i> <span data-lang="feedbackTitle">Идеи, баги и отзывы</span></h2>
+          <h2 style="margin:0;"><i class="fas fa-comment-dots" style="font-size:24px;color:var(--accent);"></i> <span data-lang="feedbackTitle">${t('feedbackTitle')}</span></h2>
         </div>
-        <button class="button" id="toggle-form-btn">+ Оставить сообщение</button>
+        <button class="button" id="toggle-form-btn">+ ${t('feedbackNewBtn')}</button>
       </div>
-      <p class="text-secondary" data-lang="feedbackDesc">Делитесь мыслями, сообщайте об ошибках.</p>
-      <div class="feedback-tabs"><button class="feedback-tab active" data-tab="all">Все</button><button class="feedback-tab" data-tab="idea">💡 Идеи</button><button class="feedback-tab" data-tab="bug">🐛 Баги</button><button class="feedback-tab" data-tab="review">⭐ Отзывы</button></div>
+      <p class="text-secondary" data-lang="feedbackDesc">${t('feedbackDesc')}</p>
+      <div class="feedback-tabs"><button class="feedback-tab active" data-tab="all">${t('tabAll')}</button><button class="feedback-tab" data-tab="idea">💡 ${t('tabIdeas')}</button><button class="feedback-tab" data-tab="bug">🐛 ${t('tabBugs')}</button><button class="feedback-tab" data-tab="review">⭐ ${t('tabReviews')}</button></div>
       <div class="projects-grid" id="feedback-panel"></div><div id="sentinel" style="height:10px;"></div>
     `;
     const toggleBtn = document.getElementById('toggle-form-btn');
     if (toggleBtn) {
       toggleBtn.addEventListener('click', () => {
         if (!window.UIFeedback) {
-          showToast('Модуль редактора не загружен', 'error');
+          showToast(t('editorNotLoaded'), 'error');
           return;
         }
         window.UIFeedback.openEditorModal('new', { game: currentGame }, 'feedback');
@@ -279,12 +283,12 @@
         try {
           await loadModule('js/features/ui-feedback.js');
         } catch (err) {
-          showToast('Не удалось загрузить модуль просмотра', 'error');
+          showToast(t('viewerNotAvailable'), 'error');
           return;
         }
       }
       if (!window.UIFeedback) {
-        showToast('Модуль просмотра недоступен', 'error');
+        showToast(t('viewerNotAvailable'), 'error');
         return;
       }
       window.UIFeedback.openFullModal({
@@ -301,11 +305,12 @@
   }
 
   async function openPostFromUrl(id) {
+    const t = window.I18n?.translate || (k => k);
     try {
       if (!window.GithubAPI) await loadModule('js/core/github-api.js');
       const issue = await window.GithubAPI.loadIssue(id);
       if (!issue || issue.state === 'closed') {
-        showToast('Пост не найден или закрыт', 'error');
+        showToast(t('postNotFound'), 'error');
         return;
       }
       const gameLabel = issue.labels.find(l => l.name.startsWith('game:'));
@@ -321,13 +326,13 @@
       };
       if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
       if (!window.UIFeedback.canViewPost(issue.body, item.labels, currentUser)) {
-        showToast('Нет доступа', 'error');
+        showToast(t('noAccess'), 'error');
         return;
       }
       window.UIFeedback.openFullModal(item);
     } catch (err) {
       console.error('[feedback.js] openPostFromUrl error:', err);
-      showToast('Ошибка загрузки поста', 'error');
+      showToast(t('postLoadError'), 'error');
     }
   }
 

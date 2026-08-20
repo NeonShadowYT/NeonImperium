@@ -1,4 +1,4 @@
-// js/common-init.js – инициализация без автоподчистки кеша
+// js/common-init.js – инициализация без автоподчистки кеша, с локализацией
 (function() {
   function addPreconnects() {
     const links = [
@@ -91,16 +91,15 @@
     document.head.appendChild(link);
   }
 
-  // ========== ОБНОВЛЁННАЯ ФУНКЦИЯ ДЛЯ LAZY YOUTUBE ==========
   function initLazyYT() {
-    // Функция отображения fallback
     function showYouTubeFallback(container, videoUrl) {
+      const t = window.I18n?.translate || (k => k);
       container.innerHTML = `
         <div class="yt-fallback" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:var(--bg-primary);border-radius:12px;padding:20px;text-align:center;gap:12px;animation:fadeInUp 0.4s ease;">
           <i class="fab fa-youtube" style="font-size:32px;color:var(--accent);"></i>
-          <p style="color:var(--text-secondary);font-size:14px;margin:0;">Видео не может быть встроено</p>
+          <p style="color:var(--text-secondary);font-size:14px;margin:0;">${t('videoLoadFailed')}</p>
           <button class="button small" onclick="window.open('${videoUrl || '#'}', '_blank')" style="background:var(--accent);color:#fff;">
-            <i class="fas fa-external-link-alt"></i> Открыть на YouTube
+            <i class="fas fa-external-link-alt"></i> ${t('open')}
           </button>
         </div>
       `;
@@ -115,7 +114,6 @@
           const src = el.dataset.src;
           if (!src) return;
 
-          // Парсим ID видео
           let videoId = '';
           const patterns = [
             /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
@@ -130,7 +128,6 @@
             return;
           }
 
-          // Используем youtube-nocookie с параметрами
           const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`;
           const iframe = document.createElement('iframe');
           iframe.src = embedUrl;
@@ -144,7 +141,6 @@
           iframe.style.border = 'none';
           iframe.style.borderRadius = '12px';
 
-          // Обработка ошибок
           let errorOccurred = false;
           iframe.onerror = function() {
             if (!errorOccurred) {
@@ -152,7 +148,6 @@
               showYouTubeFallback(el, src);
             }
           };
-          // Таймаут на случай, если iframe завис
           const timeout = setTimeout(() => {
             if (!iframe.contentWindow && !errorOccurred) {
               errorOccurred = true;
@@ -160,14 +155,12 @@
             }
           }, 10000);
 
-          // Успешная загрузка
           iframe.onload = function() {
             clearTimeout(timeout);
             el.classList.add('loaded');
             obs.unobserve(el);
           };
 
-          // Очистка при удалении элемента
           el.addEventListener('remove', function() {
             clearTimeout(timeout);
           });
@@ -189,19 +182,17 @@
       }, { rootMargin: '200px' });
 
       document.querySelectorAll('.lazy-yt').forEach((el) => {
-        // Если контейнер уже содержит iframe, пропускаем
         if (el.querySelector('iframe')) return;
         obs.observe(el);
       });
     } else {
-      // Fallback для браузеров без IntersectionObserver
       document.querySelectorAll('.lazy-yt').forEach((el) => {
         if (el.querySelector('iframe')) return;
         const src = el.dataset.src;
         if (!src) return;
         const videoId = src.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
         if (!videoId) {
-          el.innerHTML = `<div class="yt-fallback">⚠️ Неверная ссылка</div>`;
+          el.innerHTML = `<div class="yt-fallback">⚠️ ${window.I18n?.translate('videoLoadFailed') || 'Video load failed'}</div>`;
           return;
         }
         const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`;
@@ -243,6 +234,7 @@
   function showUpdateNotification() {
     if (sessionStorage.getItem('update_notification_shown')) return;
     sessionStorage.setItem('update_notification_shown', '1');
+    const t = window.I18n?.translate || (k => k);
     const note = document.createElement('div');
     note.id = 'update-notification';
     note.style.cssText =
@@ -250,7 +242,7 @@
       'background: var(--accent); color: #fff; padding: 12px 20px;' +
       'border-radius: 40px; box-shadow: 0 6px 14px rgba(0,0,0,0.4);' +
       'font-family: "Russo One", sans-serif; display: flex; align-items: center; gap: 12px;';
-    note.innerHTML = '<span>Доступна новая версия.</span><button id="update-btn" style="background:white;color:var(--accent);border:none;padding:6px 16px;border-radius:20px;cursor:pointer;font-family:inherit;">Обновить</button>';
+    note.innerHTML = `<span>${t('newVersionAvailable')}</span><button id="update-btn" style="background:white;color:var(--accent);border:none;padding:6px 16px;border-radius:20px;cursor:pointer;font-family:inherit;">${t('updateBtn')}</button>`;
     document.body.appendChild(note);
     document.getElementById('update-btn').addEventListener('click', () => { window.location.reload(); });
   }
@@ -275,6 +267,7 @@
   function initDownloadConsent() {
     const CONSENT_KEY = 'download_consent_given_v1';
     const consentGiven = localStorage.getItem(CONSENT_KEY) === 'true';
+    const t = window.I18n?.translate || (k => k);
     function showConsentModal(callback) {
       const modal = document.createElement('div');
       modal.className = 'modal modal-fullscreen';
@@ -283,18 +276,18 @@
         <div class="modal-content-full" style="max-width: 550px; text-align: center;">
           <div class="modal-header"><h2>⚠️ ВАЖНОЕ ПРЕДУПРЕЖДЕНИЕ</h2><button class="modal-close"><i class="fas fa-times"></i></button></div>
           <div class="modal-body" style="text-align: left;">
-            <p><strong>Подтвердите, прежде чем скачать игру:</strong></p>
+            <p><strong>${t('licenseConfirmDesc')}</strong></p>
             <ul style="margin: 15px 0; padding-left: 20px;">
-              <li>Я принимаю <strong><a href="license.html" target="_blank">лицензионное соглашение</a></strong> и осознаю, что разработчики не несут ответственности за любой вред здоровью или имуществу.</li>
-              <li>Я понимаю, что сторонние моды устанавливаю на свой страх и риск.</li>
+              <li>${t('licenseAccept')} <strong><a href="license.html" target="_blank">${t('licenseLink')}</a></strong>.</li>
+              <li>${t('licenseModDisclaimer')}</li>
             </ul>
             <label style="display: flex; align-items: center; gap: 10px; margin-top: 15px; cursor: pointer;">
-              <input type="checkbox" id="consent-checkbox"> Я подтверждаю все вышеуказанные условия и согласен(на) с ними.
+              <input type="checkbox" id="consent-checkbox"> ${t('licenseConfirmCheckbox')}
             </label>
           </div>
           <div class="modal-footer" style="padding: 20px; display: flex; justify-content: flex-end; gap: 12px;">
-            <button class="button" id="consent-cancel">Отмена</button>
-            <button class="button" id="consent-confirm" disabled style="background: var(--accent);">Продолжить</button>
+            <button class="button" id="consent-cancel">${t('feedbackCancel')}</button>
+            <button class="button" id="consent-confirm" disabled style="background: var(--accent);">${t('licenseConfirmButton')}</button>
           </div>
         </div>
       `;
@@ -343,7 +336,8 @@
             const item = document.createElement('div');
             item.className = 'profile-dropdown-item';
             item.dataset.action = 'rate-panel';
-            item.innerHTML = '<i class="fas fa-chart-bar"></i> Лимиты и кеш';
+            const t = window.I18n?.translate || (k => k);
+            item.innerHTML = `<i class="fas fa-chart-bar"></i> ${t('ratePanel') || 'Лимиты и кеш'}`;
             const divider = dropdown.querySelector('.profile-dropdown-divider');
             if (divider) {
               dropdown.insertBefore(item, divider);

@@ -1,4 +1,4 @@
-// js/features/ui-feedback.js
+// js/features/ui-feedback.js – с локализацией
 (function() {
   const {
     createElement, escapeHtml, renderMarkdown, loadModule,
@@ -33,6 +33,8 @@
   let currentModalAbortController = null;
   let currentModalLoading = null;
 
+  const t = window.I18n?.translate || (k => k);
+
   function canViewPost(body, labels, currentUser) {
     if (!labels || !labels.includes('private')) return true;
     if (isAdmin()) return true;
@@ -42,12 +44,12 @@
 
   function validateTextContent(text, minLength, fieldName = 'Текст') {
     if (containsGitHubToken(text)) {
-      showToast('Обнаружен GitHub-токен в тексте. Пожалуйста, удалите его.', 'error');
+      showToast(t('githubTokenDetected'), 'error');
       return false;
     }
     const plainLength = getPlainTextLength(text);
     if (plainLength < minLength) {
-      showToast(`${fieldName} должен содержать не менее ${minLength} значимых символов (сейчас ${plainLength}).`, 'error');
+      showToast(`${fieldName} ${t('commentTooShort')}`, 'error');
       return false;
     }
     return true;
@@ -110,18 +112,18 @@
     if (!isHeartActive) {
       heartBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!currentUser) { showToast('Войдите в GitHub', 'error'); return; }
+        if (!currentUser) { showToast(t('loginToGitHub'), 'error'); return; }
         const valid = await isActionStillValid('reactions', { issueNumber, content: 'heart' });
         if (!valid) {
-          showToast('Вы уже поставили ❤️', 'info');
+          showToast(t('alreadyHearted'), 'info');
           return;
         }
         try {
           const result = await performAction('reactions', { issueNumber, content: 'heart' }, () => window.GithubAPI.addReaction(issueNumber, 'heart'));
           if (result.queued) {
-            showToast('❤️ будет добавлена при восстановлении лимитов', 'info');
+            showToast(t('heartQueued'), 'info');
           } else {
-            showToast('❤️ добавлена', 'success');
+            showToast(t('heartAdded'), 'success');
           }
           heartBtn.disabled = true;
           heartBtn.style.pointerEvents = 'none';
@@ -136,7 +138,7 @@
             renderReactions(container, issueNumber, newReactions, currentUser, onAddHeart, onRemoveHeart);
           }).catch(() => {});
         } catch (err) {
-          showToast('Ошибка: ' + err.message, 'error');
+          showToast(t('loadError') + ': ' + err.message, 'error');
           heartBtn.disabled = false;
           heartBtn.style.pointerEvents = 'auto';
           heartBtn.style.background = 'var(--bg-primary)';
@@ -260,7 +262,7 @@
   function renderComments(comments, container) {
     container.innerHTML = '';
     if (comments.length === 0) {
-      container.innerHTML = '<p class="text-secondary" style="text-align:center;">Нет комментариев</p>';
+      container.innerHTML = `<p class="text-secondary" style="text-align:center;">${t('noComments') || 'Нет комментариев'}</p>`;
       return;
     }
     const currentUser = getCurrentUser();
@@ -276,10 +278,10 @@
       commentDiv.appendChild(body);
       if (currentUser === c.user.login || isAdmin()) {
         const actions = createElement('div', 'comment-actions', { position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', opacity: '0', transition: 'opacity 0.2s' });
-        const editBtn = createElement('button', '', {}, { title: 'Редактировать' });
+        const editBtn = createElement('button', '', {}, { title: t('edit') });
         editBtn.innerHTML = '<i class="fas fa-pen"></i>';
         editBtn.addEventListener('click', (e) => { e.stopPropagation(); editCommentWithEditor(c.id, c.body, () => { /* обновить после редактирования */ }); });
-        const delBtn = createElement('button', '', {}, { title: 'Удалить' });
+        const delBtn = createElement('button', '', {}, { title: t('delete') });
         delBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
         delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteComment(c.id, () => { /* обновить после удаления */ }); });
         actions.appendChild(editBtn);
@@ -295,36 +297,36 @@
 
   async function editCommentWithEditor(commentId, oldBody, onUpdate) {
     if (!window.Editor) await loadModule('js/features/editor.js');
-    const newBody = prompt('Редактировать комментарий (поддерживается Markdown)', oldBody);
+    const newBody = prompt(t('edit'), oldBody);
     if (!newBody || newBody === oldBody) return;
     if (newBody.length > 400) {
-      showToast('Комментарий не может превышать 400 символов', 'error');
+      showToast(t('commentTooLong'), 'error');
       return;
     }
-    if (!validateTextContent(newBody, MIN_COMMENT_LENGTH, 'Комментарий')) return;
+    if (!validateTextContent(newBody, MIN_COMMENT_LENGTH, t('comment'))) return;
 
     try {
       await window.GithubAPI.updateComment(commentId, newBody);
-      showToast('Обновлено', 'success');
+      showToast(t('updated'), 'success');
       if (onUpdate) onUpdate();
-    } catch (err) { showToast('Ошибка', 'error'); }
+    } catch (err) { showToast(t('loadError'), 'error'); }
   }
 
   async function addComment(issueNumber, body, onUpdate) {
-    if (!body.trim()) return showToast('Введите текст', 'error');
+    if (!body.trim()) return showToast(t('enterText'), 'error');
     if (body.length > 400) {
-      showToast('Комментарий не может превышать 400 символов', 'error');
+      showToast(t('commentTooLong'), 'error');
       return;
     }
-    if (!validateTextContent(body, MIN_COMMENT_LENGTH, 'Комментарий')) return;
+    if (!validateTextContent(body, MIN_COMMENT_LENGTH, t('comment'))) return;
 
     const currentUser = getCurrentUser();
-    if (!currentUser) return showToast('Войдите в GitHub', 'error');
+    if (!currentUser) return showToast(t('loginToGitHub'), 'error');
 
     try {
       const result = await performAction('comments', { issueNumber, body }, () => window.GithubAPI.addComment(issueNumber, body));
       if (result.queued) {
-        showToast('Комментарий сохранён в очередь', 'info');
+        showToast(t('commentQueued'), 'info');
         const container = document.getElementById('modal-comments-list');
         if (container) {
           const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px', opacity: '0.6' });
@@ -335,22 +337,22 @@
           container.prepend(commentDiv);
         }
       } else {
-        showToast('Комментарий добавлен', 'success');
+        showToast(t('commentAdded'), 'success');
         localStorage.setItem(LAST_COMMENT_KEY, Date.now().toString());
         if (onUpdate) onUpdate();
       }
     } catch (err) {
-      showToast('Ошибка: ' + err.message, 'error');
+      showToast(t('loadError') + ': ' + err.message, 'error');
     }
   }
 
   async function deleteComment(commentId, onUpdate) {
-    if (!confirm('Удалить комментарий?')) return;
+    if (!confirm(t('deletePostConfirm'))) return;
     try {
       await window.GithubAPI.deleteComment(commentId);
-      showToast('Удалено', 'success');
+      showToast(t('deleted'), 'success');
       if (onUpdate) onUpdate();
-    } catch (err) { showToast('Ошибка', 'error'); }
+    } catch (err) { showToast(t('loadError'), 'error'); }
   }
 
   async function sharePost(title, url) {
@@ -358,7 +360,7 @@
       try { await navigator.share({ title, url }); } catch(e) {}
     } else {
       navigator.clipboard.writeText(url);
-      showToast('Ссылка скопирована', 'success');
+      showToast(t('share') + ' ' + t('updated'), 'success');
     }
   }
 
@@ -367,21 +369,21 @@
       try {
         await loadModule('js/features/storage.js');
       } catch (e) {
-        showToast('Не удалось загрузить хранилище', 'error');
+        showToast(t('loadModulesError'), 'error');
         return;
       }
     }
     if (!window.BookmarkStorage) {
-      showToast('Хранилище не загружено', 'error');
+      showToast(t('loadModulesError'), 'error');
       return;
     }
     const currentUser = getCurrentUser();
     if (!currentUser) {
-      showToast('Войдите в GitHub', 'error');
+      showToast(t('loginToGitHub'), 'error');
       return;
     }
     if (!hasScope('gist')) {
-      showToast('Требуется scope gist', 'error');
+      showToast(t('needGistScope'), 'error');
       return;
     }
     try {
@@ -394,23 +396,23 @@
         date: postData.date,
         postData: postData
       });
-      showToast('Добавлено в закладки', 'success');
-    } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
+      showToast(t('addToFavorites'), 'success');
+    } catch(e) { showToast(t('loadError') + ': ' + e.message, 'error'); }
   }
 
   async function editPost(id, currentTitle, currentBody, game, labels) {
-    if (!hasScope('repo')) return showToast('Нет прав', 'error');
+    if (!hasScope('repo')) return showToast(t('noPermission'), 'error');
     await openEditorModal('edit', { game, title: currentTitle, body: currentBody }, 'post', id);
   }
 
   async function deletePost(id) {
-    if (!hasScope('repo')) return showToast('Нет прав', 'error');
-    if (!confirm('Удалить пост? Это действие необратимо.')) return;
+    if (!hasScope('repo')) return showToast(t('noPermission'), 'error');
+    if (!confirm(t('deletePostConfirm'))) return;
     try {
       await window.GithubAPI.closeIssue(id);
-      showToast('Пост закрыт (удалён)', 'success');
+      showToast(t('postDeleted'), 'success');
       setTimeout(() => location.reload(), 1000);
-    } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
+    } catch(e) { showToast(t('loadError') + ': ' + e.message, 'error'); }
   }
 
   async function openFullModal(item) {
@@ -418,7 +420,7 @@
     const currentUser = getCurrentUser();
     let displayBody = body;
     if (labels && labels.includes('private') && !canViewPost(body, labels, currentUser)) {
-      showToast('Нет доступа к приватному посту', 'error');
+      showToast(t('noAccess'), 'error');
       return;
     }
     if (labels && labels.includes('private') && canViewPost(body, labels, currentUser)) {
@@ -442,16 +444,16 @@
       <div class="markdown-body post-content" style="margin-bottom: 24px;"></div>
       <div class="reactions-container" id="modal-reactions"></div>
       <div class="comments-section">
-        <h3>Комментарии</h3>
+        <h3>${t('comments') || 'Комментарии'}</h3>
         <div id="modal-comments-list" class="comments-list"></div>
         ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px; align-items:center; flex-wrap:wrap;">
-          <input type="text" id="new-comment-input" placeholder="Ваш комментарий..." class="comment-input-field" style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:150px;">
-          <button id="submit-comment-btn" class="button small">Отправить</button>
+          <input type="text" id="new-comment-input" placeholder="${t('enterText')}" class="comment-input-field" style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:150px;">
+          <button id="submit-comment-btn" class="button small">${t('send')}</button>
           <span style="font-size:12px; color:var(--text-secondary); margin-left:4px;" id="comment-counter">0/400</span>
           <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
-            Осталось: <span class="rate-indicator" data-action="comments">${window.RateLimits ? window.RateLimits.getRemaining('comments') : '?'}</span>
+            ${t('postsRemaining')}: <span class="rate-indicator" data-action="comments">${window.RateLimits ? window.RateLimits.getRemaining('comments') : '?'}</span>
           </span>
-        </div>` : '<p class="text-secondary">Войдите, чтобы комментировать</p>'}
+        </div>` : `<p class="text-secondary">${t('loginToComment')}</p>`}
       </div>
     `;
 
@@ -483,23 +485,23 @@
     if (headerDiv) {
       const actionsDiv = createElement('div', 'modal-header-actions', { display: 'flex', gap: '8px', marginLeft: 'auto', marginRight: '8px' });
       if (canBookmark) {
-        const bookmarkBtn = createElement('button', 'action-btn', {}, { title: 'В закладки' });
+        const bookmarkBtn = createElement('button', 'action-btn', {}, { title: t('bookmark') });
         bookmarkBtn.innerHTML = '<i class="fas fa-bookmark"></i>';
         bookmarkBtn.addEventListener('click', () => addToBookmarks({ id, title, author, date, game, labels, thumbnail: null }));
         actionsDiv.appendChild(bookmarkBtn);
       }
-      const shareBtn = createElement('button', 'action-btn', {}, { title: 'Поделиться' });
+      const shareBtn = createElement('button', 'action-btn', {}, { title: t('share') });
       shareBtn.innerHTML = '<i class="fas fa-share-alt"></i>';
       shareBtn.addEventListener('click', () => sharePost(title, `${location.origin}${location.pathname}?post=${id}`));
       actionsDiv.appendChild(shareBtn);
       if (canEdit) {
-        const editBtn = createElement('button', 'action-btn', {}, { title: 'Редактировать' });
+        const editBtn = createElement('button', 'action-btn', {}, { title: t('edit') });
         editBtn.innerHTML = '<i class="fas fa-pen"></i>';
         editBtn.addEventListener('click', () => editPost(id, title, body, game, labels));
         actionsDiv.appendChild(editBtn);
       }
       if (canDelete) {
-        const deleteBtn = createElement('button', 'action-btn', {}, { title: 'Удалить' });
+        const deleteBtn = createElement('button', 'action-btn', {}, { title: t('delete') });
         deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
         deleteBtn.addEventListener('click', () => deletePost(id));
         actionsDiv.appendChild(deleteBtn);
@@ -557,7 +559,7 @@
         const text = commentInput.value.trim();
         if (!text) return;
         if (text.length > 400) {
-          showToast('Комментарий не может превышать 400 символов', 'error');
+          showToast(t('commentTooLong'), 'error');
           return;
         }
         await addComment(id, text, refreshComments);
@@ -570,10 +572,9 @@
     }
   }
 
-  // ================== НОВЫЙ РЕДАКТОР ==================
   async function openEditorModal(mode, initialData, context, existingId = null) {
     if (!hasScope('repo')) {
-      showToast('Требуется scope repo', 'error');
+      showToast(t('noPermission'), 'error');
       return;
     }
     const { game, title: initTitle, body: initBody } = initialData || {};
@@ -586,9 +587,8 @@
     let currentBody = savedBody;
     let allowedUsers = '';
 
-    // Создаём модальное окно с пустым контейнером
     const { modal, closeModal } = createModal(
-      mode === 'new' ? 'Создать пост' : 'Редактировать пост',
+      mode === 'new' ? t('createPost') : t('editPost'),
       '<div class="editor-container"></div>',
       { size: 'full' }
     );
@@ -598,7 +598,6 @@
     container.style.flexDirection = 'column';
     container.style.gap = '12px';
 
-    // ----- Заголовок -----
     const titleRow = createElement('div', 'editor-title-row', {
       display: 'flex',
       gap: '12px',
@@ -616,7 +615,7 @@
       minWidth: '150px'
     });
     titleInput.type = 'text';
-    titleInput.placeholder = 'Заголовок';
+    titleInput.placeholder = t('title');
     titleInput.value = currentTitle;
     const titleCounter = createElement('span', 'title-counter', {
       fontSize: '12px',
@@ -628,7 +627,6 @@
     titleRow.appendChild(titleCounter);
     container.appendChild(titleRow);
 
-    // ----- Переключатель приватности -----
     const accessRow = createElement('div', 'access-row', {
       display: 'flex',
       gap: '12px',
@@ -644,9 +642,9 @@
       padding: '4px'
     });
     const publicBtn = createElement('button', 'access-switch-btn active', {});
-    publicBtn.textContent = 'Публичный';
+    publicBtn.textContent = t('public');
     const privateBtn = createElement('button', 'access-switch-btn', {});
-    privateBtn.textContent = 'Приватный';
+    privateBtn.textContent = t('private');
     accessSwitch.appendChild(publicBtn);
     accessSwitch.appendChild(privateBtn);
     const allowedInput = createElement('input', 'allowed-users-input', {
@@ -660,14 +658,12 @@
       fontFamily: 'var(--font-family)',
       minWidth: '150px'
     });
-    allowedInput.placeholder = 'Логины через запятую';
+    allowedInput.placeholder = t('loginsComma');
     allowedInput.value = allowedUsers;
     accessRow.appendChild(accessSwitch);
     accessRow.appendChild(allowedInput);
     container.appendChild(accessRow);
 
-    // ----- Редактор (тулбар + две колонки) -----
-    // Создаём textarea
     const textarea = createElement('textarea', 'editor-textarea', {
       width: '100%',
       height: '100%',
@@ -684,7 +680,6 @@
     });
     textarea.value = currentBody;
 
-    // Создаём предпросмотр
     const preview = createElement('div', 'editor-preview markdown-body', {
       padding: '16px',
       wordWrap: 'break-word',
@@ -694,7 +689,6 @@
     });
     await renderMarkdownWithEditor(currentBody, preview);
 
-    // Контейнер для двух колонок
     const splitContainer = createElement('div', 'editor-split', {
       display: 'flex',
       gap: '16px',
@@ -725,7 +719,6 @@
     splitContainer.appendChild(leftCol);
     splitContainer.appendChild(rightCol);
 
-    // Тулбар (создаём после textarea, чтобы передать ссылку)
     let toolbar = null;
     if (window.Editor) {
       toolbar = window.Editor.createEditorToolbar(textarea);
@@ -736,7 +729,6 @@
       }
     }
     if (toolbar) {
-      // Добавляем кнопку "Хостинги" в тулбар (если есть)
       const hostBtn = window.Editor.createImageServicesMenu ? window.Editor.createImageServicesMenu() : null;
       if (hostBtn) {
         toolbar.appendChild(hostBtn);
@@ -745,7 +737,6 @@
     }
     container.appendChild(splitContainer);
 
-    // ----- Кнопка отправки и лимиты -----
     const submitRow = createElement('div', 'submit-row', {
       display: 'flex',
       gap: '12px',
@@ -762,31 +753,27 @@
       cursor: 'pointer',
       fontFamily: 'var(--font-family)'
     });
-    submitBtn.textContent = mode === 'edit' ? 'Обновить' : 'Опубликовать';
+    submitBtn.textContent = mode === 'edit' ? t('update') : t('publish');
     const rateIndicator = createElement('span', 'rate-indicator-wrapper', {
       fontSize: '12px',
       color: 'var(--text-secondary)',
       marginLeft: '8px'
     });
-    rateIndicator.innerHTML = `Осталось постов: <span class="rate-indicator" data-action="posts">${window.RateLimits ? window.RateLimits.getRemaining('posts') : '?'}</span>`;
+    rateIndicator.innerHTML = `${t('postsRemaining')}: <span class="rate-indicator" data-action="posts">${window.RateLimits ? window.RateLimits.getRemaining('posts') : '?'}</span>`;
     submitRow.appendChild(submitBtn);
     submitRow.appendChild(rateIndicator);
     container.appendChild(submitRow);
 
-    // ----- Обработчики событий -----
-
-    // 1. Ввод в textarea → обновляем предпросмотр, сохраняем черновик, обновляем currentBody
     textarea.addEventListener('input', async () => {
       currentBody = textarea.value;
       await renderMarkdownWithEditor(currentBody, preview);
       saveDraft(draftKey, { title: titleInput.value, body: currentBody });
     });
 
-    // 2. Ввод в заголовок → сохраняем черновик
     titleInput.addEventListener('input', () => {
       const val = titleInput.value;
       if (val.length > 100) {
-        showToast('Заголовок не должен превышать 100 символов', 'error');
+        showToast(t('title') + ' ' + t('commentTooLong'), 'error');
         titleInput.value = val.slice(0, 100);
         return;
       }
@@ -796,7 +783,6 @@
       saveDraft(draftKey, { title: currentTitle, body: currentBody });
     });
 
-    // 3. Переключение приватности
     let privMode = false;
     publicBtn.addEventListener('click', () => {
       privMode = false;
@@ -811,24 +797,23 @@
       allowedInput.style.display = 'flex';
     });
 
-    // 4. Отправка поста
     const debouncedSubmit = window.GithubCore.debounce(async () => {
       const title = titleInput.value.trim();
       const body = currentBody;
 
-      if (!title) return showToast('Введите заголовок', 'error');
-      if (title.length > 100) return showToast('Заголовок не должен превышать 100 символов', 'error');
+      if (!title) return showToast(t('enterTitle'), 'error');
+      if (title.length > 100) return showToast(t('title') + ' ' + t('commentTooLong'), 'error');
       if (containsGitHubToken(title)) {
-        showToast('Обнаружен GitHub-токен в заголовке. Пожалуйста, удалите его.', 'error');
+        showToast(t('githubTokenDetected'), 'error');
         return;
       }
       if (getPlainTextLength(title) < MIN_POST_TITLE_LENGTH) {
-        showToast(`Заголовок должен содержать не менее ${MIN_POST_TITLE_LENGTH} значимых символов.`, 'error');
+        showToast(`${t('title')} ${t('commentTooShort')}`, 'error');
         return;
       }
 
-      if (body.length > 10000) return showToast('Текст поста не должен превышать 10000 символов', 'error');
-      if (!validateTextContent(body, MIN_POST_BODY_LENGTH, 'Текст поста')) return;
+      if (body.length > 10000) return showToast(t('postTooLong'), 'error');
+      if (!validateTextContent(body, MIN_POST_BODY_LENGTH, t('postBody'))) return;
 
       let finalBody = body;
       let labels = [`game:${game}`];
@@ -837,7 +822,7 @@
       else labels.push('type:idea');
       if (privMode) {
         const allowed = allowedInput.value.trim();
-        if (!allowed) return showToast('Укажите хотя бы одного пользователя', 'error');
+        if (!allowed) return showToast(t('specifyUser'), 'error');
         finalBody = `<!-- allowed: ${allowed} -->\n${window.GithubCore.encryptPrivateBody(body, allowed)}`;
         labels.push('private');
       }
@@ -852,15 +837,15 @@
           }
         });
         if (result.queued) {
-          showToast('Пост сохранён в очередь', 'info');
+          showToast(t('postQueued'), 'info');
         } else {
-          showToast(mode === 'edit' ? 'Пост обновлён' : 'Пост создан', 'success');
+          showToast(mode === 'edit' ? t('postUpdated') : t('postCreated'), 'success');
         }
         clearDraft(draftKey);
         closeModal();
         setTimeout(() => location.reload(), 800);
       } catch (err) {
-        showToast('Ошибка: ' + err.message, 'error');
+        showToast(t('loadError') + ': ' + err.message, 'error');
       }
     }, 1000);
     submitBtn.addEventListener('click', debouncedSubmit);

@@ -1,11 +1,10 @@
-// js/pages/news-feed.js
+// js/pages/news-feed.js – с локализацией
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues, loadIssue } = window.GithubAPI;
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
   const { showToast, createModal } = window.UIUtils;
 
-  // Каналы YouTube
   const YT_CHANNELS = [
     { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
     { id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' },
@@ -13,7 +12,6 @@
     { id: 'UCcuqf3fNtZ2UP5MO89kVKLw', name: 'Mitmi' }
   ];
 
-  // Список каналов Twitch
   const TWITCH_CHANNELS = [
     'sk0l3ra1',
     'neoncyndows'
@@ -26,8 +24,6 @@
   let loading = false;
   let currentAbortController = null;
 
-  // --- Вспомогательные функции ---
-
   async function ensureLoggedInAndGist() {
     if (getCurrentUser() && hasScope('gist')) return true;
     window.dispatchEvent(new CustomEvent('github-login-requested'));
@@ -37,7 +33,8 @@
           window.removeEventListener('github-login-success', onLogin);
           resolve(true);
         } else if (e.detail?.scopes) {
-          showToast('Для закладок требуется scope "gist".', 'error');
+          const t = window.I18n?.translate || (k => k);
+          showToast(t('needGistScope'), 'error');
           window.removeEventListener('github-login-success', onLogin);
           resolve(false);
         }
@@ -50,17 +47,18 @@
   }
 
   async function handleBookmark(item) {
-    if (!(await ensureLoggedInAndGist())) { showToast('Необходимо войти с правами gist', 'error'); return; }
+    const t = window.I18n?.translate || (k => k);
+    if (!(await ensureLoggedInAndGist())) { showToast(t('needGistScope'), 'error'); return; }
     if (!window.BookmarkStorage) {
       try {
         await loadModule('js/features/storage.js');
       } catch (e) {
-        showToast('Не удалось загрузить хранилище', 'error');
+        showToast(t('loadModulesError'), 'error');
         return;
       }
     }
     if (!window.BookmarkStorage) {
-      showToast('Хранилище не загружено', 'error');
+      showToast(t('loadModulesError'), 'error');
       return;
     }
     const bookmark = {
@@ -76,10 +74,8 @@
       videoData: item.type === 'video' ? { id: item.id, service: 'youtube' } : undefined,
       twitchData: item.type === 'twitch' ? { channel: item.id } : undefined
     };
-    try { await window.BookmarkStorage.addBookmark(bookmark); showToast('Добавлено в избранное', 'success'); } catch (err) { if (err.message !== 'duplicate') showToast('Ошибка: ' + err.message, 'error'); }
+    try { await window.BookmarkStorage.addBookmark(bookmark); showToast(t('addToFavorites'), 'success'); } catch (err) { if (err.message !== 'duplicate') showToast(t('loadError') + ': ' + err.message, 'error'); }
   }
-
-  // --- Инициализация ---
 
   document.addEventListener('DOMContentLoaded', () => {
     const section = document.getElementById('news-section');
@@ -87,7 +83,8 @@
     let header = section.querySelector('.news-header');
     if (!header) {
       header = createElement('div', 'news-header', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' });
-      header.innerHTML = '<div><h2 data-lang="newsTitle">📰 Последние новости</h2><p class="text-secondary" data-lang="newsDesc">Свежие видео, стримы и обновления</p></div>';
+      const t = window.I18n?.translate || (k => k);
+      header.innerHTML = `<div><h2 data-lang="newsTitle">${t('newsTitle')}</h2><p class="text-secondary" data-lang="newsDesc">${t('newsDesc')}</p></div>`;
       section.prepend(header);
     }
     container = document.getElementById('news-feed');
@@ -108,19 +105,18 @@
   });
 
   async function openPostFromUrl(postId) {
+    const t = window.I18n?.translate || (k => k);
     try {
       const issue = await loadIssue(postId);
-      if (issue.state === 'closed') return showToast('Пост закрыт', 'error');
+      if (issue.state === 'closed') return showToast(t('postNotFound'), 'error');
       const item = { type: 'post', id: issue.number, title: issue.title, body: issue.body, author: issue.user.login, date: new Date(issue.created_at), game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null, labels: issue.labels.map(l => l.name) };
       if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
-      if (!window.UIFeedback.canViewPost(issue.body, item.labels, currentUser)) return showToast('Нет доступа', 'error');
+      if (!window.UIFeedback.canViewPost(issue.body, item.labels, currentUser)) return showToast(t('noAccess'), 'error');
       window.UIFeedback.openFullModal(item);
-    } catch { showToast('Ошибка загрузки', 'error'); }
+    } catch { showToast(t('postLoadError'), 'error'); }
   }
 
   window.refreshNewsFeed = () => { if (!container || loading) return; posts = []; videos = []; twitchStreams = []; postsLoaded = videosLoaded = twitchLoaded = false; loadNewsFeed(); };
-
-  // --- Основная функция загрузки ---
 
   function loadNewsFeed() {
     if (loading) return;
@@ -130,8 +126,8 @@
     }
     currentAbortController = new AbortController();
     const signal = currentAbortController.signal;
-
-    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">Загрузка новостей...</p></div>';
+    const t = window.I18n?.translate || (k => k);
+    container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">${t('newsLoading')}</p></div>`;
     
     console.log('[NewsFeed] Начинаем загрузку всех источников');
     Promise.all([ loadPosts(signal), loadVideos(signal), loadTwitchStreams(signal) ]).then(([loadedPosts, loadedVideos, loadedTwitch]) => {
@@ -148,8 +144,6 @@
       renderMixed();
     }).finally(() => { loading = false; currentAbortController = null; });
   }
-
-  // --- Загрузка YouTube видео ---
 
   async function loadVideos(signal) {
     try { return await loadVideosFromRSS2JSON(signal); } catch { return []; }
@@ -184,8 +178,6 @@
     cacheSet(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
     return sorted;
   }
-
-  // ========== ЗАГРУЗКА СТРИМОВ TWITCH ==========
 
   async function loadTwitchStreams(signal, retries = 2) {
     console.log('[NewsFeed] loadTwitchStreams вызвана');
@@ -238,7 +230,6 @@
     return streams;
   }
 
-  // --- Метод 1: twitch-live-checker (без decapi.me) ---
   async function fetchTwitchStreamsLiveChecker(signal) {
     if (typeof TwitchLiveChecker === 'undefined') {
       try {
@@ -262,12 +253,12 @@
             if (status === 'online') {
               const thumbnail = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
               const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
-              
+              const t = window.I18n?.translate || (k => k);
               resolve({
                 type: 'twitch',
                 id: channel,
-                title: `Стрим: ${channel}`,
-                game: 'стрим',
+                title: `${t('stream')}: ${channel}`,
+                game: t('stream'),
                 author: channel,
                 date: new Date(),
                 thumbnail: thumbnail,
@@ -294,7 +285,6 @@
     return streams;
   }
 
-  // --- Метод 2: GraphQL API Twitch (gql.twitch.tv) ---
   async function fetchTwitchStreamsGraphQL(signal) {
     const streams = [];
     for (const channel of TWITCH_CHANNELS) {
@@ -345,16 +335,17 @@
         const streamData = data?.data?.user?.stream;
 
         if (streamData) {
-          const game = streamData.game?.name || 'стрим';
+          const t = window.I18n?.translate || (k => k);
+          const game = streamData.game?.name || t('stream');
           const viewers = streamData.viewersCount || 0;
-          const title = streamData.title || `Стрим: ${channel}`;
+          const title = streamData.title || `${t('stream')}: ${channel}`;
           const thumbnail = streamData.thumbnailURL || `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
           const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
 
           streams.push({
             type: 'twitch',
             id: channel,
-            title: `${title}${viewers ? ` (${viewers} зрителей)` : ''}`,
+            title: `${title}${viewers ? ` (${viewers} ${t('viewers')})` : ''}`,
             game: game,
             author: channel,
             date: new Date(streamData.createdAt || Date.now()),
@@ -371,7 +362,6 @@
     return streams;
   }
 
-  // --- Метод 3: twitchinsights.net (запасной) ---
   async function fetchTwitchStreamsInsights(signal) {
     const streams = [];
     for (const channel of TWITCH_CHANNELS) {
@@ -385,7 +375,8 @@
         const streamInfo = data.streams[0];
         if (!streamInfo) continue;
         
-        const game = streamInfo[2] || 'стрим';
+        const t = window.I18n?.translate || (k => k);
+        const game = streamInfo[2] || t('stream');
         const viewers = streamInfo[1] || 0;
         const thumbnail = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
         const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
@@ -393,7 +384,7 @@
         streams.push({
           type: 'twitch',
           id: channel,
-          title: `Стрим: ${channel}${viewers ? ` (${viewers} зрителей)` : ''}`,
+          title: `${t('stream')}: ${channel}${viewers ? ` (${viewers} ${t('viewers')})` : ''}`,
           game: game,
           author: channel,
           date: new Date(),
@@ -409,7 +400,6 @@
     return streams;
   }
 
-  // --- Вспомогательная функция для загрузки скриптов ---
   function loadScript(src, signal) {
     return new Promise((resolve, reject) => {
       if (signal && signal.aborted) {
@@ -452,7 +442,6 @@
     });
   }
 
-  // ---------- Загрузка постов ----------
   async function loadPosts(signal) {
     const cacheKey = 'posts_news+update_v3';
     const cached = cacheGet(cacheKey);
@@ -471,8 +460,8 @@
     return result;
   }
 
-  // ========== ОБНОВЛЁННАЯ ФУНКЦИЯ createVideoCard ==========
   function createVideoCard(video) {
+    const t = window.I18n?.translate || (k => k);
     const card = createElement('div', 'project-card-link card-interactive');
     const inner = createElement('div', 'project-card');
     const imgW = createElement('div', 'image-wrapper');
@@ -494,7 +483,7 @@
     inner.appendChild(meta);
 
     if (currentUser && hasScope('gist')) {
-      const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+      const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: t('addToFavorites') });
       favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
       favBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -505,7 +494,6 @@
 
     card.appendChild(inner);
 
-    // Обработчик клика для встраивания видео
     card.addEventListener('click', (e) => {
       if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
       const mediaContainer = card.querySelector('.image-wrapper');
@@ -515,7 +503,6 @@
       if (video.type === 'twitch') {
         iframeSrc = video.embedUrl || `https://player.twitch.tv/?channel=${video.id}&parent=${location.hostname}&autoplay=false`;
       } else {
-        // Используем youtube-nocookie с параметрами
         iframeSrc = `https://www.youtube-nocookie.com/embed/${video.id}?rel=0&modestbranding=1&playsinline=1`;
       }
 
@@ -529,12 +516,10 @@
       iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
       iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
       
-      // Очищаем контейнер и вставляем iframe
       mediaContainer.innerHTML = '';
       mediaContainer.style.background = '#000';
       mediaContainer.appendChild(iframe);
 
-      // Fallback при ошибке
       let errorShown = false;
       iframe.onerror = function() {
         if (!errorShown) {
@@ -542,35 +527,32 @@
           mediaContainer.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:#000;color:#fff;padding:20px;text-align:center;gap:8px;">
               <i class="fab fa-youtube" style="font-size:28px;color:#ff0000;"></i>
-              <p style="font-size:13px;">Не удалось загрузить видео</p>
+              <p style="font-size:13px;">${t('videoLoadFailed')}</p>
               <button class="button small" onclick="window.open('${video.type === 'twitch' ? 'https://twitch.tv/' + video.id : 'https://youtu.be/' + video.id}', '_blank')" style="background:#ff0000;color:#fff;">
-                <i class="fas fa-external-link-alt"></i> Открыть
+                <i class="fas fa-external-link-alt"></i> ${t('open')}
               </button>
             </div>
           `;
         }
       };
-      // Таймаут на случай, если iframe завис
       const timeout = setTimeout(() => {
         if (!iframe.contentWindow && !errorShown) {
           errorShown = true;
           mediaContainer.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:#000;color:#fff;padding:20px;text-align:center;gap:8px;">
               <i class="fab fa-youtube" style="font-size:28px;color:#ff0000;"></i>
-              <p style="font-size:13px;">Видео не загружается</p>
+              <p style="font-size:13px;">${t('videoNotLoading')}</p>
               <button class="button small" onclick="window.open('${video.type === 'twitch' ? 'https://twitch.tv/' + video.id : 'https://youtu.be/' + video.id}', '_blank')" style="background:#ff0000;color:#fff;">
-                <i class="fas fa-external-link-alt"></i> Открыть
+                <i class="fas fa-external-link-alt"></i> ${t('open')}
               </button>
             </div>
           `;
         }
       }, 10000);
 
-      // Очистка таймаута при загрузке iframe
       iframe.onload = function() {
         clearTimeout(timeout);
       };
-      // При удалении элемента очищаем таймаут
       card.addEventListener('remove', function() {
         clearTimeout(timeout);
       });
@@ -579,13 +561,13 @@
     return card;
   }
 
-  // ---------- Создание карточки поста ----------
   function createPostCard(post) {
     let previewBody = post.body;
     const allowed = extractAllowed(post.body);
     if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
       try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
     }
+    const t = window.I18n?.translate || (k => k);
     const card = createElement('div', 'project-card-link card-interactive');
     const inner = createElement('div', 'project-card');
 
@@ -608,7 +590,7 @@
     inner.append(meta, preview);
 
     if (currentUser && hasScope('gist')) {
-      const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: 'В избранное' });
+      const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: t('addToFavorites') });
       favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
       favBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -627,9 +609,9 @@
     return card;
   }
 
-  // ---------- Рендер смешанной ленты (стримы имеют высший приоритет) ----------
   function renderMixed() {
     if (!postsLoaded || !videosLoaded || !twitchLoaded) return;
+    const t = window.I18n?.translate || (k => k);
 
     const filteredPosts = posts.filter(p => {
       if (!p.labels.includes('private')) return true;
@@ -656,7 +638,7 @@
 
     const grid = createElement('div', 'projects-grid');
     if (showItems.length === 0) {
-      grid.innerHTML = '<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">Пока нет новостей</p></div>';
+      grid.innerHTML = `<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">${t('newsNoItems')}</p></div>`;
     } else {
       const fragment = document.createDocumentFragment();
       showItems.forEach(item => {
@@ -682,7 +664,7 @@
       if (isAdmin() && hasScope('repo')) {
         if (!existing) {
           const btn = createElement('button', 'button admin-news-btn');
-          btn.innerHTML = '<i class="fas fa-plus"></i> Добавить новость';
+          btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
           btn.addEventListener('click', async () => {
             if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
             window.UIFeedback.openEditorModal('new', { game: null }, 'news');

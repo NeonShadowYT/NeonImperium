@@ -1,4 +1,4 @@
-// js/pages/game-updates.js – использует общий кэш и DocumentFragment
+// js/pages/game-updates.js – использует общий кэш и DocumentFragment, с локализацией
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractAllowed, extractSummary, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
@@ -6,7 +6,7 @@
   const { showToast } = window.UIUtils;
 
   let currentAbort = null, currentGame = null;
-  const UPDATES_CACHE_TTL = 15 * 60 * 1000; // 15 минут
+  const UPDATES_CACHE_TTL = 15 * 60 * 1000;
 
   document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('game-updates');
@@ -40,7 +40,8 @@
   };
 
   async function loadGameUpdates(container, game) {
-    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>';
+    const t = window.I18n?.translate || (k => k);
+    container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> ${t('loading')}</div>`;
     if (currentAbort) {
       currentAbort.controller.abort();
       currentAbort = null;
@@ -74,7 +75,7 @@
         return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
       });
       posts.sort((a, b) => b.date - a.date);
-      if (posts.length === 0) { container.innerHTML = '<p class="text-secondary">Нет обновлений</p>'; return; }
+      if (posts.length === 0) { container.innerHTML = `<p class="text-secondary">${t('noUpdates')}</p>`; return; }
       container.innerHTML = '';
       const grid = createElement('div', 'projects-grid');
       const fragment = document.createDocumentFragment();
@@ -86,15 +87,14 @@
       let header = parent.querySelector('.updates-header');
       if (!header) {
         header = createElement('div', 'updates-header', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' });
-        // Добавлена иконка к заголовку
-        header.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);"></i> <h2 style="margin:0;" data-lang="updatesTitle">Обновления</h2></div>';
+        header.innerHTML = `<div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);"></i> <h2 style="margin:0;" data-lang="updatesTitle">${t('updatesTitle')}</h2></div>`;
         parent.insertBefore(header, container);
       }
       const existing = header.querySelector('.admin-update-btn');
       if (isAdmin() && hasScope('repo')) {
         if (!existing) {
           const btn = createElement('button', 'button admin-update-btn');
-          btn.innerHTML = '<i class="fas fa-plus"></i> Добавить обновление';
+          btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
           btn.addEventListener('click', async () => { if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js'); window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update'); });
           header.appendChild(btn);
         }
@@ -102,7 +102,7 @@
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error('Update load error:', err);
-      container.innerHTML = '<p class="error-message">Ошибка загрузки обновлений</p>';
+      container.innerHTML = `<p class="error-message">${t('updatesLoadError')}</p>`;
     } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
   }
 
