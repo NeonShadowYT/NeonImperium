@@ -1,4 +1,4 @@
-// js/common-init.js – инициализация без автоподчистки кеша, с локализацией
+// js/common-init.js – инициализация без автоподчистки кеша, с локализацией и обновлением интерфейса
 (function() {
   function addPreconnects() {
     const links = [
@@ -337,7 +337,7 @@
             item.className = 'profile-dropdown-item';
             item.dataset.action = 'rate-panel';
             const t = window.I18n?.translate || (k => k);
-            item.innerHTML = `<i class="fas fa-chart-bar"></i> ${t('ratePanel') || 'Лимиты и кеш'}`;
+            item.innerHTML = `<i class="fas fa-chart-bar"></i> ${t('ratePanel')}`;
             const divider = dropdown.querySelector('.profile-dropdown-divider');
             if (divider) {
               dropdown.insertBefore(item, divider);
@@ -361,6 +361,24 @@
     }
   }
 
+  // Функция обновления всех динамических элементов при смене языка
+  function refreshDynamicUI() {
+    // Обновляем текст кнопок с data-lang (уже обновляется через MutationObserver в lang.js)
+    // Но для админских кнопок, которые создаются динамически, нужно перерисовывать их
+    // Например, кнопки "Добавить новость" и "Добавить обновление" пересоздаются в своих модулях.
+    // Мы просто вызываем события, которые перезапускают инициализацию страничных модулей.
+    if (window.FeedbackPage?.refresh) window.FeedbackPage.refresh();
+    if (window.refreshGameUpdates && window.currentGame) window.refreshGameUpdates(window.currentGame);
+    if (window.refreshNewsFeed) window.refreshNewsFeed();
+    // Обновление платформы (версии)
+    if (window.initPlatform) window.initPlatform();
+  }
+
+  // Подписываемся на смену языка
+  window.addEventListener('languageChanged', () => {
+    refreshDynamicUI();
+  });
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       preloadFont();
@@ -369,6 +387,7 @@
         if (window.initNewsFeed) window.initNewsFeed();
         if (window.initFeedback) window.initFeedback();
         if (window.initGameUpdates) window.initGameUpdates();
+        if (window.initPlatform) window.initPlatform();
       });
       initLazyYT();
       loadDustParticles();
@@ -383,6 +402,7 @@
       if (window.initNewsFeed) window.initNewsFeed();
       if (window.initFeedback) window.initFeedback();
       if (window.initGameUpdates) window.initGameUpdates();
+      if (window.initPlatform) window.initPlatform();
     });
     initLazyYT();
     loadDustParticles();

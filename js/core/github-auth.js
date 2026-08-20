@@ -1,4 +1,4 @@
-// js/core/github-auth.js
+// js/core/github-auth.js – с локализацией и обновлением при смене языка
 (function() {
   const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule } = window.Utils;
   const GitHubClient = window.GitHubClient;
@@ -30,6 +30,17 @@
         if (!modal) createLoginModal();
         modal.classList.add('active');
         if (tokenInput) tokenInput.focus();
+      }
+    });
+
+    // Обновление интерфейса при смене языка
+    window.addEventListener('languageChanged', () => {
+      if (currentUserLogin) {
+        // Перерисовываем меню с новыми переводами
+        const user = JSON.parse(sessionStorage.getItem(USER_CACHE_KEY));
+        if (user) renderLoggedInUI(user);
+      } else {
+        renderLoggedOutUI();
       }
     });
 

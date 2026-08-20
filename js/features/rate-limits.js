@@ -1,4 +1,4 @@
-// js/features/rate-limits.js – с локализацией
+// js/features/rate-limits.js – с локализацией, исправлены loadQueueItems и loadHistoryItems
 (function() {
     const { escapeHtml } = window.GithubCore;
 
@@ -442,8 +442,9 @@
             if (e.target === modal) newCloseWithClean();
         });
 
-        loadQueueItems(modal);
-        loadHistoryItems(modal);
+        // Передаём t в функции загрузки
+        loadQueueItems(modal, t);
+        loadHistoryItems(modal, t);
     }
 
     function buildPanelHTML(t) {
@@ -514,7 +515,7 @@
               let color = '#4caf50';
               if (pct < 30) color = '#f44336';
               else if (pct < 60) color = '#ff9800';
-              const label = actionLabels[action] || action;
+              const label = t('action' + action.charAt(0).toUpperCase() + action.slice(1)) || actionLabels[action] || action;
               return `
                 <div class="rate-limit-item">
                   <span class="rate-label"><i class="fas ${actionIcons[action] || 'fa-circle'}"></i> ${label}</span>
@@ -572,8 +573,8 @@
                 };
                 const el = modal.querySelector('#' + map[target]);
                 if (el) el.style.display = '';
-                if (target === 'queue') loadQueueItems(modal);
-                if (target === 'history') loadHistoryItems(modal);
+                if (target === 'queue') loadQueueItems(modal, t);
+                if (target === 'history') loadHistoryItems(modal, t);
                 if (target === 'cache') loadCacheItems(modal);
             });
         });
@@ -614,7 +615,8 @@
         });
     }
 
-    async function loadQueueItems(modal) {
+    // Исправлены функции: теперь принимают t
+    async function loadQueueItems(modal, t) {
         const container = modal?.querySelector('#rate-queue');
         if (!container) return;
         const items = await getPendingActions();
@@ -626,14 +628,14 @@
         }
         container.innerHTML = items.map(item => `
           <div class="rate-queue-item">
-            <span class="rate-action"><i class="fas ${actionIcons[item.action] || 'fa-circle'}"></i> ${actionLabels[item.action] || item.action}</span>
+            <span class="rate-action"><i class="fas ${actionIcons[item.action] || 'fa-circle'}"></i> ${t('action' + item.action.charAt(0).toUpperCase() + item.action.slice(1)) || actionLabels[item.action] || item.action}</span>
             <span class="rate-time">${new Date(item.timestamp).toLocaleString()}</span>
             <button class="queue-cancel-btn" data-id="${item.id}"><i class="fas fa-times"></i></button>
           </div>
         `).join('');
     }
 
-    async function loadHistoryItems(modal) {
+    async function loadHistoryItems(modal, t) {
         const container = modal?.querySelector('#rate-history');
         if (!container) return;
         const history = getHistory().slice(-50).reverse();
@@ -643,7 +645,7 @@
         }
         container.innerHTML = history.map(h => `
           <div class="rate-history-item ${h.status}">
-            <span class="rate-action">${actionLabels[h.action] || h.action}</span>
+            <span class="rate-action">${t('action' + h.action.charAt(0).toUpperCase() + h.action.slice(1)) || actionLabels[h.action] || h.action}</span>
             <span class="rate-status">${h.status === 'completed' ? '✅' : '❌'}</span>
             <span class="rate-time">${new Date(h.timestamp).toLocaleString()}</span>
           </div>
