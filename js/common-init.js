@@ -1,4 +1,4 @@
-// js/common-init.js – инициализация без автоподчистки кеша, с локализацией и обновлением интерфейса
+// js/common-init.js – инициализация после загрузки переводов
 (function() {
   function addPreconnects() {
     const links = [
@@ -363,14 +363,9 @@
 
   // Функция обновления всех динамических элементов при смене языка
   function refreshDynamicUI() {
-    // Обновляем текст кнопок с data-lang (уже обновляется через MutationObserver в lang.js)
-    // Но для админских кнопок, которые создаются динамически, нужно перерисовывать их
-    // Например, кнопки "Добавить новость" и "Добавить обновление" пересоздаются в своих модулях.
-    // Мы просто вызываем события, которые перезапускают инициализацию страничных модулей.
     if (window.FeedbackPage?.refresh) window.FeedbackPage.refresh();
     if (window.refreshGameUpdates && window.currentGame) window.refreshGameUpdates(window.currentGame);
     if (window.refreshNewsFeed) window.refreshNewsFeed();
-    // Обновление платформы (версии)
     if (window.initPlatform) window.initPlatform();
   }
 
@@ -379,35 +374,59 @@
     refreshDynamicUI();
   });
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      preloadFont();
-      loadPageScripts();
-      ensureMarked().then(() => {
-        if (window.initNewsFeed) window.initNewsFeed();
-        if (window.initFeedback) window.initFeedback();
-        if (window.initGameUpdates) window.initGameUpdates();
-        if (window.initPlatform) window.initPlatform();
-      });
-      initLazyYT();
-      loadDustParticles();
-      registerServiceWorker();
-      initDownloadConsent();
-      initRateLimits();
-    });
-  } else {
+  // ==== НОВОЕ: запуск модулей только после загрузки переводов ====
+  function initPageModules() {
+    if (window.initNewsFeed) window.initNewsFeed();
+    if (window.initFeedback) window.initFeedback();
+    if (window.initGameUpdates) window.initGameUpdates();
+    if (window.initPlatform) window.initPlatform();
+  }
+
+  function waitForLanguage() {
+    // Если переводы уже загружены – запускаем сразу
+    if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
+      // Проверяем, что translations загружены (если есть хоть один ключ)
+      const testKey = window.I18n.translate('siteTitle');
+      if (testKey !== 'siteTitle') {
+        initPageModules();
+        return;
+      }
+    }
+    // Слушаем событие загрузки языка
+    document.addEventListener('languageLoaded', initPageModules, { once: true });
+    // Запасной вариант: если событие уже было, но мы его пропустили
+    if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
+      setTimeout(() => {
+        const testKey = window.I18n.translate('siteTitle');
+        if (testKey !== 'siteTitle') {
+          initPageModules();
+        }
+      }, 100);
+    }
+  }
+
+  // Инициализация, не зависящая от переводов
+  function initNonLanguageDependent() {
     preloadFont();
     loadPageScripts();
     ensureMarked().then(() => {
-      if (window.initNewsFeed) window.initNewsFeed();
-      if (window.initFeedback) window.initFeedback();
-      if (window.initGameUpdates) window.initGameUpdates();
-      if (window.initPlatform) window.initPlatform();
+      // ничего не делаем
     });
     initLazyYT();
     loadDustParticles();
     registerServiceWorker();
     initDownloadConsent();
     initRateLimits();
+  }
+
+  // Запуск
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      initNonLanguageDependent();
+      waitForLanguage();
+    });
+  } else {
+    initNonLanguageDependent();
+    waitForLanguage();
   }
 })();

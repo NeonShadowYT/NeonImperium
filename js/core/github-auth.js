@@ -1,4 +1,4 @@
-// js/core/github-auth.js – с локализацией и обновлением при смене языка
+// js/core/github-auth.js – с локализацией, обновление меню при смене языка
 (function() {
   const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule } = window.Utils;
   const GitHubClient = window.GitHubClient;
@@ -35,13 +35,11 @@
 
     // Обновление интерфейса при смене языка
     window.addEventListener('languageChanged', () => {
-      if (currentUserLogin) {
-        // Перерисовываем меню с новыми переводами
-        const user = JSON.parse(sessionStorage.getItem(USER_CACHE_KEY));
-        if (user) renderLoggedInUI(user);
-      } else {
-        renderLoggedOutUI();
-      }
+      refreshProfileMenu();
+    });
+    // Также при загрузке переводов
+    window.addEventListener('languageLoaded', () => {
+      refreshProfileMenu();
     });
 
     window.dispatchEvent(new CustomEvent('github-auth-ready'));
@@ -536,6 +534,23 @@
   function preloadAdminModules() {
     window.Utils.loadModule('js/features/editor.js').catch(() => {});
     window.Utils.loadModule('js/features/ui-feedback.js').catch(() => {});
+  }
+
+  // ==== НОВОЕ: перерисовка меню при загрузке/смене языка ====
+  function refreshProfileMenu() {
+    // Если пользователь залогинен – перерисовываем залогиненное меню, иначе – выходное
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token && currentUserLogin) {
+      const user = sessionStorage.getItem(USER_CACHE_KEY);
+      if (user) {
+        try {
+          const userObj = JSON.parse(user);
+          renderLoggedInUI(userObj);
+          return;
+        } catch (e) {}
+      }
+    }
+    renderLoggedOutUI();
   }
 
   window.GithubAuth = {
