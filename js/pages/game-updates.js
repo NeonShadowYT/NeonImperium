@@ -1,4 +1,4 @@
-// js/pages/game-updates.js – использует общий кэш и DocumentFragment, с локализацией
+// js/pages/game-updates.js – использует общий кэш и DocumentFragment, с локализацией, обновление кнопки при смене языка
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractAllowed, extractSummary, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
@@ -32,6 +32,21 @@
     });
     window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
     window.addEventListener('github-logout', () => { if (currentGame) refreshGameUpdates(currentGame); });
+
+    // ---- обновление кнопки при смене языка ----
+    window.addEventListener('languageChanged', () => {
+      const container = document.getElementById('game-updates');
+      if (!container) return;
+      const parent = container.parentNode;
+      const header = parent?.querySelector('.updates-header');
+      if (header) {
+        const btn = header.querySelector('.admin-update-btn');
+        if (btn) {
+          const t = window.I18n?.translate || (k => k);
+          btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
+        }
+      }
+    });
   });
 
   window.refreshGameUpdates = (game) => {
@@ -97,6 +112,9 @@
           btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
           btn.addEventListener('click', async () => { if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js'); window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update'); });
           header.appendChild(btn);
+        } else {
+          // Обновляем текст
+          existing.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
         }
       } else if (existing) existing.remove();
     } catch (err) {

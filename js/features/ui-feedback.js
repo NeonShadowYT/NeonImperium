@@ -1,4 +1,4 @@
-// js/features/ui-feedback.js – с локализацией
+// js/features/ui-feedback.js – с локализацией, обновление при смене языка
 (function() {
   const {
     createElement, escapeHtml, renderMarkdown, loadModule,
@@ -34,6 +34,8 @@
   let currentModalLoading = null;
 
   const t = window.I18n?.translate || (k => k);
+
+  // ---- вспомогательные функции ----
 
   function canViewPost(body, labels, currentUser) {
     if (!labels || !labels.includes('private')) return true;
@@ -415,6 +417,10 @@
     } catch(e) { showToast(t('loadError') + ': ' + e.message, 'error'); }
   }
 
+  // ---- открытие полной модалки (пост) ----
+
+  let activeFullModal = null; // ссылка на текущую модалку
+
   async function openFullModal(item) {
     const { id, title, body, author, date, game, labels, type } = item;
     const currentUser = getCurrentUser();
@@ -458,6 +464,7 @@
     `;
 
     const { modal, closeModal } = createModal(title, html, { size: 'full' });
+    activeFullModal = { modal, closeModal, item };
 
     if (currentModalAbortController) {
       currentModalAbortController.abort();
@@ -473,6 +480,7 @@
         currentModalAbortController = null;
       }
       currentModalLoading = null;
+      activeFullModal = null;
       originalClose();
     };
     modal.querySelector('.modal-close').removeEventListener('click', closeModal);
@@ -570,7 +578,47 @@
       }, 1000);
       submitBtn.addEventListener('click', debouncedSubmit);
     }
+
+    // ---- обновление при смене языка ----
+    const langHandler = async () => {
+      if (!activeFullModal || activeFullModal.modal !== modal) return;
+      // Пересоздаём содержимое модалки заново, сохраняя состояние
+      // Просто обновляем заголовок и кнопки с новыми переводами
+      const headerTitle = modal.querySelector('.modal-header h2');
+      if (headerTitle) headerTitle.textContent = t(title) || title;
+      // Обновляем кнопки, которые используют переводы (например, "Комментарии")
+      const commentsHeader = modal.querySelector('.comments-section h3');
+      if (commentsHeader) commentsHeader.textContent = t('comments') || 'Комментарии';
+      // Обновляем placeholder у поля ввода
+      const inputField = modal.querySelector('#new-comment-input');
+      if (inputField) inputField.placeholder = t('enterText');
+      // Обновляем кнопку отправки
+      const sendBtn = modal.querySelector('#submit-comment-btn');
+      if (sendBtn) sendBtn.textContent = t('send');
+      // Обновляем индикатор лимитов
+      const indicator = modal.querySelector('.rate-indicator-wrapper');
+      if (indicator) {
+        const span = indicator.querySelector('.rate-indicator');
+        if (span && window.RateLimits) span.textContent = window.RateLimits.getRemaining('comments');
+      }
+    };
+    window.addEventListener('languageChanged', langHandler);
+    // Удаляем обработчик при закрытии модалки
+    const closeWithCleanup = () => {
+      window.removeEventListener('languageChanged', langHandler);
+      newClose();
+    };
+    // Заменяем обработчики закрытия
+    modal.querySelector('.modal-close').removeEventListener('click', newClose);
+    modal.querySelector('.modal-close').addEventListener('click', closeWithCleanup);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeWithCleanup();
+    });
   }
+
+  // ---- редактор (создание/редактирование поста) ----
+
+  let activeEditorModal = null;
 
   async function openEditorModal(mode, initialData, context, existingId = null) {
     if (!hasScope('repo')) {
@@ -592,6 +640,7 @@
       '<div class="editor-container"></div>',
       { size: 'full' }
     );
+    activeEditorModal = { modal, closeModal, mode, context, existingId };
 
     const container = modal.querySelector('.editor-container');
     container.style.display = 'flex';
@@ -855,8 +904,39 @@
       textarea.value = draft.body;
       currentBody = draft.body;
     }
+
+    // ---- обновление при смене языка ----
+    const langHandler = () => {
+      if (!activeEditorModal || activeEditorModal.modal !== modal) return;
+      // Обновляем заголовок модалки
+      const headerTitle = modal.querySelector('.modal-header h2');
+      if (headerTitle) headerTitle.textContent = mode === 'new' ? t('createPost') : t('editPost');
+      // Обновляем placeholder'ы и кнопки
+      titleInput.placeholder = t('title');
+      publicBtn.textContent = t('public');
+      privateBtn.textContent = t('private');
+      allowedInput.placeholder = t('loginsComma');
+      submitBtn.textContent = mode === 'edit' ? t('update') : t('publish');
+      const indicator = modal.querySelector('.rate-indicator-wrapper');
+      if (indicator) {
+        const span = indicator.querySelector('.rate-indicator');
+        if (span && window.RateLimits) span.textContent = window.RateLimits.getRemaining('posts');
+      }
+    };
+    window.addEventListener('languageChanged', langHandler);
+    const closeWithCleanup = () => {
+      window.removeEventListener('languageChanged', langHandler);
+      activeEditorModal = null;
+      closeModal();
+    };
+    modal.querySelector('.modal-close').removeEventListener('click', closeModal);
+    modal.querySelector('.modal-close').addEventListener('click', closeWithCleanup);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeWithCleanup();
+    });
   }
 
+  // ---- экспорт ----
   window.UIFeedback = {
     renderReactions,
     loadComments,

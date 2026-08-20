@@ -1,4 +1,4 @@
-// js/platform.js – улучшенная сортировка и стилизованные метки для выбора версий, с локализацией
+// js/platform.js – улучшенная сортировка и стилизованные метки для выбора версий, с локализацией, обновление при смене языка
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
@@ -177,10 +177,15 @@
         return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
-    async function init() {
+    let platformInitialized = false;
+    let githubContainer, platformBtns, versionSelect, versionDateEl, githubBtn, whatsNewBtn;
+    let allReleases = [];
+    let currentPlatform = (getOS() === 'Android') ? 'Android' : 'Windows';
+
+    async function initPlatform() {
         const t = window.I18n?.translate || (k => k);
         const os = getOS();
-        let currentPlatform = (os === 'Android') ? 'Android' : 'Windows';
+        currentPlatform = (os === 'Android') ? 'Android' : 'Windows';
 
         const cloudButtons = document.querySelectorAll('.cloud-buttons .download-button[data-platform]');
         function updateCloudVisibility() {
@@ -190,7 +195,7 @@
         }
         updateCloudVisibility();
 
-        const githubContainer = document.getElementById('github-block-container');
+        githubContainer = document.getElementById('github-block-container');
         if (!githubContainer) return;
 
         githubContainer.innerHTML = `
@@ -211,13 +216,12 @@
             </div>
         `;
 
-        const platformBtns = githubContainer.querySelectorAll('.platform-btn');
-        const versionSelect = githubContainer.querySelector('.version-select');
-        const versionDateEl = githubContainer.querySelector('#version-date');
-        const githubBtn = githubContainer.querySelector('#github-download-btn');
-        const whatsNewBtn = githubContainer.querySelector('#whats-new-btn');
+        platformBtns = githubContainer.querySelectorAll('.platform-btn');
+        versionSelect = githubContainer.querySelector('.version-select');
+        versionDateEl = githubContainer.querySelector('#version-date');
+        githubBtn = githubContainer.querySelector('#github-download-btn');
+        whatsNewBtn = githubContainer.querySelector('#whats-new-btn');
 
-        let allReleases = [];
         try {
             allReleases = await getGameReleases(gameTag);
         } catch (e) {
@@ -368,11 +372,49 @@
         });
 
         populateVersionSelect(currentPlatform);
+        platformInitialized = true;
     }
 
+    // ---- обновление при смене языка ----
+    window.addEventListener('languageChanged', () => {
+        if (platformInitialized && githubContainer) {
+            // Пересоздаём блок с новыми переводами
+            const t = window.I18n?.translate || (k => k);
+            // Обновляем текст кнопки
+            const downloadBtn = githubContainer.querySelector('#github-download-btn');
+            if (downloadBtn) {
+                downloadBtn.innerHTML = `<i class="fab fa-github"></i> ${t('downloadBtn')}`;
+            }
+            const whatsNewBtn = githubContainer.querySelector('#whats-new-btn');
+            if (whatsNewBtn) {
+                whatsNewBtn.innerHTML = `<i class="fas fa-newspaper"></i> ${t('whatsNew')}`;
+            }
+            const versionDateEl = githubContainer.querySelector('#version-date');
+            if (versionDateEl) {
+                // Дата обновится при выборе версии, но можно перезагрузить
+                const selected = versionSelect.value;
+                if (selected) {
+                    const release = allReleases.find(r => r.tag_name === selected);
+                    if (release) {
+                        const meta = parseMeta(release.body);
+                        let displayDate;
+                        if (meta.publishDate) {
+                            const formatted = formatCustomDate(meta.publishDate);
+                            if (formatted) displayDate = formatted;
+                            else displayDate = formatDate(release.published_at);
+                        } else {
+                            displayDate = formatDate(release.published_at);
+                        }
+                        versionDateEl.textContent = `${t('updateFrom')} ${displayDate}`;
+                    }
+                }
+            }
+        }
+    });
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', initPlatform);
     } else {
-        init();
+        initPlatform();
     }
 })();

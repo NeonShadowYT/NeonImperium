@@ -1,4 +1,4 @@
-// js/features/rate-limits.js – с локализацией, исправлены loadQueueItems и loadHistoryItems
+// js/features/rate-limits.js – с локализацией, обновление при смене языка
 (function() {
     const { escapeHtml } = window.GithubCore;
 
@@ -399,14 +399,18 @@
         queueCache = null;
     }
 
+    let activeRatePanel = null;
+
     function openRatePanel() {
         const t = window.I18n?.translate || (k => k);
         window._ratePanelOpen = true;
         const { modal, closeModal } = window.UIUtils.createModal(t('limitsAndCache'), buildPanelHTML(t), { size: 'full' });
+        activeRatePanel = { modal, closeModal };
         modal.dataset.ratePanel = 'true';
         const originalClose = closeModal;
         const newClose = () => {
             window._ratePanelOpen = false;
+            activeRatePanel = null;
             originalClose();
         };
         modal.querySelector('.modal-close').addEventListener('click', newClose);
@@ -442,7 +446,31 @@
             if (e.target === modal) newCloseWithClean();
         });
 
-        // Передаём t в функции загрузки
+        // ---- обновление при смене языка ----
+        const langHandler = () => {
+            if (!activeRatePanel || activeRatePanel.modal !== modal) return;
+            const t = window.I18n?.translate || (k => k);
+            // Обновляем заголовок
+            const headerTitle = modal.querySelector('.modal-header h2');
+            if (headerTitle) headerTitle.textContent = t('limitsAndCache');
+            // Перестраиваем панель
+            const body = modal.querySelector('.modal-body');
+            if (body) body.innerHTML = buildPanelHTML(t);
+            bindPanelEvents(modal, t);
+            loadQueueItems(modal, t);
+            loadHistoryItems(modal, t);
+        };
+        window.addEventListener('languageChanged', langHandler);
+        const closeWithCleanup = () => {
+            window.removeEventListener('languageChanged', langHandler);
+            newCloseWithClean();
+        };
+        modal.querySelector('.modal-close').removeEventListener('click', newCloseWithClean);
+        modal.querySelector('.modal-close').addEventListener('click', closeWithCleanup);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeWithCleanup();
+        });
+
         loadQueueItems(modal, t);
         loadHistoryItems(modal, t);
     }
@@ -615,7 +643,6 @@
         });
     }
 
-    // Исправлены функции: теперь принимают t
     async function loadQueueItems(modal, t) {
         const container = modal?.querySelector('#rate-queue');
         if (!container) return;

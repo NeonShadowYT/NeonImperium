@@ -1,4 +1,4 @@
-// js/features/storage.js – с локализацией
+// js/features/storage.js – с локализацией, обновление при смене языка
 (function() {
   const {
     CONFIG, escapeHtml, createElement, formatDate, debounce,
@@ -1221,6 +1221,10 @@
     }
   }
 
+  // ---- открытие модалки хранилища ----
+
+  let activeStorageModal = null;
+
   async function openStorageModal(gameContext = null) {
     const t = window.I18n?.translate || (k => k);
     updateAuthState();
@@ -1282,6 +1286,7 @@
 
     const { modal, closeModal } = createModal(t('storageModalTitle'), html, { size: 'full' });
     modalRef = modal;
+    activeStorageModal = { modal, closeModal };
 
     const style = createElement('style');
     style.textContent = `
@@ -1400,7 +1405,66 @@
       await processFiles(files, modal);
     });
 
-    return { modal, closeModal: () => { closeModal(); modalRef = null; } };
+    // ---- обновление при смене языка ----
+    const langHandler = () => {
+      if (!activeStorageModal || activeStorageModal.modal !== modal) return;
+      // Обновляем заголовок модалки
+      const headerTitle = modal.querySelector('.modal-header h2');
+      if (headerTitle) headerTitle.textContent = t('storageModalTitle');
+      // Обновляем кнопки и тексты
+      const sortBtns = modal.querySelectorAll('.sort-btn');
+      sortBtns.forEach(b => {
+        if (b.dataset.order === 'new') b.innerHTML = `<i class="fas fa-arrow-down"></i> ${t('new')}`;
+        else if (b.dataset.order === 'old') b.innerHTML = `<i class="fas fa-arrow-up"></i> ${t('old')}`;
+      });
+      const catBtns = modal.querySelectorAll('.cat-btn');
+      catBtns.forEach(b => {
+        const cat = b.dataset.cat;
+        const iconMap = { all: 'fa-globe', post: 'fa-newspaper', video: 'fa-video', link: 'fa-link', save: 'fa-save' };
+        const labelMap = { all: t('all'), post: t('posts'), video: t('videos'), link: t('links'), save: t('saves') };
+        b.innerHTML = `<i class="fas ${iconMap[cat] || 'fa-circle'}"></i> ${labelMap[cat] || cat}`;
+      });
+      // Поиск
+      const searchInput = modal.querySelector('#search-input');
+      if (searchInput) searchInput.placeholder = t('searchPlaceholder');
+      // Кнопка добавления
+      const toggleBtn = modal.querySelector('#toggle-add-btn');
+      const formVisible = addForm.style.display !== 'none';
+      toggleBtn.innerHTML = formVisible ? `<i class="fas fa-times"></i> ${t('cancelButton')}` : `<i class="fas fa-plus"></i> ${t('addButton')}`;
+      // Поле ввода URL
+      const urlInput = modal.querySelector('#new-url');
+      if (urlInput) urlInput.placeholder = t('addLinkPlaceholder');
+      // Кнопка подтверждения
+      const confirmBtn = modal.querySelector('#confirm-add');
+      if (confirmBtn) confirmBtn.innerHTML = `<i class="fas fa-plus"></i> ${t('addButton')}`;
+      // Drop zone
+      const dropZone = modal.querySelector('#drop-zone');
+      if (dropZone) {
+        const p = dropZone.querySelector('p:first-of-type');
+        if (p) p.textContent = t('dropZoneText');
+        const btn = dropZone.querySelector('#file-select-btn');
+        if (btn) btn.innerHTML = `<i class="fas fa-folder-open"></i> ${t('selectFiles')}`;
+      }
+      // Счетчик лимитов
+      const indicator = modal.querySelector('.rate-indicator[data-action="storageAdds"]');
+      if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('storageAdds');
+      // Перерисовываем карточки (некоторые тексты могут измениться)
+      renderBookmarks(modal);
+    };
+    window.addEventListener('languageChanged', langHandler);
+    const closeWithCleanup = () => {
+      window.removeEventListener('languageChanged', langHandler);
+      activeStorageModal = null;
+      modalRef = null;
+      closeModal();
+    };
+    modal.querySelector('.modal-close').removeEventListener('click', closeModal);
+    modal.querySelector('.modal-close').addEventListener('click', closeWithCleanup);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeWithCleanup();
+    });
+
+    return { modal, closeModal: closeWithCleanup };
   }
 
   async function processFiles(files, modal) {
@@ -1464,6 +1528,10 @@
     cachedBookmarksTime = 0;
     if (modalRef) {
       modalRef = null;
+    }
+    if (activeStorageModal) {
+      activeStorageModal.closeModal();
+      activeStorageModal = null;
     }
   });
 

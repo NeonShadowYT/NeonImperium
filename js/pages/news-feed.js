@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – с локализацией
+// js/pages/news-feed.js – с локализацией, обновление кнопки "Добавить новость" при смене языка
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues, loadIssue } = window.GithubAPI;
@@ -102,6 +102,18 @@
     });
     const postId = new URLSearchParams(location.search).get('post');
     if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
+
+    // ---- обновление кнопки "Добавить новость" при смене языка ----
+    window.addEventListener('languageChanged', () => {
+      const header = document.querySelector('.news-header');
+      if (header) {
+        const btn = header.querySelector('.admin-news-btn');
+        if (btn) {
+          const t = window.I18n?.translate || (k => k);
+          btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
+        }
+      }
+    });
   });
 
   async function openPostFromUrl(postId) {
@@ -670,6 +682,9 @@
             window.UIFeedback.openEditorModal('new', { game: null }, 'news');
           });
           header.appendChild(btn);
+        } else {
+          // Обновляем текст кнопки при перерисовке
+          existing.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
         }
       } else if (existing) existing.remove();
     }
