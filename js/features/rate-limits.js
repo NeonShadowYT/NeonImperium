@@ -559,7 +559,7 @@
           <div class="rate-info"><i class="fas fa-info-circle"></i> ${t('limitsInfo')}</div>
           <div class="rate-tabs">
             <button class="rate-tab active" data-tab="queue"><i class="fas fa-clock"></i> ${t('queue')} (<span id="queue-count">0</span>)</button>
-            <button class="rate-tab" data-tab="history"><i class="fas fa-history"></i> История</button>
+            <button class="rate-tab" data-tab="history"><i class="fas fa-history"></i> ${t('history')}</button>
             <button class="rate-tab" data-tab="cache"><i class="fas fa-database"></i> ${t('cacheState')}</button>
           </div>
           <div class="rate-tab-content">

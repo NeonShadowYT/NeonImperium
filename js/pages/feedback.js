@@ -1,4 +1,4 @@
-// js/pages/feedback.js – обратная связь, инициализация через window.initFeedback
+// js/pages/feedback.js – обратная связь с performAction, улучшенная обработка ошибок, локализация, обновление при смене языка
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber,
@@ -11,7 +11,17 @@
 
   if (!window.GithubCore || !window.GithubAPI || !window.GithubAuth || !window.UIUtils) {
     console.error('[feedback.js] Missing dependencies');
-    // Попытка загрузить модули может быть здесь, но мы полагаемся на common-init
+    Promise.all([
+      loadModule('js/core/github-core.js'),
+      loadModule('js/core/github-api.js'),
+      loadModule('js/core/github-auth.js'),
+      loadModule('js/features/ui-utils.js')
+    ]).catch(() => {
+      const t = window.I18n?.translate || (k => k);
+      document.querySelector('#feedback-section')?.innerHTML?.(
+        `<p class="error-message">${t('loadModulesError')}</p>`
+      );
+    });
     return;
   }
 
@@ -21,6 +31,7 @@
   let initialized = false;
   let loadRetries = 0;
   const MAX_RETRIES = 2;
+  let activeFeedbackContainer = null; // для обновления при смене языка
 
   async function addReactionWithSync(issueNumber, content) {
     try {
@@ -78,6 +89,7 @@
       container.className = 'feedback-container';
       section.appendChild(container);
     }
+    activeFeedbackContainer = container;
 
     window.addEventListener('github-login-success', e => { currentUser = e.detail.login; checkAuthAndRender(); });
     window.addEventListener('github-logout', () => { currentUser = null; checkAuthAndRender(); });
@@ -87,6 +99,14 @@
       cacheRemoveByPrefix(`game_issues_${currentGame}`);
       allIssues = [issue, ...allIssues];
       filterAndDisplay(true);
+    });
+
+    // ---- обновление при смене языка ----
+    window.addEventListener('languageChanged', () => {
+      if (activeFeedbackContainer) {
+        // Перерисовываем интерфейс заново
+        renderInterface();
+      }
     });
 
     currentUser = getCurrentUser();
@@ -326,10 +346,15 @@
     }
   }
 
-  // ---- экспорт функции инициализации ----
-  window.initFeedback = function() {
+  document.addEventListener('DOMContentLoaded', () => {
     initLazy();
-  };
+    window.addEventListener('scroll', initLazy, { passive: true });
+  });
 
-  // Убираем авто-вызов!
+  window.FeedbackPage = {
+    addReactionWithSync,
+    removeReactionWithSync,
+    loadGameIssues,
+    refresh: () => { if (currentGame) loadGameIssues(true); }
+  };
 })();

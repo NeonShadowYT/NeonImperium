@@ -318,6 +318,7 @@
   "clearCacheConfirm": "Очистить весь кеш (кроме лимитов)?",
   "cacheCleared": "Весь кеш очищен",
   "staleCacheCleared": "Устаревший кеш очищен",
+  "history": "История",
 
   "starveDetailedTitle": "⚔️ ОЧНУЛСЯ В ОБЛОМКАХ",
   "starveDetailedDesc1": "Без памяти, без вещей, без союзников.",

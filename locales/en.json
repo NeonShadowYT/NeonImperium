@@ -328,6 +328,7 @@
   "clearCacheConfirm": "Clear all cache (except limits)?",
   "cacheCleared": "All cache cleared",
   "staleCacheCleared": "Stale cache cleared",
+  "historyLabel": "История",
 
   "starveDetailedTitle": "⚔️ WOKE UP IN THE RUINS",
   "starveDetailedDesc1": "No memory, no gear, no allies.",
