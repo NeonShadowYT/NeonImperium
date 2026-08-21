@@ -16,6 +16,7 @@
     const SOURCE_TIMEOUT = 10000;               // 10 сек на каждый источник
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 1000;                   // начальная задержка, экспоненциально растёт
+    const MAX_DISPLAY_ITEMS = 6;                // ограничение на главной
 
     // ---------- Внутреннее состояние ----------
     let currentItems = [];
@@ -28,25 +29,34 @@
     // ---------- Вспомогательные функции ----------
     const t = (key) => window.I18n?.translate(key) || key;
 
+    // Приведение элемента к единому формату с гарантией Date
     function normalizeItem(item) {
-        // Приводим к единому формату
+        let date = item.date;
+        if (!(date instanceof Date)) {
+            date = new Date(date);
+            if (isNaN(date.getTime())) {
+                date = new Date(); // fallback
+            }
+        }
         return {
             type: item.type || 'post',
             id: item.id || item.number || item.videoId || item.channel || '',
             title: item.title || 'Без названия',
             author: item.author || 'Unknown',
-            date: item.date instanceof Date ? item.date : new Date(item.date || Date.now()),
+            date: date,
             thumbnail: item.thumbnail || null,
             embedUrl: item.embedUrl || null,
-            // дополнительные поля для постов
             body: item.body || null,
             labels: item.labels || [],
             game: item.game || null,
-            // для видео
             videoData: item.videoData || null,
-            // для стримов
             twitchData: item.twitchData || null,
         };
+    }
+
+    // Нормализация массива элементов
+    function normalizeItems(items) {
+        return items.map(item => normalizeItem(item));
     }
 
     // ---------- Загрузка источников с повторами ----------
@@ -70,7 +80,6 @@
     async function loadPosts(signal) {
         // Проверяем лимиты
         if (window.RateLimits && !window.RateLimits.checkLimit('posts')) {
-            // лимит исчерпан – используем кеш (если есть) и не запрашиваем
             console.warn('[NewsFeed] Лимит постов исчерпан, пропускаем запрос');
             return [];
         }
@@ -243,12 +252,14 @@
         // 1. Проверка кеша
         const cached = cacheGet(CACHE_KEY, maxAge);
         if (cached && !forceRefresh) {
-            console.log(`[NewsFeed] Загрузка из кеша: ${cached.items.length} элементов`);
+            // Нормализуем даты в кеше
+            const items = normalizeItems(cached.items || []);
+            console.log(`[NewsFeed] Загрузка из кеша: ${items.length} элементов`);
             // Фоновое обновление (stale-while-revalidate)
             if (navigator.onLine) {
                 scheduleBackgroundRefresh();
             }
-            return { items: cached.items, fromCache: true, isStale: false };
+            return { items, fromCache: true, isStale: false };
         }
 
         // 2. Если кеша нет или forceRefresh – загружаем из сети
@@ -259,7 +270,12 @@
                     if (!isLoading) {
                         // После загрузки берём из кеша
                         const fresh = cacheGet(CACHE_KEY, maxAge);
-                        resolve({ items: fresh ? fresh.items : [], fromCache: !!fresh, isStale: !fresh });
+                        if (fresh) {
+                            const items = normalizeItems(fresh.items || []);
+                            resolve({ items, fromCache: true, isStale: false });
+                        } else {
+                            resolve({ items: [], fromCache: false, isStale: false });
+                        }
                     } else {
                         setTimeout(check, 100);
                     }
@@ -301,10 +317,10 @@
 
             // Сортируем по дате (новые сверху)
             allItems.sort((a, b) => b.date - a.date);
-            // Ограничим количество (например, 20)
+            // Ограничим количество (например, 20, но для кеша можно больше)
             const limited = allItems.slice(0, 20);
 
-            // Сохраняем в кеш
+            // Сохраняем в кеш (нормализованные элементы уже имеют Date, при JSON-сериализации они станут строками)
             cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
 
             console.log(`[NewsFeed] Загружено: ${limited.length} элементов (посты: ${results[0].status === 'fulfilled' ? results[0].value.length : 0}, видео: ${results[1].status === 'fulfilled' ? results[1].value.length : 0}, стримы: ${results[2].status === 'fulfilled' ? results[2].value.length : 0})`);
@@ -316,8 +332,9 @@
             // Если есть кеш, возвращаем его даже устаревший
             const stale = cacheGet(CACHE_KEY, Infinity);
             if (stale) {
+                const items = normalizeItems(stale.items || []);
                 console.warn('[NewsFeed] Возвращаем устаревший кеш');
-                return { items: stale.items, fromCache: true, isStale: true };
+                return { items, fromCache: true, isStale: true };
             }
             throw err;
         } finally {
@@ -379,7 +396,51 @@
     function renderNewsFeed(items) {
         if (!container) return;
 
-        if (items.length === 0) {
+        // Ограничиваем количество отображаемых элементов
+        const displayItems = items.slice(0, MAX_DISPLAY_ITEMS);
+
+        // Создаём или обновляем заголовок с кнопкой "Добавить новость" для админов
+        let header = container.parentNode?.querySelector('.news-header');
+        if (!header) {
+            header = createElement('div', 'news-header', {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '20px',
+                flexWrap: 'wrap',
+                gap: '15px'
+            });
+            const titleDiv = createElement('div');
+            titleDiv.innerHTML = `
+                <h2>
+                    <i class="fas fa-newspaper" style="color: var(--accent); margin-right: 8px;"></i>
+                    <span data-lang="newsTitle">${t('newsTitle')}</span>
+                </h2>
+                <p class="text-secondary" data-lang="newsDesc">${t('newsDesc')}</p>
+            `;
+            header.appendChild(titleDiv);
+            container.parentNode.insertBefore(header, container);
+        }
+
+        // Кнопка "Добавить новость" для админов
+        const existingBtn = header.querySelector('.admin-news-btn');
+        if (isAdmin() && hasScope('repo')) {
+            if (!existingBtn) {
+                const btn = createElement('button', 'button admin-news-btn');
+                btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
+                btn.addEventListener('click', async () => {
+                    if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
+                    window.UIFeedback.openEditorModal('new', { game: null }, 'news');
+                });
+                header.appendChild(btn);
+            } else {
+                existingBtn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
+            }
+        } else if (existingBtn) {
+            existingBtn.remove();
+        }
+
+        if (displayItems.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-newspaper"></i>
@@ -395,7 +456,7 @@
         const grid = createElement('div', 'projects-grid');
         const fragment = document.createDocumentFragment();
 
-        items.forEach(item => {
+        displayItems.forEach(item => {
             const card = createNewsCard(item);
             fragment.appendChild(card);
         });
@@ -433,7 +494,9 @@
 
         // Мета
         const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
-        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(item.author)} · <i class="fas fa-calendar-alt"></i> ${item.date.toLocaleDateString()}`;
+        // Теперь item.date гарантированно Date
+        const dateStr = item.date.toLocaleDateString();
+        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(item.author)} · <i class="fas fa-calendar-alt"></i> ${dateStr}`;
         if (item.type === 'twitch' && item.twitchData) {
             meta.innerHTML += ` · 🎮 ${escapeHtml(item.twitchData.game)}`;
         }
@@ -534,7 +597,7 @@
 
         // Показываем скелетон
         container.innerHTML = '';
-        container.appendChild(renderSkeleton(6));
+        container.appendChild(renderSkeleton(MAX_DISPLAY_ITEMS));
 
         try {
             const result = await fetchNewsFeed({ forceRefresh: false });
@@ -543,7 +606,6 @@
                 if (result.isStale) {
                     showToast('Данные могут быть устаревшими. Попробуйте обновить.', 'warning', 5000);
                 }
-                // Если есть кнопка обновления в пустом состоянии, она уже добавлена
             } else {
                 renderNewsFeed([]);
             }
@@ -563,7 +625,17 @@
         // Подписка на изменение языка – обновляем только тексты
         window.addEventListener('languageChanged', () => {
             if (!container) return;
-            // Обновляем все элементы с data-lang
+            // Обновляем заголовок
+            const header = container.parentNode?.querySelector('.news-header');
+            if (header) {
+                const titleSpan = header.querySelector('h2 span');
+                if (titleSpan) titleSpan.textContent = t('newsTitle');
+                const desc = header.querySelector('.text-secondary');
+                if (desc) desc.textContent = t('newsDesc');
+                const btn = header.querySelector('.admin-news-btn');
+                if (btn) btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
+            }
+            // Обновляем все элементы с data-lang внутри контейнера
             container.querySelectorAll('[data-lang]').forEach(el => {
                 const key = el.getAttribute('data-lang');
                 if (key) el.textContent = t(key);
@@ -578,7 +650,7 @@
         if (!container) return;
         // Показываем скелетон
         container.innerHTML = '';
-        container.appendChild(renderSkeleton(6));
+        container.appendChild(renderSkeleton(MAX_DISPLAY_ITEMS));
         // Принудительное обновление
         fetchNewsFeed({ forceRefresh: true })
             .then(result => {
@@ -594,6 +666,4 @@
     // Экспорт
     window.initNewsFeed = initNewsFeed;
     window.refreshNewsFeed = refreshNewsFeed;
-
-    // Если страница уже загружена, инициализация будет вызвана из common-init.js
 })();
