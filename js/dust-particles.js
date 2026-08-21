@@ -1,6 +1,5 @@
 // js/features/dust-particles.js
-// Фоновые динамические частицы (пылинки) с эффектом случайного блуждания
-// Плавное появление, масштабирование при ресайзе без исчезновения
+// Фоновые динамические частицы (пылинки) с адаптивной производительностью
 
 (function() {
     let canvas, ctx, particles = [];
@@ -8,32 +7,48 @@
     let width, height;
     let isEnabled = true;
 
-    // Настройки
-    const CONFIG = {
-        PARTICLE_COUNT: 80,
-        MIN_RADIUS: 1,
-        MAX_RADIUS: 2.5,
-        BASE_SPEED: 0.25,
-        NOISE_STRENGTH: 0.08,
-        MAX_SPEED: 0.6,
-        MIN_OPACITY: 0.04,
-        MAX_OPACITY: 0.18,
-        OPACITY_WAVE_SPEED: 0.003,
-        FADE_IN_SPEED: 0.02,
-        DENSITY_THRESHOLD: 0.7     // если после ресайза частиц стало меньше 70% от целевого количества – досоздаём
-    };
-
-    // Акцентный цвет #3d9eb3
-    const BASE_R = 61;
-    const BASE_G = 158;
-    const BASE_B = 179;
-
-    // Проверка на reduced motion
+    // Проверка prefers-reduced-motion
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     if (mediaQuery.matches) {
         isEnabled = false;
         return;
     }
+
+    // === Адаптивные настройки ===
+    // Определяем, мобильное ли устройство (ширина < 768 или touch)
+    const isMobile = window.innerWidth < 768 || ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    // Учитываем количество ядер (если доступно)
+    const cores = navigator.hardwareConcurrency || 4;
+    const isLowPerf = cores < 4;
+
+    // Базовое количество частиц
+    let PARTICLE_COUNT = isMobile ? 30 : (isLowPerf ? 40 : 80);
+    // Для очень слабых устройств уменьшаем ещё
+    if (isMobile && isLowPerf) PARTICLE_COUNT = 20;
+
+    // Радиусы
+    const MIN_RADIUS = isMobile ? 0.8 : 1;
+    const MAX_RADIUS = isMobile ? 1.8 : 2.5;
+
+    // Скорости
+    const BASE_SPEED = isMobile ? 0.15 : 0.25;
+    const NOISE_STRENGTH = isMobile ? 0.04 : 0.08;
+    const MAX_SPEED = isMobile ? 0.4 : 0.6;
+
+    // Прозрачность
+    const MIN_OPACITY = 0.02;
+    const MAX_OPACITY = isMobile ? 0.12 : 0.18;
+    const OPACITY_WAVE_SPEED = 0.003;
+    const FADE_IN_SPEED = 0.02;
+
+    // Максимальная ширина/высота канваса для уменьшения разрешения на мобильных
+    const MAX_CANVAS_WIDTH = isMobile ? 800 : 1600;
+    const MAX_CANVAS_HEIGHT = isMobile ? 600 : 1200;
+
+    // Акцентный цвет #3d9eb3
+    const BASE_R = 61;
+    const BASE_G = 158;
+    const BASE_B = 179;
 
     function initCanvas() {
         if (canvas) return;
@@ -47,43 +62,44 @@
         canvas.style.pointerEvents = 'none';
         canvas.style.zIndex = '-1';
         canvas.style.display = 'block';
+        // will-change для GPU-ускорения
+        canvas.style.willChange = 'transform';
         document.body.appendChild(canvas);
         ctx = canvas.getContext('2d');
 
-        window.addEventListener('resize', onResize);
-        onResize(); // установит начальные размеры и создаст частицы
+        window.addEventListener('resize', onResize, { passive: true });
+        onResize();
     }
 
     function onResize() {
         if (!canvas) return;
         const oldWidth = width;
         const oldHeight = height;
-        const newWidth = window.innerWidth;
-        const newHeight = window.innerHeight;
+
+        // Ограничиваем размер канваса для экономии памяти
+        let newWidth = window.innerWidth;
+        let newHeight = window.innerHeight;
+        if (newWidth > MAX_CANVAS_WIDTH) newWidth = MAX_CANVAS_WIDTH;
+        if (newHeight > MAX_CANVAS_HEIGHT) newHeight = MAX_CANVAS_HEIGHT;
 
         if (oldWidth && oldHeight && particles.length) {
-            // Масштабируем координаты существующих частиц пропорционально
             const scaleX = newWidth / oldWidth;
             const scaleY = newHeight / oldHeight;
             for (const p of particles) {
                 p.x *= scaleX;
                 p.y *= scaleY;
-                // Также можно масштабировать скорость, чтобы движение не сбивалось
                 p.vx *= scaleX;
                 p.vy *= scaleY;
-                // Ограничиваем скорость после масштабирования
                 let speed = Math.hypot(p.vx, p.vy);
-                if (speed > CONFIG.MAX_SPEED) {
-                    p.vx = (p.vx / speed) * CONFIG.MAX_SPEED;
-                    p.vy = (p.vy / speed) * CONFIG.MAX_SPEED;
+                if (speed > MAX_SPEED) {
+                    p.vx = (p.vx / speed) * MAX_SPEED;
+                    p.vy = (p.vy / speed) * MAX_SPEED;
                 }
             }
-            // Проверяем плотность: если после ресайза частиц стало слишком мало относительно площади
-            const expectedCount = CONFIG.PARTICLE_COUNT;
+            // Если после ресайза частиц стало слишком мало, добавляем
+            const expectedCount = PARTICLE_COUNT;
             const currentCount = particles.length;
-            const areaRatio = (newWidth * newHeight) / (oldWidth * oldHeight);
-            // Если площадь увеличилась, а количество частиц не увеличилось – добавляем недостающие
-            if (currentCount < expectedCount * CONFIG.DENSITY_THRESHOLD || areaRatio > 1.2) {
+            if (currentCount < expectedCount * 0.7) {
                 const needed = Math.min(expectedCount - currentCount, Math.floor(expectedCount * 0.3));
                 for (let i = 0; i < needed; i++) {
                     particles.push(createParticle(
@@ -93,7 +109,6 @@
                 }
             }
         } else {
-            // Первый запуск: просто создаём все частицы
             width = newWidth;
             height = newHeight;
             canvas.width = width;
@@ -117,19 +132,20 @@
         return {
             x: x !== undefined ? x : Math.random() * width,
             y: y !== undefined ? y : Math.random() * height,
-            vx: randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED),
-            vy: randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED),
-            radius: randomRange(CONFIG.MIN_RADIUS, CONFIG.MAX_RADIUS),
-            baseOpacity: randomRange(CONFIG.MIN_OPACITY, CONFIG.MAX_OPACITY),
+            vx: randomRange(-BASE_SPEED, BASE_SPEED),
+            vy: randomRange(-BASE_SPEED, BASE_SPEED),
+            radius: randomRange(MIN_RADIUS, MAX_RADIUS),
+            baseOpacity: randomRange(MIN_OPACITY, MAX_OPACITY),
             opacityPhase: Math.random() * Math.PI * 2,
-            fadeProgress: 1,            // при создании сразу видимы (можно 0, если нужен fade-in)
-            colorFactor: colorFactor
+            fadeProgress: 1,
+            colorFactor: colorFactor,
+            currentOpacity: 0
         };
     }
 
     function initParticlesFull() {
         particles = [];
-        for (let i = 0; i < CONFIG.PARTICLE_COUNT; i++) {
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
             particles.push(createParticle());
         }
     }
@@ -138,22 +154,18 @@
         for (let i = 0; i < particles.length; i++) {
             const p = particles[i];
 
-            // Броуновское движение
-            p.vx += (Math.random() - 0.5) * CONFIG.NOISE_STRENGTH;
-            p.vy += (Math.random() - 0.5) * CONFIG.NOISE_STRENGTH;
+            p.vx += (Math.random() - 0.5) * NOISE_STRENGTH;
+            p.vy += (Math.random() - 0.5) * NOISE_STRENGTH;
 
-            // Ограничение скорости
             let speed = Math.hypot(p.vx, p.vy);
-            if (speed > CONFIG.MAX_SPEED) {
-                p.vx = (p.vx / speed) * CONFIG.MAX_SPEED;
-                p.vy = (p.vy / speed) * CONFIG.MAX_SPEED;
+            if (speed > MAX_SPEED) {
+                p.vx = (p.vx / speed) * MAX_SPEED;
+                p.vy = (p.vy / speed) * MAX_SPEED;
             }
 
-            // Движение
             p.x += p.vx;
             p.y += p.vy;
 
-            // Телепортация за границы
             let respawn = false;
             if (p.x < 0) { p.x = width; respawn = true; }
             if (p.x > width) { p.x = 0; respawn = true; }
@@ -161,33 +173,29 @@
             if (p.y > height) { p.y = 0; respawn = true; }
 
             if (respawn) {
-                // Сброс fade (появится снова плавно)
                 p.fadeProgress = 0;
-                p.vx = randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED);
-                p.vy = randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED);
+                p.vx = randomRange(-BASE_SPEED, BASE_SPEED);
+                p.vy = randomRange(-BASE_SPEED, BASE_SPEED);
                 p.opacityPhase = Math.random() * Math.PI * 2;
                 continue;
             }
 
-            // Плавное появление (если частица была пересоздана)
             if (p.fadeProgress < 1) {
-                p.fadeProgress += CONFIG.FADE_IN_SPEED;
+                p.fadeProgress += FADE_IN_SPEED;
                 if (p.fadeProgress > 1) p.fadeProgress = 1;
             }
 
-            // Мерцание
-            p.opacityPhase += CONFIG.OPACITY_WAVE_SPEED;
+            p.opacityPhase += OPACITY_WAVE_SPEED;
             const opacityFactor = (Math.sin(p.opacityPhase) + 1) / 2;
             const wave = 0.6 + 0.4 * opacityFactor;
-            let targetOpacity = p.baseOpacity * p.fadeProgress * wave;
-            p.currentOpacity = targetOpacity;
+            p.currentOpacity = p.baseOpacity * p.fadeProgress * wave;
         }
     }
 
     function drawParticles() {
         if (!ctx) return;
         ctx.clearRect(0, 0, width, height);
-        ctx.shadowBlur = 0; // без теней
+        ctx.shadowBlur = 0;
 
         for (const p of particles) {
             if (p.currentOpacity <= 0.001) continue;
@@ -248,5 +256,6 @@
         start();
     }
 
+    // Экспортируем API для возможного ручного управления
     window.DustParticles = { start, stop, isEnabled: () => isEnabled };
 })();

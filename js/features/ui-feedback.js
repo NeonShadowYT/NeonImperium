@@ -1,10 +1,10 @@
-// js/features/ui-feedback.js – оптимизирован: обновление модалок через data-lang
+// js/features/ui-feedback.js – оптимизирован: мемоизация, throttleRAF, удалён offline-queue
 (function() {
   const {
     createElement, escapeHtml, renderMarkdown, loadModule,
     performAction, isActionStillValid, extractAllowed, decryptPrivateBody,
     cacheRemoveByPrefix, CONFIG, getPlainTextLength, containsGitHubToken,
-    cacheGet, cacheSet
+    cacheGet, cacheSet, memoize, throttleRAF
   } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
@@ -35,7 +35,20 @@
 
   const t = window.I18n?.translate || (k => k);
 
-  // ---- вспомогательные функции ----
+  // Мемоизация рендеринга Markdown
+  const renderMarkdownMemoized = memoize(
+    (text) => {
+      if (!text) return '';
+      if (window.marked) {
+        if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
+        if (typeof marked.parse === 'function') return marked.parse(text);
+        else if (typeof marked === 'function') return marked(text);
+      }
+      return text.replace(/\n/g, '<br>');
+    },
+    null,
+    100
+  );
 
   function canViewPost(body, labels, currentUser) {
     if (!labels || !labels.includes('private')) return true;
@@ -63,22 +76,9 @@
       targetElement.innerHTML = markdownCache.get(cacheKey);
       return;
     }
-    try {
-      let html;
-      if (window.marked) {
-        if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-        if (typeof marked.parse === 'function') html = await marked.parse(text);
-        else if (typeof marked === 'function') html = marked(text);
-        else throw new Error('marked not callable');
-      } else {
-        html = text.replace(/\n/g, '<br>');
-      }
-      if (cacheKey) markdownCache.set(cacheKey, html);
-      targetElement.innerHTML = html;
-    } catch (e) {
-      console.warn('Markdown error:', e);
-      targetElement.innerHTML = text.replace(/\n/g, '<br>');
-    }
+    const html = renderMarkdownMemoized(text);
+    if (cacheKey) markdownCache.set(cacheKey, html);
+    targetElement.innerHTML = html;
   }
 
   function renderReactions(container, issueNumber, reactions, currentUser, onAddHeart, onRemoveHeart) {
@@ -417,9 +417,7 @@
     } catch(e) { showToast(t('loadError') + ': ' + e.message, 'error'); }
   }
 
-  // ---- открытие полной модалки (пост) ----
-
-  let activeFullModal = null; // ссылка на текущую модалку
+  let activeFullModal = null;
 
   async function openFullModal(item) {
     const { id, title, body, author, date, game, labels, type } = item;
@@ -580,13 +578,10 @@
     }
 
     // Обновление модалки при смене языка – только data-lang
-    // Удаляем предыдущие обработчики, вешаем один на обновление текстов
     const langHandler = () => {
       if (!activeFullModal || activeFullModal.modal !== modal) return;
-      // Обновляем заголовок
       const headerTitle = modal.querySelector('.modal-header h2');
       if (headerTitle) headerTitle.textContent = t(title) || title;
-      // Кнопки с data-lang обновятся сами
       const commentsHeader = modal.querySelector('.comments-section h3');
       if (commentsHeader) commentsHeader.textContent = t('comments');
       const inputField = modal.querySelector('#new-comment-input');
@@ -610,8 +605,6 @@
       if (e.target === modal) closeWithCleanup();
     });
   }
-
-  // ---- редактор (создание/редактирование поста) ----
 
   let activeEditorModal = null;
 
@@ -808,11 +801,14 @@
     submitRow.appendChild(rateIndicator);
     container.appendChild(submitRow);
 
-    textarea.addEventListener('input', async () => {
+    // Обновление превью с debounce + throttleRAF
+    const updatePreview = throttleRAF(async () => {
       currentBody = textarea.value;
       await renderMarkdownWithEditor(currentBody, preview);
       saveDraft(draftKey, { title: titleInput.value, body: currentBody });
     });
+
+    textarea.addEventListener('input', updatePreview);
 
     titleInput.addEventListener('input', () => {
       const val = titleInput.value;
@@ -894,12 +890,6 @@
     }, 1000);
     submitBtn.addEventListener('click', debouncedSubmit);
 
-    if (draft && draft.body !== undefined) {
-      await renderMarkdownWithEditor(draft.body, preview);
-      textarea.value = draft.body;
-      currentBody = draft.body;
-    }
-
     // Обновление модалки редактора при смене языка – только data-lang
     const langHandler = () => {
       if (!activeEditorModal || activeEditorModal.modal !== modal) return;
@@ -929,7 +919,6 @@
     });
   }
 
-  // ---- экспорт ----
   window.UIFeedback = {
     renderReactions,
     loadComments,

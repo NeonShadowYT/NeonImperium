@@ -1,18 +1,18 @@
-// sw.js — Service Worker с кэшированием, background sync, офлайн-поддержкой и кэшированием изображений
-const STATIC_CACHE = 'static-v7';
-const DYNAMIC_CACHE = 'dynamic-v7';
-const IMAGES_CACHE = 'images-v7';
-const API_CACHE = 'github-api-v7';
+// sw.js — Service Worker с кэшированием, background sync, офлайн-поддержкой
+const STATIC_CACHE = 'static-v8';
+const DYNAMIC_CACHE = 'dynamic-v8';
+const IMAGES_CACHE = 'images-v8';
+const API_CACHE = 'github-api-v8';
 const SYNC_TAG = 'github-mutations';
-const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 минут
-const IMAGES_CACHE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 дней
+const API_CACHE_MAX_AGE = 5 * 60 * 1000;
+const IMAGES_CACHE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
 
 const PRECACHE_URLS = [
   'style.css',
   'js/utils.js', 'js/core/github-core.js', 'js/github-client.js',
-  'js/core/github-api.js', 'js/core/github-auth.js', 'js/offline-queue.js',
+  'js/core/github-api.js', 'js/core/github-auth.js',
   'js/features/ui-utils.js', 'js/features/ui-feedback.js',
-  'js/features/editor.js', 'js/features/storage.js',
+  'js/features/editor.js', 'js/features/storage.js', 'js/features/rate-limits.js',
   'js/lang.js', 'js/common-init.js', 'js/effects.js',
   'js/pages/news-feed.js', 'js/pages/feedback.js', 'js/pages/game-updates.js',
   'js/platform.js', 'js/features/background-gifs.js',
@@ -61,14 +61,12 @@ async function isImageCacheValid(cachedResponse) {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Пропускаем внешние API, которые не нужно кэшировать
   if (url.hostname === 'api.github.com' ||
       url.hostname === 'api.rss2json.com' ||
       url.hostname === 'avatars.githubusercontent.com') {
     return;
   }
 
-  // HTML – stale-while-revalidate
   if (event.request.mode === 'navigate') {
     event.respondWith((async () => {
       const cache = await caches.open(DYNAMIC_CACHE);
@@ -82,7 +80,6 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Изображения – CacheFirst с долгим TTL (30 дней)
   if (event.request.method === 'GET' && url.pathname.match(/\.(webp|png|jpg|jpeg|gif|svg|ico)$/)) {
     event.respondWith((async () => {
       const cache = await caches.open(IMAGES_CACHE);
@@ -119,7 +116,6 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // API-запросы к GitHub (GET) – NetworkFirst с кэшем на 5 минут
   if (event.request.method === 'GET' && url.pathname.includes('/repos/')) {
     event.respondWith((async () => {
       const cache = await caches.open(API_CACHE);
@@ -139,7 +135,6 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Остальное – NetworkFirst
   event.respondWith((async () => {
     try {
       const network = await fetch(event.request);
@@ -155,7 +150,6 @@ self.addEventListener('fetch', event => {
   })());
 });
 
-// Background sync
 self.addEventListener('sync', event => {
   if (event.tag !== SYNC_TAG) return;
   event.waitUntil((async () => {

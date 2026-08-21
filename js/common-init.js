@@ -1,4 +1,7 @@
 // js/common-init.js – инициализация после загрузки переводов
+// Оптимизирован: удалён offline-queue, использован RateLimits напрямую,
+// добавлена проверка isLowPerformance для отключения тяжёлых эффектов
+
 (function() {
   function addPreconnects() {
     const links = [
@@ -94,7 +97,6 @@
   function initLazyYT() {
     function showYouTubeFallback(container, videoUrl) {
       const t = window.I18n?.translate || (k => k);
-      // fallback занимает всю площадь контейнера
       container.innerHTML = `
         <div class="yt-fallback" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-primary);border-radius:12px;padding:20px;text-align:center;gap:12px;box-sizing:border-box;animation:fadeInUp 0.4s ease;">
           <i class="fab fa-youtube" style="font-size:32px;color:var(--accent);"></i>
@@ -223,6 +225,11 @@
   }
 
   function loadDustParticles() {
+    // Проверяем, не является ли устройство низкопроизводительным
+    if (window.Utils && window.Utils.isLowPerformance && window.Utils.isLowPerformance()) {
+      console.log('[common-init] Dust particles disabled due to low performance');
+      return;
+    }
     if (document.querySelector('script[src="js/dust-particles.js"]')) return;
     const script = document.createElement('script');
     script.src = 'js/dust-particles.js';
@@ -362,15 +369,7 @@
     }
   }
 
-  function refreshDynamicUI() {
-    if (window.FeedbackPage?.refresh) window.FeedbackPage.refresh();
-    if (window.refreshGameUpdates && window.currentGame) window.refreshGameUpdates(window.currentGame);
-    if (window.refreshNewsFeed) window.refreshNewsFeed();
-    if (window.initPlatform) window.initPlatform();
-  }
-
-  // Убрали обработчик languageChanged, который вызывал refreshDynamicUI – теперь полагаемся на data-lang
-
+  // Функция для инициализации страничных модулей (без перезагрузки данных)
   function initPageModules() {
     if (window.initNewsFeed) window.initNewsFeed();
     if (window.initFeedback) window.initFeedback();

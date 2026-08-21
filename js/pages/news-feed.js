@@ -1,6 +1,10 @@
-// js/pages/news-feed.js – оптимизирован: data-lang вместо перерисовки
+// js/pages/news-feed.js – оптимизирован: мемоизация, throttleRAF, удалён offline-queue
 (function() {
-  const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
+  const {
+    cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber,
+    createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody,
+    loadModule, createElement, throttleRAF, memoize
+  } = window.GithubCore;
   const { loadIssues, loadIssue } = window.GithubAPI;
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
   const { showToast, createModal } = window.UIUtils;
@@ -23,6 +27,21 @@
   let currentUser = null;
   let loading = false;
   let currentAbortController = null;
+
+  // Мемоизация рендеринга Markdown для постов
+  const renderMarkdownMemoized = memoize(
+    (text) => {
+      if (!text) return '';
+      if (window.marked) {
+        if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
+        if (typeof marked.parse === 'function') return marked.parse(text);
+        else if (typeof marked === 'function') return marked(text);
+      }
+      return text.replace(/\n/g, '<br>');
+    },
+    null,
+    100
+  );
 
   async function ensureLoggedInAndGist() {
     if (getCurrentUser() && hasScope('gist')) return true;
@@ -111,8 +130,6 @@
     });
     const postId = new URLSearchParams(location.search).get('post');
     if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
-
-    // languageChanged больше не перезагружает данные – только data-lang
   };
 
   async function openPostFromUrl(postId) {
@@ -689,6 +706,4 @@
       } else if (existing) existing.remove();
     }
   }
-
-  // Убираем обработчик languageChanged – данные не перезагружаем
 })();

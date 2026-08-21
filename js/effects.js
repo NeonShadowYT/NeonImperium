@@ -1,5 +1,6 @@
-// effects.js — 3D tilt и параллакс для шапок (только десктоп)
+// effects.js — 3D tilt и параллакс для шапок (только десктоп, с учётом prefers-reduced-motion)
 
+// Утилита для тротлинга через requestAnimationFrame (без изменений)
 function throttleAnimation(fn) {
     let running = false;
     return function(e) {
@@ -12,12 +13,27 @@ function throttleAnimation(fn) {
     };
 }
 
-// 3D Tilt для карточек (только на десктопе)
+// Проверка, нужно ли включать эффекты
+function shouldEnableEffects() {
+    // Отключаем при prefers-reduced-motion
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    // Отключаем на сенсорных устройствах (мобильные/планшеты)
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return false;
+    // Опционально: отключаем на слабых устройствах (например, малом числе ядер)
+    if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) return false;
+    return true;
+}
+
+const effectsEnabled = shouldEnableEffects();
+
+// 3D Tilt для карточек (только если эффекты разрешены)
 function initTiltEffect() {
+    if (!effectsEnabled) return;
     const cards = document.querySelectorAll('.tilt-card');
     if (cards.length === 0) return;
 
     cards.forEach(card => {
+        // Исключаем элементы, где tilt не нужен
         if (card.classList.contains('feature-item') ||
             card.classList.contains('update-card') ||
             card.classList.contains('req-item') ||
@@ -46,23 +62,26 @@ function initTiltEffect() {
             }
         });
         
-        card.addEventListener('mousemove', handleMove);
+        // Добавляем passive: true для улучшения производительности скролла (mousemove не блокирует)
+        card.addEventListener('mousemove', handleMove, { passive: true });
         card.addEventListener('mouseleave', () => {
             card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)';
             if (img && !isProfile) {
                 img.style.transform = 'translate(0, 0) scale(1)';
             }
-        });
+        }, { passive: true });
     });
 }
 
-// Параллакс для шапок игр (на десктопе) — исправлен сброс при скролле
+// Параллакс для шапок игр (только десктоп)
 function initHeaderParallax() {
+    if (!effectsEnabled) return;
     const headers = document.querySelectorAll('.game-header');
     if (headers.length === 0) return;
 
     let scrollTimer = null;
 
+    // Сброс позиции при скролле с debounce
     window.addEventListener('scroll', function() {
         if (scrollTimer) clearTimeout(scrollTimer);
         scrollTimer = setTimeout(function() {
@@ -73,7 +92,7 @@ function initHeaderParallax() {
                 header.style.backgroundPosition = 'center';
             });
         }, 100);
-    });
+    }, { passive: true }); // passive: true
 
     headers.forEach(header => {
         const handleMove = throttleAnimation((e) => {
@@ -92,18 +111,17 @@ function initHeaderParallax() {
             header.style.backgroundPosition = `calc(50% + ${moveX}px) calc(50% + ${moveY}px)`;
         });
         
-        header.addEventListener('mousemove', handleMove);
+        header.addEventListener('mousemove', handleMove, { passive: true });
         header.addEventListener('mouseleave', () => {
             header.style.backgroundPosition = 'center';
-        });
+        }, { passive: true });
     });
 }
 
 // Инициализация после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
-    const isTouch = 'ontouchstart' in window;
-    
-    if (!isTouch) {
+    // Проверка уже выполнена в shouldEnableEffects, но для надёжности дублируем
+    if (effectsEnabled) {
         initTiltEffect();
         initHeaderParallax();
     }

@@ -1,10 +1,22 @@
 // js/platform.js – улучшенная сортировка и стилизованные метки для выбора версий, с локализацией, обновление при смене языка
+// Оптимизации:
+// - кеширование релизов в localStorage с TTL 30 минут (баланс между актуальностью и производительностью)
+// - debounce для переключения платформы (300 мс)
+// - предотвращение повторных запросов при смене языка (используем кеш)
+// - уменьшение количества перерисовок через requestAnimationFrame
+
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
     const RELEASES_CACHE_KEY = 'github_all_releases';
-    const CACHE_DURATION = 60 * 60 * 1000; // 1 час
+    // Увеличим TTL до 30 минут (было 1 час) – чтобы обновления появлялись быстрее, но не перегружали API
+    const CACHE_DURATION = 30 * 60 * 1000;
     let currentAbortController = null;
+    let platformInitialized = false;
+    let githubContainer, platformBtns, versionSelect, versionDateEl, githubBtn, whatsNewBtn;
+    let allReleases = [];
+    let currentPlatform = (getOS() === 'Android') ? 'Android' : 'Windows';
+    let debounceTimer = null;
 
     const gameTag = location.pathname.split('/').pop().replace('.html', '');
 
@@ -19,9 +31,10 @@
         return 'Windows';
     }
 
+    // Кеширование с localStorage (долгий TTL)
     function cacheGet(key) {
         try {
-            const raw = sessionStorage.getItem(key);
+            const raw = localStorage.getItem(key);
             if (!raw) return null;
             const { data, ts } = JSON.parse(raw);
             if (Date.now() - ts < CACHE_DURATION) return data;
@@ -29,12 +42,13 @@
         return null;
     }
     function cacheSet(key, data) {
-        try { sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {}
+        try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {}
     }
 
     async function fetchAllReleases() {
         const cached = cacheGet(RELEASES_CACHE_KEY);
         if (cached) return cached;
+
         if (currentAbortController) {
             currentAbortController.abort();
         }
@@ -177,13 +191,13 @@
         return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
-    let platformInitialized = false;
-    let githubContainer, platformBtns, versionSelect, versionDateEl, githubBtn, whatsNewBtn;
-    let allReleases = [];
-    let currentPlatform = (getOS() === 'Android') ? 'Android' : 'Windows';
+    // Debounced обновление интерфейса при смене платформы
+    const debouncedPopulate = debounce(function(platform) {
+        populateVersionSelect(platform);
+    }, 300);
 
     async function initPlatform() {
-        if (platformInitialized) return; // предотвращаем повторный вызов
+        if (platformInitialized) return;
         platformInitialized = true;
 
         const t = window.I18n?.translate || (k => k);
@@ -339,13 +353,16 @@
             }
         }
 
+        // Обработчики с debounce
         platformBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                currentPlatform = btn.dataset.platform;
+                const newPlatform = btn.dataset.platform;
+                if (newPlatform === currentPlatform) return;
+                currentPlatform = newPlatform;
                 platformBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 updateCloudVisibility();
-                populateVersionSelect(currentPlatform);
+                debouncedPopulate(currentPlatform);
             });
         });
 
@@ -377,7 +394,16 @@
         populateVersionSelect(currentPlatform);
     }
 
-    // ---- обновление при смене языка ----
+    // Вспомогательная функция debounce
+    function debounce(fn, delay) {
+        let timer;
+        return function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
+    // ---- обновление при смене языка (только тексты, без перезагрузки данных) ----
     window.addEventListener('languageChanged', () => {
         if (platformInitialized && githubContainer) {
             const t = window.I18n?.translate || (k => k);
@@ -391,7 +417,7 @@
             }
             const versionDateEl = githubContainer.querySelector('#version-date');
             if (versionDateEl) {
-                const selected = versionSelect.value;
+                const selected = versionSelect?.value;
                 if (selected) {
                     const release = allReleases.find(r => r.tag_name === selected);
                     if (release) {
@@ -411,8 +437,5 @@
         }
     });
 
-    // Экспортируем функцию инициализации
     window.initPlatform = initPlatform;
-
-    // Убираем авто-вызов!
 })();
