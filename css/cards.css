@@ -535,7 +535,7 @@
 
 /* cards.css – добавлены стили для Bento-плиток, наклонов, плавающих иконок и морфинга */
 
-/* ---- Bento Grid (используется в starve-neon) ---- */
+/* ---- Bento Grid (улучшенная версия) ---- */
 .bento-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -556,16 +556,22 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    transform-style: preserve-3d;
-    perspective: 600px;
     position: relative;
     overflow: hidden;
 }
 
-.bento-item:hover {
-    transform: translateY(-4px) scale(1.01) rotateX(2deg) rotateY(2deg);
+/* Ослабленный hover-эффект (без вращения) */
+.bento-item.tilt-card:hover {
+    transform: translateY(-4px) scale(1.01);
     border-color: var(--accent);
     box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 60px rgba(61,158,179,0.08);
+}
+
+/* Для маленьких блоков (span-1) отключаем tilt */
+.bento-item.span-1:hover {
+    transform: translateY(-2px) scale(1.005);
+    border-color: rgba(61,158,179,0.3);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
 }
 
 .bento-item .bento-title {
@@ -576,10 +582,17 @@
     gap: 10px;
 }
 
-.bento-item .bento-title .emoji-float {
+/* Плавающие эмодзи только в крупных блоках */
+.bento-item.span-2 .bento-title .emoji-float,
+.bento-item.span-3 .bento-title .emoji-float,
+.bento-item.span-4 .bento-title .emoji-float {
     display: inline-block;
     animation: floatEmoji 3s ease-in-out infinite;
 }
+.bento-item.span-1 .bento-title .emoji-float {
+    display: none; /* скрываем эмодзи в маленьких блоках */
+}
+
 .bento-item .bento-title .emoji-float.delay-1 { animation-delay: 0.2s; }
 .bento-item .bento-title .emoji-float.delay-2 { animation-delay: 0.5s; }
 
@@ -604,12 +617,13 @@
     color: var(--text-primary);
 }
 
+/* Гифка внутри блока (прижата к низу) */
 .bento-item .bento-gif {
     border-radius: 12px;
     overflow: hidden;
     background: #000;
     border: 1px solid var(--glass-border);
-    margin: 0 -24px -24px -24px;
+    margin: 8px -24px -24px -24px; /* растягиваем на всю ширину блока */
     border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 .bento-item .bento-gif img,
@@ -624,7 +638,7 @@
 .bento-item.span-4 { grid-column: span 4; }
 .bento-item.span-2-row { grid-row: span 2; }
 
-/* Специальные стили для summary-grid внутри bento */
+/* Summary-сетка внутри блока */
 .bento-summary-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -645,7 +659,7 @@
     flex-shrink: 0;
 }
 
-/* Социальные кнопки в bento */
+/* Социальные кнопки */
 .bento-social-links {
     display: flex;
     flex-wrap: wrap;
@@ -698,6 +712,10 @@
     .bento-item.span-2-row {
         grid-row: span 1;
     }
+    .bento-item .bento-gif {
+        margin: 8px -16px -16px -16px;
+        border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    }
 }
 
 @media (max-width: 700px) {
@@ -716,10 +734,6 @@
     .bento-item .bento-title {
         font-size: 18px;
     }
-    .bento-item .bento-gif {
-        margin: 0 -16px -16px -16px;
-        border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-    }
 }
 
 @media (max-width: 480px) {
@@ -731,5 +745,8 @@
     }
     .bento-summary-item {
         font-size: 13px;
+    }
+    .bento-item .bento-gif {
+        margin: 8px -16px -16px -16px;
     }
 }
