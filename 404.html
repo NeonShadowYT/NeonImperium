@@ -34,12 +34,13 @@
         .page { max-width:1200px; margin:0 auto; width:100%; }
         .loading-spinner { text-align:center; padding:30px; color:#c0c0d0; }
 
-        /* Фоновый слой с гифкой */
+        /* Фоновый слой с гифкой – заполняет весь контейнер */
         .page-404-wrapper {
             position: relative;
             overflow: hidden;
             border-radius: var(--radius-md);
             margin-bottom: 24px;
+            /* Высота определяется содержимым (карточкой) */
         }
         .bg-gif-layer {
             position: absolute;
@@ -50,6 +51,7 @@
             z-index: 0;
             opacity: 0;
             transition: opacity 1.5s ease-in-out;
+            pointer-events: none;
         }
         .bg-gif-layer.active {
             opacity: 1;
@@ -57,7 +59,8 @@
         .bg-gif-layer img {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: cover;  /* заполняет контейнер, обрезая лишнее */
+            display: block;
             filter: blur(4px) brightness(0.6);
         }
         .bg-gif-mask {
@@ -77,7 +80,6 @@
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
         }
-        /* Навбар поверх всего */
         .nav-bar {
             position: relative;
             z-index: 10;
@@ -109,7 +111,7 @@
             <main>
                 <div class="card" style="text-align: center; padding: 60px 28px;">
                     <h1 data-lang="notFoundTitle" style="font-size: 72px; margin-bottom: 20px;">404</h1>
-                    <p class="text-secondary" data-lang="notFoundDesc" style="font-size: 18px; margin-bottom: 30px;">Запрашиваемая страница не существует или была перемещена.</p>
+                    <p class="text-secondary" data-lang="notFoundDesc" style="font-size: 18px; margin-bottom: 30px;"></p>
                     <a href="index.html" class="button wide" data-lang="backHome">Вернуться на главную</a>
                 </div>
             </main>
@@ -117,11 +119,10 @@
     </div>
 
     <script>
-        // Активация фонового слоя после загрузки
+        // Активация фона после загрузки
         document.addEventListener('DOMContentLoaded', function() {
             const layer = document.getElementById('bgGifLayer');
             if (layer) {
-                // Небольшая задержка для плавности
                 setTimeout(() => layer.classList.add('active'), 100);
             }
         });
