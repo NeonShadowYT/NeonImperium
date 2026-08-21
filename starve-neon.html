@@ -18,10 +18,12 @@
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
 
+    <!-- Убираем шумовую рябь на фоне только для этой страницы -->
     <style>
         body {
             background-image: var(--bg-gradient-overlay) !important;
         }
+        /* Пылинки остаются, их создаёт dust-particles.js */
     </style>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -70,203 +72,140 @@
             border: 1px solid var(--border);
         }
 
-        /* ---- Детальное описание Starve Neon (Bento Grid) ---- */
+        /* ---- Детальное описание Starve Neon ---- */
         .starve-description {
             margin-top: 30px;
         }
-
-        .bento-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 24px;
-            margin-top: 16px;
-        }
-
-        .bento-item {
+        .starve-description .desc-block {
             background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(8px);
             border-radius: var(--radius-md);
-            padding: 24px;
-            transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.4, 1),
-                        box-shadow 0.3s ease,
-                        border-color 0.3s ease;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            transform-style: preserve-3d;
-            perspective: 600px;
-            position: relative;
-            overflow: hidden;
+            padding: 28px 24px;
+            margin-bottom: 24px;
+            border: 1px solid var(--glass-border);
+            transition: border-color 0.3s, box-shadow 0.3s;
+            box-shadow: var(--glass-shadow);
         }
-
-        .bento-item:hover {
-            transform: translateY(-4px) scale(1.01) rotateX(2deg) rotateY(2deg);
+        .starve-description .desc-block:hover {
             border-color: var(--accent);
-            box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 60px rgba(61,158,179,0.08);
+            box-shadow: var(--shadow-hover);
         }
-
-        .bento-item .bento-title {
+        .starve-description .desc-block h3 {
+            margin: 0 0 12px 0;
             font-size: 22px;
-            margin: 0 0 4px 0;
             display: flex;
             align-items: center;
             gap: 10px;
         }
-        .bento-item .bento-title .emoji-float {
-            display: inline-block;
-            animation: floatEmoji 3s ease-in-out infinite;
-        }
-        .bento-item .bento-title .emoji-float.delay-1 { animation-delay: 0.2s; }
-        .bento-item .bento-title .emoji-float.delay-2 { animation-delay: 0.5s; }
-
-        .bento-item p {
+        .starve-description .desc-block p {
+            margin: 10px 0;
             color: var(--text-secondary);
-            line-height: 1.6;
-            margin: 4px 0;
+            line-height: 1.7;
             font-size: 15px;
         }
-        .bento-item .quote {
-            background: rgba(0,0,0,0.2);
+        .starve-description .desc-block .quote {
+            margin: 12px 0;
+            padding: 16px 24px;
+            background: rgba(0,0,0,0.3);
             border-radius: 12px;
-            padding: 12px 16px;
             border-left: 4px solid var(--accent);
             color: var(--text-secondary);
             font-style: normal;
-            font-size: 14px;
-            margin: 6px 0;
+            font-size: 15px;
         }
-        .bento-item .quote strong {
+        .starve-description .desc-block .quote strong {
             color: var(--text-primary);
         }
-
-        .bento-item .bento-gif {
+        .starve-description .desc-gif {
             border-radius: 12px;
             overflow: hidden;
+            margin: 16px 0;
             background: #000;
             border: 1px solid var(--glass-border);
-            margin: 0 -24px -24px -24px;
-            border-radius: 0 0 var(--radius-md) var(--radius-md);
         }
-        .bento-item .bento-gif img,
-        .bento-item .bento-gif video {
+        .starve-description .desc-gif img,
+        .starve-description .desc-gif video {
             width: 100%;
             display: block;
+            border-radius: 12px;
         }
-
-        /* Размеры плиток */
-        .bento-item.span-2 { grid-column: span 2; }
-        .bento-item.span-3 { grid-column: span 3; }
-        .bento-item.span-4 { grid-column: span 4; }
-        .bento-item.span-2-row { grid-row: span 2; }
-
-        /* Специальные стили для summary-grid внутри bento */
-        .bento-summary-grid {
+        .starve-description .summary-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px 16px;
-            margin-top: 8px;
+            gap: 12px;
+            margin-top: 16px;
         }
-        .bento-summary-item {
+        .starve-description .summary-item {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 6px 0;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            border-bottom: 1px solid var(--glass-border);
             font-size: 14px;
             color: var(--text-secondary);
-            border-bottom: 1px solid rgba(255,255,255,0.04);
         }
-        .bento-summary-item .emoji {
-            font-size: 18px;
+        .starve-description .summary-item .emoji {
+            font-size: 20px;
             flex-shrink: 0;
         }
-
-        /* Социальные кнопки в bento */
-        .bento-social-links {
+        .starve-description .social-links {
             display: flex;
             flex-wrap: wrap;
             gap: 12px;
             justify-content: center;
-            margin: 12px 0 8px;
+            margin: 20px 0 10px;
         }
-        .bento-social-links a {
+        .starve-description .social-links a {
+            display: inline-block;
             transition: transform 0.2s;
         }
-        .bento-social-links a:hover {
+        .starve-description .social-links a:hover {
             transform: translateY(-3px);
         }
-
-        .bento-footer-credit {
-            padding: 12px 0 0 0;
-            border-top: 1px solid var(--glass-border);
+        .starve-description .footer-credit {
+            padding: 20px;
             text-align: center;
+            border-top: 1px solid var(--glass-border);
             color: var(--text-secondary);
             font-size: 14px;
-            margin-top: 8px;
         }
-        .bento-footer-credit strong {
+        .starve-description .footer-credit strong {
             color: var(--accent);
         }
 
-        /* Морфинг-фигура (декоративная) */
-        .bento-morph-shape {
-            width: 120px;
-            height: 120px;
-            border-radius: 60% 40% 50% 50% / 40% 50% 60% 50%;
-            background: linear-gradient(135deg, rgba(61,158,179,0.15), rgba(90,181,201,0.08));
-            animation: morphShape 8s ease-in-out infinite alternate;
-            margin: 0 auto 12px;
-            filter: blur(2px);
-            opacity: 0.5;
-        }
+        /* Цветовые вариации для блоков */
+        .starve-description .block-accent1 { border-left: 4px solid #ff6b6b; }
+        .starve-description .block-accent1 h3 { color: #ff6b6b; }
+        .starve-description .block-accent1 .quote { border-left-color: #ff6b6b; }
 
-        @media (max-width: 900px) {
-            .bento-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 16px;
-            }
-            .bento-item.span-2,
-            .bento-item.span-3,
-            .bento-item.span-4 {
-                grid-column: span 2;
-            }
-            .bento-item.span-2-row {
-                grid-row: span 1;
-            }
-        }
+        .starve-description .block-accent2 { border-left: 4px solid #ffd93d; }
+        .starve-description .block-accent2 h3 { color: #ffd93d; }
+        .starve-description .block-accent2 .quote { border-left-color: #ffd93d; }
+
+        .starve-description .block-accent3 { border-left: 4px solid #ff8c00; }
+        .starve-description .block-accent3 h3 { color: #ff8c00; }
+        .starve-description .block-accent3 .quote { border-left-color: #ff8c00; }
+
+        .starve-description .block-accent4 { border-left: 4px solid #9b59b6; }
+        .starve-description .block-accent4 h3 { color: #9b59b6; }
+        .starve-description .block-accent4 .quote { border-left-color: #9b59b6; }
+
+        .starve-description .block-accent5 { border-left: 4px solid #6bcbff; }
+        .starve-description .block-accent5 h3 { color: #6bcbff; }
+        .starve-description .block-accent5 .quote { border-left-color: #6bcbff; }
+
+        .starve-description .block-accent6 { border-left: 4px solid #39ff14; }
+        .starve-description .block-accent6 h3 { color: #39ff14; }
+        .starve-description .block-accent6 .quote { border-left-color: #39ff14; }
 
         @media (max-width: 700px) {
-            .bento-grid {
-                grid-template-columns: 1fr;
-                gap: 16px;
-            }
-            .bento-item.span-2,
-            .bento-item.span-3,
-            .bento-item.span-4 {
-                grid-column: span 1;
-            }
-            .bento-summary-grid {
+            .starve-description .summary-grid {
                 grid-template-columns: 1fr;
             }
-            .bento-item .bento-title {
-                font-size: 18px;
-            }
-            .bento-item .bento-gif {
-                margin: 0 -16px -16px -16px;
-                border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-            }
-        }
-
-        @media (max-width: 480px) {
-            .bento-item {
-                padding: 16px;
-            }
-            .bento-item .bento-title {
-                font-size: 16px;
-            }
-            .bento-summary-item {
-                font-size: 13px;
+            .starve-description .desc-block {
+                padding: 20px 16px;
             }
         }
     </style>
@@ -370,183 +309,156 @@
                 </div>
             </section>
 
-            <!-- ===== ОПИСАНИЕ (Bento Grid с улучшенной структурой) ===== -->
+            <!-- ===== ОПИСАНИЕ ===== -->
             <section class="card">
                 <h2>
                     <i class="fas fa-align-left"></i>
                     <span data-lang="descriptionTitle">Описание</span>
                 </h2>
 
+                <!-- ===== РАЗВЁРНУТОЕ ОПИСАНИЕ ===== -->
                 <div class="starve-description">
-                    <div class="bento-grid">
 
-                        <!-- 1. Очнулся в обломках (span-2) с гифкой -->
-                        <div class="bento-item span-2 tilt-card">
-                            <h3 class="bento-title">
-                                <span class="emoji-float">⚔️</span>
-                                <span data-lang="starveDetailedTitle">ОЧНУЛСЯ В ОБЛОМКАХ</span>
-                            </h3>
-                            <p data-lang="starveDetailedDesc1">Без памяти, без вещей, без союзников.</p>
-                            <p data-lang="starveDetailedDesc2">Первый камень, первый топор, первый шаг в лес. Вернёшься живым - станешь сильнее. Погибнешь - потеряешь всё.</p>
-                            <div class="quote" data-lang="starveDetailedQuote1">
-                                <strong>В этой игре нет фарма ради фарма.</strong> Прогрессия завязана на риске: <strong>чем опаснее вылазка - тем больше награда.</strong>
-                            </div>
-                            <div class="bento-gif">
-                                <img src="https://img.itch.zone/aW1nLzI2MTc1MTAzLmdpZg==/original/ZSdakp.gif" alt="Progression" loading="lazy">
-                            </div>
+                    <!-- Блок 1: Очнулся в обломках -->
+                    <div class="desc-block block-accent1">
+                        <h3><span data-lang="starveDetailedTitle">⚔️ ОЧНУЛСЯ В ОБЛОМКАХ</span></h3>
+                        <p data-lang="starveDetailedDesc1">Без памяти, без вещей, без союзников.</p>
+                        <p data-lang="starveDetailedDesc2">Первый камень, первый топор, первый шаг в лес. Вернёшься живым - станешь сильнее. Погибнешь - потеряешь всё.</p>
+                        <div class="quote" data-lang="starveDetailedQuote1"><strong>В этой игре нет фарма ради фарма.</strong> Прогрессия завязана на риске: <strong>чем опаснее вылазка - тем больше награда.</strong></div>
+                    </div>
+
+                    <!-- GIF 1: Progression -->
+                    <div class="desc-gif">
+                        <img src="https://img.itch.zone/aW1nLzI2MTc1MTAzLmdpZg==/original/ZSdakp.gif" alt="Progression" loading="lazy">
+                    </div>
+
+                    <!-- Блок 2: Смерть - туториал -->
+                    <div class="desc-block block-accent2">
+                        <h3><span data-lang="starveDeathTitle">☠️ СМЕРТЬ - ТУТОРИАЛ</span></h3>
+                        <p data-lang="starveDeathDesc">Взял снаряжение в вылазку - будь готов его потерять.</p>
+                        <div class="quote" data-lang="starveDeathQuote"><strong>Как в Tarkov: умрёшь - твои вещи достанутся врагу.</strong> Никаких «сохраниться перед боем». Никаких вторых шансов. <strong>Только ты и твой скилл.</strong></div>
+                    </div>
+
+                    <!-- Блок 3: Прогрессия через риск -->
+                    <div class="desc-block block-accent3">
+                        <h3><span data-lang="starveRiskTitle">🔥 ПРОГРЕССИЯ ЧЕРЕЗ РИСК</span></h3>
+                        <p data-lang="starveRiskDesc">Туториал ведёт новичков за руку, но уже через 10 минут ты решаешь: бежать за золотом через медведей или вернуться на базу.</p>
+                        <div class="quote" data-lang="starveRiskQuote"><strong>Хочешь лучшее снаряжение? Иди в самое пекло.</strong> Лес, гора, вулкан. Каждый биом - шаг вверх по сложности.</div>
+                    </div>
+
+                    <!-- GIF 2: Genetics -->
+                    <div class="desc-gif">
+                        <img src="https://img.itch.zone/aW1nLzI2MTc1Mzc5LmdpZg==/original/Qe5gAj.gif" alt="Genetics" loading="lazy">
+                    </div>
+
+                    <!-- Блок 4: Твой билд -->
+                    <div class="desc-block block-accent4">
+                        <h3><span data-lang="starveGeneticsTitle">🧬 ТВОЙ БИЛД</span></h3>
+                        <div class="quote" data-lang="starveGeneticsQuote"><strong>Каждый бафф тянет за собой дебафф.</strong> Имба без последствий не бывает.</div>
+                        <p data-lang="starveGeneticsDesc">Генетика - это игра с балансом. Балансируй с метаболизмом подобно RimWorld, выбивая гены под свой стиль игры.</p>
+                    </div>
+
+                    <!-- Блок 5: Мир не ждёт тебя -->
+                    <div class="desc-block block-accent5">
+                        <h3><span data-lang="starveWorldTitle">🌍 МИР НЕ ЖДЁТ ТЕБЯ</span></h3>
+                        <p data-lang="starveWorldDesc">Каждый биом - своя температура, свои ресурсы, свои твари. Без шкур медведя замёрзнешь в горе. Без льда сгоришь в вулкане.</p>
+                        <div class="quote" data-lang="starveWorldQuote"><strong>ИИ-рассказчик следит за тобой.</strong> Он любит сюрпризы: караван фракций, охота стаи, редкое растение. Он всегда знает, где ты. И всегда готов сделать твой день интереснее.</div>
+                    </div>
+
+                    <!-- GIF 3: World -->
+                    <div class="desc-gif">
+                        <img src="https://img.itch.zone/aW1nLzI2MTc1MTA3LmdpZg==/original/L9kTnt.gif" alt="World" loading="lazy">
+                    </div>
+
+                    <!-- Блок 6: Твой остров -->
+                    <div class="desc-block block-accent1">
+                        <h3><span data-lang="starveIslandTitle">🏰 ТВОЙ ОСТРОВ - ТВОЯ КРЕПОСТЬ</span></h3>
+                        <p data-lang="starveIslandDesc">Строй стены, ставь верстаки, укрепляй фундамент. Как в Rust.</p>
+                        <div class="quote" data-lang="starveIslandQuote"><strong>Но без соседей, которые придут ночью, пока ты в офлайне.</strong> У каждого игрока - свой личный остров. Фракции могут устроить рейд - и они опаснее, чем любой игрок. В планах - клановые базы и рейды на чужие острова. Пока - отбивайся и строй.</div>
+                    </div>
+
+                    <!-- Блок 7: Фракции -->
+                    <div class="desc-block block-accent2">
+                        <h3><span data-lang="starveFactionsTitle">🤝 ФРАКЦИИ</span></h3>
+                        <p data-lang="starveFactionsDesc">Люди-крабы-пираты, оборотни в пещерах из костей, древние стражи пустыни, самурайши у вулкана. С ними можно торговать, дружить, воевать.</p>
+                        <div class="quote" data-lang="starveFactionsQuote"><strong>У каждой фракции - своя валюта, свои ресурсы, свои компоненты.</strong> Хочешь лучший ствол? Заработай репутацию квестами, в боях на арене. Или отними силой.</div>
+                    </div>
+
+                    <!-- GIF 4: Factions -->
+                    <div class="desc-gif">
+                        <img src="https://img.itch.zone/aW1nLzI2MTc1MjEwLmdpZg==/original/U6bTS7.gif" alt="Factions" loading="lazy">
+                    </div>
+
+                    <!-- Блок 8: Играй как хочешь -->
+                    <div class="desc-block block-accent6">
+                        <h3><span data-lang="starvePlayTitle">⚡ ИГРАЙ КАК ХОЧЕШЬ</span></h3>
+                        <p data-lang="starvePlayDesc">ПК и телефон - в одном лобби. Без скидок на FPS. <strong>Без доната и рекламы.</strong> Всё за игру. Пасс без дедлайнов - играйте в своём темпе. Заходите каждый день - получайте валюту на скины. Крафт на ходу, авто-экипировка, автопоедание, автобег, автопрыжок.</p>
+                        <div class="quote" data-lang="starvePlayQuote"><strong>Я сделал игру удобной, но не лёгкой.</strong></div>
+                    </div>
+
+                    <!-- Коротко о главном -->
+                    <div class="desc-block" style="border-left: 4px solid var(--accent);">
+                        <h3 style="color: var(--accent);"><span data-lang="starveSummaryTitle">📋 КОРОТКО О ГЛАВНОМ</span></h3>
+                        <div class="summary-grid">
+                            <div class="summary-item"><span class="emoji">☠️</span> <span data-lang="starveSummary1">Смерть в вылазке = потеря всего снаряжения</span></div>
+                            <div class="summary-item"><span class="emoji">⚡</span> <span data-lang="starveSummary2">Прогрессия за риск, а не за часы</span></div>
+                            <div class="summary-item"><span class="emoji">🏝️</span> <span data-lang="starveSummary3">У каждого свой остров - без соседей-грабителей</span></div>
+                            <div class="summary-item"><span class="emoji">🧬</span> <span data-lang="starveSummary4">Генетика: бафф = дебафф, имба через боль</span></div>
+                            <div class="summary-item"><span class="emoji">👁️</span> <span data-lang="starveSummary5">Живой мир с рассказчиком, который не спит</span></div>
+                            <div class="summary-item"><span class="emoji">🤝</span> <span data-lang="starveSummary6">Фракции с репутацией и уникальными ресурсами</span></div>
+                            <div class="summary-item"><span class="emoji">🎄</span> <span data-lang="starveSummary7">Сезонные ивенты, вайпы, поддержка модов и редактора даже на мобилке</span></div>
+                            <div class="summary-item"><span class="emoji">📱</span> <span data-lang="starveSummary8">Кроссплатформа, бесплатно, без доната</span></div>
                         </div>
+                    </div>
 
-                        <!-- 2. Смерть - туториал (span-1, без эмодзи) -->
-                        <div class="bento-item span-1">
-                            <h3 class="bento-title" style="font-size: 18px;">
-                                <span data-lang="starveDeathTitle">СМЕРТЬ - ТУТОРИАЛ</span>
-                            </h3>
-                            <p data-lang="starveDeathDesc">Взял снаряжение в вылазку - будь готов его потерять.</p>
-                            <div class="quote" data-lang="starveDeathQuote">
-                                <strong>Как в Tarkov: умрёшь - твои вещи достанутся врагу.</strong> Никаких «сохраниться перед боем». Никаких вторых шансов. <strong>Только ты и твой скилл.</strong>
-                            </div>
+                    <!-- Играбелен -->
+                    <div class="desc-block block-accent5">
+                        <p data-lang="starvePlayable">⚙️ Starve Neon уже играбелен. Мультиплеер, кроссплатформа, ранняя стадия.</p>
+                        <div class="quote" data-lang="starvePlayableQuote"><strong style="color: var(--accent);">Твой отзыв меняет игру. Присоединяйся к сообществу и влияй на развитие.</strong></div>
+                    </div>
+
+                    <!-- GIF 5: Gameplay -->
+                    <div class="desc-gif">
+                        <img src="https://img.itch.zone/aW1nLzIyNjAyNTM1LmdpZg==/original/HYXFD4.gif" alt="Gameplay" loading="lazy">
+                    </div>
+
+                    <!-- Социальные сети -->
+                    <div class="desc-block" style="text-align: center; border-left: none;">
+                        <h3 style="color: var(--text-primary);"><span data-lang="starveFollow">📸 СЛЕДИ ЗА РАЗРАБОТКОЙ</span></h3>
+                        <div class="social-links">
+                            <a target="_blank" href="https://www.youtube.com/@NeonShadow-neon">
+                                <img alt="YouTube" src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white">
+                            </a>
+                            <a target="_blank" href="https://www.twitch.tv/neoncyndows">
+                                <img alt="Twitch" src="https://img.shields.io/twitch/status/neoncyndows?style=for-the-badge&logo=twitch&logoColor=white&label=Twitch&labelColor=9146FF&color=282c34">
+                            </a>
+                            <a target="_blank" href="https://discord.com/invite/9gv5sRhk9R">
+                                <img alt="Discord" src="https://img.shields.io/discord/1033727594467704842?style=for-the-badge&logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=282c34">
+                            </a>
+                            <a target="_blank" href="https://t.me/voididea">
+                                <img alt="Telegram" src="https://telegram-badge.vercel.app/api/telegram-badge?channelId=@voididea&style=for-the-badge&logo=telegram&logoColor=white&label=Telegram&labelColor=26A5E4&color=282c34">
+                            </a>
+                            <a target="_blank" href="https://boosty.to/neoncyndows">
+                                <img alt="Boosty" src="https://img.shields.io/badge/Boosty-FF5E00?style=for-the-badge&logo=boosty&logoColor=white">
+                            </a>
+                            <a target="_blank" href="https://t.me/NeonCyndows">
+                                <img alt="Telegram DM" src="https://img.shields.io/badge/Telegram-Личка-26A5E4?style=for-the-badge&logo=telegram&logoColor=white">
+                            </a>
+                            <a target="_blank" href="https://discord.com/users/857872869949177896">
+                                <img alt="Discord DM" src="https://img.shields.io/badge/Discord-Личка-5865F2?style=for-the-badge&logo=discord&logoColor=white">
+                            </a>
+                            <a target="_blank" href="https://neonshadowyt.github.io/NeonImperium/starve-neon">
+                                <img alt="Official Site" src="https://img.shields.io/badge/Официальный%20сайт-2d2f48?style=for-the-badge&logo=github&logoColor=white">
+                            </a>
+                            <a target="_blank" href="https://github.com/NeonShadowYT">
+                                <img title="GitHub" alt="GitHub" src="https://img.shields.io/badge/GitHub-2d2f48?style=for-the-badge&logo=github&logoColor=white">
+                            </a>
                         </div>
-
-                        <!-- 3. Твой билд (span-1, без эмодзи) -->
-                        <div class="bento-item span-1">
-                            <h3 class="bento-title" style="font-size: 18px;">
-                                <span data-lang="starveGeneticsTitle">ТВОЙ БИЛД</span>
-                            </h3>
-                            <div class="quote" data-lang="starveGeneticsQuote">
-                                <strong>Каждый бафф тянет за собой дебафф.</strong> Имба без последствий не бывает.
-                            </div>
-                            <p data-lang="starveGeneticsDesc">Генетика - это игра с балансом. Балансируй с метаболизмом подобно RimWorld, выбивая гены под свой стиль игры.</p>
+                        <div class="footer-credit">
+                            <p data-lang="starveDeveloped">Разработано с ❤️ <strong style="color: #ff6b6b;">Neon Shadow</strong> - независимым разработчиком из России</p>
                         </div>
+                    </div>
 
-                        <!-- 4. Прогрессия через риск (span-2) с гифкой -->
-                        <div class="bento-item span-2 tilt-card">
-                            <h3 class="bento-title">
-                                <span class="emoji-float delay-1">🔥</span>
-                                <span data-lang="starveRiskTitle">ПРОГРЕССИЯ ЧЕРЕЗ РИСК</span>
-                            </h3>
-                            <p data-lang="starveRiskDesc">Туториал ведёт новичков за руку, но уже через 10 минут ты решаешь: бежать за золотом через медведей или вернуться на базу.</p>
-                            <div class="quote" data-lang="starveRiskQuote">
-                                <strong>Хочешь лучшее снаряжение? Иди в самое пекло.</strong> Лес, гора, вулкан. Каждый биом - шаг вверх по сложности.
-                            </div>
-                            <div class="bento-gif">
-                                <img src="https://img.itch.zone/aW1nLzI2MTc1Mzc5LmdpZg==/original/Qe5gAj.gif" alt="Genetics" loading="lazy">
-                            </div>
-                        </div>
-
-                        <!-- 5. Мир не ждёт тебя (span-2) с гифкой -->
-                        <div class="bento-item span-2 tilt-card">
-                            <h3 class="bento-title">
-                                <span class="emoji-float delay-2">🌍</span>
-                                <span data-lang="starveWorldTitle">МИР НЕ ЖДЁТ ТЕБЯ</span>
-                            </h3>
-                            <p data-lang="starveWorldDesc">Каждый биом - своя температура, свои ресурсы, свои твари. Без шкур медведя замёрзнешь в горе. Без льда сгоришь в вулкане.</p>
-                            <div class="quote" data-lang="starveWorldQuote">
-                                <strong>ИИ-рассказчик следит за тобой.</strong> Он любит сюрпризы: караван фракций, охота стаи, редкое растение. Он всегда знает, где ты. И всегда готов сделать твой день интереснее.
-                            </div>
-                            <div class="bento-gif">
-                                <img src="https://img.itch.zone/aW1nLzI2MTc1MTA3LmdpZg==/original/L9kTnt.gif" alt="World" loading="lazy">
-                            </div>
-                        </div>
-
-                        <!-- 6. Твой остров (span-2, без эмодзи, но большой) -->
-                        <div class="bento-item span-2 tilt-card">
-                            <h3 class="bento-title" style="font-size: 20px;">
-                                <span data-lang="starveIslandTitle">ТВОЙ ОСТРОВ - ТВОЯ КРЕПОСТЬ</span>
-                            </h3>
-                            <p data-lang="starveIslandDesc">Строй стены, ставь верстаки, укрепляй фундамент. Как в Rust.</p>
-                            <div class="quote" data-lang="starveIslandQuote">
-                                <strong>Но без соседей, которые придут ночью, пока ты в офлайне.</strong> У каждого игрока - свой личный остров. Фракции могут устроить рейд - и они опаснее, чем любой игрок. В планах - клановые базы и рейды на чужие острова. Пока - отбивайся и строй.
-                            </div>
-                        </div>
-
-                        <!-- 7. Фракции (span-2) с гифкой -->
-                        <div class="bento-item span-2 tilt-card">
-                            <h3 class="bento-title">
-                                <span class="emoji-float">🤝</span>
-                                <span data-lang="starveFactionsTitle">ФРАКЦИИ</span>
-                            </h3>
-                            <p data-lang="starveFactionsDesc">Люди-крабы-пираты, оборотни в пещерах из костей, древние стражи пустыни, самурайши у вулкана. С ними можно торговать, дружить, воевать.</p>
-                            <div class="quote" data-lang="starveFactionsQuote">
-                                <strong>У каждой фракции - своя валюта, свои ресурсы, свои компоненты.</strong> Хочешь лучший ствол? Заработай репутацию квестами, в боях на арене. Или отними силой.
-                            </div>
-                            <div class="bento-gif">
-                                <img src="https://img.itch.zone/aW1nLzI2MTc1MjEwLmdpZg==/original/U6bTS7.gif" alt="Factions" loading="lazy">
-                            </div>
-                        </div>
-
-                        <!-- 8. Играй как хочешь (span-2) -->
-                        <div class="bento-item span-2 tilt-card">
-                            <h3 class="bento-title">
-                                <span class="emoji-float delay-1">⚡</span>
-                                <span data-lang="starvePlayTitle">ИГРАЙ КАК ХОЧЕШЬ</span>
-                            </h3>
-                            <p data-lang="starvePlayDesc">ПК и телефон - в одном лобби. Без скидок на FPS. <strong>Без доната и рекламы.</strong> Всё за игру. Пасс без дедлайнов - играйте в своём темпе. Заходите каждый день - получайте валюту на скины. Крафт на ходу, авто-экипировка, автопоедание, автобег, автопрыжок.</p>
-                            <div class="quote" data-lang="starvePlayQuote"><strong>Я сделал игру удобной, но не лёгкой.</strong></div>
-                        </div>
-
-                        <!-- 9. Коротко о главном + Играбелен (span-2) -->
-                        <div class="bento-item span-2 tilt-card" style="border-left: 4px solid var(--accent);">
-                            <h3 class="bento-title" style="color: var(--accent);">
-                                <span class="emoji-float delay-2">📋</span>
-                                <span data-lang="starveSummaryTitle">КОРОТКО О ГЛАВНОМ</span>
-                            </h3>
-                            <div class="bento-summary-grid">
-                                <div class="bento-summary-item"><span class="emoji">☠️</span> <span data-lang="starveSummary1">Смерть в вылазке = потеря всего снаряжения</span></div>
-                                <div class="bento-summary-item"><span class="emoji">⚡</span> <span data-lang="starveSummary2">Прогрессия за риск, а не за часы</span></div>
-                                <div class="bento-summary-item"><span class="emoji">🏝️</span> <span data-lang="starveSummary3">У каждого свой остров - без соседей-грабителей</span></div>
-                                <div class="bento-summary-item"><span class="emoji">🧬</span> <span data-lang="starveSummary4">Генетика: бафф = дебафф, имба через боль</span></div>
-                                <div class="bento-summary-item"><span class="emoji">👁️</span> <span data-lang="starveSummary5">Живой мир с рассказчиком, который не спит</span></div>
-                                <div class="bento-summary-item"><span class="emoji">🤝</span> <span data-lang="starveSummary6">Фракции с репутацией и уникальными ресурсами</span></div>
-                                <div class="bento-summary-item"><span class="emoji">🎄</span> <span data-lang="starveSummary7">Сезонные ивенты, вайпы, поддержка модов и редактора даже на мобилке</span></div>
-                                <div class="bento-summary-item"><span class="emoji">📱</span> <span data-lang="starveSummary8">Кроссплатформа, бесплатно, без доната</span></div>
-                            </div>
-                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--glass-border);">
-                                <p data-lang="starvePlayable">⚙️ Starve Neon уже играбелен. Мультиплеер, кроссплатформа, ранняя стадия.</p>
-                                <div class="quote" data-lang="starvePlayableQuote"><strong style="color: var(--accent);">Твой отзыв меняет игру. Присоединяйся к сообществу и влияй на развитие.</strong></div>
-                            </div>
-                        </div>
-
-                        <!-- 10. Социальные сети (span-4) с морфинг-фигурой -->
-                        <div class="bento-item span-4 tilt-card" style="text-align: center;">
-                            <div class="bento-morph-shape"></div>
-                            <h3 class="bento-title" style="justify-content: center; color: var(--text-primary);">
-                                <span data-lang="starveFollow">📸 СЛЕДИ ЗА РАЗРАБОТКОЙ</span>
-                            </h3>
-                            <div class="bento-social-links">
-                                <a target="_blank" href="https://www.youtube.com/@NeonShadow-neon">
-                                    <img alt="YouTube" src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white">
-                                </a>
-                                <a target="_blank" href="https://www.twitch.tv/neoncyndows">
-                                    <img alt="Twitch" src="https://img.shields.io/twitch/status/neoncyndows?style=for-the-badge&logo=twitch&logoColor=white&label=Twitch&labelColor=9146FF&color=282c34">
-                                </a>
-                                <a target="_blank" href="https://discord.com/invite/9gv5sRhk9R">
-                                    <img alt="Discord" src="https://img.shields.io/discord/1033727594467704842?style=for-the-badge&logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=282c34">
-                                </a>
-                                <a target="_blank" href="https://t.me/voididea">
-                                    <img alt="Telegram" src="https://telegram-badge.vercel.app/api/telegram-badge?channelId=@voididea&style=for-the-badge&logo=telegram&logoColor=white&label=Telegram&labelColor=26A5E4&color=282c34">
-                                </a>
-                                <a target="_blank" href="https://boosty.to/neoncyndows">
-                                    <img alt="Boosty" src="https://img.shields.io/badge/Boosty-FF5E00?style=for-the-badge&logo=boosty&logoColor=white">
-                                </a>
-                                <a target="_blank" href="https://t.me/NeonCyndows">
-                                    <img alt="Telegram DM" src="https://img.shields.io/badge/Telegram-Личка-26A5E4?style=for-the-badge&logo=telegram&logoColor=white">
-                                </a>
-                                <a target="_blank" href="https://discord.com/users/857872869949177896">
-                                    <img alt="Discord DM" src="https://img.shields.io/badge/Discord-Личка-5865F2?style=for-the-badge&logo=discord&logoColor=white">
-                                </a>
-                                <a target="_blank" href="https://neonshadowyt.github.io/NeonImperium/starve-neon">
-                                    <img alt="Official Site" src="https://img.shields.io/badge/Официальный%20сайт-2d2f48?style=for-the-badge&logo=github&logoColor=white">
-                                </a>
-                                <a target="_blank" href="https://github.com/NeonShadowYT">
-                                    <img title="GitHub" alt="GitHub" src="https://img.shields.io/badge/GitHub-2d2f48?style=for-the-badge&logo=github&logoColor=white">
-                                </a>
-                            </div>
-                            <div class="bento-footer-credit">
-                                <p data-lang="starveDeveloped">Разработано с ❤️ <strong style="color: #ff6b6b;">Neon Shadow</strong> - независимым разработчиком из России</p>
-                            </div>
-                        </div>
-
-                    </div><!-- /bento-grid -->
                 </div><!-- /starve-description -->
             </section>
 

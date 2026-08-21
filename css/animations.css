@@ -135,36 +135,3 @@
 .skeleton-card:nth-child(4) { animation-delay: 0.20s; }
 .skeleton-card:nth-child(5) { animation-delay: 0.25s; }
 .skeleton-card:nth-child(6) { animation-delay: 0.30s; }
-
-/* animations.css — добавлены анимации для плавающих эмодзи и морфинга фигур */
-
-/* Плавающие эмодзи */
-@keyframes floatEmoji {
-    0% { transform: translateY(0px) rotate(0deg); }
-    50% { transform: translateY(-8px) rotate(3deg); }
-    100% { transform: translateY(0px) rotate(0deg); }
-}
-
-/* Морфинг фигур */
-@keyframes morphShape {
-    0% {
-        border-radius: 60% 40% 50% 50% / 40% 50% 60% 50%;
-        transform: scale(1) rotate(0deg);
-    }
-    25% {
-        border-radius: 40% 60% 30% 70% / 60% 30% 70% 40%;
-        transform: scale(1.1) rotate(10deg);
-    }
-    50% {
-        border-radius: 30% 70% 60% 40% / 50% 60% 40% 70%;
-        transform: scale(0.9) rotate(180deg);
-    }
-    75% {
-        border-radius: 70% 30% 50% 60% / 30% 70% 50% 60%;
-        transform: scale(1.05) rotate(-10deg);
-    }
-    100% {
-        border-radius: 60% 40% 50% 50% / 40% 50% 60% 50%;
-        transform: scale(1) rotate(360deg);
-    }
-}
