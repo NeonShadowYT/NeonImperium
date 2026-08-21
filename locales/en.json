@@ -8,6 +8,7 @@
   "alphaPageTitle": "Neon Imperium - Alpha 01",
   "gcPageTitle": "Neon Imperium - GC Adven",
   "notFoundTitle": "404 - Page not found",
+  "notFoundDesc": "The requested page does not exist or has been moved.",
   "licenseTitle": "Neon Imperium - License Agreement",
   "backHome": "Back to home",
   "donateButton": "Support",
