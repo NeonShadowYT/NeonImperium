@@ -1,11 +1,11 @@
-// js/platform.js – исправленная загрузка релизов
+// js/platform.js – исправлен для корректной локализации кнопок
 (function() {
   const GH_OWNER = 'NeonShadowYT';
   const GH_REPO = 'NeonImperium';
   const RELEASES_CACHE_KEY = 'github_all_releases';
   const CACHE_DURATION = 30 * 60 * 1000;
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY = 2000;
+  const MAX_RETRIES = 4;
+  const RETRY_DELAY = 3000;
 
   let currentAbortController = null;
   let platformInitialized = false;
@@ -399,6 +399,7 @@
     populateVersionSelect(currentPlatform);
   };
 
+  // Обновление при смене языка
   window.addEventListener('languageChanged', () => {
     if (platformInitialized && githubContainer) {
       const t = window.I18n?.translate || (k => k);

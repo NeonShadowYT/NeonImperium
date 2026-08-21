@@ -1,4 +1,4 @@
-// js/common-init.js – оптимизированная инициализация с принудительной загрузкой модулей
+// js/common-init.js – улучшенная инициализация с ожиданием I18n
 (function() {
   // Проверка на мобильное устройство и низкую производительность
   const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -226,20 +226,45 @@
     registerServiceWorker();
     loadModules();
 
-    // Ждём загрузку языка, затем инициализируем страничные модули
-    if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
-      setTimeout(initPageModules, 100);
-    } else {
-      document.addEventListener('languageLoaded', initPageModules);
-      setTimeout(initPageModules, 2000); // fallback
+    // Функция, которая будет вызвана после загрузки языка
+    function onLanguageReady() {
+      // Обновляем тексты
+      updateLanguageElements();
+      // Инициализируем страничные модули
+      initPageModules();
     }
 
-    document.addEventListener('languageLoaded', updateLanguageElements);
-    window.addEventListener('languageChanged', updateLanguageElements);
+    // Проверяем, загружен ли I18n
+    if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
+      // Уже загружен – сразу выполняем
+      setTimeout(onLanguageReady, 50);
+    } else {
+      // Ожидаем событие languageLoaded
+      document.addEventListener('languageLoaded', onLanguageReady);
+      // Fallback: если через 2 секунды событие не сработало, пробуем ещё раз
+      setTimeout(() => {
+        if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
+          onLanguageReady();
+        } else {
+          // Если I18n всё ещё нет, пробуем принудительно загрузить переводы
+          if (window.I18n && typeof window.I18n.init === 'function') {
+            window.I18n.init().then(() => {
+              onLanguageReady();
+            }).catch(() => {});
+          }
+        }
+      }, 2000);
+    }
 
+    // При смене языка тоже обновляем
+    window.addEventListener('languageChanged', updateLanguageElements);
     // Перезагружаем данные при логине/выходе
-    window.addEventListener('github-login-success', initPageModules);
-    window.addEventListener('github-logout', initPageModules);
+    window.addEventListener('github-login-success', () => {
+      setTimeout(initPageModules, 300);
+    });
+    window.addEventListener('github-logout', () => {
+      setTimeout(initPageModules, 300);
+    });
   }
 
   if (document.readyState === 'loading') {

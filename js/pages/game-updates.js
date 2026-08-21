@@ -1,4 +1,4 @@
-// js/pages/game-updates.js – полная, с карточками, иконками, кнопкой "Добавить обновление"
+// js/pages/game-updates.js – полная, с иконками, кнопкой "Добавить обновление", устойчивая к ошибкам
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG,
@@ -11,8 +11,8 @@
 
   let currentGame = null;
   let currentAbort = null;
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY = 2000;
+  const MAX_RETRIES = 4;
+  const RETRY_DELAY = 3000;
 
   window.initGameUpdates = function() {
     const container = document.getElementById('game-updates');
@@ -80,7 +80,7 @@
       currentAbort.controller.abort();
       currentAbort = null;
     }
-    const { controller, timeoutId } = createAbortable(15000);
+    const { controller, timeoutId } = createAbortable(20000);
     currentAbort = { controller };
 
     try {

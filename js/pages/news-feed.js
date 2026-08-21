@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – полная, с заголовком, иконками, кнопкой для админов
+// js/pages/news-feed.js – полная, с заголовком, иконками, кнопкой для админов, устойчивая к ошибкам
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG,
@@ -12,8 +12,8 @@
   const POSTS_CACHE_TTL = 3 * 60 * 1000;
   const VIDEOS_CACHE_TTL = 10 * 60 * 1000;
   const TWITCH_CACHE_TTL = 2 * 60 * 1000;
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY = 2000;
+  const MAX_RETRIES = 4;
+  const RETRY_DELAY = 3000;
 
   let container, posts = [], videos = [], twitchStreams = [];
   let postsLoaded = false, videosLoaded = false, twitchLoaded = false;
@@ -141,21 +141,36 @@
     const t = window.I18n?.translate || (k => k);
     container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">${t('newsLoading')}</p></div>`;
 
-    Promise.all([
+    // Используем Promise.allSettled для устойчивости
+    Promise.allSettled([
       loadPostsWithRetry(signal),
       loadVideosWithRetry(signal),
       loadTwitchStreamsWithRetry(signal)
-    ]).then(([loadedPosts, loadedVideos, loadedTwitch]) => {
+    ]).then(results => {
       if (signal.aborted) return;
-      posts = loadedPosts;
-      videos = loadedVideos;
-      twitchStreams = loadedTwitch;
-      postsLoaded = videosLoaded = twitchLoaded = true;
+      // Заполняем данные, даже если некоторые источники не загрузились
+      const postsResult = results[0];
+      const videosResult = results[1];
+      const twitchResult = results[2];
+
+      posts = postsResult.status === 'fulfilled' ? postsResult.value : [];
+      videos = videosResult.status === 'fulfilled' ? videosResult.value : [];
+      twitchStreams = twitchResult.status === 'fulfilled' ? twitchResult.value : [];
+
+      postsLoaded = true;
+      videosLoaded = true;
+      twitchLoaded = true;
       retryCount = 0;
-      renderMixed();
+
+      // Если все источники пустые, показываем сообщение
+      if (posts.length === 0 && videos.length === 0 && twitchStreams.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">${t('newsNoItems')}</p></div>`;
+      } else {
+        renderMixed();
+      }
     }).catch(err => {
       if (signal.aborted) return;
-      console.error('[NewsFeed] Error loading:', err);
+      console.error('[NewsFeed] Fatal error:', err);
       postsLoaded = videosLoaded = twitchLoaded = true;
       posts = []; videos = []; twitchStreams = [];
       renderMixed();
@@ -525,7 +540,12 @@
         top: 0, left: 0, width: '100%', height: '100%',
         objectFit: 'cover'
       }, { src: thumbnail, alt: title, loading: 'lazy' });
-      img.onerror = () => { imgWrapper.innerHTML = iconHtml || '<i class="fas fa-file-alt" style="font-size:48px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text-secondary);"></i>'; };
+      img.onerror = () => {
+        imgWrapper.style.display = 'flex';
+        imgWrapper.style.alignItems = 'center';
+        imgWrapper.style.justifyContent = 'center';
+        imgWrapper.innerHTML = iconHtml || '<i class="fas fa-file-alt" style="font-size:48px;color:var(--text-secondary);"></i>';
+      };
       imgWrapper.appendChild(img);
     } else {
       imgWrapper.style.display = 'flex';
