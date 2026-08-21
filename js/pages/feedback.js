@@ -1,4 +1,4 @@
-// js/pages/feedback.js – обратная связь с performAction, улучшенная обработка ошибок, локализация, обновление при смене языка
+// js/pages/feedback.js – обратная связь с performAction, улучшенная обработка ошибок, локализация через data-lang
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber,
@@ -31,7 +31,6 @@
   let initialized = false;
   let loadRetries = 0;
   const MAX_RETRIES = 2;
-  let activeFeedbackContainer = null; // для обновления при смене языка
 
   async function addReactionWithSync(issueNumber, content) {
     try {
@@ -89,7 +88,6 @@
       container.className = 'feedback-container';
       section.appendChild(container);
     }
-    activeFeedbackContainer = container;
 
     window.addEventListener('github-login-success', e => { currentUser = e.detail.login; checkAuthAndRender(); });
     window.addEventListener('github-logout', () => { currentUser = null; checkAuthAndRender(); });
@@ -101,13 +99,7 @@
       filterAndDisplay(true);
     });
 
-    // ---- обновление при смене языка ----
-    window.addEventListener('languageChanged', () => {
-      if (activeFeedbackContainer) {
-        // Перерисовываем интерфейс заново
-        renderInterface();
-      }
-    });
+    // languageChanged больше не перезагружает данные, только обновление текстов через data-lang
 
     currentUser = getCurrentUser();
     checkAuthAndRender();
@@ -207,9 +199,25 @@
   function renderLoginPrompt() {
     if (!container) return;
     const t = window.I18n?.translate || (k => k);
-    container.innerHTML = `<div class="login-prompt"><i class="fab fa-github"></i><h3 data-lang="feedbackLoginPrompt">${t('feedbackLoginPrompt')}</h3><p class="text-secondary" data-lang="feedbackTokenNote">${t('githubTokenNote')}</p><button class="button" id="feedback-login-btn">${t('feedbackLoginBtn')}</button></div>`;
-    const btn = container.querySelector('#feedback-login-btn');
-    if (btn) btn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('github-login-requested')));
+    container.innerHTML = '';
+    const prompt = createElement('div', 'login-prompt');
+    const icon = createElement('i', 'fab fa-github');
+    prompt.appendChild(icon);
+    const h3 = createElement('h3');
+    h3.setAttribute('data-lang', 'feedbackLoginPrompt');
+    h3.textContent = t('feedbackLoginPrompt');
+    prompt.appendChild(h3);
+    const p = createElement('p', 'text-secondary');
+    p.setAttribute('data-lang', 'githubTokenNote');
+    p.textContent = t('githubTokenNote');
+    prompt.appendChild(p);
+    const btn = createElement('button', 'button');
+    btn.setAttribute('data-lang', 'feedbackLoginBtn');
+    btn.textContent = t('feedbackLoginBtn');
+    btn.id = 'feedback-login-btn';
+    btn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('github-login-requested')));
+    prompt.appendChild(btn);
+    container.appendChild(prompt);
   }
 
   async function renderInterface() {
@@ -224,37 +232,78 @@
         return;
       }
     }
-    container.innerHTML = `
-      <div class="feedback-header">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <h2 style="margin:0;"><i class="fas fa-comment-dots" style="font-size:24px;color:var(--accent);"></i> <span data-lang="feedbackTitle">${t('feedbackTitle')}</span></h2>
-        </div>
-        <button class="button" id="toggle-form-btn">+ ${t('feedbackNewBtn')}</button>
-      </div>
-      <p class="text-secondary" data-lang="feedbackDesc">${t('feedbackDesc')}</p>
-      <div class="feedback-tabs"><button class="feedback-tab active" data-tab="all">${t('tabAll')}</button><button class="feedback-tab" data-tab="idea">💡 ${t('tabIdeas')}</button><button class="feedback-tab" data-tab="bug">🐛 ${t('tabBugs')}</button><button class="feedback-tab" data-tab="review">⭐ ${t('tabReviews')}</button></div>
-      <div class="projects-grid" id="feedback-panel"></div><div id="sentinel" style="height:10px;"></div>
-    `;
-    const toggleBtn = document.getElementById('toggle-form-btn');
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => {
-        if (!window.UIFeedback) {
-          showToast(t('editorNotLoaded'), 'error');
-          return;
-        }
-        window.UIFeedback.openEditorModal('new', { game: currentGame }, 'feedback');
-      });
-    }
+    container.innerHTML = '';
+    const header = createElement('div', 'feedback-header');
+    const titleWrap = createElement('div', '', { display: 'flex', alignItems: 'center', gap: '8px' });
+    const h2 = createElement('h2', '', { margin: '0' });
+    h2.setAttribute('data-lang', 'feedbackTitle');
+    h2.textContent = t('feedbackTitle');
+    const icon = createElement('i', 'fas fa-comment-dots', { fontSize: '24px', color: 'var(--accent)' });
+    h2.prepend(icon);
+    titleWrap.appendChild(h2);
+    header.appendChild(titleWrap);
+    const btn = createElement('button', 'button');
+    btn.setAttribute('data-lang', 'feedbackNewBtn');
+    btn.textContent = '+ ' + t('feedbackNewBtn');
+    btn.id = 'toggle-form-btn';
+    btn.addEventListener('click', () => {
+      if (!window.UIFeedback) {
+        showToast(t('editorNotLoaded'), 'error');
+        return;
+      }
+      window.UIFeedback.openEditorModal('new', { game: currentGame }, 'feedback');
+    });
+    header.appendChild(btn);
+    container.appendChild(header);
+
+    const desc = createElement('p', 'text-secondary');
+    desc.setAttribute('data-lang', 'feedbackDesc');
+    desc.textContent = t('feedbackDesc');
+    container.appendChild(desc);
+
+    const tabs = createElement('div', 'feedback-tabs');
+    const tabAll = createElement('button', 'feedback-tab active');
+    tabAll.setAttribute('data-lang', 'tabAll');
+    tabAll.textContent = t('tabAll');
+    tabAll.dataset.tab = 'all';
+    tabs.appendChild(tabAll);
+    const tabIdea = createElement('button', 'feedback-tab');
+    tabIdea.setAttribute('data-lang', 'tabIdeas');
+    tabIdea.textContent = '💡 ' + t('tabIdeas');
+    tabIdea.dataset.tab = 'idea';
+    tabs.appendChild(tabIdea);
+    const tabBug = createElement('button', 'feedback-tab');
+    tabBug.setAttribute('data-lang', 'tabBugs');
+    tabBug.textContent = '🐛 ' + t('tabBugs');
+    tabBug.dataset.tab = 'bug';
+    tabs.appendChild(tabBug);
+    const tabReview = createElement('button', 'feedback-tab');
+    tabReview.setAttribute('data-lang', 'tabReviews');
+    tabReview.textContent = '⭐ ' + t('tabReviews');
+    tabReview.dataset.tab = 'review';
+    tabs.appendChild(tabReview);
+    container.appendChild(tabs);
+
+    const panel = createElement('div', 'projects-grid');
+    panel.id = 'feedback-panel';
+    container.appendChild(panel);
+    const sentinelEl = createElement('div', '', { height: '10px' });
+    sentinelEl.id = 'sentinel';
+    container.appendChild(sentinelEl);
+
     grid = document.getElementById('feedback-panel');
     sentinel = document.getElementById('sentinel');
-    const tabs = container.querySelectorAll('.feedback-tab');
-    tabs.forEach(t => t.addEventListener('click', e => {
-      tabs.forEach(tt => { tt.classList.remove('active'); tt.setAttribute('aria-selected','false'); });
-      t.classList.add('active'); t.setAttribute('aria-selected','true');
-      currentTab = t.dataset.tab;
-      currentPage = 1;
-      filterAndDisplay(true);
-    }));
+
+    tabs.querySelectorAll('.feedback-tab').forEach(t => {
+      t.addEventListener('click', e => {
+        tabs.querySelectorAll('.feedback-tab').forEach(tt => { tt.classList.remove('active'); tt.setAttribute('aria-selected','false'); });
+        t.classList.add('active'); t.setAttribute('aria-selected','true');
+        currentTab = t.dataset.tab;
+        currentPage = 1;
+        filterAndDisplay(true);
+      });
+    });
+
     if (observer) observer.disconnect();
     observer = new IntersectionObserver(e => {
       if (e[0].isIntersecting && !isLoading && hasMore) {
@@ -263,6 +312,7 @@
       }
     }, { threshold: 0.1 });
     if (sentinel) observer.observe(sentinel);
+
     await loadGameIssues(true);
   }
 
