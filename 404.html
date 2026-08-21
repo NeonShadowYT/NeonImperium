@@ -34,13 +34,11 @@
         .page { max-width:1200px; margin:0 auto; width:100%; }
         .loading-spinner { text-align:center; padding:30px; color:#c0c0d0; }
 
-        /* Фоновый слой с гифкой – заполняет весь контейнер */
         .page-404-wrapper {
             position: relative;
             overflow: hidden;
             border-radius: var(--radius-md);
-            margin-bottom: 24px;
-            /* Высота определяется содержимым (карточкой) */
+            /* margin-bottom убран */
         }
         .bg-gif-layer {
             position: absolute;
@@ -59,7 +57,7 @@
         .bg-gif-layer img {
             width: 100%;
             height: 100%;
-            object-fit: cover;  /* заполняет контейнер, обрезая лишнее */
+            object-fit: cover;
             display: block;
             filter: blur(4px) brightness(0.6);
         }
@@ -84,6 +82,38 @@
             position: relative;
             z-index: 10;
         }
+
+        /* Явно задаём цвет текста кнопки, чтобы он не менялся при наведении */
+        .button,
+        .button:hover {
+            color: white !important;
+        }
+
+        /* Соцсети – копия стилей из starve-neon */
+        .social-links-404 {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        .social-links-404 a {
+            display: inline-block;
+            transition: transform 0.2s;
+        }
+        .social-links-404 a:hover {
+            transform: translateY(-3px);
+        }
+        .social-links-404 img {
+            height: 28px;
+            width: auto;
+            border-radius: 4px;
+        }
+        @media (max-width: 600px) {
+            .social-links-404 img {
+                height: 24px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -102,24 +132,51 @@
         </nav>
 
         <div class="page-404-wrapper">
-            <!-- Фоновый слой с гифкой -->
+            <!-- Фон -->
             <div class="bg-gif-layer" id="bgGifLayer">
                 <img src="https://img.itch.zone/aW1nLzIyNjAyNTM1LmdpZg==/original/HYXFD4.gif" alt="фон" loading="lazy">
             </div>
             <div class="bg-gif-mask"></div>
 
             <main>
-                <div class="card" style="text-align: center; padding: 60px 28px;">
+                <div class="card" style="text-align: center; padding: 50px 28px;">
                     <h1 data-lang="notFoundTitle" style="font-size: 72px; margin-bottom: 20px;">404</h1>
                     <p class="text-secondary" data-lang="notFoundDesc" style="font-size: 18px; margin-bottom: 30px;"></p>
                     <a href="index.html" class="button wide" data-lang="backHome">Вернуться на главную</a>
+
+                    <!-- Блок социальных сетей (как в Starve Neon) -->
+                    <div class="social-links-404">
+                        <a target="_blank" href="https://www.youtube.com/@NeonShadow-neon">
+                            <img alt="YouTube" src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white">
+                        </a>
+                        <a target="_blank" href="https://www.twitch.tv/neoncyndows">
+                            <img alt="Twitch" src="https://img.shields.io/twitch/status/neoncyndows?style=for-the-badge&logo=twitch&logoColor=white&label=Twitch&labelColor=9146FF&color=282c34">
+                        </a>
+                        <a target="_blank" href="https://discord.com/invite/9gv5sRhk9R">
+                            <img alt="Discord" src="https://img.shields.io/discord/1033727594467704842?style=for-the-badge&logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=282c34">
+                        </a>
+                        <a target="_blank" href="https://t.me/voididea">
+                            <img alt="Telegram" src="https://telegram-badge.vercel.app/api/telegram-badge?channelId=@voididea&style=for-the-badge&logo=telegram&logoColor=white&label=Telegram&labelColor=26A5E4&color=282c34">
+                        </a>
+                        <a target="_blank" href="https://boosty.to/neoncyndows">
+                            <img alt="Boosty" src="https://img.shields.io/badge/Boosty-FF5E00?style=for-the-badge&logo=boosty&logoColor=white">
+                        </a>
+                        <a target="_blank" href="https://t.me/NeonCyndows">
+                            <img alt="Telegram DM" src="https://img.shields.io/badge/Telegram-Личка-26A5E4?style=for-the-badge&logo=telegram&logoColor=white">
+                        </a>
+                        <a target="_blank" href="https://discord.com/users/857872869949177896">
+                            <img alt="Discord DM" src="https://img.shields.io/badge/Discord-Личка-5865F2?style=for-the-badge&logo=discord&logoColor=white">
+                        </a>
+                        <a target="_blank" href="https://github.com/NeonShadowYT">
+                            <img alt="GitHub" src="https://img.shields.io/badge/GitHub-2d2f48?style=for-the-badge&logo=github&logoColor=white">
+                        </a>
+                    </div>
                 </div>
             </main>
         </div>
     </div>
 
     <script>
-        // Активация фона после загрузки
         document.addEventListener('DOMContentLoaded', function() {
             const layer = document.getElementById('bgGifLayer');
             if (layer) {
