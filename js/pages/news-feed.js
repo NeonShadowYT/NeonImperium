@@ -1,13 +1,31 @@
-// js/pages/news-feed.js – оптимизирован: мемоизация, throttleRAF, удалён offline-queue
+// js/pages/news-feed.js – оптимизирован: локальная memoize, throttleRAF, удалён offline-queue
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber,
     createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody,
-    loadModule, createElement, throttleRAF, memoize
+    loadModule, createElement, throttleRAF
   } = window.GithubCore;
   const { loadIssues, loadIssue } = window.GithubAPI;
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
   const { showToast, createModal } = window.UIUtils;
+
+  // ---------- Локальная мемоизация (как в ui-feedback.js) ----------
+  function memoize(fn, maxSize = 100) {
+    const cache = new Map();
+    return function(...args) {
+      const key = JSON.stringify(args);
+      if (cache.has(key)) {
+        return cache.get(key);
+      }
+      const result = fn.apply(this, args);
+      if (cache.size >= maxSize) {
+        const firstKey = cache.keys().next().value;
+        cache.delete(firstKey);
+      }
+      cache.set(key, result);
+      return result;
+    };
+  }
 
   const YT_CHANNELS = [
     { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
@@ -29,19 +47,15 @@
   let currentAbortController = null;
 
   // Мемоизация рендеринга Markdown для постов
-  const renderMarkdownMemoized = memoize(
-    (text) => {
-      if (!text) return '';
-      if (window.marked) {
-        if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-        if (typeof marked.parse === 'function') return marked.parse(text);
-        else if (typeof marked === 'function') return marked(text);
-      }
-      return text.replace(/\n/g, '<br>');
-    },
-    null,
-    100
-  );
+  const renderMarkdownMemoized = memoize((text) => {
+    if (!text) return '';
+    if (window.marked) {
+      if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
+      if (typeof marked.parse === 'function') return marked.parse(text);
+      else if (typeof marked === 'function') return marked(text);
+    }
+    return text.replace(/\n/g, '<br>');
+  }, 100);
 
   async function ensureLoggedInAndGist() {
     if (getCurrentUser() && hasScope('gist')) return true;
