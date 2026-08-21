@@ -1,13 +1,16 @@
-// js/features/ui-feedback.js – исправлен: локальная мемоизация, проверка marked, гарантированный экспорт UIFeedback
+// js/features/ui-feedback.js – исправлен: throttleRAF берётся из Utils, модалки работают корректно
 (function() {
   const {
     createElement, escapeHtml, loadModule,
     performAction, isActionStillValid, extractAllowed, decryptPrivateBody,
     cacheRemoveByPrefix, CONFIG, getPlainTextLength, containsGitHubToken,
-    cacheGet, cacheSet, throttleRAF
+    cacheGet, cacheSet
   } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
+
+  // Берём throttleRAF из Utils (если недоступен – fallback)
+  const throttleRAF = window.Utils?.throttleRAF || ((fn) => fn);
 
   const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
   const COMMENTS_CACHE_TTL = 10 * 60 * 1000;
@@ -35,7 +38,7 @@
 
   const t = window.I18n?.translate || (k => k);
 
-  // ---------- Локальная мемоизация (чтобы не зависеть от Utils) ----------
+  // ---------- Локальная мемоизация ----------
   function memoize(fn, maxSize = 100) {
     const cache = new Map();
     return function(...args) {
@@ -53,7 +56,6 @@
     };
   }
 
-  // Мемоизированный рендеринг Markdown
   const renderMarkdownMemoized = memoize((text) => {
     if (!text) return '';
     if (window.marked) {
@@ -69,7 +71,6 @@
     return text.replace(/\n/g, '<br>');
   }, 100);
 
-  // Рендеринг с кешем по ключу (для постов)
   async function renderMarkdownWithEditor(text, targetElement, cacheKey = null) {
     if (!text) { targetElement.innerHTML = ''; return; }
     if (cacheKey && markdownCache.has(cacheKey)) {
@@ -821,6 +822,7 @@
     submitRow.appendChild(rateIndicator);
     container.appendChild(submitRow);
 
+    // Обновление превью с throttleRAF (из Utils)
     const updatePreview = throttleRAF(async () => {
       currentBody = textarea.value;
       await renderMarkdownWithEditor(currentBody, preview);
@@ -937,7 +939,6 @@
     });
   }
 
-  // Экспорт
   window.UIFeedback = {
     renderReactions,
     loadComments,

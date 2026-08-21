@@ -1,5 +1,5 @@
 // js/features/ui-utils.js — только UI-функции, используют GithubCore
-// Исправлено: переиспользуемая модалка, корректное удаление обработчиков при закрытии
+// Исправлено: при создании новой модалки старая полностью удаляется, избегая конфликтов обработчиков
 (function() {
     const { createElement, escapeHtml, loadModule } = window.GithubCore || {};
 
@@ -80,7 +80,7 @@
         }, 300);
     }
 
-    // ---------- ПЕРЕИСПОЛЬЗУЕМАЯ МОДАЛКА (исправлена) ----------
+    // ---------- ПЕРЕИСПОЛЬЗУЕМАЯ МОДАЛКА (исправлена: удаление старой) ----------
     let modalInstance = null;
     let modalCloseCallback = null;
     let modalEscHandler = null;
@@ -88,22 +88,18 @@
     function createModal(title, contentHtml, options = {}) {
         const { onClose, size = 'full', closeButton = true } = options;
 
+        // Если модалка уже существует, закрываем и удаляем её
         if (modalInstance) {
-            // Обновляем содержимое существующей модалки
-            const { modal, header, body, closeFn } = modalInstance;
-            const titleEl = header.querySelector('h2');
-            if (titleEl) titleEl.textContent = title;
-            body.innerHTML = contentHtml;
-            modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
-
-            // Обновляем колбэк
-            if (modalCloseCallback && modalCloseCallback !== onClose) {
-                // Предыдущий колбэк заменяем
+            const { modal, closeFn } = modalInstance;
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+            if (modalEscHandler) {
+                document.removeEventListener('keydown', modalEscHandler);
+                modalEscHandler = null;
             }
-            modalCloseCallback = onClose || null;
-
-            return { modal, closeModal: closeFn };
+            if (modal.parentNode) modal.remove();
+            modalInstance = null;
+            modalCloseCallback = null;
         }
 
         // Создаём новую модалку
@@ -135,10 +131,13 @@
                 modalCloseCallback();
                 modalCloseCallback = null;
             }
-            // Удаляем обработчик Escape
             if (modalEscHandler) {
                 document.removeEventListener('keydown', modalEscHandler);
                 modalEscHandler = null;
+            }
+            if (modal.parentNode) modal.remove();
+            if (modalInstance && modalInstance.modal === modal) {
+                modalInstance = null;
             }
         };
 
