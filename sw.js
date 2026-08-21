@@ -3,14 +3,16 @@ const STATIC_CACHE = 'static-v7';
 const DYNAMIC_CACHE = 'dynamic-v7';
 const IMAGES_CACHE = 'images-v7';
 const API_CACHE = 'github-api-v7';
+const RSS_CACHE = 'rss-v1';  // ДОБАВЛЕНО
 const SYNC_TAG = 'github-mutations';
 const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 минут
 const IMAGES_CACHE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 дней
+const RSS_CACHE_MAX_AGE = 30 * 60 * 1000; // 30 минут
 
 const PRECACHE_URLS = [
   'style.css',
   'js/utils.js', 'js/core/github-core.js', 'js/github-client.js',
-  'js/core/github-api.js', 'js/core/github-auth.js', 'js/offline-queue.js',
+  'js/core/github-api.js', 'js/core/github-auth.js',
   'js/features/ui-utils.js', 'js/features/ui-feedback.js',
   'js/features/editor.js', 'js/features/storage.js',
   'js/lang.js', 'js/common-init.js', 'js/effects.js',
@@ -30,7 +32,7 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, IMAGES_CACHE, API_CACHE];
+  const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, IMAGES_CACHE, API_CACHE, RSS_CACHE]; // ДОБАВЛЕНО RSS_CACHE
   event.waitUntil(
     caches.keys().then(names =>
       Promise.all(names.filter(n => !currentCaches.includes(n)).map(n => caches.delete(n)))
@@ -58,13 +60,37 @@ async function isImageCacheValid(cachedResponse) {
   return ts && (Date.now() - parseInt(ts) < IMAGES_CACHE_MAX_AGE);
 }
 
+async function isRssCacheValid(cachedResponse) {
+  const ts = cachedResponse.headers.get('sw-cached-time');
+  return ts && (Date.now() - parseInt(ts) < RSS_CACHE_MAX_AGE);
+}
+
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Пропускаем внешние API, которые не нужно кэшировать
+  // Пропускаем внешние API, которые не нужно кэшировать (кроме RSS)
   if (url.hostname === 'api.github.com' ||
-      url.hostname === 'api.rss2json.com' ||
       url.hostname === 'avatars.githubusercontent.com') {
+    return;
+  }
+
+  // ДОБАВЛЕНО: кеширование RSS-запросов
+  if (url.hostname === 'api.rss2json.com') {
+    event.respondWith((async () => {
+      const cache = await caches.open(RSS_CACHE);
+      const cached = await cache.match(event.request);
+      if (cached && await isRssCacheValid(cached)) {
+        return cached;
+      }
+      try {
+        const network = await fetch(event.request);
+        if (network.ok) {
+          await cacheWithTimestamp(RSS_CACHE, event.request, network.clone());
+          return network;
+        }
+      } catch (e) {}
+      return cached || Response.error();
+    })());
     return;
   }
 

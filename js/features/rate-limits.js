@@ -450,10 +450,8 @@
         const langHandler = () => {
             if (!activeRatePanel || activeRatePanel.modal !== modal) return;
             const t = window.I18n?.translate || (k => k);
-            // Обновляем заголовок
             const headerTitle = modal.querySelector('.modal-header h2');
             if (headerTitle) headerTitle.textContent = t('limitsAndCache');
-            // Перестраиваем панель
             const body = modal.querySelector('.modal-body');
             if (body) body.innerHTML = buildPanelHTML(t);
             bindPanelEvents(modal, t);
@@ -844,6 +842,18 @@
         });
     }
 
+    // ДОБАВЛЕНО: метод ожидания лимита
+    async function waitForLimit(action, timeout = 30000) {
+        const start = Date.now();
+        while (Date.now() - start < timeout) {
+            if (checkLimit(action)) {
+                return true;
+            }
+            await new Promise(r => setTimeout(r, 1000));
+        }
+        return false;
+    }
+
     function init() {
         loadCounts();
         setInterval(() => {
@@ -929,7 +939,8 @@
         clearAllCache: clearAllCacheInternal,
         clearStaleCache,
         getCacheKeys,
-        deleteCacheKey
+        deleteCacheKey,
+        waitForLimit // ДОБАВЛЕНО
     };
 
     if (document.readyState === 'loading') {

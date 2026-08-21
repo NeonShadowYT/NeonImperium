@@ -374,6 +374,7 @@
     }
   }
 
+  // ----- ИЗМЕНЕНИЕ: инициализация страничных модулей перенесена после загрузки переводов -----
   function initPageModules() {
     if (window.initNewsFeed) window.initNewsFeed();
     if (window.initFeedback) window.initFeedback();
@@ -381,23 +382,28 @@
     if (window.initPlatform) window.initPlatform();
   }
 
-  function waitForLanguage() {
+  // Функция, которая ждёт загрузки переводов, затем запускает модули
+  function waitForLanguageAndInit() {
+    // Проверяем, загружены ли переводы
     if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
       const testKey = window.I18n.translate('siteTitle');
       if (testKey !== 'siteTitle') {
+        // Переводы загружены – инициализируем
         initPageModules();
         return;
       }
     }
+    // Если ещё нет – подписываемся на событие
     document.addEventListener('languageLoaded', initPageModules, { once: true });
-    if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
-      setTimeout(() => {
+    // Фолбек: если через 500 мс переводы так и не загрузились, пробуем инициализировать (на случай ошибки)
+    setTimeout(() => {
+      if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
         const testKey = window.I18n.translate('siteTitle');
         if (testKey !== 'siteTitle') {
           initPageModules();
         }
-      }, 100);
-    }
+      }
+    }, 500);
   }
 
   function initNonLanguageDependent() {
@@ -410,13 +416,14 @@
     initRateLimits();
   }
 
+  // Запуск
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       initNonLanguageDependent();
-      waitForLanguage();
+      waitForLanguageAndInit(); // теперь новости и другие модули загружаются после переводов
     });
   } else {
     initNonLanguageDependent();
-    waitForLanguage();
+    waitForLanguageAndInit();
   }
 })();
