@@ -1,537 +1,633 @@
-// js/pages/feedback.js – полная, с иконками, кнопками, обработкой ошибок
+// js/pages/news-feed.js – полная, с заголовком, иконками, кнопкой для админов
 (function() {
   const {
-    cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, createAbortable,
-    loadModule, createElement, extractSummary, extractAllowed,
-    decryptPrivateBody, performAction
+    cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG,
+    createAbortable, loadModule, createElement, extractSummary,
+    extractAllowed, stripHtml
   } = window.GithubCore;
-  const { loadIssues, loadReactions, addReaction, removeReaction, loadIssue } = window.GithubAPI;
+  const { loadIssues, loadIssue } = window.GithubAPI;
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
-  const { showToast, createModal } = window.UIUtils;
+  const { showToast } = window.UIUtils;
 
-  const ITEMS_PER_PAGE = 10, MAX_DISPLAY = 30, CACHE_TTL = 10 * 60 * 1000;
-  let currentGame, currentTab = 'all', currentPage = 1, hasMore = true, isLoading = false;
-  let allIssues = [], container, grid, sentinel, observer, currentAbort, currentUser;
-  let initialized = false;
-  let loadRetries = 0;
-  const MAX_RETRIES = 2;
+  const POSTS_CACHE_TTL = 3 * 60 * 1000;
+  const VIDEOS_CACHE_TTL = 10 * 60 * 1000;
+  const TWITCH_CACHE_TTL = 2 * 60 * 1000;
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 2000;
 
-  // ---- Добавление реакции с синхронизацией ----
-  async function addReactionWithSync(issueNumber, content) {
-    try {
-      const result = await performAction('reactions', { issueNumber, content }, () => addReaction(issueNumber, content));
-      if (result.queued) {
-        showToast('Реакция будет отправлена позже', 'info');
-      } else {
-        showToast('Реакция добавлена', 'success');
+  let container, posts = [], videos = [], twitchStreams = [];
+  let postsLoaded = false, videosLoaded = false, twitchLoaded = false;
+  let currentUser = null;
+  let loading = false;
+  let currentAbortController = null;
+  let retryCount = 0;
+
+  const YT_CHANNELS = [
+    { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
+    { id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' },
+    { id: 'UCQKVSv62dLsK3QnfIke24uQ', name: 'Golden Creeper' },
+    { id: 'UCcuqf3fNtZ2UP5MO89kVKLw', name: 'Mitmi' }
+  ];
+
+  const TWITCH_CHANNELS = ['sk0l3ra1', 'neoncyndows'];
+  const DEFAULT_IMAGE = 'images/default-news.webp';
+
+  function memoize(fn, maxSize = 100) {
+    const cache = new Map();
+    return function(...args) {
+      const key = JSON.stringify(args);
+      if (cache.has(key)) return cache.get(key);
+      const result = fn.apply(this, args);
+      if (cache.size >= maxSize) {
+        const firstKey = cache.keys().next().value;
+        cache.delete(firstKey);
       }
-      window.UIFeedback?.invalidateCache(issueNumber);
-      // Обновляем отображение реакций
-      const reactionsContainer = document.querySelector(`#feedback-item-${issueNumber} .reactions-container`);
-      if (reactionsContainer) {
-        const reactions = await loadReactions(issueNumber);
-        renderReactions(reactionsContainer, issueNumber, reactions, currentUser);
-      }
-    } catch (err) {
-      showToast('Ошибка: ' + err.message, 'error');
-    }
+      cache.set(key, result);
+      return result;
+    };
   }
 
-  async function removeReactionWithSync(issueNumber, reactionId) {
-    try {
-      await removeReaction(issueNumber, reactionId);
-      window.UIFeedback?.invalidateCache(issueNumber);
-      const reactionsContainer = document.querySelector(`#feedback-item-${issueNumber} .reactions-container`);
-      if (reactionsContainer) {
-        const reactions = await loadReactions(issueNumber);
-        renderReactions(reactionsContainer, issueNumber, reactions, currentUser);
-      }
-    } catch (err) {
-      showToast('Ошибка: ' + err.message, 'error');
+  const renderMarkdownMemoized = memoize((text) => {
+    if (!text) return '';
+    if (window.marked) {
+      if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true });
+      if (typeof marked.parse === 'function') return marked.parse(text);
+      else if (typeof marked === 'function') return marked(text);
     }
-  }
-
-  // ---- Рендер реакций ----
-  function renderReactions(container, issueNumber, reactions, currentUser) {
-    if (!container) return;
-    const filtered = reactions.filter(r => r.content === 'heart' || r.content === 'eyes');
-    const counts = new Map();
-    const userReactions = new Set();
-    filtered.forEach(r => {
-      counts.set(r.content, (counts.get(r.content) || 0) + 1);
-      if (r.user && r.user.login === currentUser) userReactions.add(r.content);
-    });
-
-    container.innerHTML = '';
-    const btnsDiv = createElement('div', 'reactions-buttons', { display: 'flex', gap: '6px', flexWrap: 'wrap' });
-
-    const heartCount = counts.get('heart') || 0;
-    const isHeartActive = userReactions.has('heart');
-    const heartBtn = createElement('button', 'reaction-button', {
-      display: 'inline-flex', alignItems: 'center', gap: '4px',
-      padding: '4px 10px', borderRadius: '30px', fontSize: '13px',
-      cursor: isHeartActive ? 'default' : 'pointer',
-      border: '1px solid var(--border)',
-      background: isHeartActive ? 'var(--accent)' : 'var(--bg-primary)',
-      color: isHeartActive ? '#fff' : 'var(--text-secondary)',
-      transition: 'background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s',
-      opacity: isHeartActive ? '1' : '0.8',
-      pointerEvents: isHeartActive ? 'none' : 'auto'
-    }, { type: 'button', disabled: isHeartActive });
-    heartBtn.innerHTML = `<span class="reaction-emoji">❤️</span><span class="reaction-count">${heartCount || ''}</span>`;
-
-    if (!isHeartActive) {
-      heartBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (!currentUser) { showToast('Войдите в GitHub', 'error'); return; }
-        try {
-          const result = await performAction('reactions', { issueNumber, content: 'heart' }, () => addReaction(issueNumber, 'heart'));
-          if (result.queued) showToast('❤️ будет добавлена позже', 'info');
-          else showToast('❤️ добавлена', 'success');
-          const newReactions = await loadReactions(issueNumber);
-          renderReactions(container, issueNumber, newReactions, currentUser);
-        } catch (err) {
-          showToast('Ошибка: ' + err.message, 'error');
-        }
-      });
-    }
-
-    btnsDiv.appendChild(heartBtn);
-
-    const eyesCount = counts.get('eyes') || 0;
-    const hasEyes = userReactions.has('eyes');
-    const eyesSpan = createElement('span', 'reaction-static', {
-      display: 'inline-flex', alignItems: 'center', gap: '4px',
-      padding: '4px 10px', background: 'var(--bg-primary)', border: '1px solid var(--border)',
-      borderRadius: '30px', fontSize: '13px', color: 'var(--text-secondary)'
-    });
-    eyesSpan.innerHTML = `<span class="reaction-emoji">👀</span><span class="reaction-count">${eyesCount || ''}</span>`;
-    btnsDiv.appendChild(eyesSpan);
-
-    if (currentUser && !hasEyes) {
-      const eyesKey = `eyes_${issueNumber}`;
-      if (!sessionStorage.getItem(eyesKey)) {
-        sessionStorage.setItem(eyesKey, '1');
-        performAction('reactions', { issueNumber, content: 'eyes' }, () => addReaction(issueNumber, 'eyes'))
-          .then(() => {
-            loadReactions(issueNumber).then(newReactions => {
-              renderReactions(container, issueNumber, newReactions, currentUser);
-            });
-          })
-          .catch(() => {});
-      }
-    }
-
-    container.appendChild(btnsDiv);
-  }
+    return text.replace(/\n/g, '<br>');
+  }, 100);
 
   // ---- Инициализация ----
-  window.initFeedback = function() {
-    const section = document.getElementById('feedback-section');
+  window.initNewsFeed = function() {
+    const section = document.getElementById('news-section');
     if (!section) return;
-    if (initialized) return;
-    const rect = section.getBoundingClientRect();
-    if (rect.top < window.innerHeight + 200 && rect.bottom > -200) {
-      initializeFeedback(section);
-    } else {
-      const obs = new IntersectionObserver((entries) => {
-        if (entries.some(e => e.isIntersecting)) {
-          obs.disconnect();
-          initializeFeedback(section);
-        }
-      }, { rootMargin: '200px' });
-      obs.observe(section);
-    }
-  };
+    container = document.getElementById('news-feed');
+    if (!container) return;
 
-  function initializeFeedback(section) {
-    if (initialized) return;
-    initialized = true;
-    currentGame = section.dataset.game;
-    if (!currentGame) {
-      section.innerHTML = '<p class="error-message">Не указана игра</p>';
-      return;
+    // Создаём шапку новостей, если её нет
+    let header = section.querySelector('.news-header');
+    if (!header) {
+      header = createElement('div', 'news-header', {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '20px',
+        flexWrap: 'wrap',
+        gap: '15px'
+      });
+      const t = window.I18n?.translate || (k => k);
+      const div = createElement('div');
+      const h2 = createElement('h2');
+      h2.setAttribute('data-lang', 'newsTitle');
+      h2.textContent = t('newsTitle');
+      div.appendChild(h2);
+      const p = createElement('p', 'text-secondary');
+      p.setAttribute('data-lang', 'newsDesc');
+      p.textContent = t('newsDesc');
+      div.appendChild(p);
+      header.appendChild(div);
+      section.prepend(header);
     }
-    container = section.querySelector('.feedback-container');
-    if (!container) {
-      container = document.createElement('div');
-      container.className = 'feedback-container';
-      section.appendChild(container);
-    }
-
-    window.addEventListener('github-login-success', e => { currentUser = e.detail.login; checkAuthAndRender(); });
-    window.addEventListener('github-logout', () => { currentUser = null; checkAuthAndRender(); });
-    window.addEventListener('github-issue-created', e => {
-      const issue = e.detail;
-      if (!issue.labels.some(l => l.name === `game:${currentGame}`)) return;
-      cacheRemoveByPrefix(`game_issues_${currentGame}`);
-      allIssues = [issue, ...allIssues];
-      filterAndDisplay(true);
-    });
 
     currentUser = getCurrentUser();
-    checkAuthAndRender();
+    loadNewsFeed();
 
-    const postId = new URLSearchParams(location.search).get('post');
-    if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
-  }
-
-  // ---- Загрузка данных ----
-  async function loadGameIssues(reset) {
-    if (isLoading) return;
-    isLoading = true;
-    if (currentAbort) {
-      currentAbort.controller.abort();
-      currentAbort = null;
-    }
-    const { controller, timeoutId } = createAbortable(15000);
-    currentAbort = { controller };
-    const t = window.I18n?.translate || (k => k);
-    try {
-      const key = `game_issues_${currentGame}`;
-      let issues = cacheGet(key, CACHE_TTL);
-      if (!issues) {
-        try {
-          issues = await loadIssues({ labels: `game:${currentGame}`, state: 'open', per_page: 100 }, controller.signal);
-          cacheSet(key, issues);
-          loadRetries = 0;
-        } catch (err) {
-          if (controller.signal.aborted) return;
-          console.warn('[feedback.js] loadIssues error:', err);
-          if (loadRetries < MAX_RETRIES) {
-            loadRetries++;
-            showToast(`${t('loadError')}, ${t('tryRefresh')}`, 'warning');
-            await new Promise(r => setTimeout(r, 1000));
-            return loadGameIssues(reset);
-          } else {
-            showToast(t('feedbackLoadFailed'), 'error');
-            if (grid) grid.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>${t('dataLoadError')}</p></div>`;
-            return;
-          }
-        }
-      }
-      allIssues = issues.filter(i => i.state === 'open');
-      filterAndDisplay(reset);
-    } catch (err) {
-      if (controller.signal.aborted) return;
-      console.error('[feedback.js] loadGameIssues error:', err);
-      showToast(t('loadError') + ': ' + (err.message || err), 'error');
-      if (grid) grid.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>${t('dataLoadError')}</p></div>`;
-    } finally {
-      clearTimeout(timeoutId);
-      if (currentAbort?.controller === controller) currentAbort = null;
-      isLoading = false;
-    }
-  }
-
-  // ---- Фильтрация и пагинация ----
-  function filterAndDisplay(reset) {
-    if (!grid) return;
-    let filtered = allIssues.filter(i => i.state === 'open').filter(i => {
-      const labels = i.labels.map(l=>l.name);
-      if (!labels.includes('private')) return true;
-      if (isAdmin()) return true;
-      const allowed = extractAllowed(i.body);
-      return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
+    window.addEventListener('github-login-success', e => {
+      currentUser = e.detail.login;
+      refreshNewsFeed();
     });
-    if (currentTab !== 'all') {
-      filtered = filtered.filter(i => i.labels.some(l => l.name === `type:${currentTab}`));
-    }
-    if (reset) {
-      grid.innerHTML = '';
-      currentPage = 1;
-      hasMore = true;
-    }
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    const pageItems = filtered.slice(start, start + ITEMS_PER_PAGE);
-    if (pageItems.length === 0 && reset) {
-      const t = window.I18n?.translate || (k => k);
-      grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p data-lang="feedbackNoItems">${t('feedbackNoItems')}</p></div>`;
-      hasMore = false;
-      return;
-    }
-    const fragment = document.createDocumentFragment();
-    pageItems.forEach(issue => {
-      if (!grid.querySelector(`[data-issue-number="${issue.number}"]`)) {
-        fragment.appendChild(createCard(issue));
-      }
+    window.addEventListener('github-logout', () => {
+      currentUser = null;
+      refreshNewsFeed();
     });
-    grid.appendChild(fragment);
-    hasMore = filtered.length > start + ITEMS_PER_PAGE;
-    if (!hasMore && sentinel) sentinel.style.display = 'none';
-  }
-
-  // ---- Проверка авторизации и рендер ----
-  function checkAuthAndRender() {
-    if (currentUser) renderInterface();
-    else renderLoginPrompt();
-  }
-
-  function renderLoginPrompt() {
-    if (!container) return;
-    const t = window.I18n?.translate || (k => k);
-    container.innerHTML = '';
-    const prompt = createElement('div', 'login-prompt');
-    const icon = createElement('i', 'fab fa-github');
-    prompt.appendChild(icon);
-    const h3 = createElement('h3');
-    h3.setAttribute('data-lang', 'feedbackLoginPrompt');
-    h3.textContent = t('feedbackLoginPrompt');
-    prompt.appendChild(h3);
-    const p = createElement('p', 'text-secondary');
-    p.setAttribute('data-lang', 'githubTokenNote');
-    p.textContent = t('githubTokenNote');
-    prompt.appendChild(p);
-    const btn = createElement('button', 'button');
-    btn.setAttribute('data-lang', 'feedbackLoginBtn');
-    btn.textContent = t('feedbackLoginBtn');
-    btn.id = 'feedback-login-btn';
-    btn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('github-login-requested')));
-    prompt.appendChild(btn);
-    container.appendChild(prompt);
-  }
-
-  async function renderInterface() {
-    if (!container) return;
-    const t = window.I18n?.translate || (k => k);
-    if (!window.UIFeedback) {
-      try {
-        await loadModule('js/features/ui-feedback.js');
-      } catch (err) {
-        console.error('[feedback.js] Failed to load UIFeedback:', err);
-        container.innerHTML = `<p class="error-message">${t('loadModulesError')}</p>`;
-        return;
-      }
-    }
-    container.innerHTML = '';
-
-    // Заголовок
-    const header = createElement('div', 'feedback-header');
-    const titleWrap = createElement('div', '', { display: 'flex', alignItems: 'center', gap: '8px' });
-    const h2 = createElement('h2', '', { margin: '0' });
-    h2.setAttribute('data-lang', 'feedbackTitle');
-    h2.innerHTML = `<i class="fas fa-comment-dots" style="font-size:24px;color:var(--accent);margin-right:8px;"></i> ${t('feedbackTitle')}`;
-    titleWrap.appendChild(h2);
-    header.appendChild(titleWrap);
-    const btn = createElement('button', 'button');
-    btn.setAttribute('data-lang', 'feedbackNewBtn');
-    btn.textContent = '+ ' + t('feedbackNewBtn');
-    btn.id = 'toggle-form-btn';
-    btn.addEventListener('click', () => {
-      if (!window.UIFeedback) {
-        showToast(t('editorNotLoaded'), 'error');
-        return;
-      }
-      window.UIFeedback.openEditorModal('new', { game: currentGame }, 'feedback');
-    });
-    header.appendChild(btn);
-    container.appendChild(header);
-
-    // Описание
-    const desc = createElement('p', 'text-secondary');
-    desc.setAttribute('data-lang', 'feedbackDesc');
-    desc.textContent = t('feedbackDesc');
-    container.appendChild(desc);
-
-    // Вкладки
-    const tabs = createElement('div', 'feedback-tabs');
-    const tabAll = createElement('button', 'feedback-tab active');
-    tabAll.setAttribute('data-lang', 'tabAll');
-    tabAll.textContent = t('tabAll');
-    tabAll.dataset.tab = 'all';
-    tabs.appendChild(tabAll);
-    const tabIdea = createElement('button', 'feedback-tab');
-    tabIdea.setAttribute('data-lang', 'tabIdeas');
-    tabIdea.textContent = '💡 ' + t('tabIdeas');
-    tabIdea.dataset.tab = 'idea';
-    tabs.appendChild(tabIdea);
-    const tabBug = createElement('button', 'feedback-tab');
-    tabBug.setAttribute('data-lang', 'tabBugs');
-    tabBug.textContent = '🐛 ' + t('tabBugs');
-    tabBug.dataset.tab = 'bug';
-    tabs.appendChild(tabBug);
-    const tabReview = createElement('button', 'feedback-tab');
-    tabReview.setAttribute('data-lang', 'tabReviews');
-    tabReview.textContent = '⭐ ' + t('tabReviews');
-    tabReview.dataset.tab = 'review';
-    tabs.appendChild(tabReview);
-    container.appendChild(tabs);
-
-    // Сетка
-    const panel = createElement('div', 'projects-grid');
-    panel.id = 'feedback-panel';
-    container.appendChild(panel);
-    const sentinelEl = createElement('div', '', { height: '10px' });
-    sentinelEl.id = 'sentinel';
-    container.appendChild(sentinelEl);
-
-    grid = document.getElementById('feedback-panel');
-    sentinel = document.getElementById('sentinel');
-
-    // Обработчики вкладок
-    tabs.querySelectorAll('.feedback-tab').forEach(t => {
-      t.addEventListener('click', e => {
-        tabs.querySelectorAll('.feedback-tab').forEach(tt => { tt.classList.remove('active'); tt.setAttribute('aria-selected','false'); });
-        t.classList.add('active'); t.setAttribute('aria-selected','true');
-        currentTab = t.dataset.tab;
-        currentPage = 1;
-        filterAndDisplay(true);
-      });
-    });
-
-    if (observer) observer.disconnect();
-    observer = new IntersectionObserver(e => {
-      if (e[0].isIntersecting && !isLoading && hasMore) {
-        currentPage++;
-        filterAndDisplay(false);
-      }
-    }, { threshold: 0.1 });
-    if (sentinel) observer.observe(sentinel);
-
-    await loadGameIssues(true);
-  }
-
-  // ---- Создание карточки с иконкой ----
-  function createCard(issue) {
-    const type = issue.labels.find(l=>l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
-    const iconMap = {
-      'idea': '💡',
-      'bug': '🐛',
-      'review': '⭐'
-    };
-    const icon = iconMap[type] || '📌';
-
-    let summary = extractSummary(issue.body) || (issue.body||'').substring(0,120)+'…';
-    const allowed = extractAllowed(issue.body);
-    if (issue.labels.some(l=>l.name==='private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-      try { summary = extractSummary(decryptPrivateBody(issue.body, allowed)) || ''; } catch {}
-    }
-
-    const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
-    card.dataset.issueNumber = issue.number;
-    const inner = createElement('div', 'project-card');
-
-    // Иконка вместо изображения
-    const imgW = createElement('div', 'image-wrapper', {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--bg-primary)',
-      paddingBottom: '56.25%',
-      position: 'relative'
-    });
-    const iconSpan = createElement('span', '', {
-      position: 'absolute',
-      top: '50%', left: '50%',
-      transform: 'translate(-50%, -50%)',
-      fontSize: '48px'
-    });
-    iconSpan.textContent = icon;
-    imgW.appendChild(iconSpan);
-    inner.appendChild(imgW);
-
-    const title = createElement('h3', '', { margin: '8px 0 4px' });
-    title.textContent = issue.title.length > 70 ? issue.title.slice(0,70)+'…' : issue.title;
-    inner.appendChild(title);
-
-    const preview = createElement('p', 'text-secondary', {
-      fontSize: '13px',
-      overflow: 'hidden',
-      display: '-webkit-box',
-      WebkitLineClamp: '2',
-      WebkitBoxOrient: 'vertical',
-      margin: '4px 0 0'
-    });
-    preview.textContent = summary.replace(/\n/g,' ');
-    inner.appendChild(preview);
-
-    const footer = createElement('div', '', {
-      display: 'flex',
-      justifyContent: 'space-between',
-      fontSize: '12px',
-      color: 'var(--text-secondary)',
-      marginTop: 'auto',
-      paddingTop: '10px',
-      borderTop: '1px solid var(--border)'
-    });
-    footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span>`;
-    inner.appendChild(footer);
-
-    card.appendChild(inner);
-
-    // Клик для открытия модалки
-    card.addEventListener('click', async e => {
-      if (e.target.closest('button')) return;
-      if (!window.UIFeedback) {
-        try {
-          await loadModule('js/features/ui-feedback.js');
-        } catch (err) {
-          showToast(t('viewerNotAvailable'), 'error');
-          return;
-        }
-      }
-      if (!window.UIFeedback) {
-        showToast(t('viewerNotAvailable'), 'error');
-        return;
-      }
-      window.UIFeedback.openFullModal({
-        id: issue.number,
+    window.addEventListener('github-issue-created', e => {
+      const issue = e.detail;
+      const typeLabel = issue.labels.find(l => l.name === 'type:news' || l.name === 'type:update');
+      if (!typeLabel || !CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+      cacheRemoveByPrefix('posts_news+update_v3');
+      const newPost = {
+        type: 'post',
+        number: issue.number,
         title: issue.title,
         body: issue.body,
         author: issue.user.login,
         date: new Date(issue.created_at),
-        game: currentGame,
-        labels: issue.labels.map(l=>l.name)
+        labels: issue.labels.map(l => l.name),
+        game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
+        postType: issue.labels.some(l => l.name === 'type:news') ? 'news' : 'update'
+      };
+      posts = [newPost, ...posts];
+      renderMixed();
+    });
+
+    const postId = new URLSearchParams(location.search).get('post');
+    if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
+  };
+
+  window.refreshNewsFeed = function() {
+    if (!container || loading) return;
+    posts = []; videos = []; twitchStreams = [];
+    postsLoaded = videosLoaded = twitchLoaded = false;
+    loadNewsFeed();
+  };
+
+  // ---- Основная загрузка ----
+  function loadNewsFeed() {
+    if (loading) return;
+    loading = true;
+    if (currentAbortController) currentAbortController.abort();
+    currentAbortController = new AbortController();
+    const signal = currentAbortController.signal;
+    const t = window.I18n?.translate || (k => k);
+    container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">${t('newsLoading')}</p></div>`;
+
+    Promise.all([
+      loadPostsWithRetry(signal),
+      loadVideosWithRetry(signal),
+      loadTwitchStreamsWithRetry(signal)
+    ]).then(([loadedPosts, loadedVideos, loadedTwitch]) => {
+      if (signal.aborted) return;
+      posts = loadedPosts;
+      videos = loadedVideos;
+      twitchStreams = loadedTwitch;
+      postsLoaded = videosLoaded = twitchLoaded = true;
+      retryCount = 0;
+      renderMixed();
+    }).catch(err => {
+      if (signal.aborted) return;
+      console.error('[NewsFeed] Error loading:', err);
+      postsLoaded = videosLoaded = twitchLoaded = true;
+      posts = []; videos = []; twitchStreams = [];
+      renderMixed();
+      if (retryCount < MAX_RETRIES) {
+        retryCount++;
+        setTimeout(loadNewsFeed, RETRY_DELAY * retryCount);
+      }
+    }).finally(() => {
+      loading = false;
+      currentAbortController = null;
+    });
+  }
+
+  // ---- Загрузка постов с повторными попытками ----
+  async function loadPostsWithRetry(signal) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        return await loadPosts(signal);
+      } catch (err) {
+        if (signal.aborted) throw err;
+        console.warn(`[NewsFeed] Posts load attempt ${attempt+1} failed:`, err);
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY * (attempt + 1)));
+        } else {
+          throw err;
+        }
+      }
+    }
+  }
+
+  async function loadPosts(signal) {
+    const cacheKey = 'posts_news+update_v3';
+    const cached = cacheGet(cacheKey, POSTS_CACHE_TTL);
+    if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
+
+    const [news, updates] = await Promise.all([
+      loadIssues({ labels: 'type:news', state: 'open', per_page: 10, page: 1 }, signal),
+      loadIssues({ labels: 'type:update', state: 'open', per_page: 10, page: 1 }, signal)
+    ]);
+
+    if (signal.aborted) return [];
+    const all = [...news, ...updates]
+      .filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
+
+    const seen = new Set();
+    const unique = all.filter(i => { if (seen.has(i.number)) return false; seen.add(i.number); return true; });
+
+    const result = unique.map(i => {
+      const isNews = i.labels.some(l => l.name === 'type:news');
+      return {
+        type: 'post',
+        number: i.number,
+        title: i.title,
+        body: i.body,
+        author: i.user.login,
+        date: new Date(i.created_at),
+        labels: i.labels.map(l => l.name),
+        game: i.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
+        postType: isNews ? 'news' : 'update'
+      };
+    });
+
+    cacheSet(cacheKey, result.map(p => ({ ...p, date: p.date.toISOString() })));
+    return result;
+  }
+
+  // ---- Загрузка видео (YouTube) ----
+  async function loadVideosWithRetry(signal) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        return await loadVideos(signal);
+      } catch (err) {
+        if (signal.aborted) throw err;
+        console.warn(`[NewsFeed] Videos load attempt ${attempt+1} failed:`, err);
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY * (attempt + 1)));
+        } else {
+          throw err;
+        }
+      }
+    }
+  }
+
+  async function loadVideos(signal) {
+    const cacheKey = 'youtube_videos_rss2json_v3';
+    const cached = cacheGet(cacheKey, VIDEOS_CACHE_TTL);
+    if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
+
+    const all = [];
+    for (const ch of YT_CHANNELS) {
+      if (signal.aborted) break;
+      const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(`https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`)}`;
+      try {
+        const resp = await fetch(apiUrl, { signal });
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        if (data.status !== 'ok') continue;
+        const items = data.items.slice(0, 3).map(item => {
+          const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
+          if (!vid) return null;
+          return {
+            type: 'video',
+            id: vid,
+            title: item.title,
+            author: ch.name,
+            date: new Date(item.pubDate),
+            thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`
+          };
+        }).filter(v => v);
+        all.push(...items);
+      } catch (e) {
+        if (e.name === 'AbortError') break;
+        console.warn('[NewsFeed] RSS error for', ch.name, e);
+      }
+    }
+    const sorted = all.sort((a, b) => b.date - a.date).slice(0, 12);
+    cacheSet(cacheKey, sorted.map(v => ({ ...v, date: v.date.toISOString() })));
+    return sorted;
+  }
+
+  // ---- Загрузка Twitch стримов ----
+  async function loadTwitchStreamsWithRetry(signal) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        return await loadTwitchStreams(signal);
+      } catch (err) {
+        if (signal.aborted) throw err;
+        console.warn(`[NewsFeed] Twitch load attempt ${attempt+1} failed:`, err);
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY * (attempt + 1)));
+        } else {
+          throw err;
+        }
+      }
+    }
+  }
+
+  async function loadTwitchStreams(signal) {
+    const cacheKey = 'twitch_streams_v2';
+    const cached = cacheGet(cacheKey, TWITCH_CACHE_TTL);
+    if (cached) return cached.map(s => ({ ...s, date: new Date(s.date) }));
+
+    const streams = [];
+    // Пробуем GraphQL
+    try {
+      const clientId = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
+      for (const channel of TWITCH_CHANNELS) {
+        if (signal.aborted) break;
+        const query = {
+          operationName: "StreamMetadata",
+          variables: { channelLogin: channel },
+          extensions: {
+            persistedQuery: {
+              version: 1,
+              sha256Hash: "a1b2c3d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890"
+            }
+          },
+          query: `
+            query StreamMetadata($channelLogin: String!) {
+              user(login: $channelLogin) {
+                stream {
+                  id
+                  game { name }
+                  title
+                  viewersCount
+                  createdAt
+                  thumbnailURL
+                }
+              }
+            }
+          `
+        };
+        const resp = await fetch('https://gql.twitch.tv/gql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Client-ID': clientId },
+          body: JSON.stringify(query),
+          signal
+        });
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const streamData = data?.data?.user?.stream;
+        if (streamData) {
+          const t = window.I18n?.translate || (k => k);
+          const viewers = streamData.viewersCount || 0;
+          const title = streamData.title || `${t('stream')}: ${channel}`;
+          const thumbnail = streamData.thumbnailURL || `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
+          const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
+          streams.push({
+            type: 'twitch',
+            id: channel,
+            title: `${title}${viewers ? ` (${viewers} ${t('viewers')})` : ''}`,
+            game: streamData.game?.name || t('stream'),
+            author: channel,
+            date: new Date(streamData.createdAt || Date.now()),
+            thumbnail,
+            embedUrl
+          });
+        }
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') console.warn('[NewsFeed] Twitch GraphQL error:', e);
+    }
+
+    // Если стримов нет, пробуем альтернативный метод
+    if (streams.length === 0) {
+      try {
+        for (const channel of TWITCH_CHANNELS) {
+          if (signal.aborted) break;
+          const url = `https://api.twitchinsights.net/v1/streams?channel=${channel}`;
+          const resp = await fetch(url, { signal });
+          if (!resp.ok) continue;
+          const data = await resp.json();
+          if (data.online !== 1) continue;
+          const streamInfo = data.streams[0];
+          if (!streamInfo) continue;
+          const t = window.I18n?.translate || (k => k);
+          const viewers = streamInfo[1] || 0;
+          const thumbnail = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
+          const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
+          streams.push({
+            type: 'twitch',
+            id: channel,
+            title: `${t('stream')}: ${channel}${viewers ? ` (${viewers} ${t('viewers')})` : ''}`,
+            game: streamInfo[2] || t('stream'),
+            author: channel,
+            date: new Date(),
+            thumbnail,
+            embedUrl
+          });
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError') console.warn('[NewsFeed] Twitch insights error:', e);
+      }
+    }
+
+    cacheSet(cacheKey, streams.map(s => ({ ...s, date: s.date.toISOString() })));
+    return streams;
+  }
+
+  // ---- Рендеринг смешанного контента ----
+  function renderMixed() {
+    if (!postsLoaded || !videosLoaded || !twitchLoaded) return;
+    const t = window.I18n?.translate || (k => k);
+    const currentUser = getCurrentUser();
+
+    // Фильтруем приватные посты
+    const filteredPosts = posts.filter(p => {
+      if (!p.labels.includes('private')) return true;
+      if (isAdmin()) return true;
+      const allowed = extractAllowed(p.body);
+      return allowed && allowed.split(',').map(s => s.trim()).includes(currentUser);
+    });
+
+    let items = [];
+    // Twitch стримы (всегда сверху)
+    if (twitchStreams.length > 0) {
+      twitchStreams.sort((a, b) => b.date - a.date);
+      items = items.concat(twitchStreams);
+    }
+    // Видео
+    const sortedVideos = videos.sort((a, b) => b.date - a.date);
+    items = items.concat(sortedVideos);
+    // Посты (новости и обновления)
+    const sortedPosts = filteredPosts.sort((a, b) => b.date - a.date);
+    items = items.concat(sortedPosts);
+
+    const maxDisplay = 8;
+    const showItems = items.slice(0, maxDisplay);
+
+    const grid = createElement('div', 'projects-grid');
+    if (showItems.length === 0) {
+      grid.innerHTML = `<div class="empty-state"><i class="fas fa-newspaper"></i><p data-lang="newsNoItems">${t('newsNoItems')}</p></div>`;
+    } else {
+      const fragment = document.createDocumentFragment();
+      showItems.forEach(item => {
+        const card = createCard(item);
+        fragment.appendChild(card);
       });
+      grid.appendChild(fragment);
+    }
+
+    // Обновляем контейнер
+    container.innerHTML = '';
+    container.appendChild(grid);
+
+    // Добавляем/обновляем кнопку "Добавить новость" для админов в шапке
+    const section = document.getElementById('news-section');
+    if (section) {
+      let header = section.querySelector('.news-header');
+      if (!header) {
+        header = createElement('div', 'news-header', {
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '20px',
+          flexWrap: 'wrap',
+          gap: '15px'
+        });
+        const div = createElement('div');
+        const h2 = createElement('h2');
+        h2.setAttribute('data-lang', 'newsTitle');
+        h2.textContent = t('newsTitle');
+        div.appendChild(h2);
+        const p = createElement('p', 'text-secondary');
+        p.setAttribute('data-lang', 'newsDesc');
+        p.textContent = t('newsDesc');
+        div.appendChild(p);
+        header.appendChild(div);
+        section.prepend(header);
+      }
+      const existing = header.querySelector('.admin-news-btn');
+      if (isAdmin() && hasScope('repo')) {
+        if (!existing) {
+          const btn = createElement('button', 'button admin-news-btn');
+          btn.setAttribute('data-lang', 'addNews');
+          btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
+          btn.addEventListener('click', async () => {
+            if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
+            window.UIFeedback.openEditorModal('new', { game: null }, 'news');
+          });
+          header.appendChild(btn);
+        } else {
+          existing.setAttribute('data-lang', 'addNews');
+          existing.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
+        }
+      } else if (existing) {
+        existing.remove();
+      }
+    }
+  }
+
+  // ---- Создание карточки ----
+  function createCard(item) {
+    const t = window.I18n?.translate || (k => k);
+    const card = createElement('div', 'project-card-link card-interactive');
+    const inner = createElement('div', 'project-card');
+
+    let thumbnail = item.thumbnail || DEFAULT_IMAGE;
+    let title = item.title || 'Без названия';
+    let author = item.author || '';
+    let date = item.date instanceof Date ? item.date.toLocaleDateString() : new Date(item.date).toLocaleDateString();
+
+    // Иконка в зависимости от типа
+    let iconHtml = '';
+    if (item.type === 'post') {
+      if (item.postType === 'news') {
+        iconHtml = '<i class="fas fa-newspaper" style="font-size: 48px; color: var(--accent);"></i>';
+      } else {
+        iconHtml = '<i class="fas fa-clock-rotate-left" style="font-size: 48px; color: var(--accent);"></i>';
+      }
+    } else if (item.type === 'video') {
+      iconHtml = '<i class="fab fa-youtube" style="font-size: 48px; color: #ff0000;"></i>';
+    } else if (item.type === 'twitch') {
+      iconHtml = '<i class="fab fa-twitch" style="font-size: 48px; color: #9146FF;"></i>';
+    }
+
+    // Изображение или иконка
+    const imgWrapper = createElement('div', 'image-wrapper', {
+      position: 'relative',
+      paddingBottom: '56.25%',
+      background: 'var(--bg-primary)',
+      overflow: 'hidden'
+    });
+    if (thumbnail && thumbnail !== DEFAULT_IMAGE) {
+      const img = createElement('img', 'project-image', {
+        position: 'absolute',
+        top: 0, left: 0, width: '100%', height: '100%',
+        objectFit: 'cover'
+      }, { src: thumbnail, alt: title, loading: 'lazy' });
+      img.onerror = () => { imgWrapper.innerHTML = iconHtml || '<i class="fas fa-file-alt" style="font-size:48px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text-secondary);"></i>'; };
+      imgWrapper.appendChild(img);
+    } else {
+      imgWrapper.style.display = 'flex';
+      imgWrapper.style.alignItems = 'center';
+      imgWrapper.style.justifyContent = 'center';
+      imgWrapper.innerHTML = iconHtml || '<i class="fas fa-file-alt" style="font-size:48px;color:var(--text-secondary);"></i>';
+    }
+    inner.appendChild(imgWrapper);
+
+    // Заголовок
+    const titleEl = createElement('h3', '', { cursor: 'pointer', margin: '8px 0 4px' });
+    titleEl.textContent = title.length > 70 ? title.slice(0,70)+'…' : title;
+    inner.appendChild(titleEl);
+
+    // Метаданные (автор, дата)
+    const meta = createElement('p', 'text-secondary', { fontSize: '12px', margin: '0 0 4px' });
+    meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(author)} · <i class="fas fa-calendar-alt"></i> ${date}`;
+    if (item.game) {
+      meta.innerHTML += ` · <i class="fas fa-gamepad"></i> ${escapeHtml(item.game)}`;
+    }
+    inner.appendChild(meta);
+
+    // Краткое описание (если есть)
+    if (item.type === 'post' && item.body) {
+      const summary = extractSummary(item.body) || stripHtml(item.body).substring(0,120)+'…';
+      const preview = createElement('p', 'text-secondary', {
+        fontSize: '13px',
+        overflow: 'hidden',
+        display: '-webkit-box',
+        WebkitLineClamp: '2',
+        WebkitBoxOrient: 'vertical',
+        margin: '4px 0 0'
+      });
+      preview.textContent = summary;
+      inner.appendChild(preview);
+    }
+
+    card.appendChild(inner);
+
+    // Клик для открытия
+    card.addEventListener('click', () => {
+      if (item.type === 'post') {
+        if (!window.UIFeedback) {
+          loadModule('js/features/ui-feedback.js').then(() => {
+            window.UIFeedback.openFullModal({ ...item, id: item.number, date: item.date });
+          }).catch(() => showToast(t('loadModulesError'), 'error'));
+        } else {
+          window.UIFeedback.openFullModal({ ...item, id: item.number, date: item.date });
+        }
+      } else {
+        // Видео или Twitch – открываем в новой вкладке
+        if (item.embedUrl) {
+          window.open(item.embedUrl, '_blank');
+        } else if (item.id) {
+          window.open(`https://youtu.be/${item.id}`, '_blank');
+        }
+      }
     });
 
     return card;
   }
 
-  // ---- Открытие поста из URL ----
-  async function openPostFromUrl(id) {
+  // ---- Вспомогательные функции ----
+  function extractAllowed(body) {
+    const match = body?.match(/<!--\s*allowed:\s*(.*?)\s*-->/i);
+    return match ? match[1].trim() : null;
+  }
+
+  function extractSummary(body) {
+    const match = body?.match(/<!--\s*summary:\s*(.*?)\s*-->/i);
+    return match ? match[1].trim() : null;
+  }
+
+  function stripHtml(html) {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || '';
+  }
+
+  async function openPostFromUrl(postId) {
     const t = window.I18n?.translate || (k => k);
     try {
-      if (!window.GithubAPI) await loadModule('js/core/github-api.js');
-      const issue = await loadIssue(id);
-      if (!issue || issue.state === 'closed') {
-        showToast(t('postNotFound'), 'error');
-        return;
-      }
-      const gameLabel = issue.labels.find(l => l.name.startsWith('game:'));
-      if (!gameLabel || gameLabel.name.split(':')[1] !== currentGame) return;
+      const issue = await loadIssue(postId);
+      if (issue.state === 'closed') return showToast(t('postNotFound'), 'error');
       const item = {
-        id: issue.number,
+        type: 'post',
+        number: issue.number,
         title: issue.title,
         body: issue.body,
         author: issue.user.login,
         date: new Date(issue.created_at),
-        game: currentGame,
-        labels: issue.labels.map(l=>l.name)
+        game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
+        labels: issue.labels.map(l => l.name),
+        postType: issue.labels.some(l => l.name === 'type:news') ? 'news' : 'update'
       };
       if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
-      if (!window.UIFeedback.canViewPost(issue.body, item.labels, currentUser)) {
-        showToast(t('noAccess'), 'error');
-        return;
+      if (!window.UIFeedback.canViewPost(issue.body, item.labels, getCurrentUser())) {
+        return showToast(t('noAccess'), 'error');
       }
       window.UIFeedback.openFullModal(item);
     } catch (err) {
-      console.error('[feedback.js] openPostFromUrl error:', err);
       showToast(t('postLoadError'), 'error');
     }
   }
-
-  // ---- Экспорт ----
-  window.FeedbackPage = {
-    addReactionWithSync,
-    removeReactionWithSync,
-    loadGameIssues,
-    refresh: () => { if (currentGame) loadGameIssues(true); }
-  };
-
-  // Инициализация при загрузке
-  document.addEventListener('DOMContentLoaded', () => {
-    window.initFeedback();
-    window.addEventListener('scroll', window.initFeedback, { passive: true });
-  });
 })();

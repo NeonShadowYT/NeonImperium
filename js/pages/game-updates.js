@@ -3,7 +3,7 @@
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG,
     createAbortable, loadModule, createElement, extractSummary,
-    extractAllowed, decryptPrivateBody
+    extractAllowed, decryptPrivateBody, stripHtml
   } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
@@ -218,7 +218,12 @@
         top: 0, left: 0, width: '100%', height: '100%',
         objectFit: 'cover'
       }, { src: imgMatch[1], alt: post.title, loading: 'lazy' });
-      img.onerror = () => { imgWrapper.innerHTML = '<i class="fas fa-clock-rotate-left" style="font-size:48px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--accent);"></i>'; };
+      img.onerror = () => {
+        imgWrapper.style.display = 'flex';
+        imgWrapper.style.alignItems = 'center';
+        imgWrapper.style.justifyContent = 'center';
+        imgWrapper.innerHTML = '<i class="fas fa-clock-rotate-left" style="font-size:48px;color:var(--accent);"></i>';
+      };
       imgWrapper.appendChild(img);
     } else {
       imgWrapper.style.display = 'flex';
@@ -269,11 +274,5 @@
     });
 
     return card;
-  }
-
-  function stripHtml(html) {
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    return div.textContent || div.innerText || '';
   }
 })();

@@ -1,8 +1,9 @@
-// js/pages/news-feed.js – полная, с иконками, кнопкой "Добавить новость", повторными попытками
+// js/pages/news-feed.js – полная, с заголовком, иконками, кнопкой для админов
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG,
-    createAbortable, loadModule, createElement
+    createAbortable, loadModule, createElement, extractSummary,
+    extractAllowed, stripHtml
   } = window.GithubCore;
   const { loadIssues, loadIssue } = window.GithubAPI;
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
@@ -112,7 +113,8 @@
         author: issue.user.login,
         date: new Date(issue.created_at),
         labels: issue.labels.map(l => l.name),
-        game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
+        game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
+        postType: issue.labels.some(l => l.name === 'type:news') ? 'news' : 'update'
       };
       posts = [newPost, ...posts];
       renderMixed();
@@ -439,9 +441,31 @@
     container.innerHTML = '';
     container.appendChild(grid);
 
-    // Добавляем кнопку "Добавить новость" для админов
-    const header = document.querySelector('.news-header');
-    if (header) {
+    // Добавляем/обновляем кнопку "Добавить новость" для админов в шапке
+    const section = document.getElementById('news-section');
+    if (section) {
+      let header = section.querySelector('.news-header');
+      if (!header) {
+        header = createElement('div', 'news-header', {
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '20px',
+          flexWrap: 'wrap',
+          gap: '15px'
+        });
+        const div = createElement('div');
+        const h2 = createElement('h2');
+        h2.setAttribute('data-lang', 'newsTitle');
+        h2.textContent = t('newsTitle');
+        div.appendChild(h2);
+        const p = createElement('p', 'text-secondary');
+        p.setAttribute('data-lang', 'newsDesc');
+        p.textContent = t('newsDesc');
+        div.appendChild(p);
+        header.appendChild(div);
+        section.prepend(header);
+      }
       const existing = header.querySelector('.admin-news-btn');
       if (isAdmin() && hasScope('repo')) {
         if (!existing) {
@@ -490,12 +514,10 @@
 
     // Изображение или иконка
     const imgWrapper = createElement('div', 'image-wrapper', {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--bg-primary)',
       position: 'relative',
-      paddingBottom: '56.25%'
+      paddingBottom: '56.25%',
+      background: 'var(--bg-primary)',
+      overflow: 'hidden'
     });
     if (thumbnail && thumbnail !== DEFAULT_IMAGE) {
       const img = createElement('img', 'project-image', {
@@ -503,16 +525,13 @@
         top: 0, left: 0, width: '100%', height: '100%',
         objectFit: 'cover'
       }, { src: thumbnail, alt: title, loading: 'lazy' });
-      img.onerror = () => img.src = DEFAULT_IMAGE;
+      img.onerror = () => { imgWrapper.innerHTML = iconHtml || '<i class="fas fa-file-alt" style="font-size:48px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text-secondary);"></i>'; };
       imgWrapper.appendChild(img);
     } else {
-      // Если нет картинки, показываем иконку
-      imgWrapper.style.paddingBottom = '0';
-      imgWrapper.style.height = '180px';
       imgWrapper.style.display = 'flex';
       imgWrapper.style.alignItems = 'center';
       imgWrapper.style.justifyContent = 'center';
-      imgWrapper.innerHTML = iconHtml || '<i class="fas fa-file-alt" style="font-size: 48px; color: var(--text-secondary);"></i>';
+      imgWrapper.innerHTML = iconHtml || '<i class="fas fa-file-alt" style="font-size:48px;color:var(--text-secondary);"></i>';
     }
     inner.appendChild(imgWrapper);
 
