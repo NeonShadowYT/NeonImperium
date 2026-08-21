@@ -1,8 +1,9 @@
-// js/pages/game-updates.js – исправленная загрузка обновлений
+// js/pages/game-updates.js – полная, с карточками, иконками, кнопкой "Добавить обновление"
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG,
-    createAbortable, loadModule, createElement
+    createAbortable, loadModule, createElement, extractSummary,
+    extractAllowed, decryptPrivateBody
   } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
@@ -158,8 +159,13 @@
             }
           });
           header.appendChild(btn);
+        } else {
+          existing.setAttribute('data-lang', 'addUpdate');
+          existing.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
         }
-      } else if (existing) existing.remove();
+      } else if (existing) {
+        existing.remove();
+      }
 
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -199,23 +205,46 @@
     const card = createElement('div', 'project-card-link no-tilt tilt-card', { cursor: 'pointer' });
     const inner = createElement('div', 'project-card');
 
+    // Изображение или иконка
     const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
-    const imgWrapper = createElement('div', 'image-wrapper');
-    const img = createElement('img', 'project-image', {}, { src: imgMatch?.[1] || 'images/default-news.webp', alt: post.title, loading: 'lazy' });
-    img.onerror = () => img.src = 'images/default-news.webp';
-    imgWrapper.appendChild(img);
+    const imgWrapper = createElement('div', 'image-wrapper', {
+      position: 'relative',
+      paddingBottom: '56.25%',
+      background: 'var(--bg-primary)'
+    });
+    if (imgMatch) {
+      const img = createElement('img', 'project-image', {
+        position: 'absolute',
+        top: 0, left: 0, width: '100%', height: '100%',
+        objectFit: 'cover'
+      }, { src: imgMatch[1], alt: post.title, loading: 'lazy' });
+      img.onerror = () => { imgWrapper.innerHTML = '<i class="fas fa-clock-rotate-left" style="font-size:48px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--accent);"></i>'; };
+      imgWrapper.appendChild(img);
+    } else {
+      imgWrapper.style.display = 'flex';
+      imgWrapper.style.alignItems = 'center';
+      imgWrapper.style.justifyContent = 'center';
+      imgWrapper.innerHTML = '<i class="fas fa-clock-rotate-left" style="font-size:48px;color:var(--accent);"></i>';
+    }
     inner.appendChild(imgWrapper);
 
-    const title = createElement('h3');
+    const title = createElement('h3', '', { margin: '8px 0 4px' });
     title.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
     inner.appendChild(title);
 
-    const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
+    const meta = createElement('p', 'text-secondary', { fontSize: '12px', margin: '0 0 4px' });
     meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
     inner.appendChild(meta);
 
     const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
-    const preview = createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+    const preview = createElement('p', 'text-secondary', {
+      fontSize: '13px',
+      overflow: 'hidden',
+      display: '-webkit-box',
+      WebkitLineClamp: '2',
+      WebkitBoxOrient: 'vertical',
+      margin: '4px 0 0'
+    });
     preview.textContent = summary;
     inner.appendChild(preview);
 
@@ -240,35 +269,6 @@
     });
 
     return card;
-  }
-
-  function extractAllowed(body) {
-    const match = body?.match(/<!--\s*allowed:\s*(.*?)\s*-->/i);
-    return match ? match[1].trim() : null;
-  }
-
-  function extractSummary(body) {
-    const match = body?.match(/<!--\s*summary:\s*(.*?)\s*-->/i);
-    return match ? match[1].trim() : null;
-  }
-
-  function decryptPrivateBody(encBase64, allowedStr) {
-    try {
-      const encrypted = decodeURIComponent(escape(atob(encBase64)));
-      let hash = 0;
-      for (let i = 0; i < allowedStr.length; i++) {
-        hash = ((hash << 5) - hash) + allowedStr.charCodeAt(i);
-        hash |= 0;
-      }
-      const key = Math.abs(hash).toString(16);
-      let result = '';
-      for (let i = 0; i < encrypted.length; i++) {
-        result += String.fromCharCode(encrypted.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-      }
-      return result;
-    } catch (e) {
-      return encBase64;
-    }
   }
 
   function stripHtml(html) {

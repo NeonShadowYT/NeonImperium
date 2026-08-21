@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – исправленная лента новостей
+// js/pages/news-feed.js – полная, с иконками, кнопкой "Добавить новость", повторными попытками
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG,
@@ -56,11 +56,38 @@
     return text.replace(/\n/g, '<br>');
   }, 100);
 
+  // ---- Инициализация ----
   window.initNewsFeed = function() {
     const section = document.getElementById('news-section');
     if (!section) return;
     container = document.getElementById('news-feed');
     if (!container) return;
+
+    // Создаём шапку новостей, если её нет
+    let header = section.querySelector('.news-header');
+    if (!header) {
+      header = createElement('div', 'news-header', {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '20px',
+        flexWrap: 'wrap',
+        gap: '15px'
+      });
+      const t = window.I18n?.translate || (k => k);
+      const div = createElement('div');
+      const h2 = createElement('h2');
+      h2.setAttribute('data-lang', 'newsTitle');
+      h2.textContent = t('newsTitle');
+      div.appendChild(h2);
+      const p = createElement('p', 'text-secondary');
+      p.setAttribute('data-lang', 'newsDesc');
+      p.textContent = t('newsDesc');
+      div.appendChild(p);
+      header.appendChild(div);
+      section.prepend(header);
+    }
+
     currentUser = getCurrentUser();
     loadNewsFeed();
 
@@ -102,6 +129,7 @@
     loadNewsFeed();
   };
 
+  // ---- Основная загрузка ----
   function loadNewsFeed() {
     if (loading) return;
     loading = true;
@@ -139,6 +167,7 @@
     });
   }
 
+  // ---- Загрузка постов с повторными попытками ----
   async function loadPostsWithRetry(signal) {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
@@ -172,16 +201,20 @@
     const seen = new Set();
     const unique = all.filter(i => { if (seen.has(i.number)) return false; seen.add(i.number); return true; });
 
-    const result = unique.map(i => ({
-      type: 'post',
-      number: i.number,
-      title: i.title,
-      body: i.body,
-      author: i.user.login,
-      date: new Date(i.created_at),
-      labels: i.labels.map(l => l.name),
-      game: i.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
-    }));
+    const result = unique.map(i => {
+      const isNews = i.labels.some(l => l.name === 'type:news');
+      return {
+        type: 'post',
+        number: i.number,
+        title: i.title,
+        body: i.body,
+        author: i.user.login,
+        date: new Date(i.created_at),
+        labels: i.labels.map(l => l.name),
+        game: i.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
+        postType: isNews ? 'news' : 'update'
+      };
+    });
 
     cacheSet(cacheKey, result.map(p => ({ ...p, date: p.date.toISOString() })));
     return result;
@@ -360,12 +393,13 @@
     return streams;
   }
 
-  // ---- Рендеринг ----
+  // ---- Рендеринг смешанного контента ----
   function renderMixed() {
     if (!postsLoaded || !videosLoaded || !twitchLoaded) return;
     const t = window.I18n?.translate || (k => k);
     const currentUser = getCurrentUser();
 
+    // Фильтруем приватные посты
     const filteredPosts = posts.filter(p => {
       if (!p.labels.includes('private')) return true;
       if (isAdmin()) return true;
@@ -374,12 +408,15 @@
     });
 
     let items = [];
+    // Twitch стримы (всегда сверху)
     if (twitchStreams.length > 0) {
       twitchStreams.sort((a, b) => b.date - a.date);
       items = items.concat(twitchStreams);
     }
+    // Видео
     const sortedVideos = videos.sort((a, b) => b.date - a.date);
     items = items.concat(sortedVideos);
+    // Посты (новости и обновления)
     const sortedPosts = filteredPosts.sort((a, b) => b.date - a.date);
     items = items.concat(sortedPosts);
 
@@ -397,10 +434,36 @@
       });
       grid.appendChild(fragment);
     }
+
+    // Обновляем контейнер
     container.innerHTML = '';
     container.appendChild(grid);
+
+    // Добавляем кнопку "Добавить новость" для админов
+    const header = document.querySelector('.news-header');
+    if (header) {
+      const existing = header.querySelector('.admin-news-btn');
+      if (isAdmin() && hasScope('repo')) {
+        if (!existing) {
+          const btn = createElement('button', 'button admin-news-btn');
+          btn.setAttribute('data-lang', 'addNews');
+          btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
+          btn.addEventListener('click', async () => {
+            if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
+            window.UIFeedback.openEditorModal('new', { game: null }, 'news');
+          });
+          header.appendChild(btn);
+        } else {
+          existing.setAttribute('data-lang', 'addNews');
+          existing.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
+        }
+      } else if (existing) {
+        existing.remove();
+      }
+    }
   }
 
+  // ---- Создание карточки ----
   function createCard(item) {
     const t = window.I18n?.translate || (k => k);
     const card = createElement('div', 'project-card-link card-interactive');
@@ -411,22 +474,79 @@
     let author = item.author || '';
     let date = item.date instanceof Date ? item.date.toLocaleDateString() : new Date(item.date).toLocaleDateString();
 
-    const imgWrapper = createElement('div', 'image-wrapper');
-    const img = createElement('img', 'project-image', {}, { src: thumbnail, alt: title, loading: 'lazy' });
-    img.onerror = () => img.src = DEFAULT_IMAGE;
-    imgWrapper.appendChild(img);
+    // Иконка в зависимости от типа
+    let iconHtml = '';
+    if (item.type === 'post') {
+      if (item.postType === 'news') {
+        iconHtml = '<i class="fas fa-newspaper" style="font-size: 48px; color: var(--accent);"></i>';
+      } else {
+        iconHtml = '<i class="fas fa-clock-rotate-left" style="font-size: 48px; color: var(--accent);"></i>';
+      }
+    } else if (item.type === 'video') {
+      iconHtml = '<i class="fab fa-youtube" style="font-size: 48px; color: #ff0000;"></i>';
+    } else if (item.type === 'twitch') {
+      iconHtml = '<i class="fab fa-twitch" style="font-size: 48px; color: #9146FF;"></i>';
+    }
+
+    // Изображение или иконка
+    const imgWrapper = createElement('div', 'image-wrapper', {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--bg-primary)',
+      position: 'relative',
+      paddingBottom: '56.25%'
+    });
+    if (thumbnail && thumbnail !== DEFAULT_IMAGE) {
+      const img = createElement('img', 'project-image', {
+        position: 'absolute',
+        top: 0, left: 0, width: '100%', height: '100%',
+        objectFit: 'cover'
+      }, { src: thumbnail, alt: title, loading: 'lazy' });
+      img.onerror = () => img.src = DEFAULT_IMAGE;
+      imgWrapper.appendChild(img);
+    } else {
+      // Если нет картинки, показываем иконку
+      imgWrapper.style.paddingBottom = '0';
+      imgWrapper.style.height = '180px';
+      imgWrapper.style.display = 'flex';
+      imgWrapper.style.alignItems = 'center';
+      imgWrapper.style.justifyContent = 'center';
+      imgWrapper.innerHTML = iconHtml || '<i class="fas fa-file-alt" style="font-size: 48px; color: var(--text-secondary);"></i>';
+    }
     inner.appendChild(imgWrapper);
 
-    const titleEl = createElement('h3');
+    // Заголовок
+    const titleEl = createElement('h3', '', { cursor: 'pointer', margin: '8px 0 4px' });
     titleEl.textContent = title.length > 70 ? title.slice(0,70)+'…' : title;
     inner.appendChild(titleEl);
 
-    const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
+    // Метаданные (автор, дата)
+    const meta = createElement('p', 'text-secondary', { fontSize: '12px', margin: '0 0 4px' });
     meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(author)} · <i class="fas fa-calendar-alt"></i> ${date}`;
+    if (item.game) {
+      meta.innerHTML += ` · <i class="fas fa-gamepad"></i> ${escapeHtml(item.game)}`;
+    }
     inner.appendChild(meta);
+
+    // Краткое описание (если есть)
+    if (item.type === 'post' && item.body) {
+      const summary = extractSummary(item.body) || stripHtml(item.body).substring(0,120)+'…';
+      const preview = createElement('p', 'text-secondary', {
+        fontSize: '13px',
+        overflow: 'hidden',
+        display: '-webkit-box',
+        WebkitLineClamp: '2',
+        WebkitBoxOrient: 'vertical',
+        margin: '4px 0 0'
+      });
+      preview.textContent = summary;
+      inner.appendChild(preview);
+    }
 
     card.appendChild(inner);
 
+    // Клик для открытия
     card.addEventListener('click', () => {
       if (item.type === 'post') {
         if (!window.UIFeedback) {
@@ -449,9 +569,21 @@
     return card;
   }
 
+  // ---- Вспомогательные функции ----
   function extractAllowed(body) {
     const match = body?.match(/<!--\s*allowed:\s*(.*?)\s*-->/i);
     return match ? match[1].trim() : null;
+  }
+
+  function extractSummary(body) {
+    const match = body?.match(/<!--\s*summary:\s*(.*?)\s*-->/i);
+    return match ? match[1].trim() : null;
+  }
+
+  function stripHtml(html) {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || '';
   }
 
   async function openPostFromUrl(postId) {
@@ -461,13 +593,14 @@
       if (issue.state === 'closed') return showToast(t('postNotFound'), 'error');
       const item = {
         type: 'post',
-        id: issue.number,
+        number: issue.number,
         title: issue.title,
         body: issue.body,
         author: issue.user.login,
         date: new Date(issue.created_at),
         game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null,
-        labels: issue.labels.map(l => l.name)
+        labels: issue.labels.map(l => l.name),
+        postType: issue.labels.some(l => l.name === 'type:news') ? 'news' : 'update'
       };
       if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
       if (!window.UIFeedback.canViewPost(issue.body, item.labels, getCurrentUser())) {

@@ -1,29 +1,13 @@
-// js/pages/feedback.js – обратная связь с performAction, улучшенная обработка ошибок, локализация через data-lang
+// js/pages/feedback.js – полная, с иконками, кнопками, обработкой ошибок
 (function() {
   const {
-    cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber,
-    createAbortable, loadModule, createElement, stripHtml,
-    extractSummary, extractAllowed, decryptPrivateBody, performAction
-  } = window.GithubCore || {};
-  const { loadIssues, loadReactions, addReaction, removeReaction } = window.GithubAPI || {};
-  const { getCurrentUser, isAdmin } = window.GithubAuth || {};
-  const { showToast } = window.UIUtils || {};
-
-  if (!window.GithubCore || !window.GithubAPI || !window.GithubAuth || !window.UIUtils) {
-    console.error('[feedback.js] Missing dependencies');
-    Promise.all([
-      loadModule('js/core/github-core.js'),
-      loadModule('js/core/github-api.js'),
-      loadModule('js/core/github-auth.js'),
-      loadModule('js/features/ui-utils.js')
-    ]).catch(() => {
-      const t = window.I18n?.translate || (k => k);
-      document.querySelector('#feedback-section')?.innerHTML?.(
-        `<p class="error-message">${t('loadModulesError')}</p>`
-      );
-    });
-    return;
-  }
+    cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, createAbortable,
+    loadModule, createElement, extractSummary, extractAllowed,
+    decryptPrivateBody, performAction
+  } = window.GithubCore;
+  const { loadIssues, loadReactions, addReaction, removeReaction, loadIssue } = window.GithubAPI;
+  const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
+  const { showToast, createModal } = window.UIUtils;
 
   const ITEMS_PER_PAGE = 10, MAX_DISPLAY = 30, CACHE_TTL = 10 * 60 * 1000;
   let currentGame, currentTab = 'all', currentPage = 1, hasMore = true, isLoading = false;
@@ -32,6 +16,7 @@
   let loadRetries = 0;
   const MAX_RETRIES = 2;
 
+  // ---- Добавление реакции с синхронизацией ----
   async function addReactionWithSync(issueNumber, content) {
     try {
       const result = await performAction('reactions', { issueNumber, content }, () => addReaction(issueNumber, content));
@@ -41,6 +26,12 @@
         showToast('Реакция добавлена', 'success');
       }
       window.UIFeedback?.invalidateCache(issueNumber);
+      // Обновляем отображение реакций
+      const reactionsContainer = document.querySelector(`#feedback-item-${issueNumber} .reactions-container`);
+      if (reactionsContainer) {
+        const reactions = await loadReactions(issueNumber);
+        renderReactions(reactionsContainer, issueNumber, reactions, currentUser);
+      }
     } catch (err) {
       showToast('Ошибка: ' + err.message, 'error');
     }
@@ -50,12 +41,92 @@
     try {
       await removeReaction(issueNumber, reactionId);
       window.UIFeedback?.invalidateCache(issueNumber);
+      const reactionsContainer = document.querySelector(`#feedback-item-${issueNumber} .reactions-container`);
+      if (reactionsContainer) {
+        const reactions = await loadReactions(issueNumber);
+        renderReactions(reactionsContainer, issueNumber, reactions, currentUser);
+      }
     } catch (err) {
       showToast('Ошибка: ' + err.message, 'error');
     }
   }
 
-  function initLazy() {
+  // ---- Рендер реакций ----
+  function renderReactions(container, issueNumber, reactions, currentUser) {
+    if (!container) return;
+    const filtered = reactions.filter(r => r.content === 'heart' || r.content === 'eyes');
+    const counts = new Map();
+    const userReactions = new Set();
+    filtered.forEach(r => {
+      counts.set(r.content, (counts.get(r.content) || 0) + 1);
+      if (r.user && r.user.login === currentUser) userReactions.add(r.content);
+    });
+
+    container.innerHTML = '';
+    const btnsDiv = createElement('div', 'reactions-buttons', { display: 'flex', gap: '6px', flexWrap: 'wrap' });
+
+    const heartCount = counts.get('heart') || 0;
+    const isHeartActive = userReactions.has('heart');
+    const heartBtn = createElement('button', 'reaction-button', {
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      padding: '4px 10px', borderRadius: '30px', fontSize: '13px',
+      cursor: isHeartActive ? 'default' : 'pointer',
+      border: '1px solid var(--border)',
+      background: isHeartActive ? 'var(--accent)' : 'var(--bg-primary)',
+      color: isHeartActive ? '#fff' : 'var(--text-secondary)',
+      transition: 'background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s',
+      opacity: isHeartActive ? '1' : '0.8',
+      pointerEvents: isHeartActive ? 'none' : 'auto'
+    }, { type: 'button', disabled: isHeartActive });
+    heartBtn.innerHTML = `<span class="reaction-emoji">❤️</span><span class="reaction-count">${heartCount || ''}</span>`;
+
+    if (!isHeartActive) {
+      heartBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!currentUser) { showToast('Войдите в GitHub', 'error'); return; }
+        try {
+          const result = await performAction('reactions', { issueNumber, content: 'heart' }, () => addReaction(issueNumber, 'heart'));
+          if (result.queued) showToast('❤️ будет добавлена позже', 'info');
+          else showToast('❤️ добавлена', 'success');
+          const newReactions = await loadReactions(issueNumber);
+          renderReactions(container, issueNumber, newReactions, currentUser);
+        } catch (err) {
+          showToast('Ошибка: ' + err.message, 'error');
+        }
+      });
+    }
+
+    btnsDiv.appendChild(heartBtn);
+
+    const eyesCount = counts.get('eyes') || 0;
+    const hasEyes = userReactions.has('eyes');
+    const eyesSpan = createElement('span', 'reaction-static', {
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      padding: '4px 10px', background: 'var(--bg-primary)', border: '1px solid var(--border)',
+      borderRadius: '30px', fontSize: '13px', color: 'var(--text-secondary)'
+    });
+    eyesSpan.innerHTML = `<span class="reaction-emoji">👀</span><span class="reaction-count">${eyesCount || ''}</span>`;
+    btnsDiv.appendChild(eyesSpan);
+
+    if (currentUser && !hasEyes) {
+      const eyesKey = `eyes_${issueNumber}`;
+      if (!sessionStorage.getItem(eyesKey)) {
+        sessionStorage.setItem(eyesKey, '1');
+        performAction('reactions', { issueNumber, content: 'eyes' }, () => addReaction(issueNumber, 'eyes'))
+          .then(() => {
+            loadReactions(issueNumber).then(newReactions => {
+              renderReactions(container, issueNumber, newReactions, currentUser);
+            });
+          })
+          .catch(() => {});
+      }
+    }
+
+    container.appendChild(btnsDiv);
+  }
+
+  // ---- Инициализация ----
+  window.initFeedback = function() {
     const section = document.getElementById('feedback-section');
     if (!section) return;
     if (initialized) return;
@@ -71,14 +142,13 @@
       }, { rootMargin: '200px' });
       obs.observe(section);
     }
-  }
+  };
 
   function initializeFeedback(section) {
     if (initialized) return;
     initialized = true;
     currentGame = section.dataset.game;
     if (!currentGame) {
-      console.warn('[feedback.js] No data-game on #feedback-section');
       section.innerHTML = '<p class="error-message">Не указана игра</p>';
       return;
     }
@@ -99,8 +169,6 @@
       filterAndDisplay(true);
     });
 
-    // languageChanged больше не перезагружает данные, только обновление текстов через data-lang
-
     currentUser = getCurrentUser();
     checkAuthAndRender();
 
@@ -108,6 +176,7 @@
     if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
   }
 
+  // ---- Загрузка данных ----
   async function loadGameIssues(reset) {
     if (isLoading) return;
     isLoading = true;
@@ -120,10 +189,10 @@
     const t = window.I18n?.translate || (k => k);
     try {
       const key = `game_issues_${currentGame}`;
-      let issues = cacheGet(key);
+      let issues = cacheGet(key, CACHE_TTL);
       if (!issues) {
         try {
-          issues = await loadIssues({ labels: `game:${currentGame}`, state: 'open', per_page: 100, signal: controller.signal });
+          issues = await loadIssues({ labels: `game:${currentGame}`, state: 'open', per_page: 100 }, controller.signal);
           cacheSet(key, issues);
           loadRetries = 0;
         } catch (err) {
@@ -141,7 +210,7 @@
           }
         }
       }
-      allIssues = deduplicateByNumber(issues);
+      allIssues = issues.filter(i => i.state === 'open');
       filterAndDisplay(reset);
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -155,6 +224,7 @@
     }
   }
 
+  // ---- Фильтрация и пагинация ----
   function filterAndDisplay(reset) {
     if (!grid) return;
     let filtered = allIssues.filter(i => i.state === 'open').filter(i => {
@@ -191,6 +261,7 @@
     if (!hasMore && sentinel) sentinel.style.display = 'none';
   }
 
+  // ---- Проверка авторизации и рендер ----
   function checkAuthAndRender() {
     if (currentUser) renderInterface();
     else renderLoginPrompt();
@@ -233,6 +304,8 @@
       }
     }
     container.innerHTML = '';
+
+    // Заголовок
     const header = createElement('div', 'feedback-header');
     const titleWrap = createElement('div', '', { display: 'flex', alignItems: 'center', gap: '8px' });
     const h2 = createElement('h2', '', { margin: '0' });
@@ -254,11 +327,13 @@
     header.appendChild(btn);
     container.appendChild(header);
 
+    // Описание
     const desc = createElement('p', 'text-secondary');
     desc.setAttribute('data-lang', 'feedbackDesc');
     desc.textContent = t('feedbackDesc');
     container.appendChild(desc);
 
+    // Вкладки
     const tabs = createElement('div', 'feedback-tabs');
     const tabAll = createElement('button', 'feedback-tab active');
     tabAll.setAttribute('data-lang', 'tabAll');
@@ -282,6 +357,7 @@
     tabs.appendChild(tabReview);
     container.appendChild(tabs);
 
+    // Сетка
     const panel = createElement('div', 'projects-grid');
     panel.id = 'feedback-panel';
     container.appendChild(panel);
@@ -292,6 +368,7 @@
     grid = document.getElementById('feedback-panel');
     sentinel = document.getElementById('sentinel');
 
+    // Обработчики вкладок
     tabs.querySelectorAll('.feedback-tab').forEach(t => {
       t.addEventListener('click', e => {
         tabs.querySelectorAll('.feedback-tab').forEach(tt => { tt.classList.remove('active'); tt.setAttribute('aria-selected','false'); });
@@ -314,27 +391,75 @@
     await loadGameIssues(true);
   }
 
+  // ---- Создание карточки с иконкой ----
   function createCard(issue) {
     const type = issue.labels.find(l=>l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
-    const icon = type === 'idea' ? '💡' : type === 'bug' ? '🐛' : type === 'review' ? '⭐' : '📌';
+    const iconMap = {
+      'idea': '💡',
+      'bug': '🐛',
+      'review': '⭐'
+    };
+    const icon = iconMap[type] || '📌';
+
     let summary = extractSummary(issue.body) || (issue.body||'').substring(0,120)+'…';
     const allowed = extractAllowed(issue.body);
     if (issue.labels.some(l=>l.name==='private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
       try { summary = extractSummary(decryptPrivateBody(issue.body, allowed)) || ''; } catch {}
     }
+
     const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
     card.dataset.issueNumber = issue.number;
     const inner = createElement('div', 'project-card');
-    const imgW = createElement('div', 'image-wrapper', { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', fontSize: '48px' });
-    imgW.textContent = icon;
-    const title = createElement('h3');
+
+    // Иконка вместо изображения
+    const imgW = createElement('div', 'image-wrapper', {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--bg-primary)',
+      paddingBottom: '56.25%',
+      position: 'relative'
+    });
+    const iconSpan = createElement('span', '', {
+      position: 'absolute',
+      top: '50%', left: '50%',
+      transform: 'translate(-50%, -50%)',
+      fontSize: '48px'
+    });
+    iconSpan.textContent = icon;
+    imgW.appendChild(iconSpan);
+    inner.appendChild(imgW);
+
+    const title = createElement('h3', '', { margin: '8px 0 4px' });
     title.textContent = issue.title.length > 70 ? issue.title.slice(0,70)+'…' : issue.title;
-    const preview = createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+    inner.appendChild(title);
+
+    const preview = createElement('p', 'text-secondary', {
+      fontSize: '13px',
+      overflow: 'hidden',
+      display: '-webkit-box',
+      WebkitLineClamp: '2',
+      WebkitBoxOrient: 'vertical',
+      margin: '4px 0 0'
+    });
     preview.textContent = summary.replace(/\n/g,' ');
-    const footer = createElement('div', '', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '10px' });
+    inner.appendChild(preview);
+
+    const footer = createElement('div', '', {
+      display: 'flex',
+      justifyContent: 'space-between',
+      fontSize: '12px',
+      color: 'var(--text-secondary)',
+      marginTop: 'auto',
+      paddingTop: '10px',
+      borderTop: '1px solid var(--border)'
+    });
     footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span>`;
-    inner.append(imgW, title, preview, footer);
+    inner.appendChild(footer);
+
     card.appendChild(inner);
+
+    // Клик для открытия модалки
     card.addEventListener('click', async e => {
       if (e.target.closest('button')) return;
       if (!window.UIFeedback) {
@@ -359,14 +484,16 @@
         labels: issue.labels.map(l=>l.name)
       });
     });
+
     return card;
   }
 
+  // ---- Открытие поста из URL ----
   async function openPostFromUrl(id) {
     const t = window.I18n?.translate || (k => k);
     try {
       if (!window.GithubAPI) await loadModule('js/core/github-api.js');
-      const issue = await window.GithubAPI.loadIssue(id);
+      const issue = await loadIssue(id);
       if (!issue || issue.state === 'closed') {
         showToast(t('postNotFound'), 'error');
         return;
@@ -394,15 +521,17 @@
     }
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    initLazy();
-    window.addEventListener('scroll', initLazy, { passive: true });
-  });
-
+  // ---- Экспорт ----
   window.FeedbackPage = {
     addReactionWithSync,
     removeReactionWithSync,
     loadGameIssues,
     refresh: () => { if (currentGame) loadGameIssues(true); }
   };
+
+  // Инициализация при загрузке
+  document.addEventListener('DOMContentLoaded', () => {
+    window.initFeedback();
+    window.addEventListener('scroll', window.initFeedback, { passive: true });
+  });
 })();
