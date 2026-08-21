@@ -1,11 +1,7 @@
 // js/features/background-gifs.js
 // Управление гифками: баннеры с плавным появлением, переключаемый фон скачивания.
-// Оптимизировано: preload="none" для видео, lazy-загрузка, адаптивное отключение на мобильных
 
 (function() {
-    // Определяем мобильное устройство для возможного отключения анимаций
-    const isMobile = window.innerWidth < 768 || ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-
     // ---------- 1. Баннеры с видео / гифками ----------
     function initFeatureBanners() {
         const banners = document.querySelectorAll('.feature-banner[data-gif]');
@@ -31,8 +27,6 @@
                         video.loop = true;
                         video.muted = true;
                         video.playsInline = true;
-                        // Оптимизация: не загружаем видео, пока не понадобится
-                        video.preload = 'none';
                         video.style.width = '100%';
                         video.style.height = '100%';
                         video.style.objectFit = 'cover';
@@ -71,11 +65,8 @@
         banners.forEach(container => observer.observe(container));
     }
 
-    // ---------- 2. Фон скачивания (с переключением) ----------
+    // ---------- 2. Фон скачивания ----------
     function initDownloadBackground() {
-        // На мобильных отключаем фоновые гифки для экономии ресурсов
-        if (isMobile) return;
-
         const section = document.getElementById('download-section');
         if (!section) return;
 
@@ -98,7 +89,6 @@
                 video.loop = true;
                 video.muted = true;
                 video.playsInline = true;
-                video.preload = 'none'; // не загружаем заранее
                 video.style.width = '100%';
                 video.style.height = '100%';
                 video.style.objectFit = 'cover';
@@ -119,7 +109,6 @@
 
         const layers = section.querySelectorAll('.bg-gif-layer');
         let currentIndex = 0;
-        // Увеличим интервал для снижения нагрузки (было 8с, оставим)
         setInterval(() => {
             layers[currentIndex].classList.remove('active');
             currentIndex = (currentIndex + 1) % layers.length;

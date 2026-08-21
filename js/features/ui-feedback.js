@@ -1,16 +1,13 @@
-// js/features/ui-feedback.js – исправлен: throttleRAF берётся из Utils, модалки работают корректно
+// js/features/ui-feedback.js – с локализацией, обновление при смене языка
 (function() {
   const {
-    createElement, escapeHtml, loadModule,
+    createElement, escapeHtml, renderMarkdown, loadModule,
     performAction, isActionStillValid, extractAllowed, decryptPrivateBody,
     cacheRemoveByPrefix, CONFIG, getPlainTextLength, containsGitHubToken,
     cacheGet, cacheSet
   } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
-
-  // Берём throttleRAF из Utils (если недоступен – fallback)
-  const throttleRAF = window.Utils?.throttleRAF || ((fn) => fn);
 
   const REACTIONS_CACHE_TTL = 5 * 60 * 1000;
   const COMMENTS_CACHE_TTL = 10 * 60 * 1000;
@@ -38,51 +35,8 @@
 
   const t = window.I18n?.translate || (k => k);
 
-  // ---------- Локальная мемоизация ----------
-  function memoize(fn, maxSize = 100) {
-    const cache = new Map();
-    return function(...args) {
-      const key = JSON.stringify(args);
-      if (cache.has(key)) {
-        return cache.get(key);
-      }
-      const result = fn.apply(this, args);
-      if (cache.size >= maxSize) {
-        const firstKey = cache.keys().next().value;
-        cache.delete(firstKey);
-      }
-      cache.set(key, result);
-      return result;
-    };
-  }
+  // ---- вспомогательные функции ----
 
-  const renderMarkdownMemoized = memoize((text) => {
-    if (!text) return '';
-    if (window.marked) {
-      if (typeof marked.setOptions === 'function') {
-        marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-      }
-      if (typeof marked.parse === 'function') {
-        return marked.parse(text);
-      } else if (typeof marked === 'function') {
-        return marked(text);
-      }
-    }
-    return text.replace(/\n/g, '<br>');
-  }, 100);
-
-  async function renderMarkdownWithEditor(text, targetElement, cacheKey = null) {
-    if (!text) { targetElement.innerHTML = ''; return; }
-    if (cacheKey && markdownCache.has(cacheKey)) {
-      targetElement.innerHTML = markdownCache.get(cacheKey);
-      return;
-    }
-    const html = renderMarkdownMemoized(text);
-    if (cacheKey) markdownCache.set(cacheKey, html);
-    targetElement.innerHTML = html;
-  }
-
-  // ---------- Остальные функции без изменений ----------
   function canViewPost(body, labels, currentUser) {
     if (!labels || !labels.includes('private')) return true;
     if (isAdmin()) return true;
@@ -101,6 +55,30 @@
       return false;
     }
     return true;
+  }
+
+  async function renderMarkdownWithEditor(text, targetElement, cacheKey = null) {
+    if (!text) { targetElement.innerHTML = ''; return; }
+    if (cacheKey && markdownCache.has(cacheKey)) {
+      targetElement.innerHTML = markdownCache.get(cacheKey);
+      return;
+    }
+    try {
+      let html;
+      if (window.marked) {
+        if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
+        if (typeof marked.parse === 'function') html = await marked.parse(text);
+        else if (typeof marked === 'function') html = marked(text);
+        else throw new Error('marked not callable');
+      } else {
+        html = text.replace(/\n/g, '<br>');
+      }
+      if (cacheKey) markdownCache.set(cacheKey, html);
+      targetElement.innerHTML = html;
+    } catch (e) {
+      console.warn('Markdown error:', e);
+      targetElement.innerHTML = text.replace(/\n/g, '<br>');
+    }
   }
 
   function renderReactions(container, issueNumber, reactions, currentUser, onAddHeart, onRemoveHeart) {
@@ -220,7 +198,7 @@
 
     const lastErrorTime = commentsErrorTimestamps.get(issueNumber);
     if (lastErrorTime && (Date.now() - lastErrorTime < COMMENTS_ERROR_COOLDOWN)) {
-      container.innerHTML = '<p class="text-secondary" style="text-align:center;" data-lang="noComments">' + t('noComments') + '</p>';
+      container.innerHTML = '<p class="text-secondary" style="text-align:center;">Комментарии временно недоступны</p>';
       return;
     }
 
@@ -238,7 +216,7 @@
       } catch (err) {
         if (err.name === 'AbortError') return;
         commentsErrorTimestamps.set(issueNumber, Date.now());
-        container.innerHTML = '<p class="error-message" data-lang="dataLoadError">' + t('dataLoadError') + '</p>';
+        container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
       }
       return;
     }
@@ -275,7 +253,7 @@
       }
     } catch (err) {
       if (err.name === 'AbortError' || err.message === 'Aborted') return;
-      container.innerHTML = '<p class="error-message" data-lang="dataLoadError">' + t('dataLoadError') + '</p>';
+      container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
     } finally {
       setTimeout(() => {
         pendingCommentsRequests.delete(issueNumber);
@@ -286,7 +264,7 @@
   function renderComments(comments, container) {
     container.innerHTML = '';
     if (comments.length === 0) {
-      container.innerHTML = `<p class="text-secondary" style="text-align:center;" data-lang="noComments">${t('noComments')}</p>`;
+      container.innerHTML = `<p class="text-secondary" style="text-align:center;">${t('noComments') || 'Нет комментариев'}</p>`;
       return;
     }
     const currentUser = getCurrentUser();
@@ -439,7 +417,9 @@
     } catch(e) { showToast(t('loadError') + ': ' + e.message, 'error'); }
   }
 
-  let activeFullModal = null;
+  // ---- открытие полной модалки (пост) ----
+
+  let activeFullModal = null; // ссылка на текущую модалку
 
   async function openFullModal(item) {
     const { id, title, body, author, date, game, labels, type } = item;
@@ -470,16 +450,16 @@
       <div class="markdown-body post-content" style="margin-bottom: 24px;"></div>
       <div class="reactions-container" id="modal-reactions"></div>
       <div class="comments-section">
-        <h3 data-lang="comments">${t('comments')}</h3>
+        <h3>${t('comments') || 'Комментарии'}</h3>
         <div id="modal-comments-list" class="comments-list"></div>
         ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px; align-items:center; flex-wrap:wrap;">
           <input type="text" id="new-comment-input" placeholder="${t('enterText')}" class="comment-input-field" style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:150px;">
-          <button id="submit-comment-btn" class="button small" data-lang="send">${t('send')}</button>
+          <button id="submit-comment-btn" class="button small">${t('send')}</button>
           <span style="font-size:12px; color:var(--text-secondary); margin-left:4px;" id="comment-counter">0/400</span>
           <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
             ${t('postsRemaining')}: <span class="rate-indicator" data-action="comments">${window.RateLimits ? window.RateLimits.getRemaining('comments') : '?'}</span>
           </span>
-        </div>` : `<p class="text-secondary" data-lang="loginToComment">${t('loginToComment')}</p>`}
+        </div>` : `<p class="text-secondary">${t('loginToComment')}</p>`}
       </div>
     `;
 
@@ -599,16 +579,23 @@
       submitBtn.addEventListener('click', debouncedSubmit);
     }
 
-    const langHandler = () => {
+    // ---- обновление при смене языка ----
+    const langHandler = async () => {
       if (!activeFullModal || activeFullModal.modal !== modal) return;
+      // Пересоздаём содержимое модалки заново, сохраняя состояние
+      // Просто обновляем заголовок и кнопки с новыми переводами
       const headerTitle = modal.querySelector('.modal-header h2');
       if (headerTitle) headerTitle.textContent = t(title) || title;
+      // Обновляем кнопки, которые используют переводы (например, "Комментарии")
       const commentsHeader = modal.querySelector('.comments-section h3');
-      if (commentsHeader) commentsHeader.textContent = t('comments');
+      if (commentsHeader) commentsHeader.textContent = t('comments') || 'Комментарии';
+      // Обновляем placeholder у поля ввода
       const inputField = modal.querySelector('#new-comment-input');
       if (inputField) inputField.placeholder = t('enterText');
+      // Обновляем кнопку отправки
       const sendBtn = modal.querySelector('#submit-comment-btn');
       if (sendBtn) sendBtn.textContent = t('send');
+      // Обновляем индикатор лимитов
       const indicator = modal.querySelector('.rate-indicator-wrapper');
       if (indicator) {
         const span = indicator.querySelector('.rate-indicator');
@@ -616,16 +603,20 @@
       }
     };
     window.addEventListener('languageChanged', langHandler);
+    // Удаляем обработчик при закрытии модалки
     const closeWithCleanup = () => {
       window.removeEventListener('languageChanged', langHandler);
       newClose();
     };
+    // Заменяем обработчики закрытия
     modal.querySelector('.modal-close').removeEventListener('click', newClose);
     modal.querySelector('.modal-close').addEventListener('click', closeWithCleanup);
     modal.addEventListener('click', (e) => {
       if (e.target === modal) closeWithCleanup();
     });
   }
+
+  // ---- редактор (создание/редактирование поста) ----
 
   let activeEditorModal = null;
 
@@ -822,14 +813,11 @@
     submitRow.appendChild(rateIndicator);
     container.appendChild(submitRow);
 
-    // Обновление превью с throttleRAF (из Utils)
-    const updatePreview = throttleRAF(async () => {
+    textarea.addEventListener('input', async () => {
       currentBody = textarea.value;
       await renderMarkdownWithEditor(currentBody, preview);
       saveDraft(draftKey, { title: titleInput.value, body: currentBody });
     });
-
-    textarea.addEventListener('input', updatePreview);
 
     titleInput.addEventListener('input', () => {
       const val = titleInput.value;
@@ -911,10 +899,19 @@
     }, 1000);
     submitBtn.addEventListener('click', debouncedSubmit);
 
+    if (draft && draft.body !== undefined) {
+      await renderMarkdownWithEditor(draft.body, preview);
+      textarea.value = draft.body;
+      currentBody = draft.body;
+    }
+
+    // ---- обновление при смене языка ----
     const langHandler = () => {
       if (!activeEditorModal || activeEditorModal.modal !== modal) return;
+      // Обновляем заголовок модалки
       const headerTitle = modal.querySelector('.modal-header h2');
       if (headerTitle) headerTitle.textContent = mode === 'new' ? t('createPost') : t('editPost');
+      // Обновляем placeholder'ы и кнопки
       titleInput.placeholder = t('title');
       publicBtn.textContent = t('public');
       privateBtn.textContent = t('private');
@@ -939,6 +936,7 @@
     });
   }
 
+  // ---- экспорт ----
   window.UIFeedback = {
     renderReactions,
     loadComments,

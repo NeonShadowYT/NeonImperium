@@ -1,6 +1,4 @@
 // js/utils.js – централизованные утилиты для всего сайта
-// Добавлены: throttleRAF, batchDOMUpdates, memoize, isLowPerformance
-
 (function() {
     const CONFIG = window.GithubCore?.CONFIG || {
         CACHE_TTL: 10 * 60 * 1000,
@@ -8,7 +6,6 @@
         REPO_NAME: 'NeonImperium'
     };
 
-    // ---------- СУЩЕСТВУЮЩИЕ ФУНКЦИИ ----------
     function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -156,25 +153,54 @@
         });
     }
 
+    /**
+     * Очищает текст от Markdown-разметки, HTML-тегов, ссылок и изображений,
+     * оставляя только "содержательный" текст для подсчёта символов.
+     * @param {string} text - Исходный текст (Markdown/HTML)
+     * @returns {string} Очищенный текст без разметки
+     */
     function stripMarkdownAndHtml(text) {
         if (!text) return '';
         let cleaned = text;
+
+        // Убираем HTML-теги (включая их содержимое для блоков, но оставляем текст внутри)
+        // Сначала заменяем <details>...</details> на пустую строку, чтобы убрать спойлеры целиком
         cleaned = cleaned.replace(/<details[\s\S]*?<\/details>/gi, '');
+        // Убираем все остальные HTML-теги, оставляя только текст
         cleaned = cleaned.replace(/<[^>]*>/g, ' ');
+
+        // Удаляем Markdown-ссылки [текст](url) – оставляем только текст
         cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+        // Удаляем изображения ![](url) – полностью убираем
         cleaned = cleaned.replace(/!\[[^\]]*\]\([^)]+\)/g, '');
+        // Удаляем YouTube-вставки <div class="youtube-embed">...</div>
         cleaned = cleaned.replace(/<div class="youtube-embed">[\s\S]*?<\/div>/gi, '');
+        // Удаляем оставшиеся ссылки типа https://
         cleaned = cleaned.replace(/\bhttps?:\/\/[^\s]+/g, '');
+        // Удаляем символы Markdown: #, *, _, ~, `, >, -, +, =, | и т.д.
         cleaned = cleaned.replace(/[#*_~`>\-+=|]/g, ' ');
+        // Удаляем множественные пробелы и переносы строк
         cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
         return cleaned;
     }
 
+    /**
+     * Возвращает длину содержательного текста после удаления всей разметки.
+     * @param {string} text - Исходный текст (Markdown/HTML)
+     * @returns {number} Количество значимых символов
+     */
     function getPlainTextLength(text) {
         const plain = stripMarkdownAndHtml(text);
         return plain.length;
     }
 
+    /**
+     * Проверяет, содержит ли текст потенциальный GitHub-токен.
+     * Ищет паттерны: ghp_, github_pat_, gho_, ghu_, ghs_, gpl_, а также "github_token" в контексте.
+     * @param {string} text - Проверяемый текст
+     * @returns {boolean} true, если найден токен
+     */
     function containsGitHubToken(text) {
         if (!text) return false;
         const patterns = [
@@ -188,91 +214,18 @@
         for (const p of patterns) {
             if (p.test(text)) return true;
         }
+        // Дополнительно проверяем наличие строки "github_token" в кавычках или без
         if (/\bgithub_token\b/i.test(text)) return true;
         return false;
     }
 
-    // ---------- НОВЫЕ УТИЛИТЫ ----------
-
-    function throttleRAF(fn) {
-        let scheduled = false;
-        let lastArgs = null;
-        return function(...args) {
-            lastArgs = args;
-            if (scheduled) return;
-            scheduled = true;
-            requestAnimationFrame(() => {
-                fn.apply(this, lastArgs);
-                scheduled = false;
-            });
-        };
-    }
-
-    function batchDOMUpdates(updateFn, delay = 0) {
-        let pending = false;
-        let timer = null;
-        return function(...args) {
-            if (pending) return;
-            pending = true;
-            const execute = () => {
-                pending = false;
-                if (timer) { clearTimeout(timer); timer = null; }
-                requestAnimationFrame(() => {
-                    updateFn.apply(this, args);
-                });
-            };
-            if (delay > 0) {
-                timer = setTimeout(execute, delay);
-            } else {
-                execute();
-            }
-        };
-    }
-
-    function memoize(fn, keyGenerator = null, maxSize = 100) {
-        const cache = new Map();
-        return function(...args) {
-            const key = keyGenerator ? keyGenerator(args) : JSON.stringify(args);
-            if (cache.has(key)) {
-                return cache.get(key);
-            }
-            const result = fn.apply(this, args);
-            if (cache.size >= maxSize) {
-                const firstKey = cache.keys().next().value;
-                cache.delete(firstKey);
-            }
-            cache.set(key, result);
-            return result;
-        };
-    }
-
-    function isLowPerformance() {
-        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            return true;
-        }
-        const cores = navigator.hardwareConcurrency || 4;
-        if (cores < 4) return true;
-        const isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-        const isSmallScreen = window.innerWidth < 768;
-        if (isMobile && isSmallScreen) return true;
-        if (navigator.deviceMemory && navigator.deviceMemory < 4) return true;
-        return false;
-    }
-
-    // Экспорт
     window.Utils = {
-        // Существующие
         escapeHtml, stripHtml, createElement, formatDate,
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
         deduplicateByNumber, debounce, throttle, renderMarkdown,
         createAbortable, loadModule,
         stripMarkdownAndHtml,
         getPlainTextLength,
-        containsGitHubToken,
-        // Новые
-        throttleRAF,
-        batchDOMUpdates,
-        memoize,
-        isLowPerformance
+        containsGitHubToken
     };
 })();

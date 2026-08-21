@@ -1,4 +1,4 @@
-// js/core/github-auth.js – оптимизирован: data-lang, кеширование, уменьшение перерисовок
+// js/core/github-auth.js – с локализацией, обновление меню при смене языка
 (function() {
   const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule } = window.Utils;
   const GitHubClient = window.GitHubClient;
@@ -33,10 +33,11 @@
       }
     });
 
-    // languageChanged – обновляем только тексты через data-lang, без перерисовки
+    // Обновление интерфейса при смене языка
     window.addEventListener('languageChanged', () => {
       refreshProfileMenu();
     });
+    // Также при загрузке переводов
     window.addEventListener('languageLoaded', () => {
       refreshProfileMenu();
     });
@@ -192,7 +193,7 @@
             font-size: 26px;
             letter-spacing: 0.5px;
             text-shadow: var(--neon-text-glow);
-          " data-lang="githubLoginTitle">${t('githubLoginTitle')}</h3>
+          ">${t('githubLoginTitle')}</h3>
         </div>
 
         <div style="
@@ -207,7 +208,7 @@
         ">
           <p style="margin: 0 0 6px 0;">
             <i class="fas fa-info-circle" style="color: var(--accent); margin-right: 8px;"></i>
-            <span data-lang="githubTokenNote">${t('githubTokenNote')}</span>
+            ${t('githubTokenNote')}
           </p>
           <p style="margin: 0; font-size: 13px;">
             <a href="https://github.com/settings/tokens" target="_blank" style="color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent);">
@@ -270,7 +271,7 @@
             font-family: var(--font-family);
             cursor: pointer;
             transition: all var(--transition);
-          " data-lang="feedbackCancel">${t('feedbackCancel')}</button>
+          ">${t('feedbackCancel')}</button>
           <button class="button" id="modal-submit" style="
             background: var(--accent);
             color: #fff;
@@ -284,7 +285,7 @@
             position: relative;
             overflow: hidden;
           ">
-            <span style="position: relative; z-index: 1;" data-lang="githubLoginBtn">${t('githubLoginBtn')}</span>
+            <span style="position: relative; z-index: 1;">${t('githubLoginBtn')}</span>
             <span style="
               position: absolute;
               inset: 0;
@@ -427,25 +428,25 @@
     const hasRepo = currentScopes.includes('repo');
     const hasGist = currentScopes.includes('gist');
     const storageItem = hasGist
-      ? `<div class="profile-dropdown-item" data-action="storage"><i class="fas fa-box-archive"></i> <span data-lang="storage">${t('storage')}</span></div>`
+      ? `<div class="profile-dropdown-item" data-action="storage"><i class="fas fa-box-archive"></i> ${t('storage')}</div>`
       : '';
     profileContainer.innerHTML = `
       <img src="${user.avatar_url || 'images/default-avatar.webp'}" alt="${user.login}" class="nav-profile-avatar" onerror="this.src='images/default-avatar.webp'" width="32" height="32">
       <span class="nav-profile-login">${escapeHtml(user.login)}</span>
       <i class="fas fa-chevron-right nav-profile-chevron"></i>
       <div class="profile-dropdown">
-        <div class="profile-dropdown-item" data-action="profile"><i class="fas fa-user"></i> <span data-lang="profileTitle">${t('profileTitle')}</span></div>
-        <div class="profile-dropdown-item" data-action="token-info"><i class="fas fa-key"></i> <span data-lang="tokenActive">${t('tokenActive')}</span>
+        <div class="profile-dropdown-item" data-action="profile"><i class="fas fa-user"></i> ${t('profileTitle')}</div>
+        <div class="profile-dropdown-item" data-action="token-info"><i class="fas fa-key"></i> ${t('tokenActive')}
           <div style="font-size:11px;margin-left:8px;">
             <span style="color:${hasRepo?'#4caf50':'#ff9800'}"><i class="fas fa-${hasRepo?'check':'exclamation-triangle'}-circle"></i> repo</span>
             <span style="color:${hasGist?'#4caf50':'#ff9800'}"><i class="fas fa-${hasGist?'check':'exclamation-triangle'}-circle"></i> gist</span>
           </div>
         </div>
         ${storageItem}
-        <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> <span data-lang="ratePanel">${t('ratePanel')}</span></div>
-        <div class="profile-dropdown-item" data-action="revoke-token"><i class="fas fa-external-link-alt"></i> <span data-lang="manageTokens">${t('manageTokens')}</span></div>
+        <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> ${t('ratePanel')}</div>
+        <div class="profile-dropdown-item" data-action="revoke-token"><i class="fas fa-external-link-alt"></i> ${t('manageTokens')}</div>
         <div class="profile-dropdown-divider"></div>
-        <div class="profile-dropdown-item" data-action="logout"><i class="fas fa-sign-out-alt"></i> <span data-lang="logout">${t('logout')}</span></div>
+        <div class="profile-dropdown-item" data-action="logout"><i class="fas fa-sign-out-alt"></i> ${t('logout')}</div>
       </div>
     `;
     bindDropdownEvents();
@@ -454,13 +455,13 @@
   function renderLoggedOutUI() {
     const t = window.I18n?.translate || (k => k);
     profileContainer.innerHTML = `
-      <span class="nav-profile-login placeholder" data-lang="loginViaGitHub">${t('loginViaGitHub')}</span>
+      <span class="nav-profile-login placeholder">${t('loginViaGitHub')}</span>
       <i class="fas fa-chevron-right nav-profile-chevron"></i>
       <div class="profile-dropdown">
-        <div class="profile-dropdown-item" data-action="login"><i class="fab fa-github"></i> <span data-lang="loginViaGitHub">${t('loginViaGitHub')}</span></div>
-        <div class="profile-dropdown-item" data-action="about"><i class="fas fa-info-circle"></i> <span data-lang="whyNeed">${t('whyNeed')}</span></div>
+        <div class="profile-dropdown-item" data-action="login"><i class="fab fa-github"></i> ${t('loginViaGitHub')}</div>
+        <div class="profile-dropdown-item" data-action="about"><i class="fas fa-info-circle"></i> ${t('whyNeed')}</div>
         <div class="profile-dropdown-divider"></div>
-        <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> <span data-lang="ratePanel">${t('ratePanel')}</span></div>
+        <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> ${t('ratePanel')}</div>
       </div>
     `;
     bindDropdownEvents();
@@ -535,7 +536,9 @@
     window.Utils.loadModule('js/features/ui-feedback.js').catch(() => {});
   }
 
+  // ==== НОВОЕ: перерисовка меню при загрузке/смене языка ====
   function refreshProfileMenu() {
+    // Если пользователь залогинен – перерисовываем залогиненное меню, иначе – выходное
     const token = localStorage.getItem(TOKEN_KEY);
     if (token && currentUserLogin) {
       const user = sessionStorage.getItem(USER_CACHE_KEY);

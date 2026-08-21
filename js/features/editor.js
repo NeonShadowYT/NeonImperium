@@ -1,10 +1,4 @@
 // js/features/editor.js – тулбар редактора с интеграцией в UIFeedback
-// Оптимизации:
-// - debounce для обновления превью (300 мс) с использованием requestAnimationFrame
-// - кеширование результатов рендеринга Markdown для одинакового текста
-// - уменьшение количества перерисовок (не обновляем превью при каждом вводе, только после debounce)
-// - вынос тяжёлого парсинга в отдельную функцию с кешем
-
 (function() {
     const TEMPLATES = {
         bold:       { name: 'Жирный', icon: 'fas fa-bold', action: (ta) => insertMarkdown(ta, '**', 'текст', true) },
@@ -33,9 +27,6 @@
     };
 
     const { createElement, escapeHtml } = window.GithubCore;
-    // Кеш для рендеринга Markdown
-    const markdownCache = new Map();
-    const MAX_CACHE_SIZE = 50;
 
     function insertAtCursor(textarea, text) {
         const start = textarea.selectionStart, end = textarea.selectionEnd;
@@ -199,37 +190,6 @@
         return container;
     }
 
-    // Функция рендеринга Markdown с кешем
-    function renderMarkdownCached(text) {
-        if (!text) return '';
-        // Проверяем кеш
-        if (markdownCache.has(text)) {
-            return markdownCache.get(text);
-        }
-        let html;
-        if (window.marked) {
-            if (typeof marked.setOptions === 'function') {
-                marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-            }
-            if (typeof marked.parse === 'function') {
-                html = marked.parse(text);
-            } else if (typeof marked === 'function') {
-                html = marked(text);
-            } else {
-                html = text.replace(/\n/g, '<br>');
-            }
-        } else {
-            html = text.replace(/\n/g, '<br>');
-        }
-        // Сохраняем в кеш, ограничивая размер
-        if (markdownCache.size >= MAX_CACHE_SIZE) {
-            const firstKey = markdownCache.keys().next().value;
-            markdownCache.delete(firstKey);
-        }
-        markdownCache.set(text, html);
-        return html;
-    }
-
     function createEditorToolbar(textarea) {
         const toolbar = createElement('div', 'editor-toolbar', {
             display: 'flex', gap: '5px', marginBottom: '10px', flexWrap: 'wrap',
@@ -267,22 +227,6 @@
         return toolbar;
     }
 
-    // Дебаунс для обновления превью
-    function debouncePreview(updateFn, delay = 300) {
-        let timer;
-        let rafId = null;
-        return function(...args) {
-            clearTimeout(timer);
-            timer = setTimeout(() => {
-                if (rafId) cancelAnimationFrame(rafId);
-                rafId = requestAnimationFrame(() => {
-                    updateFn.apply(this, args);
-                    rafId = null;
-                });
-            }, delay);
-        };
-    }
-
     window.Editor = {
         TEMPLATES,
         createEditorToolbar,
@@ -300,7 +244,6 @@
         insertCard,
         insertPoll,
         insertIcon,
-        insertColor,
-        renderMarkdownCached // экспортируем для использования в других модулях
+        insertColor
     };
 })();
