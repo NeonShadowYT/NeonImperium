@@ -1,9 +1,9 @@
-// js/platform.js – исправленная загрузка релизов с GitHub
+// js/platform.js – исправленная загрузка релизов
 (function() {
   const GH_OWNER = 'NeonShadowYT';
   const GH_REPO = 'NeonImperium';
   const RELEASES_CACHE_KEY = 'github_all_releases';
-  const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
+  const CACHE_DURATION = 30 * 60 * 1000;
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 2000;
 
@@ -38,9 +38,7 @@
   }
 
   function cacheSet(key, data) {
-    try {
-      localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
-    } catch {}
+    try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {}
   }
 
   async function fetchAllReleasesWithRetry(signal) {
@@ -401,7 +399,6 @@
     populateVersionSelect(currentPlatform);
   };
 
-  // Обновление при смене языка
   window.addEventListener('languageChanged', () => {
     if (platformInitialized && githubContainer) {
       const t = window.I18n?.translate || (k => k);

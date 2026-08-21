@@ -128,7 +128,7 @@
       grid.appendChild(fragment);
       container.appendChild(grid);
 
-      // Кнопка "Добавить обновление" для админов
+      // Кнопка "Добавить обновление"
       const parent = container.parentNode;
       let header = parent.querySelector('.updates-header');
       if (!header) {
@@ -165,7 +165,6 @@
       if (controller.signal.aborted) return;
       console.error('Update load error:', err);
       container.innerHTML = `<p class="error-message" data-lang="updatesLoadError">${t('updatesLoadError')}</p>`;
-      // Повторная попытка через некоторое время
       setTimeout(() => loadGameUpdates(container, game), 5000);
     } finally {
       clearTimeout(timeoutId);
@@ -176,7 +175,7 @@
   async function loadIssuesWithRetry(params, signal) {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
-        return await loadIssues(params);
+        return await loadIssues(params, signal);
       } catch (err) {
         if (signal.aborted) throw err;
         console.warn(`[game-updates] Load attempt ${attempt+1} failed:`, err);

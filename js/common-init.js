@@ -1,7 +1,4 @@
-// js/common-init.js – оптимизированная инициализация
-// Добавлены: отключение тяжёлых эффектов на мобильных, ленивая загрузка модулей,
-// улучшенная загрузка marked, адаптивные настройки
-
+// js/common-init.js – оптимизированная инициализация с принудительной загрузкой модулей
 (function() {
   // Проверка на мобильное устройство и низкую производительность
   const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -10,12 +7,9 @@
   const isLowPerf = isMobile || (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) ||
                     (navigator.deviceMemory && navigator.deviceMemory < 4);
 
-  // Если низкая производительность – отключаем тяжёлые эффекты глобально
   if (isLowPerf) {
     document.documentElement.dataset.lowPerf = 'true';
-    // Отключаем CSS-анимации (можно через класс)
     document.documentElement.classList.add('reduce-motion');
-    // Также можно выставить prefers-reduced-motion через медиа-запрос
   }
 
   // Предзагрузка шрифтов и preconnect
@@ -55,15 +49,13 @@
         if (typeof marked !== 'undefined' && typeof marked.parse === 'function') return;
       } catch (e) { /* continue */ }
     }
-    // Fallback – минимальный парсер
     window.marked = { parse: (txt) => Promise.resolve(txt.replace(/\n/g, '<br>')) };
   }
 
-  // Инициализация ленивых YouTube-плееров с улучшенной обработкой
+  // Инициализация ленивых YouTube-плееров
   function initLazyYT() {
     const containers = document.querySelectorAll('.lazy-yt');
     if (!('IntersectionObserver' in window)) {
-      // Fallback – грузим сразу
       containers.forEach(el => loadYouTube(el));
       return;
     }
@@ -98,9 +90,7 @@
     container.style.cssText = 'position:relative;padding-bottom:56.25%;background:#000;border-radius:12px;overflow:hidden;';
     container.appendChild(iframe);
     container.dataset.loaded = 'true';
-    // Обработка ошибок загрузки iframe
     iframe.onerror = () => showFallback(container, src);
-    // Таймаут на случай, если iframe не грузится
     const timeout = setTimeout(() => {
       if (!iframe.contentWindow) showFallback(container, src);
     }, 10000);
@@ -136,7 +126,6 @@
   // Фоновые частицы – только если не низкая производительность
   function loadDustParticles() {
     if (isLowPerf) return;
-    // Проверяем prefers-reduced-motion
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const script = document.createElement('script');
     script.src = 'js/dust-particles.js';
@@ -145,13 +134,12 @@
     document.head.appendChild(script);
   }
 
-  // Service Worker регистрация с обновлением
+  // Service Worker регистрация
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
     navigator.serviceWorker.register('sw.js')
       .then(reg => {
         console.log('SW registered');
-        // Проверка обновлений
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           newWorker.addEventListener('statechange', () => {
@@ -160,7 +148,6 @@
             }
           });
         });
-        // Если уже есть ожидающий worker
         if (reg.waiting) showUpdateNotification();
       })
       .catch(err => console.warn('SW registration failed:', err));
@@ -177,46 +164,46 @@
     document.getElementById('update-btn').addEventListener('click', () => window.location.reload());
   }
 
-  // Инициализация после DOM
-  function init() {
-    ensureMarked().then(() => {});
-    initLazyYT();
-    loadDustParticles();
-    registerServiceWorker();
-
-    // Инициализация остальных модулей через requestIdleCallback (если доступно)
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(() => {
-        // Загрузка не критичных скриптов
-        const modules = ['js/features/background-gifs.js', 'js/effects.js'];
-        modules.forEach(src => {
-          const s = document.createElement('script');
-          s.src = src;
-          s.defer = true;
-          s.async = true;
-          document.head.appendChild(s);
+  // Загрузка и инициализация модулей (последовательно)
+  function loadModules() {
+    const modules = [
+      'js/features/rate-limits.js',
+      'js/features/background-gifs.js',
+      'js/effects.js'
+    ];
+    let promise = Promise.resolve();
+    modules.forEach(src => {
+      promise = promise.then(() => {
+        return new Promise((resolve) => {
+          const script = document.createElement('script');
+          script.src = src;
+          script.defer = true;
+          script.async = true;
+          script.onload = resolve;
+          script.onerror = () => { console.warn('Failed to load', src); resolve(); };
+          document.head.appendChild(script);
         });
       });
-    } else {
-      setTimeout(() => {
-        const modules = ['js/features/background-gifs.js', 'js/effects.js'];
-        modules.forEach(src => {
-          const s = document.createElement('script');
-          s.src = src;
-          s.defer = true;
-          s.async = true;
-          document.head.appendChild(s);
-        });
-      }, 1000);
-    }
-
-    // Подписка на события загрузки языка
-    document.addEventListener('languageLoaded', () => {
-      // Обновление элементов с data-lang
-      updateLanguageElements();
+    });
+    promise.then(() => {
+      if (window.RateLimits && typeof window.RateLimits.init === 'function') {
+        window.RateLimits.init();
+        console.log('[common-init] RateLimits initialized');
+      } else {
+        console.warn('[common-init] RateLimits not available');
+      }
     });
   }
 
+  // Инициализация страничных модулей (новости, обновления, релизы)
+  function initPageModules() {
+    if (window.initNewsFeed) window.initNewsFeed();
+    if (window.initFeedback) window.initFeedback();
+    if (window.initGameUpdates) window.initGameUpdates();
+    if (window.initPlatform) window.initPlatform();
+  }
+
+  // Обновление элементов с data-lang
   function updateLanguageElements() {
     const t = window.I18n?.translate || (k => k);
     document.querySelectorAll('[data-lang]').forEach(el => {
@@ -229,6 +216,30 @@
         el.textContent = text;
       }
     });
+  }
+
+  // Главная инициализация
+  function init() {
+    ensureMarked().then(() => {});
+    initLazyYT();
+    loadDustParticles();
+    registerServiceWorker();
+    loadModules();
+
+    // Ждём загрузку языка, затем инициализируем страничные модули
+    if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
+      setTimeout(initPageModules, 100);
+    } else {
+      document.addEventListener('languageLoaded', initPageModules);
+      setTimeout(initPageModules, 2000); // fallback
+    }
+
+    document.addEventListener('languageLoaded', updateLanguageElements);
+    window.addEventListener('languageChanged', updateLanguageElements);
+
+    // Перезагружаем данные при логине/выходе
+    window.addEventListener('github-login-success', initPageModules);
+    window.addEventListener('github-logout', initPageModules);
   }
 
   if (document.readyState === 'loading') {

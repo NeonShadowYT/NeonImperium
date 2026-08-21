@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – исправленная загрузка новостей с GitHub
+// js/pages/news-feed.js – исправленная лента новостей
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG,
@@ -8,9 +8,9 @@
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
   const { showToast } = window.UIUtils;
 
-  const POSTS_CACHE_TTL = 3 * 60 * 1000;   // 3 минуты
-  const VIDEOS_CACHE_TTL = 10 * 60 * 1000; // 10 минут
-  const TWITCH_CACHE_TTL = 2 * 60 * 1000;  // 2 минуты
+  const POSTS_CACHE_TTL = 3 * 60 * 1000;
+  const VIDEOS_CACHE_TTL = 10 * 60 * 1000;
+  const TWITCH_CACHE_TTL = 2 * 60 * 1000;
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 2000;
 
@@ -56,7 +56,6 @@
     return text.replace(/\n/g, '<br>');
   }, 100);
 
-  // ---- Инициализация ----
   window.initNewsFeed = function() {
     const section = document.getElementById('news-section');
     if (!section) return;
@@ -103,7 +102,6 @@
     loadNewsFeed();
   };
 
-  // ---- Основная загрузка ----
   function loadNewsFeed() {
     if (loading) return;
     loading = true;
@@ -141,7 +139,6 @@
     });
   }
 
-  // ---- Загрузка постов с повторными попытками ----
   async function loadPostsWithRetry(signal) {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
@@ -163,28 +160,12 @@
     const cached = cacheGet(cacheKey, POSTS_CACHE_TTL);
     if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
 
-    const headers = {
-      'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'NeonImperium/1.0'
-    };
-
-    const urls = [
-      `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=10&page=1&labels=type:news`,
-      `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=10&page=1&labels=type:update`
-    ];
-
-    const [newsResp, updatesResp] = await Promise.all([
-      fetch(urls[0], { headers, signal }),
-      fetch(urls[1], { headers, signal })
+    const [news, updates] = await Promise.all([
+      loadIssues({ labels: 'type:news', state: 'open', per_page: 10, page: 1 }, signal),
+      loadIssues({ labels: 'type:update', state: 'open', per_page: 10, page: 1 }, signal)
     ]);
 
     if (signal.aborted) return [];
-    if (!newsResp.ok || !updatesResp.ok) {
-      throw new Error(`HTTP ${newsResp.status} / ${updatesResp.status}`);
-    }
-
-    const news = await newsResp.json();
-    const updates = await updatesResp.json();
     const all = [...news, ...updates]
       .filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
 

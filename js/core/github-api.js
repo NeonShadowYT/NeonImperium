@@ -1,16 +1,15 @@
-// js/core/github-api.js – обёртка с кешированием
+// js/core/github-api.js – обёртка с кешированием и сигналами
 (function() {
   const client = window.GitHubAPIClient;
   const { cacheGet, cacheSet, cacheRemoveByPrefix } = window.Utils;
 
   const API_CACHE_TTL = 5 * 60 * 1000;
 
-  // Обёртка для загрузки issues с кешем
-  async function loadIssues(params) {
+  async function loadIssues(params, signal) {
     const cacheKey = `issues_${JSON.stringify(params)}`;
     const cached = cacheGet(cacheKey, API_CACHE_TTL);
     if (cached) return cached;
-    const data = await client.issues().load(params);
+    const data = await client.issues().load({ ...params, signal });
     cacheSet(cacheKey, data);
     return data;
   }
@@ -24,7 +23,6 @@
     return data;
   }
 
-  // Остальные функции – без кеша (мутации)
   async function createIssue(title, body, labels) {
     const data = await client.issues().create(title, body, labels);
     cacheRemoveByPrefix('issues_');
