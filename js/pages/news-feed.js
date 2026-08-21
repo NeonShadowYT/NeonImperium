@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – с локализацией, обновление кнопки "Добавить новость" при смене языка
+// js/pages/news-feed.js – оптимизирован: data-lang вместо перерисовки
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, extractAllowed, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues, loadIssue } = window.GithubAPI;
@@ -77,7 +77,6 @@
     try { await window.BookmarkStorage.addBookmark(bookmark); showToast(t('addToFavorites'), 'success'); } catch (err) { if (err.message !== 'duplicate') showToast(t('loadError') + ': ' + err.message, 'error'); }
   }
 
-  // ---- экспорт функции инициализации ----
   window.initNewsFeed = function() {
     const section = document.getElementById('news-section');
     if (!section) return;
@@ -85,7 +84,16 @@
     if (!header) {
       header = createElement('div', 'news-header', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' });
       const t = window.I18n?.translate || (k => k);
-      header.innerHTML = `<div><h2 data-lang="newsTitle">${t('newsTitle')}</h2><p class="text-secondary" data-lang="newsDesc">${t('newsDesc')}</p></div>`;
+      const div = createElement('div');
+      const h2 = createElement('h2');
+      h2.setAttribute('data-lang', 'newsTitle');
+      h2.textContent = t('newsTitle');
+      div.appendChild(h2);
+      const p = createElement('p', 'text-secondary');
+      p.setAttribute('data-lang', 'newsDesc');
+      p.textContent = t('newsDesc');
+      div.appendChild(p);
+      header.appendChild(div);
       section.prepend(header);
     }
     container = document.getElementById('news-feed');
@@ -104,17 +112,7 @@
     const postId = new URLSearchParams(location.search).get('post');
     if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
 
-    // ---- обновление кнопки "Добавить новость" при смене языка ----
-    window.addEventListener('languageChanged', () => {
-      const header = document.querySelector('.news-header');
-      if (header) {
-        const btn = header.querySelector('.admin-news-btn');
-        if (btn) {
-          const t = window.I18n?.translate || (k => k);
-          btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
-        }
-      }
-    });
+    // languageChanged больше не перезагружает данные – только data-lang
   };
 
   async function openPostFromUrl(postId) {
@@ -540,9 +538,9 @@
           mediaContainer.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:#000;color:#fff;padding:20px;text-align:center;gap:8px;">
               <i class="fab fa-youtube" style="font-size:28px;color:#ff0000;"></i>
-              <p style="font-size:13px;">${t('videoLoadFailed')}</p>
+              <p style="font-size:13px;" data-lang="videoLoadFailed">${t('videoLoadFailed')}</p>
               <button class="button small" onclick="window.open('${video.type === 'twitch' ? 'https://twitch.tv/' + video.id : 'https://youtu.be/' + video.id}', '_blank')" style="background:#ff0000;color:#fff;">
-                <i class="fas fa-external-link-alt"></i> ${t('open')}
+                <i class="fas fa-external-link-alt"></i> <span data-lang="open">${t('open')}</span>
               </button>
             </div>
           `;
@@ -554,9 +552,9 @@
           mediaContainer.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:#000;color:#fff;padding:20px;text-align:center;gap:8px;">
               <i class="fab fa-youtube" style="font-size:28px;color:#ff0000;"></i>
-              <p style="font-size:13px;">${t('videoNotLoading')}</p>
+              <p style="font-size:13px;" data-lang="videoNotLoading">${t('videoNotLoading')}</p>
               <button class="button small" onclick="window.open('${video.type === 'twitch' ? 'https://twitch.tv/' + video.id : 'https://youtu.be/' + video.id}', '_blank')" style="background:#ff0000;color:#fff;">
-                <i class="fas fa-external-link-alt"></i> ${t('open')}
+                <i class="fas fa-external-link-alt"></i> <span data-lang="open">${t('open')}</span>
               </button>
             </div>
           `;
@@ -677,6 +675,7 @@
       if (isAdmin() && hasScope('repo')) {
         if (!existing) {
           const btn = createElement('button', 'button admin-news-btn');
+          btn.setAttribute('data-lang', 'addNews');
           btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
           btn.addEventListener('click', async () => {
             if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
@@ -684,12 +683,12 @@
           });
           header.appendChild(btn);
         } else {
-          // Обновляем текст кнопки при перерисовке
+          existing.setAttribute('data-lang', 'addNews');
           existing.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
         }
       } else if (existing) existing.remove();
     }
   }
 
-  // Убираем авто-вызов!
+  // Убираем обработчик languageChanged – данные не перезагружаем
 })();

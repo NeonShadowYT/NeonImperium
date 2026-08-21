@@ -94,12 +94,13 @@
   function initLazyYT() {
     function showYouTubeFallback(container, videoUrl) {
       const t = window.I18n?.translate || (k => k);
+      // fallback занимает всю площадь контейнера
       container.innerHTML = `
-        <div class="yt-fallback" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:var(--bg-primary);border-radius:12px;padding:20px;text-align:center;gap:12px;animation:fadeInUp 0.4s ease;">
+        <div class="yt-fallback" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-primary);border-radius:12px;padding:20px;text-align:center;gap:12px;box-sizing:border-box;animation:fadeInUp 0.4s ease;">
           <i class="fab fa-youtube" style="font-size:32px;color:var(--accent);"></i>
-          <p style="color:var(--text-secondary);font-size:14px;margin:0;">${t('videoLoadFailed')}</p>
+          <p style="color:var(--text-secondary);font-size:14px;margin:0;" data-lang="videoLoadFailed">${t('videoLoadFailed')}</p>
           <button class="button small" onclick="window.open('${videoUrl || '#'}', '_blank')" style="background:var(--accent);color:#fff;">
-            <i class="fas fa-external-link-alt"></i> ${t('open')}
+            <i class="fas fa-external-link-alt"></i> <span data-lang="open">${t('open')}</span>
           </button>
         </div>
       `;
@@ -192,7 +193,7 @@
         if (!src) return;
         const videoId = src.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
         if (!videoId) {
-          el.innerHTML = `<div class="yt-fallback">⚠️ ${window.I18n?.translate('videoLoadFailed') || 'Video load failed'}</div>`;
+          showYouTubeFallback(el, src);
           return;
         }
         const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`;
@@ -242,7 +243,7 @@
       'background: var(--accent); color: #fff; padding: 12px 20px;' +
       'border-radius: 40px; box-shadow: 0 6px 14px rgba(0,0,0,0.4);' +
       'font-family: "Russo One", sans-serif; display: flex; align-items: center; gap: 12px;';
-    note.innerHTML = `<span>${t('newVersionAvailable')}</span><button id="update-btn" style="background:white;color:var(--accent);border:none;padding:6px 16px;border-radius:20px;cursor:pointer;font-family:inherit;">${t('updateBtn')}</button>`;
+    note.innerHTML = `<span data-lang="newVersionAvailable">${t('newVersionAvailable')}</span><button id="update-btn" style="background:white;color:var(--accent);border:none;padding:6px 16px;border-radius:20px;cursor:pointer;font-family:inherit;" data-lang="updateBtn">${t('updateBtn')}</button>`;
     document.body.appendChild(note);
     document.getElementById('update-btn').addEventListener('click', () => { window.location.reload(); });
   }
@@ -276,18 +277,18 @@
         <div class="modal-content-full" style="max-width: 550px; text-align: center;">
           <div class="modal-header"><h2>⚠️ ВАЖНОЕ ПРЕДУПРЕЖДЕНИЕ</h2><button class="modal-close"><i class="fas fa-times"></i></button></div>
           <div class="modal-body" style="text-align: left;">
-            <p><strong>${t('licenseConfirmDesc')}</strong></p>
+            <p><strong data-lang="licenseConfirmDesc">${t('licenseConfirmDesc')}</strong></p>
             <ul style="margin: 15px 0; padding-left: 20px;">
-              <li>${t('licenseAccept')} <strong><a href="license.html" target="_blank">${t('licenseLink')}</a></strong>.</li>
-              <li>${t('licenseModDisclaimer')}</li>
+              <li><span data-lang="licenseAccept">${t('licenseAccept')}</span> <strong><a href="license.html" target="_blank" data-lang="licenseLink">${t('licenseLink')}</a></strong>.</li>
+              <li data-lang="licenseModDisclaimer">${t('licenseModDisclaimer')}</li>
             </ul>
             <label style="display: flex; align-items: center; gap: 10px; margin-top: 15px; cursor: pointer;">
-              <input type="checkbox" id="consent-checkbox"> ${t('licenseConfirmCheckbox')}
+              <input type="checkbox" id="consent-checkbox"> <span data-lang="licenseConfirmCheckbox">${t('licenseConfirmCheckbox')}</span>
             </label>
           </div>
           <div class="modal-footer" style="padding: 20px; display: flex; justify-content: flex-end; gap: 12px;">
-            <button class="button" id="consent-cancel">${t('feedbackCancel')}</button>
-            <button class="button" id="consent-confirm" disabled style="background: var(--accent);">${t('licenseConfirmButton')}</button>
+            <button class="button" id="consent-cancel" data-lang="feedbackCancel">${t('feedbackCancel')}</button>
+            <button class="button" id="consent-confirm" disabled style="background: var(--accent);" data-lang="licenseConfirmButton">${t('licenseConfirmButton')}</button>
           </div>
         </div>
       `;
@@ -337,7 +338,7 @@
             item.className = 'profile-dropdown-item';
             item.dataset.action = 'rate-panel';
             const t = window.I18n?.translate || (k => k);
-            item.innerHTML = `<i class="fas fa-chart-bar"></i> ${t('ratePanel')}`;
+            item.innerHTML = `<i class="fas fa-chart-bar"></i> <span data-lang="ratePanel">${t('ratePanel')}</span>`;
             const divider = dropdown.querySelector('.profile-dropdown-divider');
             if (divider) {
               dropdown.insertBefore(item, divider);
@@ -361,7 +362,6 @@
     }
   }
 
-  // Функция обновления всех динамических элементов при смене языка
   function refreshDynamicUI() {
     if (window.FeedbackPage?.refresh) window.FeedbackPage.refresh();
     if (window.refreshGameUpdates && window.currentGame) window.refreshGameUpdates(window.currentGame);
@@ -369,12 +369,8 @@
     if (window.initPlatform) window.initPlatform();
   }
 
-  // Подписываемся на смену языка
-  window.addEventListener('languageChanged', () => {
-    refreshDynamicUI();
-  });
+  // Убрали обработчик languageChanged, который вызывал refreshDynamicUI – теперь полагаемся на data-lang
 
-  // ==== НОВОЕ: запуск модулей только после загрузки переводов ====
   function initPageModules() {
     if (window.initNewsFeed) window.initNewsFeed();
     if (window.initFeedback) window.initFeedback();
@@ -383,18 +379,14 @@
   }
 
   function waitForLanguage() {
-    // Если переводы уже загружены – запускаем сразу
     if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
-      // Проверяем, что translations загружены (если есть хоть один ключ)
       const testKey = window.I18n.translate('siteTitle');
       if (testKey !== 'siteTitle') {
         initPageModules();
         return;
       }
     }
-    // Слушаем событие загрузки языка
     document.addEventListener('languageLoaded', initPageModules, { once: true });
-    // Запасной вариант: если событие уже было, но мы его пропустили
     if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
       setTimeout(() => {
         const testKey = window.I18n.translate('siteTitle');
@@ -405,13 +397,10 @@
     }
   }
 
-  // Инициализация, не зависящая от переводов
   function initNonLanguageDependent() {
     preloadFont();
     loadPageScripts();
-    ensureMarked().then(() => {
-      // ничего не делаем
-    });
+    ensureMarked().then(() => {});
     initLazyYT();
     loadDustParticles();
     registerServiceWorker();
@@ -419,7 +408,6 @@
     initRateLimits();
   }
 
-  // Запуск
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       initNonLanguageDependent();

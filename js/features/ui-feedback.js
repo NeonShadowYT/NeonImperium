@@ -1,4 +1,4 @@
-// js/features/ui-feedback.js – с локализацией, обновление при смене языка
+// js/features/ui-feedback.js – оптимизирован: обновление модалок через data-lang
 (function() {
   const {
     createElement, escapeHtml, renderMarkdown, loadModule,
@@ -198,7 +198,7 @@
 
     const lastErrorTime = commentsErrorTimestamps.get(issueNumber);
     if (lastErrorTime && (Date.now() - lastErrorTime < COMMENTS_ERROR_COOLDOWN)) {
-      container.innerHTML = '<p class="text-secondary" style="text-align:center;">Комментарии временно недоступны</p>';
+      container.innerHTML = '<p class="text-secondary" style="text-align:center;" data-lang="noComments">' + t('noComments') + '</p>';
       return;
     }
 
@@ -216,7 +216,7 @@
       } catch (err) {
         if (err.name === 'AbortError') return;
         commentsErrorTimestamps.set(issueNumber, Date.now());
-        container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
+        container.innerHTML = '<p class="error-message" data-lang="dataLoadError">' + t('dataLoadError') + '</p>';
       }
       return;
     }
@@ -253,7 +253,7 @@
       }
     } catch (err) {
       if (err.name === 'AbortError' || err.message === 'Aborted') return;
-      container.innerHTML = '<p class="error-message">Ошибка загрузки комментариев</p>';
+      container.innerHTML = '<p class="error-message" data-lang="dataLoadError">' + t('dataLoadError') + '</p>';
     } finally {
       setTimeout(() => {
         pendingCommentsRequests.delete(issueNumber);
@@ -264,7 +264,7 @@
   function renderComments(comments, container) {
     container.innerHTML = '';
     if (comments.length === 0) {
-      container.innerHTML = `<p class="text-secondary" style="text-align:center;">${t('noComments') || 'Нет комментариев'}</p>`;
+      container.innerHTML = `<p class="text-secondary" style="text-align:center;" data-lang="noComments">${t('noComments')}</p>`;
       return;
     }
     const currentUser = getCurrentUser();
@@ -450,16 +450,16 @@
       <div class="markdown-body post-content" style="margin-bottom: 24px;"></div>
       <div class="reactions-container" id="modal-reactions"></div>
       <div class="comments-section">
-        <h3>${t('comments') || 'Комментарии'}</h3>
+        <h3 data-lang="comments">${t('comments')}</h3>
         <div id="modal-comments-list" class="comments-list"></div>
         ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px; align-items:center; flex-wrap:wrap;">
           <input type="text" id="new-comment-input" placeholder="${t('enterText')}" class="comment-input-field" style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:150px;">
-          <button id="submit-comment-btn" class="button small">${t('send')}</button>
+          <button id="submit-comment-btn" class="button small" data-lang="send">${t('send')}</button>
           <span style="font-size:12px; color:var(--text-secondary); margin-left:4px;" id="comment-counter">0/400</span>
           <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
             ${t('postsRemaining')}: <span class="rate-indicator" data-action="comments">${window.RateLimits ? window.RateLimits.getRemaining('comments') : '?'}</span>
           </span>
-        </div>` : `<p class="text-secondary">${t('loginToComment')}</p>`}
+        </div>` : `<p class="text-secondary" data-lang="loginToComment">${t('loginToComment')}</p>`}
       </div>
     `;
 
@@ -579,23 +579,20 @@
       submitBtn.addEventListener('click', debouncedSubmit);
     }
 
-    // ---- обновление при смене языка ----
-    const langHandler = async () => {
+    // Обновление модалки при смене языка – только data-lang
+    // Удаляем предыдущие обработчики, вешаем один на обновление текстов
+    const langHandler = () => {
       if (!activeFullModal || activeFullModal.modal !== modal) return;
-      // Пересоздаём содержимое модалки заново, сохраняя состояние
-      // Просто обновляем заголовок и кнопки с новыми переводами
+      // Обновляем заголовок
       const headerTitle = modal.querySelector('.modal-header h2');
       if (headerTitle) headerTitle.textContent = t(title) || title;
-      // Обновляем кнопки, которые используют переводы (например, "Комментарии")
+      // Кнопки с data-lang обновятся сами
       const commentsHeader = modal.querySelector('.comments-section h3');
-      if (commentsHeader) commentsHeader.textContent = t('comments') || 'Комментарии';
-      // Обновляем placeholder у поля ввода
+      if (commentsHeader) commentsHeader.textContent = t('comments');
       const inputField = modal.querySelector('#new-comment-input');
       if (inputField) inputField.placeholder = t('enterText');
-      // Обновляем кнопку отправки
       const sendBtn = modal.querySelector('#submit-comment-btn');
       if (sendBtn) sendBtn.textContent = t('send');
-      // Обновляем индикатор лимитов
       const indicator = modal.querySelector('.rate-indicator-wrapper');
       if (indicator) {
         const span = indicator.querySelector('.rate-indicator');
@@ -603,12 +600,10 @@
       }
     };
     window.addEventListener('languageChanged', langHandler);
-    // Удаляем обработчик при закрытии модалки
     const closeWithCleanup = () => {
       window.removeEventListener('languageChanged', langHandler);
       newClose();
     };
-    // Заменяем обработчики закрытия
     modal.querySelector('.modal-close').removeEventListener('click', newClose);
     modal.querySelector('.modal-close').addEventListener('click', closeWithCleanup);
     modal.addEventListener('click', (e) => {
@@ -905,13 +900,11 @@
       currentBody = draft.body;
     }
 
-    // ---- обновление при смене языка ----
+    // Обновление модалки редактора при смене языка – только data-lang
     const langHandler = () => {
       if (!activeEditorModal || activeEditorModal.modal !== modal) return;
-      // Обновляем заголовок модалки
       const headerTitle = modal.querySelector('.modal-header h2');
       if (headerTitle) headerTitle.textContent = mode === 'new' ? t('createPost') : t('editPost');
-      // Обновляем placeholder'ы и кнопки
       titleInput.placeholder = t('title');
       publicBtn.textContent = t('public');
       privateBtn.textContent = t('private');

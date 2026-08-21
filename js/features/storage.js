@@ -1,4 +1,4 @@
-// js/features/storage.js – с локализацией, обновление при смене языка
+// js/features/storage.js – оптимизирован: data-lang, кеширование, debounce, уменьшение перерисовок
 (function() {
   const {
     CONFIG, escapeHtml, createElement, formatDate, debounce,
@@ -44,6 +44,7 @@
         cachedBookmarks = null;
         cachedBookmarksTime = 0;
         if (modalRef) {
+          // просто перезагружаем данные и обновляем отображение без пересоздания модалки
           loadBookmarks(true).then(() => {
             renderBookmarks(modalRef);
           });
@@ -110,7 +111,7 @@
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i);
     }
-    return new Blob([bytes], { type: mimeType });
+    return new Blob([bytes], { mimeType });
   }
 
   function tryDecodeBase64(base64) {
@@ -742,7 +743,7 @@
 
     grid.innerHTML = '';
     if (filtered.length === 0) {
-      grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>${t('noBookmarks')}</p></div>`;
+      grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p data-lang="noBookmarks">${t('noBookmarks')}</p></div>`;
       return;
     }
 
@@ -1246,38 +1247,38 @@
         <div class="storage-header">
           <div class="storage-controls">
             <div class="storage-sort">
-              <button class="sort-btn ${sortOrder==='new'?'active':''}" data-order="new"><i class="fas fa-arrow-down"></i> ${t('new')}</button>
-              <button class="sort-btn ${sortOrder==='old'?'active':''}" data-order="old"><i class="fas fa-arrow-up"></i> ${t('old')}</button>
+              <button class="sort-btn ${sortOrder==='new'?'active':''}" data-order="new"><i class="fas fa-arrow-down"></i> <span data-lang="new">${t('new')}</span></button>
+              <button class="sort-btn ${sortOrder==='old'?'active':''}" data-order="old"><i class="fas fa-arrow-up"></i> <span data-lang="old">${t('old')}</span></button>
             </div>
             <div class="storage-categories">
-              <button class="cat-btn ${category==='all'?'active':''}" data-cat="all"><i class="fas fa-globe"></i> ${t('all')}</button>
-              <button class="cat-btn ${category==='post'?'active':''}" data-cat="post"><i class="fas fa-newspaper"></i> ${t('posts')}</button>
-              <button class="cat-btn ${category==='video'?'active':''}" data-cat="video"><i class="fas fa-video"></i> ${t('videos')}</button>
-              <button class="cat-btn ${category==='link'?'active':''}" data-cat="link"><i class="fas fa-link"></i> ${t('links')}</button>
-              <button class="cat-btn ${category==='save'?'active':''}" data-cat="save"><i class="fas fa-save"></i> ${t('saves')}</button>
+              <button class="cat-btn ${category==='all'?'active':''}" data-cat="all"><i class="fas fa-globe"></i> <span data-lang="all">${t('all')}</span></button>
+              <button class="cat-btn ${category==='post'?'active':''}" data-cat="post"><i class="fas fa-newspaper"></i> <span data-lang="posts">${t('posts')}</span></button>
+              <button class="cat-btn ${category==='video'?'active':''}" data-cat="video"><i class="fas fa-video"></i> <span data-lang="videos">${t('videos')}</span></button>
+              <button class="cat-btn ${category==='link'?'active':''}" data-cat="link"><i class="fas fa-link"></i> <span data-lang="links">${t('links')}</span></button>
+              <button class="cat-btn ${category==='save'?'active':''}" data-cat="save"><i class="fas fa-save"></i> <span data-lang="saves">${t('saves')}</span></button>
             </div>
           </div>
           <div class="storage-actions">
             <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-right:12px;">
-              ${t('postsRemaining')}: <span class="rate-indicator" data-action="storageAdds">${remainingAdds}</span>
+              <span data-lang="postsRemaining">${t('postsRemaining')}</span>: <span class="rate-indicator" data-action="storageAdds">${remainingAdds}</span>
             </span>
             <div class="search-wrapper" style="display:flex;gap:8px;align-items:center;">
               <input type="text" id="search-input" placeholder="${t('searchPlaceholder')}" style="padding:6px 14px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;width:160px;">
             </div>
-            <button class="storage-btn primary" id="toggle-add-btn"><i class="fas fa-plus"></i> ${t('addButton')}</button>
+            <button class="storage-btn primary" id="toggle-add-btn"><i class="fas fa-plus"></i> <span data-lang="addButton">${t('addButton')}</span></button>
           </div>
         </div>
         <div id="add-form" class="storage-add-form" style="display:none;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
             <input type="url" id="new-url" placeholder="${t('addLinkPlaceholder')}" autocomplete="off" class="storage-url-input" style="flex:1;min-width:200px;">
-            <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> ${t('addButton')}</button>
+            <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> <span data-lang="addButton">${t('addButton')}</span></button>
           </div>
           <div style="margin-top:12px;border:2px dashed var(--border);border-radius:16px;padding:20px;text-align:center;color:var(--text-secondary);transition:background 0.2s;" id="drop-zone">
             <i class="fas fa-file-upload" style="font-size:32px;display:block;margin-bottom:8px;"></i>
-            <p>${t('dropZoneText')}</p>
-            <p style="font-size:12px;">${t('selectFiles')}</p>
+            <p data-lang="dropZoneText">${t('dropZoneText')}</p>
+            <p style="font-size:12px;" data-lang="selectFiles">${t('selectFiles')}</p>
             <input type="file" id="file-input" accept=".ini,.starver" multiple style="display:none;">
-            <button class="storage-btn" id="file-select-btn"><i class="fas fa-folder-open"></i> ${t('selectFiles')}</button>
+            <button class="storage-btn" id="file-select-btn"><i class="fas fa-folder-open"></i> <span data-lang="selectFiles">${t('selectFiles')}</span></button>
           </div>
         </div>
         <div class="bookmarks-grid" id="bookmarks-grid"></div>
@@ -1354,7 +1355,8 @@
     toggleAddBtn.addEventListener('click', () => {
       formVisible = !formVisible;
       addForm.style.display = formVisible ? 'block' : 'none';
-      toggleAddBtn.innerHTML = formVisible ? `<i class="fas fa-times"></i> ${t('cancelButton')}` : `<i class="fas fa-plus"></i> ${t('addButton')}`;
+      const t = window.I18n?.translate || (k => k);
+      toggleAddBtn.innerHTML = formVisible ? `<i class="fas fa-times"></i> <span data-lang="cancelButton">${t('cancelButton')}</span>` : `<i class="fas fa-plus"></i> <span data-lang="addButton">${t('addButton')}</span>`;
     });
 
     const addBtn = modal.querySelector('#confirm-add');
@@ -1405,24 +1407,24 @@
       await processFiles(files, modal);
     });
 
-    // ---- обновление при смене языка ----
+    // Обработчик смены языка – обновляем только тексты внутри модалки
     const langHandler = () => {
       if (!activeStorageModal || activeStorageModal.modal !== modal) return;
-      // Обновляем заголовок модалки
+      const t = window.I18n?.translate || (k => k);
+      // Заголовок
       const headerTitle = modal.querySelector('.modal-header h2');
       if (headerTitle) headerTitle.textContent = t('storageModalTitle');
-      // Обновляем кнопки и тексты
-      const sortBtns = modal.querySelectorAll('.sort-btn');
-      sortBtns.forEach(b => {
-        if (b.dataset.order === 'new') b.innerHTML = `<i class="fas fa-arrow-down"></i> ${t('new')}`;
-        else if (b.dataset.order === 'old') b.innerHTML = `<i class="fas fa-arrow-up"></i> ${t('old')}`;
+      // Кнопки сортировки
+      modal.querySelectorAll('.sort-btn').forEach(b => {
+        const order = b.dataset.order;
+        b.innerHTML = `<i class="fas fa-${order === 'new' ? 'arrow-down' : 'arrow-up'}"></i> <span data-lang="${order}">${t(order)}</span>`;
       });
-      const catBtns = modal.querySelectorAll('.cat-btn');
-      catBtns.forEach(b => {
+      // Категории
+      modal.querySelectorAll('.cat-btn').forEach(b => {
         const cat = b.dataset.cat;
         const iconMap = { all: 'fa-globe', post: 'fa-newspaper', video: 'fa-video', link: 'fa-link', save: 'fa-save' };
         const labelMap = { all: t('all'), post: t('posts'), video: t('videos'), link: t('links'), save: t('saves') };
-        b.innerHTML = `<i class="fas ${iconMap[cat] || 'fa-circle'}"></i> ${labelMap[cat] || cat}`;
+        b.innerHTML = `<i class="fas ${iconMap[cat] || 'fa-circle'}"></i> <span data-lang="${cat}">${labelMap[cat] || cat}</span>`;
       });
       // Поиск
       const searchInput = modal.querySelector('#search-input');
@@ -1430,20 +1432,20 @@
       // Кнопка добавления
       const toggleBtn = modal.querySelector('#toggle-add-btn');
       const formVisible = addForm.style.display !== 'none';
-      toggleBtn.innerHTML = formVisible ? `<i class="fas fa-times"></i> ${t('cancelButton')}` : `<i class="fas fa-plus"></i> ${t('addButton')}`;
+      toggleBtn.innerHTML = formVisible ? `<i class="fas fa-times"></i> <span data-lang="cancelButton">${t('cancelButton')}</span>` : `<i class="fas fa-plus"></i> <span data-lang="addButton">${t('addButton')}</span>`;
       // Поле ввода URL
       const urlInput = modal.querySelector('#new-url');
       if (urlInput) urlInput.placeholder = t('addLinkPlaceholder');
       // Кнопка подтверждения
       const confirmBtn = modal.querySelector('#confirm-add');
-      if (confirmBtn) confirmBtn.innerHTML = `<i class="fas fa-plus"></i> ${t('addButton')}`;
+      if (confirmBtn) confirmBtn.innerHTML = `<i class="fas fa-plus"></i> <span data-lang="addButton">${t('addButton')}</span>`;
       // Drop zone
       const dropZone = modal.querySelector('#drop-zone');
       if (dropZone) {
         const p = dropZone.querySelector('p:first-of-type');
         if (p) p.textContent = t('dropZoneText');
         const btn = dropZone.querySelector('#file-select-btn');
-        if (btn) btn.innerHTML = `<i class="fas fa-folder-open"></i> ${t('selectFiles')}`;
+        if (btn) btn.innerHTML = `<i class="fas fa-folder-open"></i> <span data-lang="selectFiles">${t('selectFiles')}</span>`;
       }
       // Счетчик лимитов
       const indicator = modal.querySelector('.rate-indicator[data-action="storageAdds"]');
@@ -1452,6 +1454,7 @@
       renderBookmarks(modal);
     };
     window.addEventListener('languageChanged', langHandler);
+
     const closeWithCleanup = () => {
       window.removeEventListener('languageChanged', langHandler);
       activeStorageModal = null;

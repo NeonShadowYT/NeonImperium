@@ -1,4 +1,4 @@
-// js/pages/game-updates.js – использует общий кэш и DocumentFragment, с локализацией, обновление кнопки при смене языка
+// js/pages/game-updates.js – оптимизирован: data-lang вместо перерисовки
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractAllowed, extractSummary, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
@@ -8,7 +8,6 @@
   let currentAbort = null, currentGame = null;
   const UPDATES_CACHE_TTL = 15 * 60 * 1000;
 
-  // ---- экспорт функции инициализации ----
   window.initGameUpdates = function() {
     const container = document.getElementById('game-updates');
     if (container?.dataset.game) {
@@ -34,20 +33,7 @@
     window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
     window.addEventListener('github-logout', () => { if (currentGame) refreshGameUpdates(currentGame); });
 
-    // ---- обновление кнопки при смене языка ----
-    window.addEventListener('languageChanged', () => {
-      const container = document.getElementById('game-updates');
-      if (!container) return;
-      const parent = container.parentNode;
-      const header = parent?.querySelector('.updates-header');
-      if (header) {
-        const btn = header.querySelector('.admin-update-btn');
-        if (btn) {
-          const t = window.I18n?.translate || (k => k);
-          btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
-        }
-      }
-    });
+    // languageChanged – только обновляем data-lang кнопки, без перерисовки
   };
 
   window.refreshGameUpdates = (game) => {
@@ -57,7 +43,7 @@
 
   async function loadGameUpdates(container, game) {
     const t = window.I18n?.translate || (k => k);
-    container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> ${t('loading')}</div>`;
+    container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> <span data-lang="loading">${t('loading')}</span></div>`;
     if (currentAbort) {
       currentAbort.controller.abort();
       currentAbort = null;
@@ -91,7 +77,7 @@
         return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
       });
       posts.sort((a, b) => b.date - a.date);
-      if (posts.length === 0) { container.innerHTML = `<p class="text-secondary">${t('noUpdates')}</p>`; return; }
+      if (posts.length === 0) { container.innerHTML = `<p class="text-secondary" data-lang="noUpdates">${t('noUpdates')}</p>`; return; }
       container.innerHTML = '';
       const grid = createElement('div', 'projects-grid');
       const fragment = document.createDocumentFragment();
@@ -103,25 +89,33 @@
       let header = parent.querySelector('.updates-header');
       if (!header) {
         header = createElement('div', 'updates-header', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' });
-        header.innerHTML = `<div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);"></i> <h2 style="margin:0;" data-lang="updatesTitle">${t('updatesTitle')}</h2></div>`;
+        const left = createElement('div', '', { display: 'flex', alignItems: 'center', gap: '8px' });
+        const icon = createElement('i', 'fas fa-clock-rotate-left', { fontSize: '24px', color: 'var(--accent)' });
+        left.appendChild(icon);
+        const h2 = createElement('h2', '', { margin: '0' });
+        h2.setAttribute('data-lang', 'updatesTitle');
+        h2.textContent = t('updatesTitle');
+        left.appendChild(h2);
+        header.appendChild(left);
         parent.insertBefore(header, container);
       }
       const existing = header.querySelector('.admin-update-btn');
       if (isAdmin() && hasScope('repo')) {
         if (!existing) {
           const btn = createElement('button', 'button admin-update-btn');
+          btn.setAttribute('data-lang', 'addUpdate');
           btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
           btn.addEventListener('click', async () => { if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js'); window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update'); });
           header.appendChild(btn);
         } else {
-          // Обновляем текст
+          existing.setAttribute('data-lang', 'addUpdate');
           existing.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
         }
       } else if (existing) existing.remove();
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error('Update load error:', err);
-      container.innerHTML = `<p class="error-message">${t('updatesLoadError')}</p>`;
+      container.innerHTML = `<p class="error-message" data-lang="updatesLoadError">${t('updatesLoadError')}</p>`;
     } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
   }
 
@@ -154,6 +148,4 @@
     });
     return card;
   }
-
-  // Убираем авто-вызов!
 })();

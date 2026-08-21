@@ -1,4 +1,4 @@
-// js/features/rate-limits.js – с локализацией, обновление при смене языка
+// js/features/rate-limits.js – оптимизирован: кеширование, data-lang, debounce, уменьшение перерисовок
 (function() {
     const { escapeHtml } = window.GithubCore;
 
@@ -446,14 +446,12 @@
             if (e.target === modal) newCloseWithClean();
         });
 
-        // ---- обновление при смене языка ----
+        // Обновление при смене языка
         const langHandler = () => {
             if (!activeRatePanel || activeRatePanel.modal !== modal) return;
             const t = window.I18n?.translate || (k => k);
-            // Обновляем заголовок
             const headerTitle = modal.querySelector('.modal-header h2');
             if (headerTitle) headerTitle.textContent = t('limitsAndCache');
-            // Перестраиваем панель
             const body = modal.querySelector('.modal-body');
             if (body) body.innerHTML = buildPanelHTML(t);
             bindPanelEvents(modal, t);
@@ -532,8 +530,8 @@
         return style + `
         <div class="rate-panel">
           <div class="rate-summary">
-            <div class="rate-timer"><i class="fas fa-clock"></i> ${t('refreshIn')} <strong>${hours}ч ${minutes}м</strong></div>
-            <div class="rate-total"><i class="fas fa-chart-bar"></i> ${t('totalRemaining')} <strong>${totalRemaining}</strong></div>
+            <div class="rate-timer"><i class="fas fa-clock"></i> <span data-lang="refreshIn">${t('refreshIn')}</span> <strong>${hours}ч ${minutes}м</strong></div>
+            <div class="rate-total"><i class="fas fa-chart-bar"></i> <span data-lang="totalRemaining">${t('totalRemaining')}</span> <strong>${totalRemaining}</strong></div>
           </div>
           <div class="rate-limits-grid">
             ${Object.entries(remaining).map(([action, rem]) => {
@@ -556,19 +554,19 @@
               `;
             }).join('')}
           </div>
-          <div class="rate-info"><i class="fas fa-info-circle"></i> ${t('limitsInfo')}</div>
+          <div class="rate-info"><i class="fas fa-info-circle"></i> <span data-lang="limitsInfo">${t('limitsInfo')}</span></div>
           <div class="rate-tabs">
-            <button class="rate-tab active" data-tab="queue"><i class="fas fa-clock"></i> ${t('queue')} (<span id="queue-count">0</span>)</button>
-            <button class="rate-tab" data-tab="history"><i class="fas fa-history"></i> ${t('history')}</button>
-            <button class="rate-tab" data-tab="cache"><i class="fas fa-database"></i> ${t('cacheState')}</button>
+            <button class="rate-tab active" data-tab="queue"><i class="fas fa-clock"></i> <span data-lang="queue">${t('queue')}</span> (<span id="queue-count">0</span>)</button>
+            <button class="rate-tab" data-tab="history"><i class="fas fa-history"></i> <span data-lang="history">${t('history')}</span></button>
+            <button class="rate-tab" data-tab="cache"><i class="fas fa-database"></i> <span data-lang="cacheState">${t('cacheState')}</span></button>
           </div>
           <div class="rate-tab-content">
-            <div id="rate-queue" class="rate-queue-list"><div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> ${t('loading')}</div></div>
+            <div id="rate-queue" class="rate-queue-list"><div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> <span data-lang="loading">${t('loading')}</span></div></div>
             <div id="rate-history" style="display:none;" class="rate-history-list"></div>
             <div id="rate-cache" style="display:none;" class="rate-cache-actions">
-              <p><i class="fas fa-broom"></i> ${t('clearStaleCache')}:</p>
+              <p><i class="fas fa-broom"></i> <span data-lang="clearStaleCache">${t('clearStaleCache')}</span>:</p>
               <div class="cache-keys-list">
-                ${cacheKeys.length === 0 ? `<p class="empty-queue">${t('noBookmarks')}</p>` :
+                ${cacheKeys.length === 0 ? `<p class="empty-queue" data-lang="noBookmarks">${t('noBookmarks')}</p>` :
                   cacheKeys.map(key => `
                     <div class="cache-key-item">
                       <span>${escapeHtml(key)}</span>
@@ -577,10 +575,10 @@
                   `).join('')}
               </div>
               <div class="cache-buttons">
-                <button id="clear-stale-cache"><i class="fas fa-broom"></i> ${t('clearStaleCache')}</button>
-                <button id="clear-all-cache"><i class="fas fa-trash-alt"></i> ${t('clearAllCache')}</button>
+                <button id="clear-stale-cache"><i class="fas fa-broom"></i> <span data-lang="clearStaleCache">${t('clearStaleCache')}</span></button>
+                <button id="clear-all-cache"><i class="fas fa-trash-alt"></i> <span data-lang="clearAllCache">${t('clearAllCache')}</span></button>
               </div>
-              <p style="font-size:12px; color:var(--text-secondary);">* ${t('save')} не удаляются.</p>
+              <p style="font-size:12px; color:var(--text-secondary);">* <span data-lang="save">${t('save')}</span> не удаляются.</p>
             </div>
           </div>
         </div>
@@ -650,7 +648,7 @@
         const countEl = modal.querySelector('#queue-count');
         if (countEl) countEl.textContent = items.length;
         if (items.length === 0) {
-            container.innerHTML = `<div class="empty-queue"><i class="fas fa-check-circle"></i> ${t('noPendingActions')}</div>`;
+            container.innerHTML = `<div class="empty-queue"><i class="fas fa-check-circle"></i> <span data-lang="noPendingActions">${t('noPendingActions')}</span></div>`;
             return;
         }
         container.innerHTML = items.map(item => `
@@ -667,7 +665,7 @@
         if (!container) return;
         const history = getHistory().slice(-50).reverse();
         if (history.length === 0) {
-            container.innerHTML = `<div class="empty-queue">${t('noBookmarks')}</div>`;
+            container.innerHTML = `<div class="empty-queue" data-lang="noBookmarks">${t('noBookmarks')}</div>`;
             return;
         }
         container.innerHTML = history.map(h => `
@@ -684,7 +682,7 @@
         if (!container) return;
         const keys = getCacheKeys();
         if (keys.length === 0) {
-            container.innerHTML = `<p class="empty-queue">${t('noBookmarks')}</p>`;
+            container.innerHTML = `<p class="empty-queue" data-lang="noBookmarks">${t('noBookmarks')}</p>`;
             return;
         }
         container.innerHTML = keys.map(key => `
@@ -861,7 +859,7 @@
                     const item = document.createElement('div');
                     item.className = 'profile-dropdown-item';
                     item.dataset.action = 'rate-panel';
-                    item.innerHTML = `<i class="fas fa-chart-bar"></i> ${t('ratePanel')}`;
+                    item.innerHTML = `<i class="fas fa-chart-bar"></i> <span data-lang="ratePanel">${t('ratePanel')}</span>`;
                     const divider = dropdown.querySelector('.profile-dropdown-divider');
                     if (divider) {
                         dropdown.insertBefore(item, divider);
