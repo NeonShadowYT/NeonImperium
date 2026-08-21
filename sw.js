@@ -1,24 +1,42 @@
-// sw.js — Service Worker с кэшированием, background sync, офлайн-поддержкой
-const STATIC_CACHE = 'static-v8';
-const DYNAMIC_CACHE = 'dynamic-v8';
-const IMAGES_CACHE = 'images-v8';
-const API_CACHE = 'github-api-v8';
+// sw.js — оптимизированный Service Worker с кешированием и фоном
+const STATIC_CACHE = 'static-v9';
+const DYNAMIC_CACHE = 'dynamic-v9';
+const IMAGES_CACHE = 'images-v9';
+const API_CACHE = 'github-api-v9';
 const SYNC_TAG = 'github-mutations';
+
 const API_CACHE_MAX_AGE = 5 * 60 * 1000;
 const IMAGES_CACHE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
 
 const PRECACHE_URLS = [
   'style.css',
-  'js/utils.js', 'js/core/github-core.js', 'js/github-client.js',
-  'js/core/github-api.js', 'js/core/github-auth.js',
-  'js/features/ui-utils.js', 'js/features/ui-feedback.js',
-  'js/features/editor.js', 'js/features/storage.js', 'js/features/rate-limits.js',
-  'js/lang.js', 'js/common-init.js', 'js/effects.js',
-  'js/pages/news-feed.js', 'js/pages/feedback.js', 'js/pages/game-updates.js',
-  'js/platform.js', 'js/features/background-gifs.js',
-  'index.html', 'starve-neon.html', 'alpha-01.html',
-  'gc-adven.html', 'license.html', '404.html',
-  'images/default-news.webp', 'images/logo-neon-imperium.webp', 'images/default-avatar.webp'
+  'js/utils.js',
+  'js/core/github-core.js',
+  'js/github-client.js',
+  'js/core/github-api.js',
+  'js/core/github-auth.js',
+  'js/features/ui-utils.js',
+  'js/features/ui-feedback.js',
+  'js/features/editor.js',
+  'js/features/storage.js',
+  'js/features/rate-limits.js',
+  'js/lang.js',
+  'js/common-init.js',
+  'js/effects.js',
+  'js/pages/news-feed.js',
+  'js/pages/feedback.js',
+  'js/pages/game-updates.js',
+  'js/platform.js',
+  'js/features/background-gifs.js',
+  'index.html',
+  'starve-neon.html',
+  'alpha-01.html',
+  'gc-adven.html',
+  'license.html',
+  '404.html',
+  'images/default-news.webp',
+  'images/logo-neon-imperium.webp',
+  'images/default-avatar.webp'
 ];
 
 self.addEventListener('install', event => {
@@ -38,12 +56,15 @@ self.addEventListener('activate', event => {
   );
 });
 
+// Вспомогательная функция для кеширования с timestamp
 async function cacheWithTimestamp(cacheName, request, response) {
   const cache = await caches.open(cacheName);
   const headers = new Headers(response.headers);
   headers.set('sw-cached-time', Date.now().toString());
   const cached = new Response(response.body, {
-    status: response.status, statusText: response.statusText, headers
+    status: response.status,
+    statusText: response.statusText,
+    headers
   });
   await cache.put(request, cached);
 }
@@ -61,12 +82,12 @@ async function isImageCacheValid(cachedResponse) {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  if (url.hostname === 'api.github.com' ||
-      url.hostname === 'api.rss2json.com' ||
-      url.hostname === 'avatars.githubusercontent.com') {
+  // Пропускаем API-запросы, они обрабатываются отдельно клиентом
+  if (url.hostname === 'api.github.com' || url.hostname === 'avatars.githubusercontent.com') {
     return;
   }
 
+  // Навигация – stale-while-revalidate
   if (event.request.mode === 'navigate') {
     event.respondWith((async () => {
       const cache = await caches.open(DYNAMIC_CACHE);
@@ -80,6 +101,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Изображения – кеш с проверкой возраста
   if (event.request.method === 'GET' && url.pathname.match(/\.(webp|png|jpg|jpeg|gif|svg|ico)$/)) {
     event.respondWith((async () => {
       const cache = await caches.open(IMAGES_CACHE);
@@ -99,6 +121,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Статика (CSS, JS, шрифты) – из кеша, если есть
   if (event.request.method === 'GET' && (
       url.pathname.match(/\.(css|js|woff2?|ttf)$/) ||
       url.origin.includes('cdnjs.cloudflare.com') ||
@@ -116,40 +139,27 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  if (event.request.method === 'GET' && url.pathname.includes('/repos/')) {
+  // Остальные GET-запросы – динамический кеш с обновлением
+  if (event.request.method === 'GET') {
     event.respondWith((async () => {
-      const cache = await caches.open(API_CACHE);
-      const cached = await cache.match(event.request);
-      if (cached && await isApiCacheValid(cached)) {
-        return cached;
-      }
+      const cache = await caches.open(DYNAMIC_CACHE);
       try {
         const network = await fetch(event.request);
-        if (network.ok) {
-          await cacheWithTimestamp(API_CACHE, event.request, network.clone());
-          return network;
-        }
-      } catch (err) {}
-      return cached || Response.error();
+        if (network.ok) cache.put(event.request, network.clone());
+        return network;
+      } catch {
+        const cached = await cache.match(event.request);
+        return cached || Response.error();
+      }
     })());
     return;
   }
 
-  event.respondWith((async () => {
-    try {
-      const network = await fetch(event.request);
-      if (network.ok) {
-        const cache = await caches.open(DYNAMIC_CACHE);
-        cache.put(event.request, network.clone());
-      }
-      return network;
-    } catch {
-      const cached = await caches.match(event.request);
-      return cached || Response.error();
-    }
-  })());
+  // Для POST и других – просто пробрасываем
+  event.respondWith(fetch(event.request));
 });
 
+// Фоновая синхронизация
 self.addEventListener('sync', event => {
   if (event.tag !== SYNC_TAG) return;
   event.waitUntil((async () => {
@@ -160,6 +170,7 @@ self.addEventListener('sync', event => {
   })());
 });
 
+// Сообщение для сохранения токена
 self.addEventListener('message', event => {
   if (event.data?.type === 'SAVE_TOKEN') {
     event.waitUntil((async () => {

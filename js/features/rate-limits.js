@@ -1,7 +1,8 @@
-// js/features/rate-limits.js – оптимизирован: кеширование, data-lang, debounce, уменьшение перерисовок
+// js/features/rate-limits.js – полная версия с оптимизациями
 (function() {
-    const { escapeHtml } = window.GithubCore;
+    const { escapeHtml } = window.GithubCore || {};
 
+    // Лимиты на действия
     const LIMITS = {
         posts: 4,
         comments: 16,
@@ -15,7 +16,7 @@
     const DB_VERSION = 2;
     const STORE_NAME = 'queue';
     const HISTORY_SIZE = 100;
-    const QUEUE_CACHE_TTL = 60000;
+    const QUEUE_CACHE_TTL = 60000; // 1 минута
 
     let db = null;
     let currentCounts = null;
@@ -23,7 +24,10 @@
     let queueCache = null;
     let queueCacheTime = 0;
     let processQueueDebounced = null;
+    let activeRatePanel = null;
+    let refreshPanel = () => {};
 
+    // BroadcastChannel для синхронизации между вкладками
     let bc = null;
     try {
         bc = new BroadcastChannel('rate-limits');
@@ -41,6 +45,7 @@
         };
     } catch (e) {}
 
+    // ---------- Работа с IndexedDB ----------
     function openDB() {
         return new Promise((resolve, reject) => {
             if (db) { resolve(db); return; }
@@ -59,6 +64,7 @@
         });
     }
 
+    // ---------- Счётчики ----------
     function getToday() {
         return new Date().toDateString();
     }
@@ -83,14 +89,6 @@
             if (bc) bc.postMessage({ type: 'counts-updated', counts: currentCounts, date: today });
         } catch (e) {}
     }
-
-    window.addEventListener('storage', (e) => {
-        if (e.key === STORAGE_KEY) {
-            loadCounts();
-            updateIndicators();
-            if (window._ratePanelOpen) refreshPanel();
-        }
-    });
 
     function getRemaining(action) {
         const limit = LIMITS[action];
@@ -129,6 +127,7 @@
         }
     }
 
+    // ---------- Очередь ----------
     async function getPendingActions(forceRefresh = false) {
         if (!forceRefresh && queueCache && (Date.now() - queueCacheTime < QUEUE_CACHE_TTL)) {
             return queueCache;
@@ -159,6 +158,7 @@
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
 
+        // Проверка на дубликаты
         const existing = await new Promise((resolve) => {
             const index = store.index('action');
             const range = IDBKeyRange.only(action);
@@ -221,10 +221,10 @@
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        const item = await new Promise((resolve, reject) => {
+        const item = await new Promise((resolve) => {
             const req = store.get(actionId);
             req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
+            req.onerror = () => resolve(null);
         });
         if (item && item.status === 'pending') {
             await new Promise((resolve, reject) => {
@@ -260,6 +260,7 @@
         pending.sort((a, b) => a.timestamp - b.timestamp);
 
         for (const item of pending) {
+            // Проверяем, не устарело ли действие
             let valid = true;
             if (window.GithubCore && typeof window.GithubCore.isActionStillValid === 'function') {
                 valid = await window.GithubCore.isActionStillValid(item.action, item.data);
@@ -378,6 +379,7 @@
         } catch { return []; }
     }
 
+    // ---------- Очистка кеша ----------
     async function clearAllCacheInternal() {
         const cacheNames = await caches.keys();
         for (const name of cacheNames) {
@@ -399,7 +401,76 @@
         queueCache = null;
     }
 
-    let activeRatePanel = null;
+    function clearStaleCache() {
+        const now = Date.now();
+        const ttl = window.GithubCore?.CONFIG?.CACHE_TTL || 600000;
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+            const key = sessionStorage.key(i);
+            if (key && key.endsWith('_time')) {
+                const time = parseInt(sessionStorage.getItem(key), 10);
+                if (!isNaN(time) && now - time > ttl) {
+                    const dataKey = key.replace('_time', '');
+                    sessionStorage.removeItem(dataKey);
+                    sessionStorage.removeItem(key);
+                }
+            }
+        }
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key && key.endsWith('_time') && !key.startsWith('rate_limits') && !key.startsWith('license_')) {
+                const time = parseInt(localStorage.getItem(key), 10);
+                if (!isNaN(time) && now - time > ttl) {
+                    const dataKey = key.replace('_time', '');
+                    localStorage.removeItem(dataKey);
+                    localStorage.removeItem(key);
+                }
+            }
+        }
+    }
+
+    function getCacheKeys() {
+        const keys = new Set();
+        for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key && !key.startsWith('preferredLanguage')) {
+                keys.add('session:' + key);
+            }
+        }
+        const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token', 'last_cache_clear'];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && !exclude.some(ex => key.startsWith(ex))) {
+                keys.add('local:' + key);
+            }
+        }
+        return Array.from(keys).sort();
+    }
+
+    function deleteCacheKey(fullKey) {
+        const [storage, key] = fullKey.split(':', 2);
+        if (storage === 'session') {
+            sessionStorage.removeItem(key);
+        } else if (storage === 'local') {
+            localStorage.removeItem(key);
+        }
+    }
+
+    // ---------- UI панель ----------
+    const actionLabels = {
+        posts: 'Посты',
+        comments: 'Комментарии',
+        storageAdds: 'Добавления в хранилище',
+        cacheClears: 'Очистка кеша',
+        reactions: 'Реакции'
+    };
+
+    const actionIcons = {
+        posts: 'fa-newspaper',
+        comments: 'fa-comment',
+        storageAdds: 'fa-box-archive',
+        cacheClears: 'fa-broom',
+        reactions: 'fa-heart'
+    };
 
     function openRatePanel() {
         const t = window.I18n?.translate || (k => k);
@@ -407,6 +478,7 @@
         const { modal, closeModal } = window.UIUtils.createModal(t('limitsAndCache'), buildPanelHTML(t), { size: 'full' });
         activeRatePanel = { modal, closeModal };
         modal.dataset.ratePanel = 'true';
+
         const originalClose = closeModal;
         const newClose = () => {
             window._ratePanelOpen = false;
@@ -435,6 +507,7 @@
             if (!modal.parentNode) { clearInterval(timerInterval); return; }
             updateTimerDisplay(modal);
         }, 10000);
+
         const origClose = newClose;
         const newCloseWithClean = () => {
             clearInterval(timerInterval);
@@ -541,7 +614,7 @@
               let color = '#4caf50';
               if (pct < 30) color = '#f44336';
               else if (pct < 60) color = '#ff9800';
-              const label = t('action' + action.charAt(0).toUpperCase() + action.slice(1)) || actionLabels[action] || action;
+              const label = actionLabels[action] || action;
               return `
                 <div class="rate-limit-item">
                   <span class="rate-label"><i class="fas ${actionIcons[action] || 'fa-circle'}"></i> ${label}</span>
@@ -612,7 +685,7 @@
         });
         modal.querySelector('#clear-all-cache')?.addEventListener('click', () => {
             if (confirm(t('clearCacheConfirm'))) {
-                clearAllCache();
+                clearAllCacheInternal();
                 window.UIUtils?.showToast(t('cacheCleared'), 'success');
                 refreshPanel();
             }
@@ -653,7 +726,7 @@
         }
         container.innerHTML = items.map(item => `
           <div class="rate-queue-item">
-            <span class="rate-action"><i class="fas ${actionIcons[item.action] || 'fa-circle'}"></i> ${t('action' + item.action.charAt(0).toUpperCase() + item.action.slice(1)) || actionLabels[item.action] || item.action}</span>
+            <span class="rate-action"><i class="fas ${actionIcons[item.action] || 'fa-circle'}"></i> ${actionLabels[item.action] || item.action}</span>
             <span class="rate-time">${new Date(item.timestamp).toLocaleString()}</span>
             <button class="queue-cancel-btn" data-id="${item.id}"><i class="fas fa-times"></i></button>
           </div>
@@ -670,7 +743,7 @@
         }
         container.innerHTML = history.map(h => `
           <div class="rate-history-item ${h.status}">
-            <span class="rate-action">${t('action' + h.action.charAt(0).toUpperCase() + h.action.slice(1)) || actionLabels[h.action] || h.action}</span>
+            <span class="rate-action">${actionLabels[h.action] || h.action}</span>
             <span class="rate-status">${h.status === 'completed' ? '✅' : '❌'}</span>
             <span class="rate-time">${new Date(h.timestamp).toLocaleString()}</span>
           </div>
@@ -703,82 +776,6 @@
         });
     }
 
-    function getCacheKeys() {
-        const keys = new Set();
-        for (let i = 0; i < sessionStorage.length; i++) {
-            const key = sessionStorage.key(i);
-            if (key && !key.startsWith('preferredLanguage')) {
-                keys.add('session:' + key);
-            }
-        }
-        const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token', 'last_cache_clear'];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && !exclude.some(ex => key.startsWith(ex))) {
-                keys.add('local:' + key);
-            }
-        }
-        return Array.from(keys).sort();
-    }
-
-    function deleteCacheKey(fullKey) {
-        const [storage, key] = fullKey.split(':', 2);
-        if (storage === 'session') {
-            sessionStorage.removeItem(key);
-        } else if (storage === 'local') {
-            localStorage.removeItem(key);
-        }
-    }
-
-    function clearStaleCache() {
-        const now = Date.now();
-        const ttl = window.GithubCore?.CONFIG?.CACHE_TTL || 600000;
-        for (let i = sessionStorage.length - 1; i >= 0; i--) {
-            const key = sessionStorage.key(i);
-            if (key && key.endsWith('_time')) {
-                const time = parseInt(sessionStorage.getItem(key), 10);
-                if (!isNaN(time) && now - time > ttl) {
-                    const dataKey = key.replace('_time', '');
-                    sessionStorage.removeItem(dataKey);
-                    sessionStorage.removeItem(key);
-                }
-            }
-        }
-        for (let i = localStorage.length - 1; i >= 0; i--) {
-            const key = localStorage.key(i);
-            if (key && key.endsWith('_time') && !key.startsWith('rate_limits') && !key.startsWith('license_')) {
-                const time = parseInt(localStorage.getItem(key), 10);
-                if (!isNaN(time) && now - time > ttl) {
-                    const dataKey = key.replace('_time', '');
-                    localStorage.removeItem(dataKey);
-                    localStorage.removeItem(key);
-                }
-            }
-        }
-    }
-
-    function clearAllCache() {
-        const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token', 'last_cache_clear'];
-        for (let i = localStorage.length - 1; i >= 0; i--) {
-            const key = localStorage.key(i);
-            if (key && !exclude.some(ex => key.startsWith(ex))) {
-                localStorage.removeItem(key);
-            }
-        }
-        for (let i = sessionStorage.length - 1; i >= 0; i--) {
-            const key = sessionStorage.key(i);
-            if (key && !key.startsWith('preferredLanguage')) {
-                sessionStorage.removeItem(key);
-            }
-        }
-        caches.keys().then(names => {
-            for (const name of names) {
-                caches.delete(name);
-            }
-        }).catch(console.warn);
-        queueCache = null;
-    }
-
     function updateTimerDisplay(modal) {
         const timerEl = modal?.querySelector('.rate-timer strong');
         if (!timerEl) return;
@@ -791,8 +788,7 @@
         timerEl.textContent = `${hours}ч ${minutes}м`;
     }
 
-    let refreshPanel = () => {};
-
+    // ---------- Индикаторы в интерфейсе ----------
     function updateIndicators() {
         document.querySelectorAll('.rate-indicator').forEach(el => {
             const action = el.dataset.action;
@@ -818,6 +814,7 @@
         return indicator;
     }
 
+    // ---------- Background Sync ----------
     let syncRegistered = false;
     const SYNC_TAG = 'github-queue-sync';
 
@@ -842,6 +839,16 @@
         });
     }
 
+    // ---------- Debounce helper ----------
+    function debounce(fn, delay) {
+        let timer;
+        return function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
+    // ---------- Инициализация ----------
     function init() {
         loadCounts();
         setInterval(() => {
@@ -850,6 +857,7 @@
 
         processQueue().catch(console.warn);
 
+        // Добавляем пункт в меню профиля при готовности
         window.addEventListener('github-auth-ready', () => {
             const profile = document.querySelector('.nav-profile');
             if (profile) {
@@ -870,10 +878,7 @@
             }
         });
 
-        window.addEventListener('open-rate-panel', () => {
-            openRatePanel();
-        });
-
+        // Слушаем клик по индикатору для открытия панели
         document.addEventListener('click', (e) => {
             const indicator = e.target.closest('.rate-indicator-wrapper, .rate-indicator');
             if (indicator) {
@@ -881,34 +886,16 @@
             }
         });
 
+        // Событие для открытия панели из других мест
+        window.addEventListener('open-rate-panel', () => {
+            openRatePanel();
+        });
+
         updateIndicators();
         console.log('[RateLimits] Инициализирован');
     }
 
-    function debounce(fn, delay) {
-        let timer;
-        return function(...args) {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn.apply(this, args), delay);
-        };
-    }
-
-    const actionLabels = {
-        posts: window.I18n?.translate('actionPosts') || 'Посты',
-        comments: window.I18n?.translate('actionComments') || 'Комментарии',
-        storageAdds: window.I18n?.translate('actionStorageAdds') || 'Добавления в хранилище',
-        cacheClears: window.I18n?.translate('actionCacheClears') || 'Очистка кеша',
-        reactions: window.I18n?.translate('actionReactions') || 'Реакции'
-    };
-
-    const actionIcons = {
-        posts: 'fa-newspaper',
-        comments: 'fa-comment',
-        storageAdds: 'fa-box-archive',
-        cacheClears: 'fa-broom',
-        reactions: 'fa-heart'
-    };
-
+    // Экспорт
     window.RateLimits = {
         init,
         checkLimit,
