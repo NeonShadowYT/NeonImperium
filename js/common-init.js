@@ -374,17 +374,6 @@
     }
   }
 
-  function refreshDynamicUI() {
-    if (window.FeedbackPage?.refresh) window.FeedbackPage.refresh();
-    if (window.refreshGameUpdates && window.currentGame) window.refreshGameUpdates(window.currentGame);
-    if (window.refreshNewsFeed) window.refreshNewsFeed();
-    if (window.initPlatform) window.initPlatform();
-  }
-
-  window.addEventListener('languageChanged', () => {
-    refreshDynamicUI();
-  });
-
   function initPageModules() {
     if (window.initNewsFeed) window.initNewsFeed();
     if (window.initFeedback) window.initFeedback();

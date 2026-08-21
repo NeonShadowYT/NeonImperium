@@ -85,7 +85,15 @@
     if (!header) {
       header = createElement('div', 'news-header', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' });
       const t = window.I18n?.translate || (k => k);
-      header.innerHTML = `<div><h2 data-lang="newsTitle">${t('newsTitle')}</h2><p class="text-secondary" data-lang="newsDesc">${t('newsDesc')}</p></div>`;
+      header.innerHTML = `
+        <div>
+          <h2>
+            <i class="fas fa-newspaper" style="color: var(--accent); margin-right: 8px;"></i>
+            <span data-lang="newsTitle">${t('newsTitle')}</span>
+          </h2>
+          <p class="text-secondary" data-lang="newsDesc">${t('newsDesc')}</p>
+        </div>
+      `;
       section.prepend(header);
     }
     container = document.getElementById('news-feed');

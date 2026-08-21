@@ -1,4 +1,5 @@
 // js/features/storage.js – с локализацией, обновление при смене языка
+// При смене языка обновляет только тексты интерфейса, не перерисовывая закладки
 (function() {
   const {
     CONFIG, escapeHtml, createElement, formatDate, debounce,
@@ -1405,18 +1406,23 @@
       await processFiles(files, modal);
     });
 
-    // ---- обновление при смене языка ----
+    // ---- обновление при смене языка (без перерисовки закладок) ----
     const langHandler = () => {
       if (!activeStorageModal || activeStorageModal.modal !== modal) return;
-      // Обновляем заголовок модалки
+      const t = window.I18n?.translate || (k => k);
+
+      // Заголовок модалки
       const headerTitle = modal.querySelector('.modal-header h2');
       if (headerTitle) headerTitle.textContent = t('storageModalTitle');
-      // Обновляем кнопки и тексты
+
+      // Кнопки сортировки
       const sortBtns = modal.querySelectorAll('.sort-btn');
       sortBtns.forEach(b => {
         if (b.dataset.order === 'new') b.innerHTML = `<i class="fas fa-arrow-down"></i> ${t('new')}`;
         else if (b.dataset.order === 'old') b.innerHTML = `<i class="fas fa-arrow-up"></i> ${t('old')}`;
       });
+
+      // Кнопки категорий
       const catBtns = modal.querySelectorAll('.cat-btn');
       catBtns.forEach(b => {
         const cat = b.dataset.cat;
@@ -1424,19 +1430,24 @@
         const labelMap = { all: t('all'), post: t('posts'), video: t('videos'), link: t('links'), save: t('saves') };
         b.innerHTML = `<i class="fas ${iconMap[cat] || 'fa-circle'}"></i> ${labelMap[cat] || cat}`;
       });
-      // Поиск
+
+      // Поле поиска
       const searchInput = modal.querySelector('#search-input');
       if (searchInput) searchInput.placeholder = t('searchPlaceholder');
+
       // Кнопка добавления
       const toggleBtn = modal.querySelector('#toggle-add-btn');
       const formVisible = addForm.style.display !== 'none';
       toggleBtn.innerHTML = formVisible ? `<i class="fas fa-times"></i> ${t('cancelButton')}` : `<i class="fas fa-plus"></i> ${t('addButton')}`;
+
       // Поле ввода URL
       const urlInput = modal.querySelector('#new-url');
       if (urlInput) urlInput.placeholder = t('addLinkPlaceholder');
+
       // Кнопка подтверждения
       const confirmBtn = modal.querySelector('#confirm-add');
       if (confirmBtn) confirmBtn.innerHTML = `<i class="fas fa-plus"></i> ${t('addButton')}`;
+
       // Drop zone
       const dropZone = modal.querySelector('#drop-zone');
       if (dropZone) {
@@ -1445,13 +1456,15 @@
         const btn = dropZone.querySelector('#file-select-btn');
         if (btn) btn.innerHTML = `<i class="fas fa-folder-open"></i> ${t('selectFiles')}`;
       }
-      // Счетчик лимитов
+
+      // Счётчик лимитов
       const indicator = modal.querySelector('.rate-indicator[data-action="storageAdds"]');
       if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('storageAdds');
-      // Перерисовываем карточки (некоторые тексты могут измениться)
-      renderBookmarks(modal);
+
+      // НЕ перерисовываем закладки – они не содержат переводимых текстов
     };
     window.addEventListener('languageChanged', langHandler);
+
     const closeWithCleanup = () => {
       window.removeEventListener('languageChanged', langHandler);
       activeStorageModal = null;

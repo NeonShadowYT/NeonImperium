@@ -1,4 +1,5 @@
 // js/pages/feedback.js – обратная связь с performAction, улучшенная обработка ошибок, локализация через data-lang
+// При смене языка не перерисовывает интерфейс, только обновляет тексты
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber,
@@ -31,6 +32,9 @@
   let initialized = false;
   let loadRetries = 0;
   const MAX_RETRIES = 2;
+
+  // Ссылки на элементы, которые нужно обновлять при смене языка без перерисовки
+  let headerElement, tabsContainer, descElement, loginPromptContainer;
 
   async function addReactionWithSync(issueNumber, content) {
     try {
@@ -99,13 +103,46 @@
       filterAndDisplay(true);
     });
 
-    // languageChanged больше не перезагружает данные, только обновление текстов через data-lang
+    // При смене языка обновляем только тексты, не перерисовывая интерфейс
+    window.addEventListener('languageChanged', () => {
+      updateTextsOnly();
+    });
 
     currentUser = getCurrentUser();
     checkAuthAndRender();
 
     const postId = new URLSearchParams(location.search).get('post');
     if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
+  }
+
+  // Функция обновления текстов без перерисовки
+  function updateTextsOnly() {
+    const t = window.I18n?.translate || (k => k);
+    if (headerElement) {
+      const titleSpan = headerElement.querySelector('h2 span');
+      if (titleSpan) titleSpan.textContent = t('feedbackTitle');
+      const btn = headerElement.querySelector('#toggle-form-btn');
+      if (btn) btn.textContent = '+ ' + t('feedbackNewBtn');
+    }
+    if (descElement) {
+      descElement.textContent = t('feedbackDesc');
+    }
+    if (tabsContainer) {
+      const tabs = tabsContainer.querySelectorAll('.feedback-tab');
+      tabs.forEach(tab => {
+        const key = tab.dataset.langKey;
+        if (key) tab.textContent = t(key);
+      });
+    }
+    if (loginPromptContainer) {
+      const prompt = loginPromptContainer;
+      const h3 = prompt.querySelector('h3');
+      if (h3) h3.textContent = t('feedbackLoginPrompt');
+      const p = prompt.querySelector('p');
+      if (p) p.textContent = t('githubTokenNote');
+      const btn = prompt.querySelector('#feedback-login-btn');
+      if (btn) btn.textContent = t('feedbackLoginBtn');
+    }
   }
 
   async function loadGameIssues(reset) {
@@ -201,6 +238,7 @@
     const t = window.I18n?.translate || (k => k);
     container.innerHTML = '';
     const prompt = createElement('div', 'login-prompt');
+    loginPromptContainer = prompt;
     const icon = createElement('i', 'fab fa-github');
     prompt.appendChild(icon);
     const h3 = createElement('h3');
@@ -234,12 +272,16 @@
     }
     container.innerHTML = '';
     const header = createElement('div', 'feedback-header');
+    headerElement = header;
     const titleWrap = createElement('div', '', { display: 'flex', alignItems: 'center', gap: '8px' });
     const h2 = createElement('h2', '', { margin: '0' });
-    h2.setAttribute('data-lang', 'feedbackTitle');
-    h2.textContent = t('feedbackTitle');
+    // Добавляем иконку перед заголовком
     const icon = createElement('i', 'fas fa-comment-dots', { fontSize: '24px', color: 'var(--accent)' });
     h2.prepend(icon);
+    const titleSpan = createElement('span');
+    titleSpan.setAttribute('data-lang', 'feedbackTitle');
+    titleSpan.textContent = t('feedbackTitle');
+    h2.appendChild(titleSpan);
     titleWrap.appendChild(h2);
     header.appendChild(titleWrap);
     const btn = createElement('button', 'button');
@@ -259,26 +301,28 @@
     const desc = createElement('p', 'text-secondary');
     desc.setAttribute('data-lang', 'feedbackDesc');
     desc.textContent = t('feedbackDesc');
+    descElement = desc;
     container.appendChild(desc);
 
     const tabs = createElement('div', 'feedback-tabs');
+    tabsContainer = tabs;
     const tabAll = createElement('button', 'feedback-tab active');
-    tabAll.setAttribute('data-lang', 'tabAll');
+    tabAll.setAttribute('data-lang-key', 'tabAll');
     tabAll.textContent = t('tabAll');
     tabAll.dataset.tab = 'all';
     tabs.appendChild(tabAll);
     const tabIdea = createElement('button', 'feedback-tab');
-    tabIdea.setAttribute('data-lang', 'tabIdeas');
+    tabIdea.setAttribute('data-lang-key', 'tabIdeas');
     tabIdea.textContent = '💡 ' + t('tabIdeas');
     tabIdea.dataset.tab = 'idea';
     tabs.appendChild(tabIdea);
     const tabBug = createElement('button', 'feedback-tab');
-    tabBug.setAttribute('data-lang', 'tabBugs');
+    tabBug.setAttribute('data-lang-key', 'tabBugs');
     tabBug.textContent = '🐛 ' + t('tabBugs');
     tabBug.dataset.tab = 'bug';
     tabs.appendChild(tabBug);
     const tabReview = createElement('button', 'feedback-tab');
-    tabReview.setAttribute('data-lang', 'tabReviews');
+    tabReview.setAttribute('data-lang-key', 'tabReviews');
     tabReview.textContent = '⭐ ' + t('tabReviews');
     tabReview.dataset.tab = 'review';
     tabs.appendChild(tabReview);

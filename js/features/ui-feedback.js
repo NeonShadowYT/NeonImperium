@@ -579,23 +579,23 @@
       submitBtn.addEventListener('click', debouncedSubmit);
     }
 
-    // ---- обновление при смене языка ----
-    const langHandler = async () => {
+    // ---- обновление при смене языка (без перерисовки) ----
+    const langHandler = () => {
       if (!activeFullModal || activeFullModal.modal !== modal) return;
-      // Пересоздаём содержимое модалки заново, сохраняя состояние
-      // Просто обновляем заголовок и кнопки с новыми переводами
+      const t = window.I18n?.translate || (k => k);
+      // Заголовок
       const headerTitle = modal.querySelector('.modal-header h2');
-      if (headerTitle) headerTitle.textContent = t(title) || title;
-      // Обновляем кнопки, которые используют переводы (например, "Комментарии")
+      if (headerTitle) headerTitle.textContent = title; // title не переводится, это название поста
+      // Заголовок раздела комментариев
       const commentsHeader = modal.querySelector('.comments-section h3');
       if (commentsHeader) commentsHeader.textContent = t('comments') || 'Комментарии';
-      // Обновляем placeholder у поля ввода
+      // Поле ввода
       const inputField = modal.querySelector('#new-comment-input');
       if (inputField) inputField.placeholder = t('enterText');
-      // Обновляем кнопку отправки
+      // Кнопка отправки
       const sendBtn = modal.querySelector('#submit-comment-btn');
       if (sendBtn) sendBtn.textContent = t('send');
-      // Обновляем индикатор лимитов
+      // Индикатор лимитов
       const indicator = modal.querySelector('.rate-indicator-wrapper');
       if (indicator) {
         const span = indicator.querySelector('.rate-indicator');
@@ -603,12 +603,10 @@
       }
     };
     window.addEventListener('languageChanged', langHandler);
-    // Удаляем обработчик при закрытии модалки
     const closeWithCleanup = () => {
       window.removeEventListener('languageChanged', langHandler);
       newClose();
     };
-    // Заменяем обработчики закрытия
     modal.querySelector('.modal-close').removeEventListener('click', newClose);
     modal.querySelector('.modal-close').addEventListener('click', closeWithCleanup);
     modal.addEventListener('click', (e) => {
@@ -905,13 +903,12 @@
       currentBody = draft.body;
     }
 
-    // ---- обновление при смене языка ----
+    // ---- обновление при смене языка (без перерисовки) ----
     const langHandler = () => {
       if (!activeEditorModal || activeEditorModal.modal !== modal) return;
-      // Обновляем заголовок модалки
+      const t = window.I18n?.translate || (k => k);
       const headerTitle = modal.querySelector('.modal-header h2');
       if (headerTitle) headerTitle.textContent = mode === 'new' ? t('createPost') : t('editPost');
-      // Обновляем placeholder'ы и кнопки
       titleInput.placeholder = t('title');
       publicBtn.textContent = t('public');
       privateBtn.textContent = t('private');

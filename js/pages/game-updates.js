@@ -1,4 +1,5 @@
 // js/pages/game-updates.js – использует общий кэш и DocumentFragment, с локализацией, обновление кнопки при смене языка
+// При смене языка не перезагружает данные, только обновляет тексты через data-lang
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractAllowed, extractSummary, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
@@ -34,7 +35,7 @@
     window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
     window.addEventListener('github-logout', () => { if (currentGame) refreshGameUpdates(currentGame); });
 
-    // ---- обновление кнопки при смене языка ----
+    // ---- обновление кнопки при смене языка (без перезагрузки) ----
     window.addEventListener('languageChanged', () => {
       const container = document.getElementById('game-updates');
       if (!container) return;
@@ -57,7 +58,8 @@
 
   async function loadGameUpdates(container, game) {
     const t = window.I18n?.translate || (k => k);
-    container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> ${t('loading')}</div>`;
+    // Используем data-lang для сообщения загрузки
+    container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="loading">${t('loading')}</p></div>`;
     if (currentAbort) {
       currentAbort.controller.abort();
       currentAbort = null;
@@ -91,7 +93,11 @@
         return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
       });
       posts.sort((a, b) => b.date - a.date);
-      if (posts.length === 0) { container.innerHTML = `<p class="text-secondary">${t('noUpdates')}</p>`; return; }
+      if (posts.length === 0) {
+        // Используем data-lang для автоматического обновления при смене языка
+        container.innerHTML = '<p class="text-secondary" data-lang="noUpdates"></p>';
+        return;
+      }
       container.innerHTML = '';
       const grid = createElement('div', 'projects-grid');
       const fragment = document.createDocumentFragment();
@@ -121,7 +127,8 @@
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error('Update load error:', err);
-      container.innerHTML = `<p class="error-message">${t('updatesLoadError')}</p>`;
+      // Используем data-lang для ошибки
+      container.innerHTML = `<p class="error-message" data-lang="updatesLoadError"></p>`;
     } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
   }
 
@@ -154,6 +161,4 @@
     });
     return card;
   }
-
-  // Убираем авто-вызов!
 })();

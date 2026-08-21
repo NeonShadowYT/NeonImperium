@@ -1,4 +1,5 @@
 // js/platform.js – улучшенная сортировка и стилизованные метки для выбора версий, с локализацией, обновление при смене языка
+// При смене языка не перезагружает данные, только обновляет тексты через обработчик
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
@@ -183,7 +184,7 @@
     let currentPlatform = (getOS() === 'Android') ? 'Android' : 'Windows';
 
     async function initPlatform() {
-        if (platformInitialized) return; // предотвращаем повторный вызов
+        if (platformInitialized) return;
         platformInitialized = true;
 
         const t = window.I18n?.translate || (k => k);
@@ -201,6 +202,7 @@
         githubContainer = document.getElementById('github-block-container');
         if (!githubContainer) return;
 
+        // Добавляем data-lang для сообщения загрузки
         githubContainer.innerHTML = `
             <h3><i class="fab fa-github"></i> GitHub</h3>
             <div class="github-block">
@@ -210,7 +212,7 @@
                 </div>
                 <div class="version-row">
                     <select class="version-select"></select>
-                    <p class="version-date" id="version-date"></p>
+                    <p class="version-date" id="version-date" data-lang="loadingVersions">${t('loadingVersions')}</p>
                 </div>
                 <a href="#" id="github-download-btn" class="download-button github" target="_blank">
                     <i class="fab fa-github"></i> ${t('downloadBtn')}
@@ -313,7 +315,9 @@
             } else {
                 displayDate = formatDate(release.published_at);
             }
+            const t = window.I18n?.translate || (k => k);
             versionDateEl.textContent = `${t('updateFrom')} ${displayDate}`;
+            versionDateEl.removeAttribute('data-lang'); // убираем data-lang, т.к. текст динамический
 
             const asset = findAsset(release, currentPlatform);
             if (asset) {
@@ -375,20 +379,25 @@
         });
 
         populateVersionSelect(currentPlatform);
-    }
 
-    // ---- обновление при смене языка ----
-    window.addEventListener('languageChanged', () => {
-        if (platformInitialized && githubContainer) {
+        // ---- обновление при смене языка (без перезагрузки) ----
+        window.addEventListener('languageChanged', () => {
+            if (!platformInitialized || !githubContainer) return;
             const t = window.I18n?.translate || (k => k);
+
+            // Обновляем кнопку скачивания
             const downloadBtn = githubContainer.querySelector('#github-download-btn');
             if (downloadBtn) {
                 downloadBtn.innerHTML = `<i class="fab fa-github"></i> ${t('downloadBtn')}`;
             }
+
+            // Обновляем кнопку "Что нового?"
             const whatsNewBtn = githubContainer.querySelector('#whats-new-btn');
             if (whatsNewBtn) {
                 whatsNewBtn.innerHTML = `<i class="fas fa-newspaper"></i> ${t('whatsNew')}`;
             }
+
+            // Обновляем дату версии, если есть выбранная версия
             const versionDateEl = githubContainer.querySelector('#version-date');
             if (versionDateEl) {
                 const selected = versionSelect.value;
@@ -405,14 +414,20 @@
                             displayDate = formatDate(release.published_at);
                         }
                         versionDateEl.textContent = `${t('updateFrom')} ${displayDate}`;
+                        versionDateEl.removeAttribute('data-lang');
+                    }
+                } else {
+                    // Если нет выбранной версии, проверяем, есть ли вообще версии
+                    const hasOptions = versionSelect.options.length > 0;
+                    if (!hasOptions) {
+                        versionDateEl.textContent = t('noVersions');
+                        versionDateEl.removeAttribute('data-lang');
                     }
                 }
             }
-        }
-    });
+        });
+    }
 
     // Экспортируем функцию инициализации
     window.initPlatform = initPlatform;
-
-    // Убираем авто-вызов!
 })();
