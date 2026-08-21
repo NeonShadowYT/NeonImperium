@@ -1,15 +1,9 @@
-// js/platform.js – улучшенная сортировка и стилизованные метки для выбора версий, с локализацией, обновление при смене языка
-// Оптимизации:
-// - кеширование релизов в localStorage с TTL 30 минут (баланс между актуальностью и производительностью)
-// - debounce для переключения платформы (300 мс)
-// - предотвращение повторных запросов при смене языка (используем кеш)
-// - уменьшение количества перерисовок через requestAnimationFrame
-
+// js/platform.js – улучшенная сортировка и стилизованные метки для выбора версий, с локализацией
+// Исправлено: область видимости populateVersionSelect, debounce внутри initPlatform
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
     const RELEASES_CACHE_KEY = 'github_all_releases';
-    // Увеличим TTL до 30 минут (было 1 час) – чтобы обновления появлялись быстрее, но не перегружали API
     const CACHE_DURATION = 30 * 60 * 1000;
     let currentAbortController = null;
     let platformInitialized = false;
@@ -31,7 +25,6 @@
         return 'Windows';
     }
 
-    // Кеширование с localStorage (долгий TTL)
     function cacheGet(key) {
         try {
             const raw = localStorage.getItem(key);
@@ -191,12 +184,15 @@
         return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
-    // Debounced обновление интерфейса при смене платформы
-    const debouncedPopulate = debounce(function(platform) {
-        populateVersionSelect(platform);
-    }, 300);
+    function debounce(fn, delay) {
+        let timer;
+        return function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
 
-    async function initPlatform() {
+    window.initPlatform = async function() {
         if (platformInitialized) return;
         platformInitialized = true;
 
@@ -353,7 +349,11 @@
             }
         }
 
-        // Обработчики с debounce
+        // Создаём debounced версию populateVersionSelect внутри области видимости
+        const debouncedPopulate = debounce(function(platform) {
+            populateVersionSelect(platform);
+        }, 300);
+
         platformBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 const newPlatform = btn.dataset.platform;
@@ -392,18 +392,9 @@
         });
 
         populateVersionSelect(currentPlatform);
-    }
+    };
 
-    // Вспомогательная функция debounce
-    function debounce(fn, delay) {
-        let timer;
-        return function(...args) {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn.apply(this, args), delay);
-        };
-    }
-
-    // ---- обновление при смене языка (только тексты, без перезагрузки данных) ----
+    // ---- обновление при смене языка (только тексты) ----
     window.addEventListener('languageChanged', () => {
         if (platformInitialized && githubContainer) {
             const t = window.I18n?.translate || (k => k);
@@ -436,6 +427,4 @@
             }
         }
     });
-
-    window.initPlatform = initPlatform;
 })();
