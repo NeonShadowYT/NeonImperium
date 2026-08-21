@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – оптимизированная лента новостей с повторными попытками и кешированием
+// js/pages/news-feed.js – исправленная загрузка новостей с GitHub
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG,
@@ -8,10 +8,11 @@
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
   const { showToast } = window.UIUtils;
 
-  // Увеличенные TTL для кеша новостей
-  const POSTS_CACHE_TTL = 5 * 60 * 1000;   // 5 минут
+  const POSTS_CACHE_TTL = 3 * 60 * 1000;   // 3 минуты
   const VIDEOS_CACHE_TTL = 10 * 60 * 1000; // 10 минут
   const TWITCH_CACHE_TTL = 2 * 60 * 1000;  // 2 минуты
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 2000;
 
   let container, posts = [], videos = [], twitchStreams = [];
   let postsLoaded = false, videosLoaded = false, twitchLoaded = false;
@@ -19,7 +20,6 @@
   let loading = false;
   let currentAbortController = null;
   let retryCount = 0;
-  const MAX_RETRIES = 2;
 
   const YT_CHANNELS = [
     { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
@@ -30,17 +30,6 @@
 
   const TWITCH_CHANNELS = ['sk0l3ra1', 'neoncyndows'];
   const DEFAULT_IMAGE = 'images/default-news.webp';
-
-  // Мемоизация рендеринга Markdown (локальная)
-  const renderMarkdownMemoized = memoize((text) => {
-    if (!text) return '';
-    if (window.marked) {
-      if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true });
-      if (typeof marked.parse === 'function') return marked.parse(text);
-      else if (typeof marked === 'function') return marked(text);
-    }
-    return text.replace(/\n/g, '<br>');
-  }, 100);
 
   function memoize(fn, maxSize = 100) {
     const cache = new Map();
@@ -57,6 +46,17 @@
     };
   }
 
+  const renderMarkdownMemoized = memoize((text) => {
+    if (!text) return '';
+    if (window.marked) {
+      if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true });
+      if (typeof marked.parse === 'function') return marked.parse(text);
+      else if (typeof marked === 'function') return marked(text);
+    }
+    return text.replace(/\n/g, '<br>');
+  }, 100);
+
+  // ---- Инициализация ----
   window.initNewsFeed = function() {
     const section = document.getElementById('news-section');
     if (!section) return;
@@ -65,7 +65,6 @@
     currentUser = getCurrentUser();
     loadNewsFeed();
 
-    // События
     window.addEventListener('github-login-success', e => {
       currentUser = e.detail.login;
       refreshNewsFeed();
@@ -93,7 +92,6 @@
       renderMixed();
     });
 
-    // Открытие поста из URL
     const postId = new URLSearchParams(location.search).get('post');
     if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
   };
@@ -105,6 +103,7 @@
     loadNewsFeed();
   };
 
+  // ---- Основная загрузка ----
   function loadNewsFeed() {
     if (loading) return;
     loading = true;
@@ -114,7 +113,6 @@
     const t = window.I18n?.translate || (k => k);
     container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">${t('newsLoading')}</p></div>`;
 
-    // Параллельная загрузка с повторными попытками
     Promise.all([
       loadPostsWithRetry(signal),
       loadVideosWithRetry(signal),
@@ -130,14 +128,12 @@
     }).catch(err => {
       if (signal.aborted) return;
       console.error('[NewsFeed] Error loading:', err);
-      // Показываем сообщение об ошибке, но не блокируем интерфейс
       postsLoaded = videosLoaded = twitchLoaded = true;
       posts = []; videos = []; twitchStreams = [];
       renderMixed();
-      // Попробуем ещё раз через некоторое время
       if (retryCount < MAX_RETRIES) {
         retryCount++;
-        setTimeout(loadNewsFeed, 5000);
+        setTimeout(loadNewsFeed, RETRY_DELAY * retryCount);
       }
     }).finally(() => {
       loading = false;
@@ -145,14 +141,20 @@
     });
   }
 
+  // ---- Загрузка постов с повторными попытками ----
   async function loadPostsWithRetry(signal) {
-    try {
-      return await loadPosts(signal);
-    } catch (err) {
-      if (signal.aborted) throw err;
-      console.warn('[NewsFeed] Posts load failed, retrying...', err);
-      await new Promise(r => setTimeout(r, 2000));
-      return loadPosts(signal);
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        return await loadPosts(signal);
+      } catch (err) {
+        if (signal.aborted) throw err;
+        console.warn(`[NewsFeed] Posts load attempt ${attempt+1} failed:`, err);
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY * (attempt + 1)));
+        } else {
+          throw err;
+        }
+      }
     }
   }
 
@@ -161,17 +163,34 @@
     const cached = cacheGet(cacheKey, POSTS_CACHE_TTL);
     if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
 
+    const headers = {
+      'Accept': 'application/vnd.github.v3+json',
+      'User-Agent': 'NeonImperium/1.0'
+    };
+
+    const urls = [
+      `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=10&page=1&labels=type:news`,
+      `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=10&page=1&labels=type:update`
+    ];
+
     const [newsResp, updatesResp] = await Promise.all([
-      fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=10&page=1&labels=type:news`, { signal }),
-      fetch(`https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?state=open&per_page=10&page=1&labels=type:update`, { signal })
+      fetch(urls[0], { headers, signal }),
+      fetch(urls[1], { headers, signal })
     ]);
+
     if (signal.aborted) return [];
-    const news = newsResp.ok ? await newsResp.json() : [];
-    const updates = updatesResp.ok ? await updatesResp.json() : [];
-    const all = [...news, ...updates].filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
-    // Дедупликация по номеру
+    if (!newsResp.ok || !updatesResp.ok) {
+      throw new Error(`HTTP ${newsResp.status} / ${updatesResp.status}`);
+    }
+
+    const news = await newsResp.json();
+    const updates = await updatesResp.json();
+    const all = [...news, ...updates]
+      .filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
+
     const seen = new Set();
     const unique = all.filter(i => { if (seen.has(i.number)) return false; seen.add(i.number); return true; });
+
     const result = unique.map(i => ({
       type: 'post',
       number: i.number,
@@ -182,18 +201,25 @@
       labels: i.labels.map(l => l.name),
       game: i.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
     }));
+
     cacheSet(cacheKey, result.map(p => ({ ...p, date: p.date.toISOString() })));
     return result;
   }
 
+  // ---- Загрузка видео (YouTube) ----
   async function loadVideosWithRetry(signal) {
-    try {
-      return await loadVideos(signal);
-    } catch (err) {
-      if (signal.aborted) throw err;
-      console.warn('[NewsFeed] Videos load failed, retrying...', err);
-      await new Promise(r => setTimeout(r, 2000));
-      return loadVideos(signal);
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        return await loadVideos(signal);
+      } catch (err) {
+        if (signal.aborted) throw err;
+        console.warn(`[NewsFeed] Videos load attempt ${attempt+1} failed:`, err);
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY * (attempt + 1)));
+        } else {
+          throw err;
+        }
+      }
     }
   }
 
@@ -234,14 +260,20 @@
     return sorted;
   }
 
+  // ---- Загрузка Twitch стримов ----
   async function loadTwitchStreamsWithRetry(signal) {
-    try {
-      return await loadTwitchStreams(signal);
-    } catch (err) {
-      if (signal.aborted) throw err;
-      console.warn('[NewsFeed] Twitch load failed, retrying...', err);
-      await new Promise(r => setTimeout(r, 2000));
-      return loadTwitchStreams(signal);
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        return await loadTwitchStreams(signal);
+      } catch (err) {
+        if (signal.aborted) throw err;
+        console.warn(`[NewsFeed] Twitch load attempt ${attempt+1} failed:`, err);
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY * (attempt + 1)));
+        } else {
+          throw err;
+        }
+      }
     }
   }
 
@@ -250,35 +282,12 @@
     const cached = cacheGet(cacheKey, TWITCH_CACHE_TTL);
     if (cached) return cached.map(s => ({ ...s, date: new Date(s.date) }));
 
-    // Используем несколько методов, чтобы получить хотя бы один стрим
-    const methods = [
-      fetchTwitchStreamsGraphQL,
-      fetchTwitchStreamsInsights
-    ];
-    let streams = [];
-    for (const method of methods) {
-      if (signal.aborted) break;
-      try {
-        const result = await method(signal);
-        if (result && result.length > 0) {
-          streams = result;
-          break;
-        }
-      } catch (e) {
-        if (e.name === 'AbortError') break;
-        console.warn('[NewsFeed] Twitch method failed:', e);
-      }
-    }
-    cacheSet(cacheKey, streams.map(s => ({ ...s, date: s.date.toISOString() })));
-    return streams;
-  }
-
-  async function fetchTwitchStreamsGraphQL(signal) {
     const streams = [];
-    const clientId = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
-    for (const channel of TWITCH_CHANNELS) {
-      if (signal.aborted) break;
-      try {
+    // Пробуем GraphQL
+    try {
+      const clientId = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
+      for (const channel of TWITCH_CHANNELS) {
+        if (signal.aborted) break;
         const query = {
           operationName: "StreamMetadata",
           variables: { channelLogin: channel },
@@ -329,49 +338,48 @@
             embedUrl
           });
         }
-      } catch (e) {
-        if (e.name === 'AbortError') break;
-        console.warn('[NewsFeed] GraphQL error for', channel, e);
       }
+    } catch (e) {
+      if (e.name !== 'AbortError') console.warn('[NewsFeed] Twitch GraphQL error:', e);
     }
-    return streams;
-  }
 
-  async function fetchTwitchStreamsInsights(signal) {
-    const streams = [];
-    for (const channel of TWITCH_CHANNELS) {
-      if (signal.aborted) break;
+    // Если стримов нет, пробуем альтернативный метод
+    if (streams.length === 0) {
       try {
-        const url = `https://api.twitchinsights.net/v1/streams?channel=${channel}`;
-        const resp = await fetch(url, { signal });
-        if (!resp.ok) continue;
-        const data = await resp.json();
-        if (data.online !== 1) continue;
-        const streamInfo = data.streams[0];
-        if (!streamInfo) continue;
-        const t = window.I18n?.translate || (k => k);
-        const viewers = streamInfo[1] || 0;
-        const thumbnail = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
-        const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
-        streams.push({
-          type: 'twitch',
-          id: channel,
-          title: `${t('stream')}: ${channel}${viewers ? ` (${viewers} ${t('viewers')})` : ''}`,
-          game: streamInfo[2] || t('stream'),
-          author: channel,
-          date: new Date(),
-          thumbnail,
-          embedUrl
-        });
+        for (const channel of TWITCH_CHANNELS) {
+          if (signal.aborted) break;
+          const url = `https://api.twitchinsights.net/v1/streams?channel=${channel}`;
+          const resp = await fetch(url, { signal });
+          if (!resp.ok) continue;
+          const data = await resp.json();
+          if (data.online !== 1) continue;
+          const streamInfo = data.streams[0];
+          if (!streamInfo) continue;
+          const t = window.I18n?.translate || (k => k);
+          const viewers = streamInfo[1] || 0;
+          const thumbnail = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
+          const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
+          streams.push({
+            type: 'twitch',
+            id: channel,
+            title: `${t('stream')}: ${channel}${viewers ? ` (${viewers} ${t('viewers')})` : ''}`,
+            game: streamInfo[2] || t('stream'),
+            author: channel,
+            date: new Date(),
+            thumbnail,
+            embedUrl
+          });
+        }
       } catch (e) {
-        if (e.name === 'AbortError') break;
-        console.warn('[NewsFeed] Insights error for', channel, e);
+        if (e.name !== 'AbortError') console.warn('[NewsFeed] Twitch insights error:', e);
       }
     }
+
+    cacheSet(cacheKey, streams.map(s => ({ ...s, date: s.date.toISOString() })));
     return streams;
   }
 
-  // Рендеринг смешанного контента
+  // ---- Рендеринг ----
   function renderMixed() {
     if (!postsLoaded || !videosLoaded || !twitchLoaded) return;
     const t = window.I18n?.translate || (k => k);
@@ -413,14 +421,10 @@
   }
 
   function createCard(item) {
-    // Общая функция для создания карточки (упрощённо)
+    const t = window.I18n?.translate || (k => k);
     const card = createElement('div', 'project-card-link card-interactive');
     const inner = createElement('div', 'project-card');
-    // Заполнение в зависимости от типа
-    // ... (код создания карточки аналогичен существующему, но с учётом оптимизаций)
-    // Для краткости, оставим ссылку на оригинальную реализацию, но в реальном коде здесь полный рендеринг.
-    // В рамках ответа приведу упрощённую версию.
-    const t = window.I18n?.translate || (k => k);
+
     let thumbnail = item.thumbnail || DEFAULT_IMAGE;
     let title = item.title || 'Без названия';
     let author = item.author || '';
@@ -441,7 +445,7 @@
     inner.appendChild(meta);
 
     card.appendChild(inner);
-    // Добавляем обработчик клика для открытия поста/видео
+
     card.addEventListener('click', () => {
       if (item.type === 'post') {
         if (!window.UIFeedback) {
@@ -452,19 +456,18 @@
           window.UIFeedback.openFullModal({ ...item, id: item.number, date: item.date });
         }
       } else {
-        // Видео или Twitch – открываем в модалке или в новом окне
+        // Видео или Twitch – открываем в новой вкладке
         if (item.embedUrl) {
           window.open(item.embedUrl, '_blank');
-        } else {
-          const videoId = item.id;
-          if (videoId) window.open(`https://youtu.be/${videoId}`, '_blank');
+        } else if (item.id) {
+          window.open(`https://youtu.be/${item.id}`, '_blank');
         }
       }
     });
+
     return card;
   }
 
-  // Вспомогательные функции
   function extractAllowed(body) {
     const match = body?.match(/<!--\s*allowed:\s*(.*?)\s*-->/i);
     return match ? match[1].trim() : null;
