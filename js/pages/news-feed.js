@@ -77,7 +77,6 @@
     try { await window.BookmarkStorage.addBookmark(bookmark); showToast(t('addToFavorites'), 'success'); } catch (err) { if (err.message !== 'duplicate') showToast(t('loadError') + ': ' + err.message, 'error'); }
   }
 
-  // ---- экспорт функции инициализации ----
   window.initNewsFeed = function() {
     const section = document.getElementById('news-section');
     if (!section) return;
@@ -104,7 +103,6 @@
     const postId = new URLSearchParams(location.search).get('post');
     if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
 
-    // ---- обновление кнопки "Добавить новость" при смене языка ----
     window.addEventListener('languageChanged', () => {
       const header = document.querySelector('.news-header');
       if (header) {
@@ -143,19 +141,50 @@
     container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="newsLoading">${t('newsLoading')}</p></div>`;
     
     console.log('[NewsFeed] Начинаем загрузку всех источников');
-    Promise.all([ loadPosts(signal), loadVideos(signal), loadTwitchStreams(signal) ]).then(([loadedPosts, loadedVideos, loadedTwitch]) => {
+
+    // Загружаем посты и видео параллельно, стримы – с меньшим приоритетом
+    Promise.allSettled([
+      loadPosts(signal),
+      loadVideos(signal)
+    ]).then(([postsResult, videosResult]) => {
       if (signal.aborted) return;
-      posts = loadedPosts; videos = loadedVideos; twitchStreams = loadedTwitch;
-      postsLoaded = videosLoaded = twitchLoaded = true;
-      console.log(`[NewsFeed] Загружено: постов ${posts.length}, видео ${videos.length}, стримов ${twitchStreams.length}`);
+      posts = postsResult.status === 'fulfilled' ? postsResult.value : [];
+      videos = videosResult.status === 'fulfilled' ? videosResult.value : [];
+      postsLoaded = true;
+      videosLoaded = true;
+      console.log(`[NewsFeed] Загружено: постов ${posts.length}, видео ${videos.length}`);
+      // Показываем ленту сразу с постами и видео
       renderMixed();
+
+      // Теперь загружаем Twitch стримы в фоне
+      loadTwitchStreams(signal, 1) // только 1 попытка
+        .then(streams => {
+          if (signal.aborted) return;
+          twitchStreams = streams;
+          twitchLoaded = true;
+          console.log(`[NewsFeed] Загружено стримов: ${twitchStreams.length}`);
+          // Обновляем ленту, чтобы добавить стримы
+          renderMixed();
+        })
+        .catch(err => {
+          if (signal.aborted) return;
+          console.warn('[NewsFeed] Ошибка загрузки стримов:', err);
+          twitchLoaded = true;
+          twitchStreams = [];
+          renderMixed();
+        });
     }).catch(err => {
       if (signal.aborted) return;
-      console.error('[NewsFeed] Ошибка загрузки:', err);
-      postsLoaded = videosLoaded = twitchLoaded = true;
-      posts = []; videos = []; twitchStreams = [];
+      console.error('[NewsFeed] Ошибка загрузки постов/видео:', err);
+      postsLoaded = true;
+      videosLoaded = true;
+      posts = [];
+      videos = [];
       renderMixed();
-    }).finally(() => { loading = false; currentAbortController = null; });
+    }).finally(() => {
+      loading = false;
+      currentAbortController = null;
+    });
   }
 
   async function loadVideos(signal) {
@@ -192,11 +221,12 @@
     return sorted;
   }
 
-  async function loadTwitchStreams(signal, retries = 2) {
+  // Упрощённая загрузка Twitch стримов – только один метод, меньше попыток
+  async function loadTwitchStreams(signal, retries = 1) {
     console.log('[NewsFeed] loadTwitchStreams вызвана');
     
     const cacheKey = 'twitch_streams_v2';
-    const cached = cacheGet(cacheKey, 2 * 60 * 1000);
+    const cached = cacheGet(cacheKey, 5 * 60 * 1000); // 5 минут кэша
     if (cached) {
       console.log('[NewsFeed] Twitch стримы взяты из кеша:', cached.length);
       return cached.map(s => ({ ...s, date: new Date(s.date) }));
@@ -206,7 +236,6 @@
     let attempt = 0;
 
     const methods = [
-      { name: 'twitch-live-checker', fn: fetchTwitchStreamsLiveChecker },
       { name: 'GraphQL', fn: fetchTwitchStreamsGraphQL },
       { name: 'twitchinsights', fn: fetchTwitchStreamsInsights }
     ];
@@ -238,65 +267,15 @@
       }
     }
 
-    cacheSet(cacheKey, streams.map(s => ({ ...s, date: s.date.toISOString() })));
+    if (streams.length > 0) {
+      cacheSet(cacheKey, streams.map(s => ({ ...s, date: s.date.toISOString() })));
+    }
     console.log('[NewsFeed] Итоговое количество стримов:', streams.length);
     return streams;
   }
 
-  async function fetchTwitchStreamsLiveChecker(signal) {
-    if (typeof TwitchLiveChecker === 'undefined') {
-      try {
-        await loadScript('https://cdn.jsdelivr.net/gh/SethClydesdale/twitch-live-checker@main/twitch-live-checker.min.js', signal);
-      } catch (e) {
-        console.warn('[NewsFeed] Не удалось загрузить twitch-live-checker:', e);
-        return [];
-      }
-    }
-
-    const streams = [];
-    const promises = TWITCH_CHANNELS.map(channel => {
-      return new Promise((resolve) => {
-        if (signal && signal.aborted) {
-          resolve(null);
-          return;
-        }
-
-        try {
-          TwitchLiveChecker.getUser(channel, function(status) {
-            if (status === 'online') {
-              const thumbnail = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`;
-              const embedUrl = `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`;
-              const t = window.I18n?.translate || (k => k);
-              resolve({
-                type: 'twitch',
-                id: channel,
-                title: `${t('stream')}: ${channel}`,
-                game: t('stream'),
-                author: channel,
-                date: new Date(),
-                thumbnail: thumbnail,
-                embedUrl: embedUrl
-              });
-            } else {
-              resolve(null);
-            }
-          });
-        } catch (e) {
-          console.warn(`[NewsFeed] Ошибка twitch-live-checker для ${channel}:`, e);
-          resolve(null);
-        }
-      });
-    });
-
-    const results = await Promise.all(promises);
-    for (const result of results) {
-      if (result) {
-        streams.push(result);
-        console.log(`[NewsFeed] Найден стрим через twitch-live-checker: ${result.id}`);
-      }
-    }
-    return streams;
-  }
+  // Метод через twitch-live-checker убран – он слишком медленный и часто падает
+  // Оставляем только GraphQL и twitchinsights
 
   async function fetchTwitchStreamsGraphQL(signal) {
     const streams = [];
@@ -332,6 +311,8 @@
           `
         };
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 сек таймаут
         const response = await fetch('https://gql.twitch.tv/gql', {
           method: 'POST',
           headers: {
@@ -339,8 +320,9 @@
             'Client-ID': 'kimne78kx3ncx6brgo4mv6wki5h1ko'
           },
           body: JSON.stringify(query),
-          signal: signal
+          signal: signal || controller.signal
         });
+        clearTimeout(timeoutId);
 
         if (!response.ok) continue;
 
@@ -380,8 +362,11 @@
     for (const channel of TWITCH_CHANNELS) {
       if (signal && signal.aborted) break;
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 сек таймаут
         const url = `https://api.twitchinsights.net/v1/streams?channel=${channel}`;
-        const resp = await fetch(url, { signal });
+        const resp = await fetch(url, { signal: signal || controller.signal });
+        clearTimeout(timeoutId);
         if (!resp.ok) continue;
         const data = await resp.json();
         if (data.online !== 1) continue;
@@ -411,48 +396,6 @@
       }
     }
     return streams;
-  }
-
-  function loadScript(src, signal) {
-    return new Promise((resolve, reject) => {
-      if (signal && signal.aborted) {
-        reject(new Error('Aborted'));
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-
-      const onLoad = () => {
-        cleanup();
-        resolve();
-      };
-      const onError = () => {
-        cleanup();
-        reject(new Error(`Failed to load script: ${src}`));
-      };
-      const onAbort = () => {
-        cleanup();
-        reject(new Error('Aborted'));
-      };
-
-      const cleanup = () => {
-        script.removeEventListener('load', onLoad);
-        script.removeEventListener('error', onError);
-        if (signal) {
-          signal.removeEventListener('abort', onAbort);
-        }
-      };
-
-      script.addEventListener('load', onLoad);
-      script.addEventListener('error', onError);
-      if (signal) {
-        signal.addEventListener('abort', onAbort);
-      }
-
-      document.head.appendChild(script);
-    });
   }
 
   async function loadPosts(signal) {
@@ -623,7 +566,8 @@
   }
 
   function renderMixed() {
-    if (!postsLoaded || !videosLoaded || !twitchLoaded) return;
+    // Ждём загрузки постов и видео (стримы могут ещё грузиться)
+    if (!postsLoaded || !videosLoaded) return;
     const t = window.I18n?.translate || (k => k);
 
     const filteredPosts = posts.filter(p => {
@@ -635,7 +579,8 @@
 
     let items = [];
 
-    if (twitchStreams.length > 0) {
+    // Стримы добавляем, если они уже загружены
+    if (twitchLoaded && twitchStreams.length > 0) {
       twitchStreams.sort((a, b) => b.date - a.date);
       items = items.concat(twitchStreams);
     }
@@ -684,12 +629,9 @@
           });
           header.appendChild(btn);
         } else {
-          // Обновляем текст кнопки при перерисовке
           existing.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
         }
       } else if (existing) existing.remove();
     }
   }
-
-  // Убираем авто-вызов!
 })();

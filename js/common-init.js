@@ -81,15 +81,7 @@
     return tryLoad(0);
   }
 
-  function preloadFont() {
-    const link = document.createElement('link');
-    link.rel = 'preload';
-    link.as = 'font';
-    link.href = 'fonts/RussoOne.woff2';
-    link.crossOrigin = 'anonymous';
-    link.type = 'font/woff2';
-    document.head.appendChild(link);
-  }
+  // Функция предзагрузки шрифта УДАЛЕНА – шрифт загружается через CSS
 
   function initLazyYT() {
     function showYouTubeFallback(container, videoUrl) {
@@ -369,12 +361,10 @@
     if (window.initPlatform) window.initPlatform();
   }
 
-  // Подписываемся на смену языка
   window.addEventListener('languageChanged', () => {
     refreshDynamicUI();
   });
 
-  // ==== НОВОЕ: запуск модулей только после загрузки переводов ====
   function initPageModules() {
     if (window.initNewsFeed) window.initNewsFeed();
     if (window.initFeedback) window.initFeedback();
@@ -383,18 +373,14 @@
   }
 
   function waitForLanguage() {
-    // Если переводы уже загружены – запускаем сразу
     if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
-      // Проверяем, что translations загружены (если есть хоть один ключ)
       const testKey = window.I18n.translate('siteTitle');
       if (testKey !== 'siteTitle') {
         initPageModules();
         return;
       }
     }
-    // Слушаем событие загрузки языка
     document.addEventListener('languageLoaded', initPageModules, { once: true });
-    // Запасной вариант: если событие уже было, но мы его пропустили
     if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
       setTimeout(() => {
         const testKey = window.I18n.translate('siteTitle');
@@ -405,13 +391,10 @@
     }
   }
 
-  // Инициализация, не зависящая от переводов
   function initNonLanguageDependent() {
-    preloadFont();
+    // preloadFont() удалён – шрифт загружается через CSS
     loadPageScripts();
-    ensureMarked().then(() => {
-      // ничего не делаем
-    });
+    ensureMarked().then(() => {});
     initLazyYT();
     loadDustParticles();
     registerServiceWorker();
@@ -419,7 +402,6 @@
     initRateLimits();
   }
 
-  // Запуск
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       initNonLanguageDependent();
