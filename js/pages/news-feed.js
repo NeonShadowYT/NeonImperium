@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – оптимизирован: локальная memoize, throttleRAF, удалён offline-queue
+// js/pages/news-feed.js – исправлен: локальная memoize, увеличен TTL кеша, параллельная загрузка
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber,
@@ -9,7 +9,7 @@
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
   const { showToast, createModal } = window.UIUtils;
 
-  // ---------- Локальная мемоизация (как в ui-feedback.js) ----------
+  // Локальная мемоизация (чтобы не зависеть от Utils)
   function memoize(fn, maxSize = 100) {
     const cache = new Map();
     return function(...args) {
@@ -27,6 +27,17 @@
     };
   }
 
+  // Мемоизация рендеринга Markdown для постов
+  const renderMarkdownMemoized = memoize((text) => {
+    if (!text) return '';
+    if (window.marked) {
+      if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
+      if (typeof marked.parse === 'function') return marked.parse(text);
+      else if (typeof marked === 'function') return marked(text);
+    }
+    return text.replace(/\n/g, '<br>');
+  }, 100);
+
   const YT_CHANNELS = [
     { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
     { id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' },
@@ -41,21 +52,15 @@
 
   const DEFAULT_IMAGE = 'images/default-news.webp';
 
+  // Увеличенные TTL для кеша
+  const POSTS_CACHE_TTL = 5 * 60 * 1000;   // 5 минут
+  const VIDEOS_CACHE_TTL = 10 * 60 * 1000; // 10 минут
+  const TWITCH_CACHE_TTL = 2 * 60 * 1000;  // 2 минуты
+
   let container, posts = [], videos = [], twitchStreams = [], postsLoaded = false, videosLoaded = false, twitchLoaded = false;
   let currentUser = null;
   let loading = false;
   let currentAbortController = null;
-
-  // Мемоизация рендеринга Markdown для постов
-  const renderMarkdownMemoized = memoize((text) => {
-    if (!text) return '';
-    if (window.marked) {
-      if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-      if (typeof marked.parse === 'function') return marked.parse(text);
-      else if (typeof marked === 'function') return marked(text);
-    }
-    return text.replace(/\n/g, '<br>');
-  }, 100);
 
   async function ensureLoggedInAndGist() {
     if (getCurrentUser() && hasScope('gist')) return true;
@@ -193,7 +198,7 @@
 
   async function loadVideosFromRSS2JSON(signal) {
     const cacheKey = 'youtube_videos_rss2json_v3';
-    const cached = cacheGet(cacheKey, 30 * 60 * 1000);
+    const cached = cacheGet(cacheKey, VIDEOS_CACHE_TTL);
     if (cached) return cached.map(v => ({ ...v, date: new Date(v.date) }));
 
     const all = [];
@@ -225,7 +230,7 @@
     console.log('[NewsFeed] loadTwitchStreams вызвана');
     
     const cacheKey = 'twitch_streams_v2';
-    const cached = cacheGet(cacheKey, 2 * 60 * 1000);
+    const cached = cacheGet(cacheKey, TWITCH_CACHE_TTL);
     if (cached) {
       console.log('[NewsFeed] Twitch стримы взяты из кеша:', cached.length);
       return cached.map(s => ({ ...s, date: new Date(s.date) }));
@@ -486,7 +491,7 @@
 
   async function loadPosts(signal) {
     const cacheKey = 'posts_news+update_v3';
-    const cached = cacheGet(cacheKey);
+    const cached = cacheGet(cacheKey, POSTS_CACHE_TTL);
     if (cached) return cached.map(p => ({ ...p, date: new Date(p.date) }));
 
     const [newsResp, updatesResp] = await Promise.all([
