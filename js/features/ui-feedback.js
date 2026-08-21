@@ -1,10 +1,10 @@
-// js/features/ui-feedback.js – оптимизирован: мемоизация, throttleRAF, удалён offline-queue
+// js/features/ui-feedback.js – исправлен: локальная мемоизация, проверка marked, гарантированный экспорт UIFeedback
 (function() {
   const {
-    createElement, escapeHtml, renderMarkdown, loadModule,
+    createElement, escapeHtml, loadModule,
     performAction, isActionStillValid, extractAllowed, decryptPrivateBody,
     cacheRemoveByPrefix, CONFIG, getPlainTextLength, containsGitHubToken,
-    cacheGet, cacheSet, memoize, throttleRAF
+    cacheGet, cacheSet, throttleRAF
   } = window.GithubCore;
   const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
@@ -35,21 +35,53 @@
 
   const t = window.I18n?.translate || (k => k);
 
-  // Мемоизация рендеринга Markdown
-  const renderMarkdownMemoized = memoize(
-    (text) => {
-      if (!text) return '';
-      if (window.marked) {
-        if (typeof marked.setOptions === 'function') marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-        if (typeof marked.parse === 'function') return marked.parse(text);
-        else if (typeof marked === 'function') return marked(text);
+  // ---------- Локальная мемоизация (чтобы не зависеть от Utils) ----------
+  function memoize(fn, maxSize = 100) {
+    const cache = new Map();
+    return function(...args) {
+      const key = JSON.stringify(args);
+      if (cache.has(key)) {
+        return cache.get(key);
       }
-      return text.replace(/\n/g, '<br>');
-    },
-    null,
-    100
-  );
+      const result = fn.apply(this, args);
+      if (cache.size >= maxSize) {
+        const firstKey = cache.keys().next().value;
+        cache.delete(firstKey);
+      }
+      cache.set(key, result);
+      return result;
+    };
+  }
 
+  // Мемоизированный рендеринг Markdown
+  const renderMarkdownMemoized = memoize((text) => {
+    if (!text) return '';
+    if (window.marked) {
+      if (typeof marked.setOptions === 'function') {
+        marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
+      }
+      if (typeof marked.parse === 'function') {
+        return marked.parse(text);
+      } else if (typeof marked === 'function') {
+        return marked(text);
+      }
+    }
+    return text.replace(/\n/g, '<br>');
+  }, 100);
+
+  // Рендеринг с кешем по ключу (для постов)
+  async function renderMarkdownWithEditor(text, targetElement, cacheKey = null) {
+    if (!text) { targetElement.innerHTML = ''; return; }
+    if (cacheKey && markdownCache.has(cacheKey)) {
+      targetElement.innerHTML = markdownCache.get(cacheKey);
+      return;
+    }
+    const html = renderMarkdownMemoized(text);
+    if (cacheKey) markdownCache.set(cacheKey, html);
+    targetElement.innerHTML = html;
+  }
+
+  // ---------- Остальные функции без изменений ----------
   function canViewPost(body, labels, currentUser) {
     if (!labels || !labels.includes('private')) return true;
     if (isAdmin()) return true;
@@ -68,17 +100,6 @@
       return false;
     }
     return true;
-  }
-
-  async function renderMarkdownWithEditor(text, targetElement, cacheKey = null) {
-    if (!text) { targetElement.innerHTML = ''; return; }
-    if (cacheKey && markdownCache.has(cacheKey)) {
-      targetElement.innerHTML = markdownCache.get(cacheKey);
-      return;
-    }
-    const html = renderMarkdownMemoized(text);
-    if (cacheKey) markdownCache.set(cacheKey, html);
-    targetElement.innerHTML = html;
   }
 
   function renderReactions(container, issueNumber, reactions, currentUser, onAddHeart, onRemoveHeart) {
@@ -577,7 +598,6 @@
       submitBtn.addEventListener('click', debouncedSubmit);
     }
 
-    // Обновление модалки при смене языка – только data-lang
     const langHandler = () => {
       if (!activeFullModal || activeFullModal.modal !== modal) return;
       const headerTitle = modal.querySelector('.modal-header h2');
@@ -801,7 +821,6 @@
     submitRow.appendChild(rateIndicator);
     container.appendChild(submitRow);
 
-    // Обновление превью с debounce + throttleRAF
     const updatePreview = throttleRAF(async () => {
       currentBody = textarea.value;
       await renderMarkdownWithEditor(currentBody, preview);
@@ -890,7 +909,6 @@
     }, 1000);
     submitBtn.addEventListener('click', debouncedSubmit);
 
-    // Обновление модалки редактора при смене языка – только data-lang
     const langHandler = () => {
       if (!activeEditorModal || activeEditorModal.modal !== modal) return;
       const headerTitle = modal.querySelector('.modal-header h2');
@@ -919,6 +937,7 @@
     });
   }
 
+  // Экспорт
   window.UIFeedback = {
     renderReactions,
     loadComments,

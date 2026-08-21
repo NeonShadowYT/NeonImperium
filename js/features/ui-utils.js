@@ -1,9 +1,5 @@
 // js/features/ui-utils.js — только UI-функции, используют GithubCore
-// Оптимизации:
-// - Очередь тостов (не более одного активного, остальные ждут)
-// - Единый экземпляр модалки (переиспользуется, меняется содержимое)
-// - Сохранение/загрузка черновиков (без изменений)
-
+// Исправлено: переиспользуемая модалка, корректное удаление обработчиков при закрытии
 (function() {
     const { createElement, escapeHtml, loadModule } = window.GithubCore || {};
 
@@ -33,7 +29,6 @@
 
     function showToast(message, type = 'info', duration = 3000) {
         const container = getToastContainer();
-        // Добавляем в очередь
         toastQueue.push({ message, type, duration });
         processToastQueue();
     }
@@ -59,18 +54,15 @@
         container.appendChild(toast);
         activeToast = toast;
 
-        // Плавное появление
         requestAnimationFrame(() => {
             toast.style.opacity = '1';
             toast.style.transform = 'translateY(0)';
         });
 
-        // Автоматическое закрытие
         const timer = setTimeout(() => {
             closeToast(toast);
         }, duration);
 
-        // Закрытие по клику
         toast.addEventListener('click', () => {
             clearTimeout(timer);
             closeToast(toast);
@@ -84,42 +76,37 @@
         setTimeout(() => {
             if (toast.parentNode) toast.remove();
             activeToast = null;
-            // Обрабатываем следующее сообщение из очереди
             processToastQueue();
         }, 300);
     }
 
-    // ---------- ПЕРЕИСПОЛЬЗУЕМАЯ МОДАЛКА ----------
+    // ---------- ПЕРЕИСПОЛЬЗУЕМАЯ МОДАЛКА (исправлена) ----------
     let modalInstance = null;
     let modalCloseCallback = null;
+    let modalEscHandler = null;
 
     function createModal(title, contentHtml, options = {}) {
         const { onClose, size = 'full', closeButton = true } = options;
 
-        // Если модалка уже существует, просто обновляем содержимое
         if (modalInstance) {
+            // Обновляем содержимое существующей модалки
             const { modal, header, body, closeFn } = modalInstance;
-            // Обновляем заголовок
             const titleEl = header.querySelector('h2');
             if (titleEl) titleEl.textContent = title;
-            // Обновляем тело
             body.innerHTML = contentHtml;
-            // Показываем модалку
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
 
-            // Обновляем колбэк закрытия
-            if (modalCloseCallback) {
-                // Удаляем старый обработчик
-                const oldClose = modalCloseCallback;
-                modalCloseCallback = null;
+            // Обновляем колбэк
+            if (modalCloseCallback && modalCloseCallback !== onClose) {
+                // Предыдущий колбэк заменяем
             }
             modalCloseCallback = onClose || null;
 
             return { modal, closeModal: closeFn };
         }
 
-        // Создаём новую модалку в первый раз
+        // Создаём новую модалку
         const modal = createElement('div', size === 'full' ? 'modal modal-fullscreen' : 'modal', {
             backgroundColor: 'rgba(0,0,0,0.7)'
         }, { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'modal-header-title' });
@@ -144,13 +131,15 @@
         const closeModal = () => {
             modal.classList.remove('active');
             document.body.style.overflow = '';
-            // Не удаляем модалку из DOM, просто скрываем
-            // Вызываем колбэк
             if (modalCloseCallback) {
                 modalCloseCallback();
                 modalCloseCallback = null;
             }
-            // Не очищаем содержимое, чтобы при повторном открытии можно было переиспользовать
+            // Удаляем обработчик Escape
+            if (modalEscHandler) {
+                document.removeEventListener('keydown', modalEscHandler);
+                modalEscHandler = null;
+            }
         };
 
         if (closeBtn) {
@@ -160,13 +149,12 @@
             if (e.target === modal) closeModal();
         });
 
-        const escHandler = e => {
+        modalEscHandler = (e) => {
             if (e.key === 'Escape') {
                 closeModal();
-                document.removeEventListener('keydown', escHandler);
             }
         };
-        document.addEventListener('keydown', escHandler);
+        document.addEventListener('keydown', modalEscHandler);
 
         modalInstance = { modal, header, body, closeFn: closeModal };
         modalCloseCallback = onClose || null;
@@ -183,6 +171,5 @@
     }
     function clearDraft(key) { sessionStorage.removeItem(key); }
 
-    // Экспорт
     window.UIUtils = { showToast, createModal, saveDraft, loadDraft, clearDraft };
 })();

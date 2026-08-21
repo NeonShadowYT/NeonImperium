@@ -1,4 +1,4 @@
-// js/pages/game-updates.js – оптимизирован: data-lang вместо перерисовки
+// js/pages/game-updates.js – исправлен: добавлена проверка UIFeedback, подгрузка при необходимости
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractAllowed, extractSummary, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
@@ -32,14 +32,21 @@
     });
     window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
     window.addEventListener('github-logout', () => { if (currentGame) refreshGameUpdates(currentGame); });
-
-    // languageChanged – только обновляем data-lang кнопки, без перерисовки
   };
 
   window.refreshGameUpdates = (game) => {
     const cont = document.getElementById('game-updates');
     if (cont && cont.dataset.game === game) loadGameUpdates(cont, game);
   };
+
+  async function ensureUIFeedback() {
+    if (window.UIFeedback) return;
+    try {
+      await loadModule('js/features/ui-feedback.js');
+    } catch (e) {
+      console.warn('[game-updates] UIFeedback не загрузился:', e);
+    }
+  }
 
   async function loadGameUpdates(container, game) {
     const t = window.I18n?.translate || (k => k);
@@ -81,6 +88,10 @@
       container.innerHTML = '';
       const grid = createElement('div', 'projects-grid');
       const fragment = document.createDocumentFragment();
+
+      // Гарантируем загрузку UIFeedback перед созданием карточек
+      await ensureUIFeedback();
+
       posts.forEach(p => fragment.appendChild(createUpdateCard(p)));
       grid.appendChild(fragment);
       container.appendChild(grid);
@@ -105,7 +116,14 @@
           const btn = createElement('button', 'button admin-update-btn');
           btn.setAttribute('data-lang', 'addUpdate');
           btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
-          btn.addEventListener('click', async () => { if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js'); window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update'); });
+          btn.addEventListener('click', async () => {
+            await ensureUIFeedback();
+            if (window.UIFeedback) {
+              window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update');
+            } else {
+              showToast(t('loadModulesError'), 'error');
+            }
+          });
           header.appendChild(btn);
         } else {
           existing.setAttribute('data-lang', 'addUpdate');
@@ -143,8 +161,12 @@
     inner.append(imgW, title, meta, preview);
     card.appendChild(inner);
     card.addEventListener('click', async () => {
-      if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
-      window.UIFeedback.openFullModal({ type: 'update', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels });
+      await ensureUIFeedback();
+      if (window.UIFeedback) {
+        window.UIFeedback.openFullModal({ type: 'update', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels });
+      } else {
+        showToast(t('viewerNotAvailable'), 'error');
+      }
     });
     return card;
   }

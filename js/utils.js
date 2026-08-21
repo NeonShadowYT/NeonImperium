@@ -8,7 +8,7 @@
         REPO_NAME: 'NeonImperium'
     };
 
-    // ---------- СУЩЕСТВУЮЩИЕ ФУНКЦИИ (без изменений) ----------
+    // ---------- СУЩЕСТВУЮЩИЕ ФУНКЦИИ ----------
     function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -194,11 +194,6 @@
 
     // ---------- НОВЫЕ УТИЛИТЫ ----------
 
-    /**
-     * Троттлинг с использованием requestAnimationFrame.
-     * Выполняет функцию не чаще одного раза за кадр.
-     * Идеально для обработчиков событий, которые могут вызываться часто (scroll, resize, mousemove).
-     */
     function throttleRAF(fn) {
         let scheduled = false;
         let lastArgs = null;
@@ -213,20 +208,11 @@
         };
     }
 
-    /**
-     * Пакетное обновление DOM.
-     * Собирает несколько операций обновления DOM в один кадр анимации.
-     * @param {Function} updateFn - функция, выполняющая обновления DOM
-     * @param {number} delay - максимальная задержка в мс (по умолчанию 0 - ждём следующий кадр)
-     */
     function batchDOMUpdates(updateFn, delay = 0) {
         let pending = false;
         let timer = null;
         return function(...args) {
-            if (pending) {
-                // Если уже запланировано, обновляем аргументы и ждём
-                return;
-            }
+            if (pending) return;
             pending = true;
             const execute = () => {
                 pending = false;
@@ -243,12 +229,6 @@
         };
     }
 
-    /**
-     * Мемоизация (кеширование результатов функции).
-     * @param {Function} fn - функция для мемоизации
-     * @param {Function} keyGenerator - функция, генерирующая ключ кеша (по умолчанию JSON.stringify аргументов)
-     * @param {number} maxSize - максимальное количество записей в кеше (по умолчанию 100)
-     */
     function memoize(fn, keyGenerator = null, maxSize = 100) {
         const cache = new Map();
         return function(...args) {
@@ -266,24 +246,15 @@
         };
     }
 
-    /**
-     * Определение, является ли устройство низкопроизводительным.
-     * Учитывает количество ядер, наличие touch-экрана (мобильное), ширину экрана.
-     * @returns {boolean}
-     */
     function isLowPerformance() {
-        // Проверяем prefers-reduced-motion
         if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
             return true;
         }
-        // Количество ядер
         const cores = navigator.hardwareConcurrency || 4;
         if (cores < 4) return true;
-        // Мобильные устройства (touch + small screen)
         const isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
         const isSmallScreen = window.innerWidth < 768;
         if (isMobile && isSmallScreen) return true;
-        // Проверка на память (если доступно)
         if (navigator.deviceMemory && navigator.deviceMemory < 4) return true;
         return false;
     }
