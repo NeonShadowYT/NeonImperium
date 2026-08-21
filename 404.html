@@ -26,12 +26,62 @@
     <script src="js/core/github-auth.js" defer></script>
     <script src="js/lang.js" defer></script>
     <script src="js/dust-particles.js" defer></script>
+
     <style>
         /* Critical CSS */
         body { margin:0; background:#0f0f1a; font-family: 'Russo One', sans-serif; }
         .nav-bar { background:#1e1e30; border-radius:40px; padding:6px 20px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
         .page { max-width:1200px; margin:0 auto; width:100%; }
         .loading-spinner { text-align:center; padding:30px; color:#c0c0d0; }
+
+        /* Фоновый слой с гифкой */
+        .page-404-wrapper {
+            position: relative;
+            overflow: hidden;
+            border-radius: var(--radius-md);
+            margin-bottom: 24px;
+        }
+        .bg-gif-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0;
+            transition: opacity 1.5s ease-in-out;
+        }
+        .bg-gif-layer.active {
+            opacity: 1;
+        }
+        .bg-gif-layer img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: blur(4px) brightness(0.6);
+        }
+        .bg-gif-mask {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(30,30,48,0.2) 0%, rgba(30,30,48,0.9) 70%, var(--bg-card) 100%);
+            z-index: 1;
+            pointer-events: none;
+        }
+        .card {
+            position: relative;
+            z-index: 2;
+            background: rgba(30,30,48,0.65);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+        /* Навбар поверх всего */
+        .nav-bar {
+            position: relative;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
@@ -49,13 +99,32 @@
             </div>
         </nav>
 
-        <main>
-            <div class="card" style="text-align: center; padding: 60px 28px;">
-                <h1 data-lang="notFoundTitle" style="font-size: 72px; margin-bottom: 20px;">404</h1>
-                <p class="text-secondary" data-lang="notFoundDesc" style="font-size: 18px; margin-bottom: 30px;">Запрашиваемая страница не существует или была перемещена.</p>
-                <a href="index.html" class="button wide" data-lang="backHome">Вернуться на главную</a>
+        <div class="page-404-wrapper">
+            <!-- Фоновый слой с гифкой -->
+            <div class="bg-gif-layer" id="bgGifLayer">
+                <img src="https://img.itch.zone/aW1nLzIyNjAyNTM1LmdpZg==/original/HYXFD4.gif" alt="фон" loading="lazy">
             </div>
-        </main>
+            <div class="bg-gif-mask"></div>
+
+            <main>
+                <div class="card" style="text-align: center; padding: 60px 28px;">
+                    <h1 data-lang="notFoundTitle" style="font-size: 72px; margin-bottom: 20px;">404</h1>
+                    <p class="text-secondary" data-lang="notFoundDesc" style="font-size: 18px; margin-bottom: 30px;">Запрашиваемая страница не существует или была перемещена.</p>
+                    <a href="index.html" class="button wide" data-lang="backHome">Вернуться на главную</a>
+                </div>
+            </main>
+        </div>
     </div>
+
+    <script>
+        // Активация фонового слоя после загрузки
+        document.addEventListener('DOMContentLoaded', function() {
+            const layer = document.getElementById('bgGifLayer');
+            if (layer) {
+                // Небольшая задержка для плавности
+                setTimeout(() => layer.classList.add('active'), 100);
+            }
+        });
+    </script>
 </body>
 </html>
