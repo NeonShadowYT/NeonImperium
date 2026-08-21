@@ -23,6 +23,7 @@
   let currentUser = null;
   let loading = false;
   let currentAbortController = null;
+  let loadTimeout = null;
 
   async function ensureLoggedInAndGist() {
     if (getCurrentUser() && hasScope('gist')) return true;
@@ -142,44 +143,49 @@
     
     console.log('[NewsFeed] Начинаем загрузку всех источников');
 
-    // Загружаем посты и видео параллельно, стримы – с меньшим приоритетом
+    if (loadTimeout) clearTimeout(loadTimeout);
+    loadTimeout = setTimeout(() => {
+      if (!postsLoaded || !videosLoaded) {
+        console.warn('[NewsFeed] Таймаут загрузки новостей, показываем то, что есть');
+        if (posts.length > 0 || videos.length > 0) {
+          postsLoaded = true;
+          videosLoaded = true;
+          renderMixed();
+        } else {
+          container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>${t('dataLoadError')}</p></div>`;
+        }
+        loading = false;
+        currentAbortController = null;
+      }
+    }, 10000);
+
     Promise.allSettled([
       loadPosts(signal),
-      loadVideos(signal)
-    ]).then(([postsResult, videosResult]) => {
+      loadVideos(signal),
+      loadTwitchStreams(signal, 1)
+    ]).then(([postsResult, videosResult, twitchResult]) => {
       if (signal.aborted) return;
+      clearTimeout(loadTimeout);
+
       posts = postsResult.status === 'fulfilled' ? postsResult.value : [];
       videos = videosResult.status === 'fulfilled' ? videosResult.value : [];
+      twitchStreams = twitchResult.status === 'fulfilled' ? twitchResult.value : [];
       postsLoaded = true;
       videosLoaded = true;
-      console.log(`[NewsFeed] Загружено: постов ${posts.length}, видео ${videos.length}`);
-      // Показываем ленту сразу с постами и видео
-      renderMixed();
+      twitchLoaded = true;
 
-      // Теперь загружаем Twitch стримы в фоне
-      loadTwitchStreams(signal, 1) // только 1 попытка
-        .then(streams => {
-          if (signal.aborted) return;
-          twitchStreams = streams;
-          twitchLoaded = true;
-          console.log(`[NewsFeed] Загружено стримов: ${twitchStreams.length}`);
-          // Обновляем ленту, чтобы добавить стримы
-          renderMixed();
-        })
-        .catch(err => {
-          if (signal.aborted) return;
-          console.warn('[NewsFeed] Ошибка загрузки стримов:', err);
-          twitchLoaded = true;
-          twitchStreams = [];
-          renderMixed();
-        });
+      console.log(`[NewsFeed] Загружено: постов ${posts.length}, видео ${videos.length}, стримов ${twitchStreams.length}`);
+      renderMixed();
     }).catch(err => {
       if (signal.aborted) return;
-      console.error('[NewsFeed] Ошибка загрузки постов/видео:', err);
+      clearTimeout(loadTimeout);
+      console.error('[NewsFeed] Ошибка загрузки:', err);
       postsLoaded = true;
       videosLoaded = true;
+      twitchLoaded = true;
       posts = [];
       videos = [];
+      twitchStreams = [];
       renderMixed();
     }).finally(() => {
       loading = false;
@@ -221,12 +227,11 @@
     return sorted;
   }
 
-  // Упрощённая загрузка Twitch стримов – только один метод, меньше попыток
   async function loadTwitchStreams(signal, retries = 1) {
     console.log('[NewsFeed] loadTwitchStreams вызвана');
     
     const cacheKey = 'twitch_streams_v2';
-    const cached = cacheGet(cacheKey, 5 * 60 * 1000); // 5 минут кэша
+    const cached = cacheGet(cacheKey, 5 * 60 * 1000);
     if (cached) {
       console.log('[NewsFeed] Twitch стримы взяты из кеша:', cached.length);
       return cached.map(s => ({ ...s, date: new Date(s.date) }));
@@ -274,9 +279,6 @@
     return streams;
   }
 
-  // Метод через twitch-live-checker убран – он слишком медленный и часто падает
-  // Оставляем только GraphQL и twitchinsights
-
   async function fetchTwitchStreamsGraphQL(signal) {
     const streams = [];
     for (const channel of TWITCH_CHANNELS) {
@@ -312,7 +314,7 @@
         };
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 сек таймаут
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         const response = await fetch('https://gql.twitch.tv/gql', {
           method: 'POST',
           headers: {
@@ -363,7 +365,7 @@
       if (signal && signal.aborted) break;
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 сек таймаут
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         const url = `https://api.twitchinsights.net/v1/streams?channel=${channel}`;
         const resp = await fetch(url, { signal: signal || controller.signal });
         clearTimeout(timeoutId);
@@ -469,7 +471,7 @@
       iframe.src = iframeSrc;
       iframe.setAttribute('allowfullscreen', 'true');
       iframe.loading = 'lazy';
-      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
       iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
       
       mediaContainer.innerHTML = '';
@@ -566,7 +568,6 @@
   }
 
   function renderMixed() {
-    // Ждём загрузки постов и видео (стримы могут ещё грузиться)
     if (!postsLoaded || !videosLoaded) return;
     const t = window.I18n?.translate || (k => k);
 
@@ -579,7 +580,6 @@
 
     let items = [];
 
-    // Стримы добавляем, если они уже загружены
     if (twitchLoaded && twitchStreams.length > 0) {
       twitchStreams.sort((a, b) => b.date - a.date);
       items = items.concat(twitchStreams);

@@ -81,20 +81,41 @@
     return tryLoad(0);
   }
 
-  // Функция предзагрузки шрифта УДАЛЕНА – шрифт загружается через CSS
-
   function initLazyYT() {
     function showYouTubeFallback(container, videoUrl) {
       const t = window.I18n?.translate || (k => k);
-      container.innerHTML = `
-        <div class="yt-fallback" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:var(--bg-primary);border-radius:12px;padding:20px;text-align:center;gap:12px;animation:fadeInUp 0.4s ease;">
-          <i class="fab fa-youtube" style="font-size:32px;color:var(--accent);"></i>
-          <p style="color:var(--text-secondary);font-size:14px;margin:0;">${t('videoLoadFailed')}</p>
-          <button class="button small" onclick="window.open('${videoUrl || '#'}', '_blank')" style="background:var(--accent);color:#fff;">
-            <i class="fas fa-external-link-alt"></i> ${t('open')}
-          </button>
-        </div>
+      container.innerHTML = '';
+      container.style.position = 'relative';
+      container.style.width = '100%';
+      container.style.paddingBottom = '56.25%';
+      container.style.background = 'var(--bg-primary)';
+      container.style.borderRadius = '12px';
+      container.style.overflow = 'hidden';
+
+      const fallbackDiv = document.createElement('div');
+      fallbackDiv.style.cssText = `
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-primary);
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        gap: 12px;
+        animation: fadeInUp 0.4s ease;
       `;
+      fallbackDiv.innerHTML = `
+        <i class="fab fa-youtube" style="font-size:32px;color:var(--accent);"></i>
+        <p style="color:var(--text-secondary);font-size:14px;margin:0;">${t('videoLoadFailed')}</p>
+        <button class="button small" onclick="window.open('${videoUrl || '#'}', '_blank')" style="background:var(--accent);color:#fff;">
+          <i class="fas fa-external-link-alt"></i> ${t('open')}
+        </button>
+      `;
+      container.appendChild(fallbackDiv);
       container.classList.add('loaded');
     }
 
@@ -127,7 +148,7 @@
           iframe.setAttribute('allowfullscreen', '');
           iframe.loading = 'lazy';
           iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
-          iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+          iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
           iframe.style.width = '100%';
           iframe.style.height = '100%';
           iframe.style.border = 'none';
@@ -184,7 +205,7 @@
         if (!src) return;
         const videoId = src.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
         if (!videoId) {
-          el.innerHTML = `<div class="yt-fallback">⚠️ ${window.I18n?.translate('videoLoadFailed') || 'Video load failed'}</div>`;
+          showYouTubeFallback(el, src);
           return;
         }
         const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`;
@@ -353,7 +374,6 @@
     }
   }
 
-  // Функция обновления всех динамических элементов при смене языка
   function refreshDynamicUI() {
     if (window.FeedbackPage?.refresh) window.FeedbackPage.refresh();
     if (window.refreshGameUpdates && window.currentGame) window.refreshGameUpdates(window.currentGame);
@@ -392,7 +412,6 @@
   }
 
   function initNonLanguageDependent() {
-    // preloadFont() удалён – шрифт загружается через CSS
     loadPageScripts();
     ensureMarked().then(() => {});
     initLazyYT();
