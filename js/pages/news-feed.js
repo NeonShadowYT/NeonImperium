@@ -524,7 +524,7 @@
       iframe.src = iframeSrc;
       iframe.setAttribute('allowfullscreen', 'true');
       iframe.loading = 'lazy';
-      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.allow = 'accelerometer; autoplay; gyroscope; picture-in-picture';
       iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
       
       mediaContainer.innerHTML = '';

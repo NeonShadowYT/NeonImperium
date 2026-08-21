@@ -136,7 +136,7 @@
           iframe.setAttribute('allowfullscreen', '');
           iframe.loading = 'lazy';
           iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
-          iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+          iframe.allow = 'accelerometer; autoplay; gyroscope; picture-in-picture';
           iframe.style.width = '100%';
           iframe.style.height = '100%';
           iframe.style.border = 'none';

@@ -237,9 +237,7 @@
     const titleWrap = createElement('div', '', { display: 'flex', alignItems: 'center', gap: '8px' });
     const h2 = createElement('h2', '', { margin: '0' });
     h2.setAttribute('data-lang', 'feedbackTitle');
-    h2.textContent = t('feedbackTitle');
-    const icon = createElement('i', 'fas fa-comment-dots', { fontSize: '24px', color: 'var(--accent)' });
-    h2.prepend(icon);
+    h2.innerHTML = `<i class="fas fa-comment-dots" style="font-size:24px;color:var(--accent);margin-right:8px;"></i> ${t('feedbackTitle')}`;
     titleWrap.appendChild(h2);
     header.appendChild(titleWrap);
     const btn = createElement('button', 'button');
@@ -318,7 +316,7 @@
 
   function createCard(issue) {
     const type = issue.labels.find(l=>l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
-    const icon = type === 'idea' ? '💡' : type === 'bug' ? '🐛' : '⭐';
+    const icon = type === 'idea' ? '💡' : type === 'bug' ? '🐛' : type === 'review' ? '⭐' : '📌';
     let summary = extractSummary(issue.body) || (issue.body||'').substring(0,120)+'…';
     const allowed = extractAllowed(issue.body);
     if (issue.labels.some(l=>l.name==='private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
