@@ -1,1295 +1,1093 @@
-// js/features/storage.js – с локализацией, обновление при смене языка
-// При смене языка обновляет только тексты интерфейса, не перерисовывая закладки
+// js/features/storage.js – полное хранилище с шифрованием, слиянием, метаданными, экспортом/импортом
+// Пароль (если установлен) обязателен для расшифровки, даже при наличии логина и токена.
 (function() {
+  // ---- зависимости ----
   const {
     CONFIG, escapeHtml, createElement, formatDate, debounce,
-    cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix, loadModule, performAction
+    cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
+    loadModule, performAction, showToast, getPlainTextLength
   } = window.GithubCore;
-  const { getCurrentUser, isAdmin, hasScope, getToken } = window.GithubAuth;
-  const { showToast, createModal } = window.UIUtils;
 
+  const { getCurrentUser, getToken, hasScope } = window.GithubAuth;
+  const { createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
+
+  // ---- константы ----
   const GIST_FILENAME = 'neon-imperium-bookmarks.json';
-  const GIST_DESCRIPTION = 'Neon Imperium bookmarks storage';
+  const GIST_DESCRIPTION = 'Neon Imperium encrypted bookmarks';
   const STORAGE_KEY_PREFIX = 'bookmarks_';
-  const SEARCH_DEBOUNCE_MS = 300;
-  const MAX_BOOKMARKS = 100;
-  const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024;
-  const METADATA_CACHE_TTL = 24 * 60 * 60 * 1000;
-  const METADATA_CACHE_PREFIX = 'metadata_';
-  const BOOKMARKS_CACHE_TTL = 60 * 1000;
+  const PASSWORD_CACHE_KEY = 'storage_password';
+  const SALT = 'neon-storage-salt-v2';
   const SAVE_DEBOUNCE_MS = 2000;
+  const MAX_BOOKMARKS = 100;
+  const VERSION = 4;
 
+  // ---- состояние ----
   let currentUser = null;
   let currentToken = null;
   let gistId = null;
-  let currentBookmarks = [];
-  let sortOrder = 'new';
-  let category = 'all';
-  let searchQuery = '';
-
-  let debouncedSaveBookmarks = null;
+  let masterKey = null;          // расшифрованный мастер-ключ (CryptoKey)
+  let bookmarks = [];            // расшифрованный массив закладок (полный)
+  let isInitialized = false;
   let isSaving = false;
+  let saveDebounced = null;
   let modalRef = null;
-  let searchInputRef = null;
-  let currentGame = null;
-  let lastBookmarksLoad = 0;
+  let lastUpdated = 0;
+  let hasPassword = false;       // есть ли в Gist блок byPassword
 
+  // кеш
+  let cachedMasterKey = null;
   let cachedBookmarks = null;
-  let cachedBookmarksTime = 0;
+  let cachedLastUpdated = 0;
 
-  let bc = null;
-  try {
-    bc = new BroadcastChannel('bookmarks');
-    bc.onmessage = (event) => {
-      if (event.data.type === 'bookmarks-updated') {
-        cachedBookmarks = null;
-        cachedBookmarksTime = 0;
-        if (modalRef) {
-          loadBookmarks(true).then(() => {
-            renderBookmarks(modalRef);
-          });
-        }
-      }
+  // индикатор в модалке
+  let statusElement = null;
+
+  // ---- вспомогательные функции шифрования ----
+  async function deriveKeyFromString(str, salt = SALT) {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      enc.encode(str + salt),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: enc.encode(salt),
+        iterations: 100000,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  async function encryptData(data, key) {
+    const enc = new TextEncoder();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: iv },
+      key,
+      enc.encode(JSON.stringify(data))
+    );
+    return {
+      iv: Array.from(iv),
+      data: Array.from(new Uint8Array(encrypted))
     };
-  } catch (e) {}
-
-  window.addEventListener('storage', (e) => {
-    if (e.key && e.key.startsWith(STORAGE_KEY_PREFIX)) {
-      cachedBookmarks = null;
-      cachedBookmarksTime = 0;
-      if (modalRef) {
-        loadBookmarks(true).then(() => {
-          renderBookmarks(modalRef);
-        });
-      }
-    }
-  });
-
-  async function authFetch(url, options = {}) {
-    const token = currentToken || localStorage.getItem('github_token');
-    const headers = {
-      'Accept': 'application/vnd.github.v3+json',
-      ...options.headers
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    try {
-      const response = await fetch(url, { ...options, headers, signal: controller.signal });
-      clearTimeout(timeoutId);
-      return response;
-    } catch (err) {
-      clearTimeout(timeoutId);
-      throw err;
-    }
   }
 
-  function simpleHash(buffer) {
-    let hash = 0;
-    const bytes = new Uint8Array(buffer);
-    for (let i = 0; i < bytes.length; i++) {
-      hash = ((hash << 5) - hash) + bytes[i];
-      hash |= 0;
-    }
-    return hash.toString(16);
+  async function decryptData(encryptedObj, key) {
+    const iv = new Uint8Array(encryptedObj.iv);
+    const data = new Uint8Array(encryptedObj.data);
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: iv },
+      key,
+      data
+    );
+    const dec = new TextDecoder();
+    return JSON.parse(dec.decode(decrypted));
   }
 
-  function arrayBufferToBase64(buffer) {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
-  }
-
-  function base64ToBlob(base64, mimeType = 'application/octet-stream') {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return new Blob([bytes], { type: mimeType });
-  }
-
-  function tryDecodeBase64(base64) {
-    try {
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      const decoder = new TextDecoder('utf-8', { fatal: true });
-      return decoder.decode(bytes);
-    } catch {
-      return null;
-    }
-  }
-
+  // ---- работа с Gist ----
   async function gistFetch(gistId) {
     const url = `https://api.github.com/gists/${gistId}`;
-    try {
-      const resp = await authFetch(url);
-      if (resp.status === 404) return null;
-      if (!resp.ok) {
-        const errorText = await resp.text();
-        throw new Error(`Gist fetch error: ${resp.status} ${errorText}`);
-      }
-      return await resp.json();
-    } catch (e) {
-      console.error('gistFetch failed:', e);
-      return null;
-    }
+    const token = getToken();
+    const headers = { 'Accept': 'application/vnd.github.v3+json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const resp = await fetch(url, { headers });
+    if (resp.status === 404) return null;
+    if (!resp.ok) throw new Error(`Gist fetch error: ${resp.status}`);
+    return resp.json();
   }
 
   async function gistUpdate(gistId, content) {
     const url = `https://api.github.com/gists/${gistId}`;
-    const resp = await authFetch(url, {
+    const token = getToken();
+    const headers = {
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const resp = await fetch(url, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ files: { [GIST_FILENAME]: { content } } })
     });
-    if (!resp.ok) {
-      const errorText = await resp.text();
-      throw new Error(`Gist update error: ${resp.status} ${errorText}`);
-    }
-    return await resp.json();
+    if (!resp.ok) throw new Error(`Gist update error: ${resp.status}`);
+    return resp.json();
   }
 
   async function gistCreate(content) {
     const url = 'https://api.github.com/gists';
-    const resp = await authFetch(url, {
+    const token = getToken();
+    const headers = {
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const resp = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description: GIST_DESCRIPTION, public: false, files: { [GIST_FILENAME]: { content } } })
+      headers,
+      body: JSON.stringify({
+        description: GIST_DESCRIPTION,
+        public: false,
+        files: { [GIST_FILENAME]: { content } }
+      })
     });
-    if (!resp.ok) {
-      const errorText = await resp.text();
-      throw new Error(`Gist create error: ${resp.status} ${errorText}`);
-    }
+    if (!resp.ok) throw new Error(`Gist create error: ${resp.status}`);
     const gist = await resp.json();
     return gist.id;
   }
 
-  async function loadBookmarks(forceRefresh = false) {
-    if (!currentToken) {
-      return { bookmarks: [] };
+  // ---- загрузка / создание хранилища (обновлённая логика) ----
+  async function loadOrCreateStorage(forceRefresh = false) {
+    const user = getCurrentUser();
+    const token = getToken();
+    if (!user || !token) throw new Error('not_logged_in');
+
+    currentUser = user;
+    currentToken = token;
+
+    if (!forceRefresh && cachedMasterKey && cachedBookmarks && cachedLastUpdated) {
+      masterKey = cachedMasterKey;
+      bookmarks = cachedBookmarks;
+      lastUpdated = cachedLastUpdated;
+      isInitialized = true;
+      return { bookmarks, lastUpdated };
     }
 
-    const now = Date.now();
-    if (!forceRefresh && cachedBookmarks && (now - cachedBookmarksTime < BOOKMARKS_CACHE_TTL)) {
-      return { bookmarks: cachedBookmarks };
-    }
-
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
-      if (!stored) {
-        const content = JSON.stringify({ version: 2, bookmarks: [] });
-        const newGistId = await gistCreate(content);
-        gistId = newGistId;
-        localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
-        cachedBookmarks = [];
-        cachedBookmarksTime = now;
-        return { bookmarks: [] };
-      }
-
-      gistId = JSON.parse(stored).gistId;
-      const gist = await gistFetch(gistId);
-      if (!gist) {
-        const content = JSON.stringify({ version: 2, bookmarks: [] });
-        const newGistId = await gistCreate(content);
-        gistId = newGistId;
-        localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
-        cachedBookmarks = [];
-        cachedBookmarksTime = now;
-        return { bookmarks: [] };
-      }
-
-      const file = gist.files?.[GIST_FILENAME];
-      if (!file) {
-        const content = JSON.stringify({ version: 2, bookmarks: [] });
-        await gistUpdate(gistId, content);
-        cachedBookmarks = [];
-        cachedBookmarksTime = now;
-        return { bookmarks: [] };
-      }
-
-      let payload;
+    const stored = localStorage.getItem(STORAGE_KEY_PREFIX + user);
+    if (stored) {
       try {
-        payload = JSON.parse(file.content);
-      } catch {
-        const content = JSON.stringify({ version: 2, bookmarks: [] });
-        await gistUpdate(gistId, content);
-        cachedBookmarks = [];
-        cachedBookmarksTime = now;
-        return { bookmarks: [] };
-      }
-
-      const bookmarks = payload.bookmarks || [];
-      cachedBookmarks = bookmarks;
-      cachedBookmarksTime = now;
-      return { bookmarks };
-    } catch (err) {
-      console.error('Ошибка загрузки закладок:', err);
-      if (cachedBookmarks) return { bookmarks: cachedBookmarks };
-      return { bookmarks: [] };
+        gistId = JSON.parse(stored).gistId;
+      } catch (e) {}
     }
-  }
 
-  async function doSaveBookmarks() {
+    let gistData = null;
+    let payload = null;
+
+    if (gistId) {
+      gistData = await gistFetch(gistId);
+    }
+
+    if (!gistData) {
+      return await createNewStorage(user, token);
+    }
+
+    const file = gistData.files?.[GIST_FILENAME];
+    if (!file) throw new Error('Gist file not found');
+
     try {
-      if (!currentToken) return;
-      if (currentBookmarks.length === 0) return;
+      payload = JSON.parse(file.content);
+    } catch (e) {
+      throw new Error('Invalid JSON in gist');
+    }
 
-      const payload = {
-        version: 2,
-        bookmarks: currentBookmarks,
-        timestamp: Date.now()
-      };
-      const content = JSON.stringify(payload);
+    if (payload.version !== VERSION) {
+      // миграция для старых версий не реализована, просто ошибка
+      throw new Error('Unsupported storage version, please recreate');
+    }
 
-      if (gistId) {
-        await gistUpdate(gistId, content);
-        console.log('[storage] Gist updated successfully');
-      } else {
-        const newGistId = await gistCreate(content);
-        gistId = newGistId;
-        localStorage.setItem(STORAGE_KEY_PREFIX + currentUser, JSON.stringify({ gistId }));
-        console.log('[storage] Gist created successfully', newGistId);
+    const remoteUpdated = payload.lastUpdated || 0;
+    const localUpdated = lastUpdated || 0;
+
+    let masterKeyArray = null;
+    let usedMethod = null;
+    const hasPasswordBlock = !!payload.masterKeyEncrypted.byPassword;
+    hasPassword = hasPasswordBlock;
+
+    // ---- Новая логика расшифровки ----
+    if (hasPasswordBlock) {
+      // Если пароль установлен, расшифровка возможна ТОЛЬКО через пароль
+      let password = sessionStorage.getItem(PASSWORD_CACHE_KEY);
+      if (!password) {
+        password = await promptPassword('Введите пароль для доступа к хранилищу:');
+        if (!password) throw new Error('Password required');
+      }
+      try {
+        const keyPassword = await deriveKeyFromString(password);
+        masterKeyArray = await decryptData(payload.masterKeyEncrypted.byPassword, keyPassword);
+        usedMethod = 'password';
+        sessionStorage.setItem(PASSWORD_CACHE_KEY, password);
+      } catch (e) {
+        sessionStorage.removeItem(PASSWORD_CACHE_KEY);
+        throw new Error('Invalid password');
+      }
+    } else {
+      // Пароля нет – расшифровка через логин или токен
+      const encryptedByLogin = payload.masterKeyEncrypted.byLogin;
+      const encryptedByToken = payload.masterKeyEncrypted.byToken;
+
+      if (encryptedByLogin) {
+        try {
+          const keyLogin = await deriveKeyFromString(user);
+          masterKeyArray = await decryptData(encryptedByLogin, keyLogin);
+          usedMethod = 'login';
+        } catch (e) {}
       }
 
-      cachedBookmarks = currentBookmarks.slice();
-      cachedBookmarksTime = Date.now();
+      if (!masterKeyArray && encryptedByToken) {
+        try {
+          const keyToken = await deriveKeyFromString(token);
+          masterKeyArray = await decryptData(encryptedByToken, keyToken);
+          usedMethod = 'token';
+        } catch (e) {}
+      }
 
-      try { if (bc) bc.postMessage({ type: 'bookmarks-updated' }); } catch (e) {}
+      if (!masterKeyArray) {
+        // ничего не подошло – предлагаем пересоздать
+        const shouldReset = await confirmResetStorage();
+        if (shouldReset) {
+          await resetStorage(true);
+          return await createNewStorage(user, token);
+        } else {
+          throw new Error('Unable to decrypt storage. No password set or credentials changed.');
+        }
+      }
+    }
 
+    // восстановили мастер-ключ
+    const masterKeyCrypto = await crypto.subtle.importKey(
+      'raw',
+      new Uint8Array(masterKeyArray),
+      { name: 'AES-GCM' },
+      true,
+      ['encrypt', 'decrypt']
+    );
+
+    // загружаем закладки
+    let publicBookmarks = payload.publicBookmarks || [];
+    let privateBookmarks = [];
+    if (payload.encryptedBookmarks) {
+      try {
+        privateBookmarks = await decryptData(payload.encryptedBookmarks, masterKeyCrypto);
+      } catch (e) {
+        privateBookmarks = [];
+      }
+    }
+
+    // объединяем публичные и приватные части
+    const merged = mergeBookmarksByType(publicBookmarks, privateBookmarks);
+
+    // сохраняем в кеш
+    masterKey = masterKeyCrypto;
+    bookmarks = merged;
+    lastUpdated = remoteUpdated;
+    cachedMasterKey = masterKeyCrypto;
+    cachedBookmarks = merged;
+    cachedLastUpdated = remoteUpdated;
+    isInitialized = true;
+
+    // если изменился логин или токен – обновляем ключи (только если нет пароля или после успешной расшифровки)
+    const storedLogin = payload.lastLogin || null;
+    const storedTokenHash = payload.lastTokenHash || null;
+    const currentTokenHash = await hashString(token);
+    if (storedLogin !== user || storedTokenHash !== currentTokenHash) {
+      // Перешифровываем мастер-ключ новыми логином и токеном (если пароль не установлен, то byPassword останется null)
+      await updateMasterKeyEncryption(masterKeyCrypto, user, token, null);
+    }
+
+    return { bookmarks, lastUpdated };
+  }
+
+  // создание нового хранилища (без пароля)
+  async function createNewStorage(user, token) {
+    const newMasterKey = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+    );
+    const exported = await crypto.subtle.exportKey('raw', newMasterKey);
+    const masterKeyArray = Array.from(new Uint8Array(exported));
+
+    const keyLogin = await deriveKeyFromString(user);
+    const keyToken = await deriveKeyFromString(token);
+    const encryptedByLogin = await encryptData(masterKeyArray, keyLogin);
+    const encryptedByToken = await encryptData(masterKeyArray, keyToken);
+
+    const payload = {
+      version: VERSION,
+      salt: SALT,
+      masterKeyEncrypted: {
+        byLogin: encryptedByLogin,
+        byToken: encryptedByToken,
+        byPassword: null
+      },
+      publicBookmarks: [],
+      encryptedBookmarks: null,
+      lastUpdated: Date.now(),
+      lastLogin: user,
+      lastTokenHash: await hashString(token)
+    };
+
+    const content = JSON.stringify(payload);
+    const newGistId = await gistCreate(content);
+    gistId = newGistId;
+    localStorage.setItem(STORAGE_KEY_PREFIX + user, JSON.stringify({ gistId }));
+
+    masterKey = newMasterKey;
+    bookmarks = [];
+    lastUpdated = payload.lastUpdated;
+    hasPassword = false;
+    cachedMasterKey = newMasterKey;
+    cachedBookmarks = [];
+    cachedLastUpdated = payload.lastUpdated;
+    isInitialized = true;
+    return { bookmarks: [] };
+  }
+
+  // обновление зашифрованных блоков мастер-ключа (без изменения закладок)
+  async function updateMasterKeyEncryption(masterKeyCrypto, login, token, password = null) {
+    const exported = await crypto.subtle.exportKey('raw', masterKeyCrypto);
+    const masterKeyArray = Array.from(new Uint8Array(exported));
+
+    const keyLogin = await deriveKeyFromString(login);
+    const keyToken = await deriveKeyFromString(token);
+    const encryptedByLogin = await encryptData(masterKeyArray, keyLogin);
+    const encryptedByToken = await encryptData(masterKeyArray, keyToken);
+
+    let encryptedByPassword = null;
+    if (password !== null) {
+      // если пароль передан (может быть null для отключения)
+      if (password) {
+        const keyPassword = await deriveKeyFromString(password);
+        encryptedByPassword = await encryptData(masterKeyArray, keyPassword);
+      }
+    } else {
+      // если password === null, значит мы не хотим менять состояние byPassword (сохраняем как есть)
+      // но для этого нужно загрузить текущий payload
+    }
+
+    const gist = await gistFetch(gistId);
+    if (!gist) throw new Error('Gist not found');
+    const file = gist.files?.[GIST_FILENAME];
+    if (!file) throw new Error('File not found');
+    let payload = JSON.parse(file.content);
+
+    if (password !== null) {
+      // явно задаём byPassword (может быть null)
+      payload.masterKeyEncrypted.byPassword = encryptedByPassword;
+    } else {
+      // не трогаем byPassword (оставляем как было)
+    }
+
+    payload.lastLogin = login;
+    payload.lastTokenHash = await hashString(token);
+    payload.lastUpdated = Date.now();
+
+    const content = JSON.stringify(payload);
+    await gistUpdate(gistId, content);
+  }
+
+  // ---- слияние публичных и приватных частей ----
+  function mergeBookmarksByType(publicBm, privateBm) {
+    // Создаём карту приватных по id
+    const privateMap = new Map();
+    privateBm.forEach(p => privateMap.set(p.id, p));
+
+    const merged = publicBm.map(pub => {
+      const priv = privateMap.get(pub.id);
+      if (priv) {
+        // объединяем: публичные поля + приватные
+        return { ...pub, ...priv };
+      }
+      // если нет приватной части, возвращаем только публичные (но это не должно происходить)
+      return pub;
+    });
+
+    // Добавляем приватные, которых нет в публичных (не должно быть, но на всякий случай)
+    privateBm.forEach(priv => {
+      if (!merged.some(m => m.id === priv.id)) {
+        merged.push(priv);
+      }
+    });
+
+    return merged;
+  }
+
+  // ---- разделение на публичные и приватные перед сохранением ----
+  function splitBookmarks(bmArray) {
+    const publicList = [];
+    const privateList = [];
+
+    bmArray.forEach(bm => {
+      // публичные поля
+      const pub = {
+        id: bm.id,
+        added: bm.added,
+        type: bm.type,
+        saveData: bm.saveData || null,
+        game: bm.game || null,
+        author: bm.author || null,
+        date: bm.date || null
+      };
+      publicList.push(pub);
+
+      // приватные поля
+      const priv = {
+        id: bm.id,
+        url: bm.url || null,
+        title: bm.title || null,
+        thumbnail: bm.thumbnail || null,
+        embedUrl: bm.embedUrl || null,
+        downloadUrl: bm.downloadUrl || null,
+        postData: bm.postData || null,
+        videoData: bm.videoData || null,
+        linkData: bm.linkData || null
+      };
+      privateList.push(priv);
+    });
+
+    return { publicList, privateList };
+  }
+
+  // ---- сохранение с разделением ----
+  async function saveBookmarksToGist() {
+    if (!masterKey || !gistId) return;
+    if (isSaving) return;
+    isSaving = true;
+    try {
+      const gist = await gistFetch(gistId);
+      if (!gist) throw new Error('Gist not found');
+      const file = gist.files?.[GIST_FILENAME];
+      if (!file) throw new Error('File not found');
+      let payload = JSON.parse(file.content);
+
+      const remoteUpdated = payload.lastUpdated || 0;
+      if (remoteUpdated > lastUpdated) {
+        // конфликт – объединяем
+        let remotePublic = payload.publicBookmarks || [];
+        let remotePrivate = [];
+        if (payload.encryptedBookmarks) {
+          try {
+            remotePrivate = await decryptData(payload.encryptedBookmarks, masterKey);
+          } catch (e) {}
+        }
+        const remoteMerged = mergeBookmarksByType(remotePublic, remotePrivate);
+        // объединяем с локальными
+        const merged = mergeBookmarks(bookmarks, remoteMerged);
+        bookmarks = merged;
+        cachedBookmarks = merged;
+        lastUpdated = remoteUpdated;
+      }
+
+      // разделяем на публичные и приватные
+      const { publicList, privateList } = splitBookmarks(bookmarks);
+
+      // шифруем приватную часть
+      const encryptedPrivate = await encryptData(privateList, masterKey);
+
+      payload.publicBookmarks = publicList;
+      payload.encryptedBookmarks = encryptedPrivate;
+      payload.lastUpdated = Date.now();
+
+      const content = JSON.stringify(payload);
+      await gistUpdate(gistId, content);
+      lastUpdated = payload.lastUpdated;
+      cachedLastUpdated = lastUpdated;
+      cachedBookmarks = bookmarks.slice();
+
+      updateStatus('Сохранено', 'success');
+    } catch (e) {
+      console.error('Save error:', e);
+      updateStatus('Ошибка сохранения', 'error');
+      throw e;
+    } finally {
       isSaving = false;
-    } catch (err) {
-      console.error('Ошибка синхронизации закладок:', err);
-      showToast(t('syncError'), 'error');
-      isSaving = false;
-      throw err;
     }
   }
 
-  function triggerDebouncedSave() {
-    if (!debouncedSaveBookmarks) {
-      debouncedSaveBookmarks = debounce(async () => {
-        if (isSaving) return;
-        isSaving = true;
-        try {
-          await performAction('storageAdds', { bookmarks: currentBookmarks }, doSaveBookmarks);
-        } catch (err) {
-          isSaving = false;
+  // ---- функция слияния (конфликт) ----
+  function mergeBookmarks(local, remote) {
+    const localMap = new Map();
+    local.forEach(b => localMap.set(b.id, b));
+
+    const remoteMap = new Map();
+    remote.forEach(b => remoteMap.set(b.id, b));
+
+    const merged = [...remote];
+    for (const [id, localBook] of localMap) {
+      if (!remoteMap.has(id)) {
+        merged.push(localBook);
+      } else {
+        const remoteBook = remoteMap.get(id);
+        if (new Date(localBook.added) > new Date(remoteBook.added)) {
+          const idx = merged.findIndex(b => b.id === id);
+          if (idx !== -1) merged[idx] = localBook;
         }
+      }
+    }
+    merged.sort((a, b) => new Date(b.added) - new Date(a.added));
+    return merged;
+  }
+
+  // дебаунс
+  function triggerSave() {
+    if (!saveDebounced) {
+      saveDebounced = debounce(async () => {
+        await performAction('storageAdds', { bookmarks }, saveBookmarksToGist);
       }, SAVE_DEBOUNCE_MS);
     }
-    debouncedSaveBookmarks();
+    saveDebounced();
   }
 
-  function enforceMaxBookmarks() {
-    const t = window.I18n?.translate || (k => k);
-    if (currentBookmarks.length > MAX_BOOKMARKS) {
-      const sorted = [...currentBookmarks].sort((a, b) => new Date(a.added) - new Date(b.added));
-      const toRemove = sorted.slice(0, currentBookmarks.length - MAX_BOOKMARKS);
-      const idsToRemove = new Set(toRemove.map(b => b.id));
-      currentBookmarks = currentBookmarks.filter(b => !idsToRemove.has(b.id));
-      showToast(t('maxBookmarksReached').replace('{max}', MAX_BOOKMARKS), 'warning');
-      triggerDebouncedSave();
+  // индикатор статуса
+  function updateStatus(text, type = 'info') {
+    if (statusElement) {
+      statusElement.textContent = text;
+      statusElement.style.color = type === 'error' ? '#f44336' : type === 'success' ? '#4caf50' : 'var(--text-secondary)';
+      statusElement.style.opacity = '1';
+      setTimeout(() => { statusElement.style.opacity = '0.7'; }, 5000);
     }
   }
 
-  function getCachedMetadata(url) {
-    const key = METADATA_CACHE_PREFIX + url;
-    const cached = cacheGet(key, METADATA_CACHE_TTL);
-    if (cached) return cached;
-    return null;
+  // запрос пароля
+  function promptPassword(message) {
+    return new Promise((resolve) => {
+      const input = prompt(message);
+      resolve(input);
+    });
   }
 
-  function setCachedMetadata(url, data) {
-    const key = METADATA_CACHE_PREFIX + url;
-    cacheSet(key, data);
+  // диалог пересоздания
+  function confirmResetStorage() {
+    return new Promise((resolve) => {
+      const confirmed = confirm(
+        'Не удалось расшифровать хранилище. Возможно, вы изменили логин, токен или не указали пароль.\n\n' +
+        'Хотите пересоздать хранилище (все старые данные будут потеряны)?\n' +
+        'Нажмите "Отмена", чтобы попробовать ввести пароль.'
+      );
+      resolve(confirmed);
+    });
   }
 
-  async function fetchPageMetadata(url) {
+  // хеш
+  async function hashString(str) {
+    const enc = new TextEncoder();
+    const hash = await crypto.subtle.digest('SHA-256', enc.encode(str));
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  // ---- публичные API ----
+  async function ensureStorage(forceRefresh = false) {
+    if (isInitialized && !forceRefresh) return { bookmarks };
     try {
-      const resp = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(5000) });
-      if (!resp.ok) return null;
-      const html = await resp.text();
-      return parseHtmlMetadata(html, url);
-    } catch (e) {
-      try {
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-        const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-        if (!resp.ok) return null;
-        const html = await resp.text();
-        return parseHtmlMetadata(html, url);
-      } catch (e2) {
-        return null;
-      }
-    }
-  }
-
-  function parseHtmlMetadata(html, baseUrl) {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    let title = doc.querySelector('title')?.textContent?.trim() || null;
-    const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')?.trim();
-    if (ogTitle) title = ogTitle;
-
-    let thumbnail = doc.querySelector('meta[property="og:image"]')?.getAttribute('content')?.trim() || null;
-    if (!thumbnail) {
-      const img = doc.querySelector('img');
-      if (img) {
-        let src = img.getAttribute('src');
-        if (src) {
-          if (src.startsWith('//')) src = 'https:' + src;
-          else if (src.startsWith('/')) src = new URL(src, baseUrl).href;
-          thumbnail = src;
-        }
-      }
-    }
-    return { title, thumbnail };
-  }
-
-  async function tryOembed(url) {
-    const providers = [
-      async (u) => {
-        const resp = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(u)}`);
-        if (!resp.ok) return null;
-        const data = await resp.json();
-        if (data && data.title) return data;
-        return null;
-      },
-      async (u) => {
-        const resp = await fetch(`https://iframe.ly/api/oembed?url=${encodeURIComponent(u)}`);
-        if (!resp.ok) return null;
-        const data = await resp.json();
-        if (data && data.title) return data;
-        return null;
-      },
-      async (u) => {
-        const resp = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(u)}&data.title&data.image&data.embed`);
-        if (!resp.ok) return null;
-        const data = await resp.json();
-        if (data && data.data && data.data.title) {
-          return {
-            title: data.data.title,
-            thumbnail_url: data.data.image?.url || null,
-            html: data.data.embed?.html || null,
-          };
-        }
-        return null;
-      }
-    ];
-
-    for (const fn of providers) {
-      try {
-        const result = await fn(url);
-        if (result) return result;
-      } catch (e) {}
-    }
-    return null;
-  }
-
-  async function fetchMetadata(url) {
-    if (typeof url !== 'string' || !url) {
-      return { type: 'link', title: url || 'Ссылка', thumbnail: null, embedUrl: null, downloadUrl: null };
-    }
-
-    const cached = getCachedMetadata(url);
-    if (cached) return cached;
-
-    let result;
-    if (url.includes('neonshadowyt.github.io/NeonImperium')) {
-      const postMatch = url.match(/[?&]post=(\d+)/);
-      if (postMatch) {
-        const postId = parseInt(postMatch[1], 10);
-        try {
-          const issue = await window.GithubAPI.loadIssue(postId);
-          if (issue) {
-            result = {
-              type: 'post',
-              title: issue.title,
-              thumbnail: null,
-              embedUrl: null,
-              downloadUrl: null,
-              postData: {
-                id: issue.number,
-                title: issue.title,
-                body: issue.body,
-                author: issue.user.login,
-                date: issue.created_at,
-                labels: issue.labels.map(l => l.name),
-                game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
-              }
-            };
-            setCachedMetadata(url, result);
-            return result;
-          }
-        } catch (e) {
-          result = {
-            type: 'post',
-            title: 'Пост #' + postId,
-            thumbnail: null,
-            embedUrl: null,
-            downloadUrl: null,
-            postData: { id: postId }
-          };
-          setCachedMetadata(url, result);
-          return result;
-        }
-      }
-    }
-
-    const videoInfo = await detectVideoService(url);
-    if (videoInfo) {
-      let title = videoInfo.title;
-      let thumbnail = videoInfo.thumbnail;
-      let embedUrl = videoInfo.embedUrl;
-
-      const oembed = await tryOembed(url);
-      if (oembed) {
-        if (oembed.title) title = oembed.title;
-        if (oembed.thumbnail_url) thumbnail = oembed.thumbnail_url;
-        if (oembed.html && !embedUrl) {
-          const div = document.createElement('div');
-          div.innerHTML = oembed.html;
-          const iframe = div.querySelector('iframe');
-          if (iframe && iframe.src) embedUrl = iframe.src;
-        }
-      }
-
-      if (!title || title === 'Видео' || !thumbnail) {
-        const pageData = await fetchPageMetadata(url);
-        if (pageData) {
-          if (pageData.title && (title === 'Видео' || !title)) title = pageData.title;
-          if (pageData.thumbnail && !thumbnail) thumbnail = pageData.thumbnail;
-        }
-      }
-
-      if ((!title || title === 'Видео') && videoInfo.embedUrl && videoInfo.embedUrl !== url) {
-        const embedPage = await fetchPageMetadata(videoInfo.embedUrl);
-        if (embedPage && embedPage.title && embedPage.title !== 'Видео') {
-          title = embedPage.title;
-          if (!thumbnail && embedPage.thumbnail) thumbnail = embedPage.thumbnail;
-        }
-      }
-
-      result = {
-        type: 'video',
-        title: title || 'Видео',
-        thumbnail: thumbnail || null,
-        embedUrl: embedUrl || videoInfo.embedUrl || null,
-        downloadUrl: videoInfo.downloadUrl || null,
-        videoData: videoInfo
-      };
-      setCachedMetadata(url, result);
+      const result = await loadOrCreateStorage(forceRefresh);
       return result;
+    } catch (e) {
+      console.error('Ensure storage error:', e);
+      throw e;
     }
-
-    let title = url, thumbnail = null, embedUrl = null;
-    const oembed = await tryOembed(url);
-    if (oembed && oembed.title) {
-      title = oembed.title;
-      thumbnail = oembed.thumbnail_url || null;
-      if (oembed.html) {
-        const div = document.createElement('div');
-        div.innerHTML = oembed.html;
-        const iframe = div.querySelector('iframe');
-        if (iframe && iframe.src) embedUrl = iframe.src;
-      }
-    } else {
-      const pageData = await fetchPageMetadata(url);
-      if (pageData) {
-        if (pageData.title) title = pageData.title;
-        if (pageData.thumbnail) thumbnail = pageData.thumbnail;
-      }
-    }
-
-    result = {
-      type: 'link',
-      title: title || url,
-      thumbnail: thumbnail || null,
-      embedUrl: embedUrl || null,
-      downloadUrl: null,
-      linkData: null
-    };
-    setCachedMetadata(url, result);
-    return result;
   }
 
-  async function detectVideoService(url) {
-    if (typeof url !== 'string' || !url) return null;
+  // ---- добавление ----
+  async function addBookmark(bookmarkData) {
+    await ensureStorage();
+    const t = (key) => window.I18n?.translate(key) || key;
 
-    const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
-    if (ytMatch) {
-      const id = ytMatch[1];
-      const thumbnail = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
-      const embedUrl = `https://www.youtube.com/embed/${id}`;
-      let title = 'YouTube видео';
-      try {
-        const resp = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
-        if (resp.ok) {
-          const data = await resp.json();
-          title = data.title || title;
-        }
-      } catch (e) {}
-      return { title, thumbnail, embedUrl, downloadUrl: null, service: 'youtube', id };
-    }
-
-    const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
-    if (vimeoMatch) {
-      const id = vimeoMatch[1];
-      let thumbnail = null, title = 'Vimeo видео', embedUrl = null;
-      try {
-        const resp = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`);
-        if (resp.ok) {
-          const data = await resp.json();
-          title = data.title || title;
-          thumbnail = data.thumbnail_url || null;
-          embedUrl = data.html ? (() => {
-            const div = document.createElement('div');
-            div.innerHTML = data.html;
-            const iframe = div.querySelector('iframe');
-            return iframe ? iframe.src : null;
-          })() : null;
-        }
-      } catch (e) {}
-      return { title, thumbnail, embedUrl, downloadUrl: null, service: 'vimeo', id };
-    }
-
-    const videoExt = /\.(mp4|webm|ogg|mov|avi|mkv)$/i;
-    if (videoExt.test(url)) {
-      return {
-        title: 'Видео файл',
-        thumbnail: null,
-        embedUrl: url,
-        downloadUrl: url,
-        service: 'direct'
-      };
-    }
-
-    if (url.includes('view_video.php?viewkey=')) {
-      const match = url.match(/viewkey=([^&]+)/);
-      if (match) {
-        const key = match[1];
-        const embedUrl = url.replace(/view_video\.php\?viewkey=[^&]+/, `embed/${key}`);
-        return {
-          title: 'Видео',
-          thumbnail: null,
-          embedUrl: embedUrl,
-          downloadUrl: null,
-          service: 'custom',
-          originalUrl: url
-        };
+    if (bookmarkData.url) {
+      if (bookmarks.some(b => b.url === bookmarkData.url)) {
+        showToast(t('addedToFavorites'), 'info');
+        throw new Error('duplicate');
       }
     }
-
-    if (url.includes('dailymotion.com')) {
-      const idMatch = url.match(/dailymotion\.com\/video\/([^_]+)/);
-      if (idMatch) {
-        const id = idMatch[1];
-        const embedUrl = `https://www.dailymotion.com/embed/video/${id}`;
-        const thumbnail = `https://www.dailymotion.com/thumbnail/video/${id}`;
-        return { title: 'Dailymotion видео', thumbnail, embedUrl, downloadUrl: null, service: 'dailymotion', id };
-      }
-    }
-    if (url.includes('twitch.tv')) {
-      const clipMatch = url.match(/clips\.twitch\.tv\/([^?]+)/);
-      if (clipMatch) {
-        const slug = clipMatch[1];
-        const embedUrl = `https://clips.twitch.tv/embed?clip=${slug}`;
-        return { title: 'Twitch клип', thumbnail: null, embedUrl, downloadUrl: null, service: 'twitch', slug };
-      }
-      const vodMatch = url.match(/twitch\.tv\/videos\/(\d+)/);
-      if (vodMatch) {
-        const id = vodMatch[1];
-        const embedUrl = `https://player.twitch.tv/?video=${id}`;
-        return { title: 'Twitch VOD', thumbnail: null, embedUrl, downloadUrl: null, service: 'twitch', id };
-      }
-    }
-
-    return null;
-  }
-
-  async function addBookmark(bookmarkOrUrl, title, fileContent, fileName) {
-    const t = window.I18n?.translate || (k => k);
-    if (!currentUser) {
-      showToast(t('loginToGitHub'), 'error');
-      throw new Error('not_logged_in');
-    }
-
-    let bookmarkData;
-    let url = null;
-    let customTitle = null;
-    let customFileContent = null;
-    let customFileName = null;
-    let extraData = {};
-    let isFile = false;
-
-    if (typeof bookmarkOrUrl === 'object' && bookmarkOrUrl !== null) {
-      const obj = bookmarkOrUrl;
-      bookmarkData = obj;
-      url = obj.url || null;
-      customTitle = obj.title || null;
-      customFileContent = obj.fileContent || null;
-      customFileName = obj.fileName || null;
-      isFile = !!(customFileContent && customFileName);
-      extraData = {
-        type: obj.type || null,
-        thumbnail: obj.thumbnail || null,
-        embedUrl: obj.embedUrl || null,
-        downloadUrl: obj.downloadUrl || null,
-        postData: obj.postData || null,
-        videoData: obj.videoData || null,
-        linkData: obj.linkData || null,
-        saveData: obj.saveData || null,
-        author: obj.author || null,
-        date: obj.date || null,
-        game: obj.game || null,
-      };
-    } else {
-      url = bookmarkOrUrl;
-      customTitle = title;
-      customFileContent = fileContent;
-      customFileName = fileName;
-      isFile = !!(customFileContent && customFileName);
-      bookmarkData = { url, title: customTitle, fileContent: customFileContent, fileName: customFileName, ...extraData };
-    }
-
-    if (url && currentBookmarks.some(b => b.url === url)) {
-      showToast(t('addedToFavorites'), 'info');
-      throw new Error('duplicate');
-    }
-    if (isFile && customFileContent && customFileName) {
-      const hash = simpleHash(new TextEncoder().encode(customFileContent));
-      if (currentBookmarks.some(b => b.saveData && b.saveData.hash === hash)) {
+    if (bookmarkData.saveData && bookmarkData.saveData.hash) {
+      if (bookmarks.some(b => b.saveData && b.saveData.hash === bookmarkData.saveData.hash)) {
         showToast(t('addedToFavorites'), 'info');
         throw new Error('duplicate');
       }
     }
 
-    const tempId = 'temp-' + Date.now();
+    if (!bookmarkData.title && bookmarkData.url) {
+      const meta = await fetchMetadata(bookmarkData.url);
+      bookmarkData.title = meta.title || bookmarkData.url;
+      bookmarkData.thumbnail = meta.thumbnail || null;
+      bookmarkData.embedUrl = meta.embedUrl || null;
+      bookmarkData.type = meta.type || 'link';
+      bookmarkData.videoData = meta.videoData || null;
+      bookmarkData.postData = meta.postData || null;
+    }
+
     const newBookmark = {
-      id: tempId,
+      id: 'bm-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
       added: new Date().toISOString(),
-      url: url || null,
-      title: customTitle || (isFile ? customFileName : url || t('bookmark')),
-      type: isFile ? 'save' : (extraData.type || 'link'),
-      thumbnail: extraData.thumbnail || null,
-      embedUrl: extraData.embedUrl || null,
-      downloadUrl: extraData.downloadUrl || null,
-      postData: extraData.postData || null,
-      videoData: extraData.videoData || null,
-      linkData: extraData.linkData || null,
-      saveData: isFile ? {
-        fileName: customFileName,
-        content: customFileContent,
-        hash: simpleHash(new TextEncoder().encode(customFileContent)),
-        mimeType: 'text/plain',
-        game: extraData.game || currentGame || null,
-        isBase64: true
-      } : null,
-      author: extraData.author || null,
-      date: extraData.date || null,
-      game: extraData.game || null,
-      _pending: true
+      url: bookmarkData.url || null,
+      title: bookmarkData.title || (bookmarkData.saveData ? bookmarkData.saveData.fileName : 'Закладка'),
+      type: bookmarkData.type || 'link',
+      thumbnail: bookmarkData.thumbnail || null,
+      embedUrl: bookmarkData.embedUrl || null,
+      downloadUrl: bookmarkData.downloadUrl || null,
+      postData: bookmarkData.postData || null,
+      videoData: bookmarkData.videoData || null,
+      linkData: bookmarkData.linkData || null,
+      saveData: bookmarkData.saveData || null,
+      author: bookmarkData.author || null,
+      date: bookmarkData.date || null,
+      game: bookmarkData.game || null
     };
 
-    currentBookmarks = [newBookmark, ...currentBookmarks];
-    cachedBookmarks = currentBookmarks.slice();
-    cachedBookmarksTime = Date.now();
+    bookmarks.unshift(newBookmark);
+    if (bookmarks.length > MAX_BOOKMARKS) {
+      const removed = bookmarks.splice(MAX_BOOKMARKS);
+      showToast(t('maxBookmarksReached').replace('{max}', MAX_BOOKMARKS), 'warning');
+    }
 
-    if (modalRef) renderBookmarks(modalRef);
-
-    triggerDebouncedSave();
+    cachedBookmarks = bookmarks.slice();
+    triggerSave();
     showToast(t('bookmarkAdded'), 'success');
+    if (modalRef) renderBookmarks(modalRef.modal);
     return newBookmark;
   }
 
+  // ---- удаление ----
   async function removeBookmark(id) {
-    const t = window.I18n?.translate || (k => k);
-    if (!currentToken) return;
-    currentBookmarks = currentBookmarks.filter(b => b.id !== id);
-    cachedBookmarks = currentBookmarks.slice();
-    cachedBookmarksTime = Date.now();
-    triggerDebouncedSave();
-    if (modalRef) {
-      renderBookmarks(modalRef);
-    }
+    await ensureStorage();
+    const t = (key) => window.I18n?.translate(key) || key;
+    bookmarks = bookmarks.filter(b => b.id !== id);
+    cachedBookmarks = bookmarks.slice();
+    triggerSave();
     showToast(t('bookmarkDeleted'), 'success');
+    if (modalRef) renderBookmarks(modalRef.modal);
   }
 
-  function renderBookmarks(modalElement) {
-    const t = window.I18n?.translate || (k => k);
-    const grid = modalElement.querySelector('#bookmarks-grid');
-    if (!grid) return;
+  // ---- загрузка ----
+  async function loadBookmarks(forceRefresh = false) {
+    const result = await ensureStorage(forceRefresh);
+    return { bookmarks: result.bookmarks };
+  }
 
-    let filtered = currentBookmarks;
-    if (category !== 'all') {
-      filtered = filtered.filter(b => b.type === category);
+  // ---- сброс ----
+  async function resetStorage(silent = false) {
+    if (gistId) {
+      const token = getToken();
+      if (token) {
+        await fetch(`https://api.github.com/gists/${gistId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(() => {});
+      }
     }
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      filtered = filtered.filter(b => b.title && b.title.toLowerCase().includes(q));
+    const user = getCurrentUser();
+    if (user) localStorage.removeItem(STORAGE_KEY_PREFIX + user);
+    gistId = null;
+    masterKey = null;
+    bookmarks = [];
+    cachedMasterKey = null;
+    cachedBookmarks = null;
+    cachedLastUpdated = 0;
+    lastUpdated = 0;
+    hasPassword = false;
+    isInitialized = false;
+    sessionStorage.removeItem(PASSWORD_CACHE_KEY);
+    if (!silent) showToast('Хранилище сброшено', 'info');
+  }
+
+  // ---- установка/смена пароля (обновлённая) ----
+  async function setStoragePassword(newPassword) {
+    await ensureStorage();
+    if (!masterKey) throw new Error('Storage not initialized');
+    const user = getCurrentUser();
+    const token = getToken();
+    if (!user || !token) throw new Error('not_logged_in');
+
+    // загружаем текущий gist
+    const gist = await gistFetch(gistId);
+    const file = gist.files?.[GIST_FILENAME];
+    let payload = JSON.parse(file.content);
+
+    const hasOldPassword = !!payload.masterKeyEncrypted.byPassword;
+
+    if (hasOldPassword) {
+      // для смены пароля нужно ввести старый
+      const oldPassword = await promptPassword('Введите текущий пароль:');
+      if (!oldPassword) throw new Error('Old password required');
+      try {
+        const keyOld = await deriveKeyFromString(oldPassword);
+        await decryptData(payload.masterKeyEncrypted.byPassword, keyOld);
+      } catch (e) {
+        throw new Error('Invalid old password');
+      }
     }
-    if (sortOrder === 'new') {
-      filtered.sort((a, b) => new Date(b.added) - new Date(a.added));
+
+    // если новый пароль не пустой, проверяем, что он не равен токену
+    if (newPassword && newPassword === token) {
+      throw new Error('Пароль не должен совпадать с токеном GitHub');
+    }
+
+    // обновляем мастер-ключ
+    const exported = await crypto.subtle.exportKey('raw', masterKey);
+    const masterKeyArray = Array.from(new Uint8Array(exported));
+
+    const keyLogin = await deriveKeyFromString(user);
+    const keyToken = await deriveKeyFromString(token);
+    const encryptedByLogin = await encryptData(masterKeyArray, keyLogin);
+    const encryptedByToken = await encryptData(masterKeyArray, keyToken);
+
+    let encryptedByPassword = null;
+    if (newPassword) {
+      const keyPassword = await deriveKeyFromString(newPassword);
+      encryptedByPassword = await encryptData(masterKeyArray, keyPassword);
+      sessionStorage.setItem(PASSWORD_CACHE_KEY, newPassword);
+      hasPassword = true;
     } else {
-      filtered.sort((a, b) => new Date(a.added) - new Date(b.added));
+      sessionStorage.removeItem(PASSWORD_CACHE_KEY);
+      hasPassword = false;
     }
 
-    grid.innerHTML = '';
-    if (filtered.length === 0) {
-      grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>${t('noBookmarks')}</p></div>`;
+    payload.masterKeyEncrypted = {
+      byLogin: encryptedByLogin,
+      byToken: encryptedByToken,
+      byPassword: encryptedByPassword
+    };
+    payload.lastLogin = user;
+    payload.lastTokenHash = await hashString(token);
+    payload.lastUpdated = Date.now();
+
+    const content = JSON.stringify(payload);
+    await gistUpdate(gistId, content);
+    lastUpdated = payload.lastUpdated;
+    showToast('Пароль хранилища обновлён', 'success');
+  }
+
+  // ---- экспорт ----
+  async function exportBookmarks() {
+    await ensureStorage();
+    if (!masterKey) throw new Error('Storage not initialized');
+    const password = await promptPassword('Введите пароль для шифрования экспортируемого файла (минимум 4 символа):');
+    if (!password || password.length < 4) {
+      showToast('Пароль должен быть не менее 4 символов', 'error');
+      return;
+    }
+    const token = getToken();
+    if (password === token) {
+      showToast('Пароль не должен совпадать с токеном GitHub', 'error');
       return;
     }
 
+    const exportData = {
+      version: 1,
+      exportedAt: Date.now(),
+      bookmarks: bookmarks
+    };
+    const jsonStr = JSON.stringify(exportData);
+
+    const key = await deriveKeyFromString(password);
+    const encrypted = await encryptData(jsonStr, key);
+    const blob = new Blob([JSON.stringify(encrypted)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `neon-bookmarks-${new Date().toISOString().slice(0,10)}.neonbk`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('Экспорт выполнен', 'success');
+  }
+
+  // ---- импорт ----
+  async function importBookmarks() {
+    await ensureStorage();
+    if (!masterKey) throw new Error('Storage not initialized');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.neonbk';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        try {
+          const encrypted = JSON.parse(ev.target.result);
+          const password = await promptPassword('Введите пароль для расшифровки импортируемого файла:');
+          if (!password) return;
+          const key = await deriveKeyFromString(password);
+          const decryptedStr = await decryptData(encrypted, key);
+          const importData = JSON.parse(decryptedStr);
+          if (!importData.bookmarks || !Array.isArray(importData.bookmarks)) {
+            throw new Error('Invalid import data');
+          }
+
+          let added = 0;
+          for (const bm of importData.bookmarks) {
+            try {
+              delete bm.id;
+              await addBookmark(bm);
+              added++;
+            } catch (err) {
+              if (err.message === 'duplicate') continue;
+              console.warn('Ошибка импорта закладки:', err);
+            }
+          }
+          showToast(`Импортировано ${added} закладок`, 'success');
+          if (modalRef) renderBookmarks(modalRef.modal);
+        } catch (err) {
+          showToast('Ошибка импорта: ' + err.message, 'error');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
+  // ---- fetchMetadata (реальная реализация) ----
+  async function fetchMetadata(url) {
+    try {
+      const resp1 = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
+      if (resp1.ok) {
+        const data = await resp1.json();
+        if (data && data.title) {
+          return {
+            title: data.title,
+            thumbnail: data.thumbnail_url || data.thumbnail || null,
+            embedUrl: data.html ? extractIframeSrc(data.html) : null,
+            type: data.type === 'video' ? 'video' : 'link',
+            videoData: data.type === 'video' ? { service: 'oembed', embedUrl: data.html } : null
+          };
+        }
+      }
+    } catch (e) {}
+
+    try {
+      const resp2 = await fetch(`https://iframe.ly/api/oembed?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
+      if (resp2.ok) {
+        const data = await resp2.json();
+        if (data && data.title) {
+          return {
+            title: data.title,
+            thumbnail: data.thumbnail_url || null,
+            embedUrl: data.html ? extractIframeSrc(data.html) : null,
+            type: data.type === 'video' ? 'video' : 'link',
+            videoData: data.type === 'video' ? { service: 'iframe', embedUrl: data.html } : null
+          };
+        }
+      }
+    } catch (e) {}
+
+    try {
+      const resp3 = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}&data.title&data.image&data.embed`, { signal: AbortSignal.timeout(5000) });
+      if (resp3.ok) {
+        const data = await resp3.json();
+        if (data && data.data && data.data.title) {
+          const embedHtml = data.data.embed?.html || null;
+          return {
+            title: data.data.title,
+            thumbnail: data.data.image?.url || null,
+            embedUrl: embedHtml ? extractIframeSrc(embedHtml) : null,
+            type: data.data.embed?.type === 'video' ? 'video' : 'link',
+            videoData: data.data.embed?.type === 'video' ? { service: 'microlink', embedUrl: embedHtml } : null
+          };
+        }
+      }
+    } catch (e) {}
+
+    return { title: url, thumbnail: null, embedUrl: null, type: 'link', videoData: null };
+  }
+
+  function extractIframeSrc(html) {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    const iframe = div.querySelector('iframe');
+    return iframe ? iframe.src : null;
+  }
+
+  // ---- рендер закладок ----
+  function renderBookmarks(modal) {
+    const grid = modal.querySelector('#bookmarks-grid');
+    if (!grid) return;
+    const t = (key) => window.I18n?.translate(key) || key;
+
+    let filtered = bookmarks.slice();
+    const activeCat = modal.querySelector('.cat-btn.active');
+    const category = activeCat ? activeCat.dataset.cat : 'all';
+    const searchInput = modal.querySelector('#search-input');
+    const searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    const sortOrder = modal.querySelector('.sort-btn.active')?.dataset.order || 'new';
+
+    if (category !== 'all') filtered = filtered.filter(b => b.type === category);
+    if (searchQuery) filtered = filtered.filter(b => b.title.toLowerCase().includes(searchQuery));
+    if (sortOrder === 'new') filtered.sort((a,b) => new Date(b.added) - new Date(a.added));
+    else filtered.sort((a,b) => new Date(a.added) - new Date(b.added));
+
+    grid.innerHTML = '';
+    if (!filtered.length) {
+      grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>${t('noBookmarks')}</p></div>`;
+      return;
+    }
     const fragment = document.createDocumentFragment();
-    filtered.forEach(bookmark => {
-      const card = createBookmarkCard(bookmark);
+    filtered.forEach(bm => {
+      const card = createBookmarkCard(bm, modal);
       fragment.appendChild(card);
     });
     grid.appendChild(fragment);
   }
 
-  function createBookmarkCard(bookmark) {
-    const wrapper = createElement('div', 'bookmark-card-wrapper', {
-      position: 'relative',
-      height: '100%',
-      cursor: 'pointer',
-      transition: 'transform 0.2s, box-shadow 0.2s'
-    });
-    wrapper.dataset.id = bookmark.id;
+  function createBookmarkCard(bm, modal) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bookmark-card-wrapper';
+    const card = document.createElement('div');
+    card.className = 'bookmark-card';
+    card.style.cursor = 'pointer';
 
-    const card = createElement('div', 'bookmark-card tilt-card', {
-      background: 'var(--bg-inner-gradient)',
-      borderRadius: '20px',
-      border: '1px solid var(--border)',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      transition: 'transform 0.2s, border-color 0.2s'
-    });
-    if (bookmark._pending) {
-      card.style.opacity = '0.6';
-      card.style.borderColor = 'var(--accent)';
-    }
-    card.addEventListener('mouseenter', () => {
-      card.style.borderColor = 'var(--accent)';
-    });
-    card.addEventListener('mouseleave', () => {
-      card.style.borderColor = 'var(--border)';
-    });
+    const content = document.createElement('div');
+    content.className = 'bookmark-content';
+    const title = document.createElement('h4');
+    title.textContent = bm.title || 'Закладка';
+    content.appendChild(title);
+    const meta = document.createElement('div');
+    meta.style.cssText = 'font-size:12px;color:var(--text-secondary)';
+    meta.textContent = `${bm.type.charAt(0).toUpperCase()+bm.type.slice(1)} · ${formatDate(bm.added)}`;
+    content.appendChild(meta);
+    card.appendChild(content);
 
-    if (bookmark.type === 'post') {
-      buildPostCard(card, bookmark);
-    } else if (bookmark.type === 'video') {
-      buildVideoCard(card, bookmark);
-    } else if (bookmark.type === 'save') {
-      buildSaveCard(card, bookmark);
+    const media = document.createElement('div');
+    media.className = 'bookmark-media';
+    if (bm.thumbnail) {
+      const img = document.createElement('img');
+      img.src = bm.thumbnail;
+      img.alt = bm.title;
+      img.onerror = () => img.style.display = 'none';
+      media.appendChild(img);
+      if (bm.type === 'video') {
+        const play = document.createElement('div');
+        play.className = 'play-overlay';
+        play.innerHTML = '<i class="fas fa-play"></i>';
+        media.appendChild(play);
+      }
     } else {
-      buildLinkCard(card, bookmark);
+      const icon = document.createElement('div');
+      icon.className = 'bookmark-icon';
+      const icons = { post: 'fa-newspaper', video: 'fa-video', save: 'fa-save', link: 'fa-link' };
+      icon.innerHTML = `<i class="fas ${icons[bm.type] || 'fa-link'}"></i>`;
+      media.appendChild(icon);
     }
+    card.insertBefore(media, content);
 
-    const deleteBtn = createElement('button', 'bookmark-delete-btn', {
-      position: 'absolute',
-      top: '8px',
-      right: '8px',
-      background: 'rgba(0,0,0,0.6)',
-      border: 'none',
-      borderRadius: '50%',
-      width: '28px',
-      height: '28px',
-      color: '#f44336',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '14px',
-      zIndex: '5',
-      transition: 'opacity 0.2s'
+    card.addEventListener('click', () => {
+      if (bm.type === 'post' && bm.postData && bm.postData.id) {
+        if (window.UIFeedback) {
+          window.UIFeedback.openFullModal(bm.postData);
+        } else {
+          showToast('Пост недоступен', 'error');
+        }
+      } else if (bm.type === 'video' && bm.embedUrl) {
+        const modalVideo = document.createElement('div');
+        modalVideo.className = 'modal-fullscreen';
+        modalVideo.style.zIndex = '10002';
+        modalVideo.innerHTML = `
+          <div class="modal-content-full" style="max-width:900px;">
+            <div class="modal-header">
+              <h2>${escapeHtml(bm.title)}</h2>
+              <button class="modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="padding:20px;">
+              <div style="position:relative;padding-bottom:56.25%;height:0;">
+                <iframe src="${escapeHtml(bm.embedUrl)}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modalVideo);
+        modalVideo.classList.add('active');
+        const close = () => { modalVideo.remove(); document.body.style.overflow = ''; };
+        modalVideo.querySelector('.modal-close').addEventListener('click', close);
+        modalVideo.addEventListener('click', (e) => { if (e.target === modalVideo) close(); });
+      } else if (bm.type === 'save' && bm.saveData) {
+        const binary = atob(bm.saveData.content);
+        const bytes = new Uint8Array(binary.length);
+        for (let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = bm.saveData.fileName || 'save.dat';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } else if (bm.url) {
+        window.open(bm.url, '_blank');
+      }
     });
-    deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
-    deleteBtn.addEventListener('click', (e) => {
+
+    const del = document.createElement('button');
+    del.className = 'bookmark-delete-btn';
+    del.innerHTML = '<i class="fas fa-trash-alt"></i>';
+    del.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const t = window.I18n?.translate || (k => k);
-      if (confirm(t('deleteConfirm'))) {
-        removeBookmark(bookmark.id);
+      if (confirm('Удалить закладку?')) {
+        await removeBookmark(bm.id);
+        if (modal) renderBookmarks(modal);
       }
     });
     wrapper.appendChild(card);
-    wrapper.appendChild(deleteBtn);
-
+    wrapper.appendChild(del);
     return wrapper;
   }
 
-  function buildPostCard(card, bookmark) {
-    card.addEventListener('click', () => {
-      if (bookmark.postData && bookmark.postData.id) {
-        const postId = bookmark.postData.id;
-        if (window.UIFeedback) {
-          window.GithubAPI.loadIssue(postId).then(issue => {
-            window.UIFeedback.openFullModal({
-              id: issue.number,
-              title: issue.title,
-              body: issue.body,
-              author: issue.user.login,
-              date: issue.created_at,
-              labels: issue.labels.map(l => l.name),
-              game: issue.labels.find(l => l.name.startsWith('game:'))?.name.split(':')[1] || null
-            });
-          }).catch(() => {
-            window.UIFeedback.openFullModal(bookmark.postData);
-          });
-        } else {
-          showToast(t('viewerNotAvailable'), 'error');
-        }
-      } else {
-        showToast(t('postNotFound'), 'error');
-      }
-    });
-
-    const content = createElement('div', 'bookmark-content', { padding: '12px', flex: '1', display: 'flex', flexDirection: 'column' });
-    const titleEl = createElement('h4', '', { margin: '0 0 4px', fontSize: '16px', color: 'var(--text-primary)' });
-    titleEl.textContent = bookmark.title || 'Пост';
-    content.appendChild(titleEl);
-
-    const meta = createElement('div', '', { fontSize: '12px', color: 'var(--text-secondary)' });
-    meta.textContent = `Пост · ${formatDate(bookmark.added)}`;
-    content.appendChild(meta);
-
-    card.appendChild(content);
-
-    if (bookmark.thumbnail) {
-      const imgWrapper = createElement('div', 'bookmark-media', {
-        position: 'relative',
-        paddingBottom: '56.25%',
-        background: 'var(--bg-primary)',
-        borderBottom: '1px solid var(--border)',
-        flexShrink: '0'
-      });
-      const img = createElement('img', '', {
-        position: 'absolute',
-        top: 0, left: 0, width: '100%', height: '100%',
-        objectFit: 'cover'
-      });
-      img.src = bookmark.thumbnail;
-      img.alt = bookmark.title;
-      img.onerror = () => { img.style.display = 'none'; };
-      imgWrapper.appendChild(img);
-      card.insertBefore(imgWrapper, content);
-    } else {
-      const iconWrapper = createElement('div', 'bookmark-icon', {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '48px',
-        padding: '20px 0',
-        background: 'var(--bg-primary)',
-        borderBottom: '1px solid var(--border)'
-      });
-      iconWrapper.innerHTML = '<i class="fas fa-newspaper"></i>';
-      card.insertBefore(iconWrapper, content);
-    }
-  }
-
-  function buildVideoCard(card, bookmark) {
-    card.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (bookmark.embedUrl) {
-        const isDirectVideo = /\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(bookmark.embedUrl);
-        let html;
-        const downloadSection = bookmark.downloadUrl
-          ? `<a href="${escapeHtml(bookmark.downloadUrl)}" download class="button" style="background:var(--accent);">${t('downloadBtn')}</a>`
-          : '';
-
-        let extraDownload = '';
-        if (bookmark.videoData && bookmark.videoData.service === 'youtube' && bookmark.videoData.id) {
-          const vid = bookmark.videoData.id;
-          extraDownload = `
-            <a href="https://www.y2mate.com/youtube/${vid}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">Скачать через y2mate</a>
-            <a href="https://en.savefrom.net/1/?url=https://youtu.be/${vid}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">Скачать через savefrom</a>
-          `;
-        }
-
-        if (isDirectVideo) {
-          html = `
-            <div style="background:#000;border-radius:12px;overflow:hidden;">
-              <video controls style="width:100%;max-height:70vh;" src="${escapeHtml(bookmark.embedUrl)}"></video>
-            </div>
-            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
-              ${downloadSection}
-              ${extraDownload}
-              <a href="${escapeHtml(bookmark.url)}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">${t('open')}</a>
-            </div>
-          `;
-        } else {
-          html = `
-            <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;background:#000;border-radius:12px;">
-              <iframe src="${escapeHtml(bookmark.embedUrl)}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe>
-            </div>
-            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
-              ${downloadSection}
-              ${extraDownload}
-              <a href="${escapeHtml(bookmark.url)}" target="_blank" class="button" style="background:var(--bg-inner-gradient);">${t('open')}</a>
-            </div>
-          `;
-        }
-
-        const modalOverlay = document.createElement('div');
-        modalOverlay.className = 'modal-fullscreen';
-        modalOverlay.style.zIndex = '10002';
-        modalOverlay.style.backgroundColor = 'rgba(0,0,0,0.85)';
-        modalOverlay.innerHTML = `
-          <div class="modal-content-full" style="max-width: 900px; max-height: 90vh;">
-            <div class="modal-header">
-              <h2>${escapeHtml(bookmark.title || 'Видео')}</h2>
-              <button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body" style="padding:20px;">
-              ${html}
-            </div>
-          </div>
-        `;
-        document.body.appendChild(modalOverlay);
-        modalOverlay.classList.add('active');
-        document.body.style.overflow = 'hidden';
-
-        const closeModal = () => {
-          modalOverlay.remove();
-          document.body.style.overflow = '';
-        };
-
-        modalOverlay.querySelector('.modal-close').addEventListener('click', closeModal);
-        modalOverlay.addEventListener('click', (e) => {
-          if (e.target === modalOverlay) closeModal();
-        });
-        document.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape') {
-            closeModal();
-            document.removeEventListener('keydown', closeModal);
-          }
-        });
-      } else {
-        window.open(bookmark.url, '_blank');
-      }
-    });
-
-    const content = createElement('div', 'bookmark-content', { padding: '12px', flex: '1', display: 'flex', flexDirection: 'column' });
-    const titleEl = createElement('h4', '', { margin: '0 0 4px', fontSize: '16px', color: 'var(--text-primary)' });
-    titleEl.textContent = bookmark.title || 'Видео';
-    content.appendChild(titleEl);
-
-    const meta = createElement('div', '', { fontSize: '12px', color: 'var(--text-secondary)' });
-    meta.textContent = `Видео · ${formatDate(bookmark.added)}`;
-    content.appendChild(meta);
-
-    card.appendChild(content);
-
-    if (bookmark.thumbnail) {
-      const imgWrapper = createElement('div', 'bookmark-media', {
-        position: 'relative',
-        paddingBottom: '56.25%',
-        background: 'var(--bg-primary)',
-        borderBottom: '1px solid var(--border)',
-        flexShrink: '0'
-      });
-      const img = createElement('img', '', {
-        position: 'absolute',
-        top: 0, left: 0, width: '100%', height: '100%',
-        objectFit: 'cover'
-      });
-      img.src = bookmark.thumbnail;
-      img.alt = bookmark.title;
-      img.onerror = () => { img.style.display = 'none'; };
-      imgWrapper.appendChild(img);
-      const playBtn = createElement('div', 'play-overlay', {
-        position: 'absolute',
-        top: '50%', left: '50%',
-        transform: 'translate(-50%, -50%)',
-        background: 'rgba(0,0,0,0.7)',
-        borderRadius: '50%',
-        width: '60px', height: '60px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: 'white',
-        fontSize: '30px',
-        pointerEvents: 'none'
-      });
-      playBtn.innerHTML = '<i class="fas fa-play"></i>';
-      imgWrapper.appendChild(playBtn);
-      card.insertBefore(imgWrapper, content);
-    } else {
-      const iconWrapper = createElement('div', 'bookmark-icon', {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '48px',
-        padding: '20px 0',
-        background: 'var(--bg-primary)',
-        borderBottom: '1px solid var(--border)'
-      });
-      iconWrapper.innerHTML = '<i class="fas fa-video"></i>';
-      card.insertBefore(iconWrapper, content);
-    }
-  }
-
-  function buildLinkCard(card, bookmark) {
-    card.addEventListener('click', () => {
-      window.open(bookmark.url, '_blank');
-    });
-
-    const content = createElement('div', 'bookmark-content', { padding: '12px', flex: '1', display: 'flex', flexDirection: 'column' });
-    const titleEl = createElement('h4', '', { margin: '0 0 4px', fontSize: '16px', color: 'var(--text-primary)' });
-    titleEl.textContent = bookmark.title || 'Ссылка';
-    content.appendChild(titleEl);
-
-    const meta = createElement('div', '', { fontSize: '12px', color: 'var(--text-secondary)' });
-    meta.textContent = `Ссылка · ${formatDate(bookmark.added)}`;
-    content.appendChild(meta);
-
-    card.appendChild(content);
-
-    if (bookmark.thumbnail) {
-      const imgWrapper = createElement('div', 'bookmark-media', {
-        position: 'relative',
-        paddingBottom: '56.25%',
-        background: 'var(--bg-primary)',
-        borderBottom: '1px solid var(--border)',
-        flexShrink: '0'
-      });
-      const img = createElement('img', '', {
-        position: 'absolute',
-        top: 0, left: 0, width: '100%', height: '100%',
-        objectFit: 'cover'
-      });
-      img.src = bookmark.thumbnail;
-      img.alt = bookmark.title;
-      img.onerror = () => { img.style.display = 'none'; };
-      imgWrapper.appendChild(img);
-      card.insertBefore(imgWrapper, content);
-    } else {
-      const iconWrapper = createElement('div', 'bookmark-icon', {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '48px',
-        padding: '20px 0',
-        background: 'var(--bg-primary)',
-        borderBottom: '1px solid var(--border)'
-      });
-      iconWrapper.innerHTML = '<i class="fas fa-link"></i>';
-      card.insertBefore(iconWrapper, content);
-    }
-  }
-
-  function buildSaveCard(card, bookmark) {
-    card.addEventListener('click', () => {
-      if (!bookmark.saveData) return;
-      const base64 = bookmark.saveData.content;
-      const fileName = bookmark.saveData.fileName || 'save.dat';
-      const decodedText = tryDecodeBase64(base64);
-      let contentHtml;
-      if (decodedText !== null) {
-        contentHtml = `
-          <div style="margin-bottom:16px;">
-            <strong>${t('save')}:</strong> ${escapeHtml(fileName)}
-            ${bookmark.saveData.game ? `<span style="margin-left:12px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:30px;font-size:12px;">${escapeHtml(bookmark.saveData.game)}</span>` : ''}
-          </div>
-          <pre style="background:var(--bg-primary);padding:16px;border-radius:12px;border:1px solid var(--border);max-height:400px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:13px;">${escapeHtml(decodedText)}</pre>
-        `;
-      } else {
-        contentHtml = `
-          <div style="margin-bottom:16px;">
-            <strong>${t('save')}:</strong> ${escapeHtml(fileName)}
-            ${bookmark.saveData.game ? `<span style="margin-left:12px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:30px;font-size:12px;">${escapeHtml(bookmark.saveData.game)}</span>` : ''}
-          </div>
-          <div style="background:var(--bg-primary);padding:20px;border-radius:12px;border:1px solid var(--border);text-align:center;color:var(--text-secondary);">
-            <i class="fas fa-file" style="font-size:48px;display:block;margin-bottom:12px;"></i>
-            Бинарный файл (не отображается)
-          </div>
-        `;
-      }
-
-      const modalOverlay = document.createElement('div');
-      modalOverlay.className = 'modal-fullscreen';
-      modalOverlay.style.zIndex = '10002';
-      modalOverlay.style.backgroundColor = 'rgba(0,0,0,0.85)';
-      modalOverlay.innerHTML = `
-        <div class="modal-content-full" style="max-width: 700px; max-height: 90vh;">
-          <div class="modal-header">
-            <h2>${escapeHtml(bookmark.title || 'Сохранение')}</h2>
-            <button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>
-          </div>
-          <div class="modal-body" style="padding:20px;">
-            ${contentHtml}
-            <div style="margin-top:16px;display:flex;gap:12px;justify-content:center;">
-              <button class="button" style="background:var(--accent);padding:12px 40px;font-size:18px;" id="download-save-btn">
-                <i class="fas fa-download"></i> ${t('downloadBtn')}
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modalOverlay);
-      modalOverlay.classList.add('active');
-      document.body.style.overflow = 'hidden';
-
-      const closeModal = () => {
-        modalOverlay.remove();
-        document.body.style.overflow = '';
-      };
-
-      modalOverlay.querySelector('.modal-close').addEventListener('click', closeModal);
-      modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) closeModal();
-      });
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          closeModal();
-          document.removeEventListener('keydown', closeModal);
-        }
-      });
-
-      modalOverlay.querySelector('#download-save-btn').addEventListener('click', () => {
-        const blob = base64ToBlob(base64);
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(a.href);
-      });
-    });
-
-    const content = createElement('div', 'bookmark-content', { padding: '12px', flex: '1', display: 'flex', flexDirection: 'column' });
-    const titleEl = createElement('h4', '', { margin: '0 0 4px', fontSize: '16px', color: 'var(--text-primary)' });
-    titleEl.textContent = bookmark.title || 'Сохранение';
-    content.appendChild(titleEl);
-
-    const meta = createElement('div', '', { fontSize: '12px', color: 'var(--text-secondary)' });
-    let metaText = `${t('save')} · ${formatDate(bookmark.added)}`;
-    if (bookmark.saveData && bookmark.saveData.game) {
-      metaText += ` · ${escapeHtml(bookmark.saveData.game)}`;
-    }
-    meta.textContent = metaText;
-    content.appendChild(meta);
-
-    card.appendChild(content);
-
-    const game = bookmark.saveData?.game;
-    const imageMap = {
-      'starve-neon': 'images/starve-neon-header.webp',
-      'alpha-01': 'images/alpha-01-header.webp',
-      'gc-adven': 'images/gc-adven-header.webp'
-    };
-    const imgSrc = game ? imageMap[game] : null;
-
-    if (imgSrc) {
-      const imgWrapper = createElement('div', 'bookmark-media', {
-        position: 'relative',
-        paddingBottom: '56.25%',
-        background: 'var(--bg-primary)',
-        borderBottom: '1px solid var(--border)',
-        flexShrink: '0'
-      });
-      const img = createElement('img', '', {
-        position: 'absolute',
-        top: 0, left: 0, width: '100%', height: '100%',
-        objectFit: 'cover'
-      });
-      img.src = imgSrc;
-      img.alt = bookmark.title || 'Сохранение';
-      img.onerror = () => { img.style.display = 'none'; };
-      imgWrapper.appendChild(img);
-      card.insertBefore(imgWrapper, content);
-    } else {
-      const iconWrapper = createElement('div', 'bookmark-icon', {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '48px',
-        padding: '20px 0',
-        background: 'var(--bg-primary)',
-        borderBottom: '1px solid var(--border)'
-      });
-      iconWrapper.innerHTML = '<i class="fas fa-save"></i>';
-      card.insertBefore(iconWrapper, content);
-    }
-  }
-
-  // ---- открытие модалки хранилища ----
-
-  let activeStorageModal = null;
-
+  // ---- открытие модалки ----
   async function openStorageModal(gameContext = null) {
-    const t = window.I18n?.translate || (k => k);
-    updateAuthState();
-    if (!currentUser) return showToast(t('loginToGitHub'), 'error');
-    if (!currentToken) return showToast(t('githubError'), 'error');
-    if (!hasScope('gist')) return showToast(t('needGistScope'), 'error');
+    const t = (key) => window.I18n?.translate(key) || key;
+    const user = getCurrentUser();
+    if (!user) { showToast(t('loginToGitHub'), 'error'); return; }
+    if (!hasScope('gist')) { showToast(t('needGistScope'), 'error'); return; }
 
-    if (gameContext) currentGame = gameContext;
-    else currentGame = null;
-
-    const res = await loadBookmarks();
-    currentBookmarks = res.bookmarks || [];
-
-    if (!window.RateLimits) await loadModule('js/features/rate-limits.js');
-    const remainingAdds = window.RateLimits ? window.RateLimits.getRemaining('storageAdds') : '?';
+    try {
+      await ensureStorage();
+    } catch (e) {
+      showToast('Ошибка загрузки хранилища: ' + e.message, 'error');
+      return;
+    }
 
     const html = `
       <div class="storage-modal-container">
         <div class="storage-header">
           <div class="storage-controls">
             <div class="storage-sort">
-              <button class="sort-btn ${sortOrder==='new'?'active':''}" data-order="new"><i class="fas fa-arrow-down"></i> ${t('new')}</button>
-              <button class="sort-btn ${sortOrder==='old'?'active':''}" data-order="old"><i class="fas fa-arrow-up"></i> ${t('old')}</button>
+              <button class="sort-btn active" data-order="new"><i class="fas fa-arrow-down"></i> ${t('new')}</button>
+              <button class="sort-btn" data-order="old"><i class="fas fa-arrow-up"></i> ${t('old')}</button>
             </div>
             <div class="storage-categories">
-              <button class="cat-btn ${category==='all'?'active':''}" data-cat="all"><i class="fas fa-globe"></i> ${t('all')}</button>
-              <button class="cat-btn ${category==='post'?'active':''}" data-cat="post"><i class="fas fa-newspaper"></i> ${t('posts')}</button>
-              <button class="cat-btn ${category==='video'?'active':''}" data-cat="video"><i class="fas fa-video"></i> ${t('videos')}</button>
-              <button class="cat-btn ${category==='link'?'active':''}" data-cat="link"><i class="fas fa-link"></i> ${t('links')}</button>
-              <button class="cat-btn ${category==='save'?'active':''}" data-cat="save"><i class="fas fa-save"></i> ${t('saves')}</button>
+              <button class="cat-btn active" data-cat="all"><i class="fas fa-globe"></i> ${t('all')}</button>
+              <button class="cat-btn" data-cat="post"><i class="fas fa-newspaper"></i> ${t('posts')}</button>
+              <button class="cat-btn" data-cat="video"><i class="fas fa-video"></i> ${t('videos')}</button>
+              <button class="cat-btn" data-cat="link"><i class="fas fa-link"></i> ${t('links')}</button>
+              <button class="cat-btn" data-cat="save"><i class="fas fa-save"></i> ${t('saves')}</button>
             </div>
           </div>
           <div class="storage-actions">
-            <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-right:12px;">
-              ${t('postsRemaining')}: <span class="rate-indicator" data-action="storageAdds">${remainingAdds}</span>
-            </span>
-            <div class="search-wrapper" style="display:flex;gap:8px;align-items:center;">
-              <input type="text" id="search-input" placeholder="${t('searchPlaceholder')}" style="padding:6px 14px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;width:160px;">
+            <button class="storage-btn" id="password-btn" title="Установить пароль на хранилище"><i class="fas fa-lock"></i></button>
+            <button class="storage-btn" id="export-btn" title="Экспорт закладок"><i class="fas fa-download"></i></button>
+            <button class="storage-btn" id="import-btn" title="Импорт закладок"><i class="fas fa-upload"></i></button>
+            <div class="search-wrapper">
+              <input type="text" id="search-input" placeholder="${t('searchPlaceholder')}" class="storage-search">
             </div>
             <button class="storage-btn primary" id="toggle-add-btn"><i class="fas fa-plus"></i> ${t('addButton')}</button>
           </div>
         </div>
         <div id="add-form" class="storage-add-form" style="display:none;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <input type="url" id="new-url" placeholder="${t('addLinkPlaceholder')}" autocomplete="off" class="storage-url-input" style="flex:1;min-width:200px;">
+            <input type="url" id="new-url" placeholder="${t('addLinkPlaceholder')}" autocomplete="off" class="storage-url-input">
             <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> ${t('addButton')}</button>
           </div>
-          <div style="margin-top:12px;border:2px dashed var(--border);border-radius:16px;padding:20px;text-align:center;color:var(--text-secondary);transition:background 0.2s;" id="drop-zone">
+          <div style="margin-top:12px;border:2px dashed var(--border);border-radius:16px;padding:20px;text-align:center;color:var(--text-secondary);" id="drop-zone">
             <i class="fas fa-file-upload" style="font-size:32px;display:block;margin-bottom:8px;"></i>
             <p>${t('dropZoneText')}</p>
-            <p style="font-size:12px;">${t('selectFiles')}</p>
             <input type="file" id="file-input" accept=".ini,.starver" multiple style="display:none;">
             <button class="storage-btn" id="file-select-btn"><i class="fas fa-folder-open"></i> ${t('selectFiles')}</button>
           </div>
+        </div>
+        <div id="status-bar" style="padding:6px 12px;background:var(--bg-primary);border-radius:20px;font-size:13px;color:var(--text-secondary);opacity:0.8;transition:opacity 0.3s;display:flex;justify-content:space-between;align-items:center;">
+          <span id="status-text">Готово</span>
+          <span id="status-icon" style="font-size:16px;">✅</span>
         </div>
         <div class="bookmarks-grid" id="bookmarks-grid"></div>
       </div>
     `;
 
     const { modal, closeModal } = createModal(t('storageModalTitle'), html, { size: 'full' });
-    modalRef = modal;
-    activeStorageModal = { modal, closeModal };
+    modalRef = { modal, closeModal };
+    statusElement = modal.querySelector('#status-text');
 
-    const style = createElement('style');
+    const style = document.createElement('style');
     style.textContent = `
       .storage-modal-container{display:flex;flex-direction:column;gap:20px}
       .storage-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px}
@@ -1302,55 +1100,47 @@
       .storage-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
       .storage-btn:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.2)}
       .bookmarks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px}
+      .storage-add-form{background:var(--bg-inner-gradient);padding:16px;border-radius:20px;border:1px solid var(--border)}
+      .storage-search{padding:6px 14px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;width:160px}
+      .storage-search:focus{border-color:var(--accent);outline:none}
       .bookmark-card-wrapper{position:relative;transition:transform 0.2s}
       .bookmark-card-wrapper:hover{transform:translateY(-4px)}
-      .bookmark-delete-btn{opacity:0;transition:opacity 0.2s}
+      .bookmark-delete-btn{opacity:0;transition:opacity 0.2s;position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:28px;height:28px;color:#f44336;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;z-index:5}
       .bookmark-card-wrapper:hover .bookmark-delete-btn{opacity:1}
-      .storage-add-form{background:var(--bg-inner-gradient);padding:16px;border-radius:20px;border:1px solid var(--border)}
-      #drop-zone.dragover{background:var(--bg-card);border-color:var(--accent)}
+      .bookmark-card{background:var(--bg-inner-gradient);border-radius:20px;border:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;height:100%}
       .bookmark-media{position:relative;padding-bottom:56.25%;background:var(--bg-primary);border-bottom:1px solid var(--border);flex-shrink:0;overflow:hidden}
       .bookmark-media img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
       .play-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);border-radius:50%;width:60px;height:60px;display:flex;align-items:center;justify-content:center;color:white;font-size:30px;pointer-events:none}
       .bookmark-icon{display:flex;align-items:center;justify-content:center;font-size:48px;padding:20px 0;background:var(--bg-primary);border-bottom:1px solid var(--border)}
       .bookmark-content{padding:12px;flex:1;display:flex;flex-direction:column}
       .bookmark-content h4{margin:0 0 4px;font-size:16px;color:var(--text-primary)}
-      .bookmark-content .text-secondary{font-size:12px}
-      .search-wrapper input{transition:border-color 0.2s,box-shadow 0.2s}
-      .search-wrapper input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 2px rgba(61,158,179,0.3)}
+      #status-bar{margin:4px 0}
     `;
     modal.appendChild(style);
 
-    const grid = modal.querySelector('#bookmarks-grid');
     renderBookmarks(modal);
 
-    modal.querySelectorAll('.sort-btn').forEach(b => {
-      b.addEventListener('click', () => {
-        sortOrder = b.dataset.order;
-        modal.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
-        b.classList.add('active');
+    modal.querySelectorAll('.sort-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        modal.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
         renderBookmarks(modal);
       });
     });
 
-    modal.querySelectorAll('.cat-btn').forEach(b => {
-      b.addEventListener('click', () => {
-        category = b.dataset.cat;
-        modal.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
-        b.classList.add('active');
+    modal.querySelectorAll('.cat-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        modal.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
         renderBookmarks(modal);
       });
     });
 
     const searchInput = modal.querySelector('#search-input');
-    searchInputRef = searchInput;
-    const debouncedSearch = debounce(() => {
-      searchQuery = searchInput.value;
-      renderBookmarks(modal);
-    }, SEARCH_DEBOUNCE_MS);
-    searchInput.addEventListener('input', debouncedSearch);
+    searchInput.addEventListener('input', () => renderBookmarks(modal));
 
-    const toggleAddBtn = modal.querySelector('#toggle-add-btn');
     const addForm = modal.querySelector('#add-form');
+    const toggleAddBtn = modal.querySelector('#toggle-add-btn');
     let formVisible = false;
     toggleAddBtn.addEventListener('click', () => {
       formVisible = !formVisible;
@@ -1358,214 +1148,130 @@
       toggleAddBtn.innerHTML = formVisible ? `<i class="fas fa-times"></i> ${t('cancelButton')}` : `<i class="fas fa-plus"></i> ${t('addButton')}`;
     });
 
-    const addBtn = modal.querySelector('#confirm-add');
     const urlInput = modal.querySelector('#new-url');
-    const debouncedAdd = debounce(async () => {
+    const confirmAdd = modal.querySelector('#confirm-add');
+    confirmAdd.addEventListener('click', async () => {
       const url = urlInput.value.trim();
-      if (!url) {
-        showToast(t('enterText'), 'error');
-        return;
-      }
+      if (!url) { showToast(t('enterText'), 'error'); return; }
       try {
-        await addBookmark(url);
+        const meta = await fetchMetadata(url);
+        await addBookmark({
+          url: url,
+          title: meta.title || url,
+          thumbnail: meta.thumbnail || null,
+          embedUrl: meta.embedUrl || null,
+          type: meta.type || 'link',
+          videoData: meta.videoData || null,
+          postData: meta.postData || null
+        });
         urlInput.value = '';
         renderBookmarks(modal);
-        const indicator = modal.querySelector('.rate-indicator[data-action="storageAdds"]');
-        if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('storageAdds');
       } catch (e) {
-        if (e.message !== 'duplicate' && e.message !== 'limit_exceeded') showToast(t('loadError') + ': ' + e.message, 'error');
+        if (e.message !== 'duplicate') showToast(e.message, 'error');
       }
-    }, 1000);
-    addBtn.addEventListener('click', debouncedAdd);
+    });
 
     const dropZone = modal.querySelector('#drop-zone');
     const fileInput = modal.querySelector('#file-input');
     const fileSelectBtn = modal.querySelector('#file-select-btn');
-
     fileSelectBtn.addEventListener('click', () => fileInput.click());
-
     fileInput.addEventListener('change', async (e) => {
       const files = e.target.files;
-      if (files.length === 0) return;
-      await processFiles(files, modal);
+      if (files.length) await processFiles(files, modal);
       fileInput.value = '';
     });
-
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.classList.add('dragover');
-    });
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.classList.remove('dragover');
-    });
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--accent)'; });
+    dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = ''; });
     dropZone.addEventListener('drop', async (e) => {
       e.preventDefault();
-      dropZone.classList.remove('dragover');
+      dropZone.style.borderColor = '';
       const files = e.dataTransfer.files;
-      if (files.length === 0) return;
-      await processFiles(files, modal);
+      if (files.length) await processFiles(files, modal);
     });
 
-    // ---- обновление при смене языка (без перерисовки закладок) ----
-    const langHandler = () => {
-      if (!activeStorageModal || activeStorageModal.modal !== modal) return;
-      const t = window.I18n?.translate || (k => k);
-
-      // Заголовок модалки
-      const headerTitle = modal.querySelector('.modal-header h2');
-      if (headerTitle) headerTitle.textContent = t('storageModalTitle');
-
-      // Кнопки сортировки
-      const sortBtns = modal.querySelectorAll('.sort-btn');
-      sortBtns.forEach(b => {
-        if (b.dataset.order === 'new') b.innerHTML = `<i class="fas fa-arrow-down"></i> ${t('new')}`;
-        else if (b.dataset.order === 'old') b.innerHTML = `<i class="fas fa-arrow-up"></i> ${t('old')}`;
-      });
-
-      // Кнопки категорий
-      const catBtns = modal.querySelectorAll('.cat-btn');
-      catBtns.forEach(b => {
-        const cat = b.dataset.cat;
-        const iconMap = { all: 'fa-globe', post: 'fa-newspaper', video: 'fa-video', link: 'fa-link', save: 'fa-save' };
-        const labelMap = { all: t('all'), post: t('posts'), video: t('videos'), link: t('links'), save: t('saves') };
-        b.innerHTML = `<i class="fas ${iconMap[cat] || 'fa-circle'}"></i> ${labelMap[cat] || cat}`;
-      });
-
-      // Поле поиска
-      const searchInput = modal.querySelector('#search-input');
-      if (searchInput) searchInput.placeholder = t('searchPlaceholder');
-
-      // Кнопка добавления
-      const toggleBtn = modal.querySelector('#toggle-add-btn');
-      const formVisible = addForm.style.display !== 'none';
-      toggleBtn.innerHTML = formVisible ? `<i class="fas fa-times"></i> ${t('cancelButton')}` : `<i class="fas fa-plus"></i> ${t('addButton')}`;
-
-      // Поле ввода URL
-      const urlInput = modal.querySelector('#new-url');
-      if (urlInput) urlInput.placeholder = t('addLinkPlaceholder');
-
-      // Кнопка подтверждения
-      const confirmBtn = modal.querySelector('#confirm-add');
-      if (confirmBtn) confirmBtn.innerHTML = `<i class="fas fa-plus"></i> ${t('addButton')}`;
-
-      // Drop zone
-      const dropZone = modal.querySelector('#drop-zone');
-      if (dropZone) {
-        const p = dropZone.querySelector('p:first-of-type');
-        if (p) p.textContent = t('dropZoneText');
-        const btn = dropZone.querySelector('#file-select-btn');
-        if (btn) btn.innerHTML = `<i class="fas fa-folder-open"></i> ${t('selectFiles')}`;
+    modal.querySelector('#password-btn').addEventListener('click', async () => {
+      const t = (key) => window.I18n?.translate(key) || key;
+      const newPass = prompt('Введите новый пароль для хранилища (оставьте пустым, чтобы отключить):\n\nВНИМАНИЕ: пароль становится обязательным для доступа, даже при наличии логина и токена.');
+      if (newPass === null) return;
+      try {
+        await setStoragePassword(newPass || null);
+        showToast('Пароль обновлён', 'success');
+        // обновляем статус hasPassword
+        if (newPass) hasPassword = true;
+        else hasPassword = false;
+      } catch (e) {
+        showToast(e.message, 'error');
       }
+    });
 
-      // Счётчик лимитов
-      const indicator = modal.querySelector('.rate-indicator[data-action="storageAdds"]');
-      if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('storageAdds');
-
-      // НЕ перерисовываем закладки – они не содержат переводимых текстов
-    };
-    window.addEventListener('languageChanged', langHandler);
+    modal.querySelector('#export-btn').addEventListener('click', exportBookmarks);
+    modal.querySelector('#import-btn').addEventListener('click', importBookmarks);
 
     const closeWithCleanup = () => {
-      window.removeEventListener('languageChanged', langHandler);
-      activeStorageModal = null;
       modalRef = null;
       closeModal();
     };
-    modal.querySelector('.modal-close').removeEventListener('click', closeModal);
     modal.querySelector('.modal-close').addEventListener('click', closeWithCleanup);
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) closeWithCleanup();
-    });
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeWithCleanup(); });
 
+    async function processFiles(files, modal) {
+      const t = (key) => window.I18n?.translate(key) || key;
+      for (const file of files) {
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (ext !== 'ini' && ext !== 'starver') {
+          showToast(t('fileNotSupported').replace('{name}', file.name), 'error');
+          continue;
+        }
+        try {
+          const buffer = await file.arrayBuffer();
+          const base64 = arrayBufferToBase64(buffer);
+          const hash = await hashBuffer(buffer);
+          await addBookmark({
+            url: null,
+            title: file.name,
+            saveData: {
+              fileName: file.name,
+              content: base64,
+              hash: hash,
+              mimeType: 'text/plain',
+              game: null
+            },
+            type: 'save'
+          });
+          showToast(t('saveAdded').replace('{name}', file.name), 'success');
+        } catch (e) {
+          showToast(e.message, 'error');
+        }
+      }
+      renderBookmarks(modal);
+    }
+
+    function arrayBufferToBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i=0; i<bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    }
+
+    async function hashBuffer(buffer) {
+      const hash = await crypto.subtle.digest('SHA-256', buffer);
+      return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+    }
+
+    updateStatus('Готово', 'success');
     return { modal, closeModal: closeWithCleanup };
   }
 
-  async function processFiles(files, modal) {
-    const t = window.I18n?.translate || (k => k);
-    for (const file of files) {
-      const ext = file.name.split('.').pop().toLowerCase();
-      if (ext !== 'ini' && ext !== 'starver') {
-        showToast(t('fileNotSupported').replace('{name}', file.name), 'error');
-        continue;
-      }
-      try {
-        const buffer = await file.arrayBuffer();
-        const base64 = arrayBufferToBase64(buffer);
-        const hash = simpleHash(buffer);
-
-        const bookmarkData = {
-          url: null,
-          title: file.name,
-          fileContent: base64,
-          fileName: file.name,
-          game: currentGame || null,
-          saveData: {
-            fileName: file.name,
-            content: base64,
-            hash: hash,
-            mimeType: 'text/plain',
-            game: currentGame || null,
-            isBase64: true
-          }
-        };
-        await addBookmark(bookmarkData);
-        showToast(t('saveAdded').replace('{name}', file.name), 'success');
-        const indicator = modal?.querySelector('.rate-indicator[data-action="storageAdds"]');
-        if (indicator && window.RateLimits) indicator.textContent = window.RateLimits.getRemaining('storageAdds');
-      } catch (e) {
-        if (e.message !== 'duplicate' && e.message !== 'limit_exceeded') showToast(t('loadError') + ': ' + e.message, 'error');
-      }
-    }
-    if (modal) renderBookmarks(modal);
-  }
-
-  function updateAuthState() {
-    if (!window.GithubAuth) return;
-    currentUser = getCurrentUser();
-    currentToken = getToken();
-    if (currentUser && currentToken) {
-      const stored = localStorage.getItem(STORAGE_KEY_PREFIX + currentUser);
-      if (stored) try { gistId = JSON.parse(stored).gistId; } catch {}
-    } else {
-      gistId = null;
-    }
-  }
-
-  window.addEventListener('github-login-success', updateAuthState);
-  window.addEventListener('github-logout', () => {
-    currentUser = null;
-    currentToken = null;
-    gistId = null;
-    currentBookmarks = [];
-    cachedBookmarks = null;
-    cachedBookmarksTime = 0;
-    if (modalRef) {
-      modalRef = null;
-    }
-    if (activeStorageModal) {
-      activeStorageModal.closeModal();
-      activeStorageModal = null;
-    }
-  });
-
+  // ---- экспорт ----
   window.BookmarkStorage = {
     openStorageModal,
     addBookmark,
     removeBookmark,
     loadBookmarks,
-    _doSave: doSaveBookmarks,
-    resetStorage: async () => {
-      if (gistId && currentToken) {
-        await fetch(`https://api.github.com/gists/${gistId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${currentToken}` }
-        }).catch(() => {});
-      }
-      gistId = null;
-      localStorage.removeItem(STORAGE_KEY_PREFIX + currentUser);
-      currentBookmarks = [];
-      cachedBookmarks = null;
-      cachedBookmarksTime = 0;
-    }
+    resetStorage,
+    setStoragePassword,
+    ensureStorage,
+    exportBookmarks,
+    importBookmarks
   };
 })();
