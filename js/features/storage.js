@@ -5,8 +5,10 @@
   const {
     CONFIG, escapeHtml, createElement, formatDate, debounce,
     cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
-    loadModule, performAction, showToast, getPlainTextLength
+    loadModule, performAction, getPlainTextLength
   } = window.GithubCore;
+
+  const showToast = window.UIUtils?.showToast;
 
   const { getCurrentUser, getToken, hasScope } = window.GithubAuth;
   const { createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils;
