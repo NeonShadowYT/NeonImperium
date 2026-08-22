@@ -2,13 +2,11 @@
 // Точка входа: собирает все модули и экспортирует публичное API
 
 (function() {
-  // Убедимся, что все части загружены (они уже должны быть в window)
   if (!window._StorageCore || !window._StorageMetadata || !window._StorageManager || !window._StorageUI) {
     console.error('[Storage] Missing dependencies');
     return;
   }
 
-  // Публичное API
   const BookmarkStorage = {
     openStorageModal: window._StorageUI.openStorageModal,
     addBookmark: window._StorageManager.addBookmark,
@@ -66,7 +64,6 @@
     }
   };
 
-  // Заменяем существующий window.BookmarkStorage
   window.BookmarkStorage = BookmarkStorage;
 
   console.log('[Storage] Инициализирован (модульная структура, оптимизирован)');

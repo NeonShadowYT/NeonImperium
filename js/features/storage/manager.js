@@ -41,9 +41,8 @@
   let isSaving = false;
   let saveDebounced = null;
   let lastUpdated = 0;
-  let hasPassword = false; // установлен ли пароль (есть byPassword)
+  let hasPassword = false;
 
-  // кеш в памяти
   let cachedMasterKey = null;
   let cachedBookmarks = null;
   let cachedLastUpdated = 0;
@@ -101,7 +100,6 @@
     currentUser = user;
     currentToken = token;
 
-    // Проверяем кеш в памяти
     if (!forceRefresh && cachedMasterKey && cachedBookmarks && cachedLastUpdated) {
       masterKey = cachedMasterKey;
       bookmarks = cachedBookmarks;
@@ -110,12 +108,10 @@
       return { bookmarks, lastUpdated };
     }
 
-    // Проверяем кеш в localStorage
     if (!forceRefresh) {
       const cachedPayload = loadGistFromCache();
       if (cachedPayload) {
         try {
-          // Пытаемся использовать кешированный payload
           const result = await processGistPayload(cachedPayload, user, token);
           if (result) {
             masterKey = result.masterKey;
@@ -128,18 +124,14 @@
             return { bookmarks, lastUpdated };
           }
         } catch (e) {
-          // Если расшифровка не удалась, игнорируем кеш и идём в сеть
           console.warn('Кеш хранилища недействителен, загружаем из сети');
         }
       }
     }
 
-    // Загрузка из сети
-    // Проверяем лимиты (если доступны)
     if (window.RateLimits) {
       const hasLimit = await window.RateLimits.waitForLimit('cacheClears', 10000).catch(() => false);
       if (!hasLimit) {
-        // Лимит исчерпан – пытаемся использовать устаревший кеш
         const stale = loadGistFromCache();
         if (stale) {
           const result = await processGistPayload(stale, user, token);
@@ -190,7 +182,6 @@
       throw new Error('Unsupported storage version, please recreate');
     }
 
-    // Сохраняем в кеш
     saveGistToCache(payload);
 
     const result = await processGistPayload(payload, user, token);
@@ -215,7 +206,6 @@
     hasPassword = hasPasswordBlock;
 
     if (hasPasswordBlock) {
-      // Только пароль
       let password = sessionStorage.getItem(PASSWORD_CACHE_KEY);
       if (!password) {
         password = await promptPassword('Введите пароль для доступа к хранилищу:');
@@ -231,7 +221,6 @@
         throw new Error('Invalid password');
       }
     } else {
-      // Пароля нет – используем byLogin или byToken
       const encryptedByLogin = payload.masterKeyEncrypted?.byLogin;
       const encryptedByToken = payload.masterKeyEncrypted?.byToken;
 
@@ -252,7 +241,6 @@
       }
 
       if (!masterKeyArray) {
-        // Ничего не подошло – предлагаем сброс
         const shouldReset = await confirmResetStorage();
         if (shouldReset) {
           await resetStorage(true);
@@ -267,12 +255,10 @@
         }
       }
 
-      // Если пароля нет, проверяем смену логина/токена и обновляем блоки
       const storedLogin = payload.lastLogin || null;
       const storedTokenHash = payload.lastTokenHash || null;
       const currentTokenHash = await hashString(token);
       if (storedLogin !== user || storedTokenHash !== currentTokenHash) {
-        // Обновляем ключи (перешифровываем мастер-ключ новыми логином и токеном)
         const masterKeyCrypto = await crypto.subtle.importKey(
           'raw',
           new Uint8Array(masterKeyArray),
@@ -284,7 +270,6 @@
       }
     }
 
-    // Восстанавливаем мастер-ключ
     const masterKeyCrypto = await crypto.subtle.importKey(
       'raw',
       new Uint8Array(masterKeyArray),
@@ -293,7 +278,6 @@
       ['encrypt', 'decrypt']
     );
 
-    // Загружаем закладки
     let publicBookmarks = payload.publicBookmarks || [];
     let privateBookmarks = [];
     if (payload.encryptedBookmarks) {
@@ -365,20 +349,14 @@
     const exported = await crypto.subtle.exportKey('raw', masterKeyCrypto);
     const masterKeyArray = Array.from(new Uint8Array(exported));
 
-    // Если пароль НЕ установлен, обновляем byLogin и byToken
-    // Если пароль установлен, мы не должны вызывать эту функцию для обновления byLogin/byToken,
-    // но она может быть вызвана при смене пароля (см. setStoragePassword).
-    // В этой функции мы не трогаем byPassword, если он уже есть – оставляем как есть.
     const gist = await gistFetch(gistId);
     if (!gist) throw new Error('Gist not found');
     const file = gist.files?.[GIST_FILENAME];
     if (!file) throw new Error('File not found');
     let payload = JSON.parse(file.content);
 
-    // Если пароль активен, мы не обновляем byLogin и byToken
     const hasPasswordBlock = !!payload.masterKeyEncrypted?.byPassword;
     if (!hasPasswordBlock) {
-      // Пароля нет – обновляем byLogin и byToken
       const keyLogin = await deriveKeyFromString(login);
       const keyToken = await deriveKeyFromString(token);
       const encryptedByLogin = await encryptData(masterKeyArray, keyLogin);
@@ -389,7 +367,6 @@
       payload.lastTokenHash = await hashString(token);
     }
 
-    // Если передан password, обновляем byPassword (может быть null для удаления)
     if (password !== undefined) {
       if (password) {
         const keyPassword = await deriveKeyFromString(password);
@@ -403,11 +380,10 @@
 
     const content = JSON.stringify(payload);
     await gistUpdate(gistId, content);
-    // Обновляем кеш
     saveGistToCache(payload);
   }
 
-  // ---- слияние публичных и приватных частей (оптимизированное) ----
+  // ---- слияние публичных и приватных частей ----
   function mergeBookmarksByType(publicBm, privateBm) {
     const privateMap = new Map();
     privateBm.forEach(p => privateMap.set(p.id, p));
@@ -429,7 +405,7 @@
     return merged;
   }
 
-  // ---- разделение на публичные и приватные (только непустые поля) ----
+  // ---- разделение на публичные и приватные ----
   function splitBookmarks(bmArray) {
     const publicList = [];
     const privateList = [];
@@ -463,7 +439,6 @@
     if (isSaving) return;
     isSaving = true;
     try {
-      // Загружаем текущий Gist для проверки конфликтов
       const gist = await gistFetch(gistId);
       if (!gist) throw new Error('Gist not found');
       const file = gist.files?.[GIST_FILENAME];
@@ -472,7 +447,6 @@
 
       const remoteUpdated = payload.lastUpdated || 0;
       if (remoteUpdated > lastUpdated) {
-        // Конфликт – объединяем
         let remotePublic = payload.publicBookmarks || [];
         let remotePrivate = [];
         if (payload.encryptedBookmarks) {
@@ -490,12 +464,10 @@
       const { publicList, privateList } = splitBookmarks(bookmarks);
       const encryptedPrivate = await encryptData(privateList, masterKey);
 
-      // Обновляем payload
       payload.publicBookmarks = publicList;
       payload.encryptedBookmarks = encryptedPrivate;
       payload.lastUpdated = Date.now();
 
-      // Если пароль активен, удаляем byLogin и byToken (если они есть)
       if (hasPassword) {
         if (payload.masterKeyEncrypted?.byLogin) {
           delete payload.masterKeyEncrypted.byLogin;
@@ -503,10 +475,7 @@
         if (payload.masterKeyEncrypted?.byToken) {
           delete payload.masterKeyEncrypted.byToken;
         }
-        // Убеждаемся, что byPassword есть
         if (!payload.masterKeyEncrypted?.byPassword) {
-          // Это аварийная ситуация, но на всякий случай перешифруем мастер-ключ паролем
-          // (но пароль должен быть в sessionStorage)
           const password = sessionStorage.getItem(PASSWORD_CACHE_KEY);
           if (password) {
             const keyPassword = await deriveKeyFromString(password);
@@ -516,9 +485,7 @@
           }
         }
       } else {
-        // Пароля нет – убеждаемся, что byLogin и byToken есть
         if (!payload.masterKeyEncrypted?.byLogin || !payload.masterKeyEncrypted?.byToken) {
-          // Перешифровываем текущим логином и токеном
           const exported = await crypto.subtle.exportKey('raw', masterKey);
           const masterKeyArray = Array.from(new Uint8Array(exported));
           const user = getCurrentUser();
@@ -539,7 +506,6 @@
       lastUpdated = payload.lastUpdated;
       cachedLastUpdated = lastUpdated;
       cachedBookmarks = bookmarks.slice();
-      // Обновляем кеш
       saveGistToCache(payload);
 
       updateStatus('Сохранено', 'success');
@@ -709,7 +675,6 @@
     const token = getToken();
     if (!user || !token) throw new Error('not_logged_in');
 
-    // Загружаем текущий Gist
     const gist = await gistFetch(gistId);
     if (!gist) throw new Error('Gist not found');
     const file = gist.files?.[GIST_FILENAME];
@@ -736,7 +701,6 @@
     const exported = await crypto.subtle.exportKey('raw', masterKey);
     const masterKeyArray = Array.from(new Uint8Array(exported));
 
-    // Создаём новые блоки
     const keyLogin = await deriveKeyFromString(user);
     const keyToken = await deriveKeyFromString(token);
     const encryptedByLogin = await encryptData(masterKeyArray, keyLogin);
@@ -753,27 +717,22 @@
       hasPassword = false;
     }
 
-    // Если пароль устанавливается, удаляем byLogin и byToken
     if (newPassword) {
       if (payload.masterKeyEncrypted?.byLogin) delete payload.masterKeyEncrypted.byLogin;
       if (payload.masterKeyEncrypted?.byToken) delete payload.masterKeyEncrypted.byToken;
-      // byPassword будет установлен
     } else {
-      // Пароль отключается – создаём byLogin и byToken
       payload.masterKeyEncrypted.byLogin = encryptedByLogin;
       payload.masterKeyEncrypted.byToken = encryptedByToken;
       payload.lastLogin = user;
       payload.lastTokenHash = await hashString(token);
     }
 
-    // Устанавливаем byPassword (может быть null)
     payload.masterKeyEncrypted.byPassword = encryptedByPassword;
     payload.lastUpdated = Date.now();
 
     const content = JSON.stringify(payload);
     await gistUpdate(gistId, content);
     lastUpdated = payload.lastUpdated;
-    // Обновляем кеш
     saveGistToCache(payload);
     showToast(newPassword ? 'Пароль установлен' : 'Пароль отключён', 'success');
   }

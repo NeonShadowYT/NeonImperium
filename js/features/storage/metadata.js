@@ -19,7 +19,6 @@
     if (!url) return url;
     try {
       const parsed = new URL(url);
-      // Список параметров, которые нужно удалить
       const removeParams = [
         'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
         'ref', 'source', 'fbclid', 'mc_cid', 'mc_eid', 'gs_l', 'gclid',
@@ -32,7 +31,6 @@
           changed = true;
         }
       }
-      // Для YouTube оставляем только v, list, t, start, end
       if (parsed.hostname.includes('youtube.com') || parsed.hostname.includes('youtu.be')) {
         const allowed = ['v', 'list', 't', 'start', 'end'];
         const params = new URLSearchParams(parsed.search);
@@ -46,55 +44,42 @@
           params.delete(key);
           changed = true;
         }
-        // Если остался только v и он единственный, можно убрать '?'
         if (params.toString() === '' || (params.keys().length === 1 && params.has('v'))) {
           parsed.search = '';
         } else {
           parsed.search = params.toString();
         }
       }
-      // Для Vimeo оставляем только id
       if (parsed.hostname.includes('vimeo.com')) {
-        // Удаляем все параметры
         if (parsed.search) {
           parsed.search = '';
           changed = true;
         }
       }
-      // Для Dailymotion оставляем только id
       if (parsed.hostname.includes('dailymotion.com')) {
-        // Удаляем все параметры
         if (parsed.search) {
           parsed.search = '';
           changed = true;
         }
       }
-      // Для Twitch оставляем только channel или clip
       if (parsed.hostname.includes('twitch.tv') || parsed.hostname.includes('clips.twitch.tv')) {
-        // Удаляем все параметры, кроме parent (если он есть, он может быть важен для embed)
-        // Но для хранения ссылки мы можем оставить только путь
-        const path = parsed.pathname;
         if (parsed.search) {
           parsed.search = '';
           changed = true;
         }
-        // Если путь содержит '?' - удаляем
       }
-      // Для RuTube оставляем только id
       if (parsed.hostname.includes('rutube.ru')) {
         if (parsed.search) {
           parsed.search = '';
           changed = true;
         }
       }
-      // Для Coub оставляем только id
       if (parsed.hostname.includes('coub.com')) {
         if (parsed.search) {
           parsed.search = '';
           changed = true;
         }
       }
-      // Для view_video.php оставляем только viewkey
       if (parsed.pathname.includes('view_video.php')) {
         const viewkey = parsed.searchParams.get('viewkey');
         if (viewkey) {
@@ -104,11 +89,14 @@
       }
       return changed ? parsed.toString() : url;
     } catch (e) {
-      // Если URL невалидный, возвращаем как есть
       return url;
     }
   }
 
+  /**
+   * Парсит видео-ссылки и возвращает embedUrl и тип
+   * Поддерживает: YouTube, Vimeo, Dailymotion, Twitch, RuTube, Coub, view_video.php
+   */
   function parseVideoUrl(url) {
     let embedUrl = null;
     let type = 'video';
@@ -118,9 +106,7 @@
     let ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
     if (ytMatch) {
       const id = ytMatch[1];
-      // Сохраняем параметры t, list, start, end, если они есть
       const params = new URLSearchParams();
-      let tParam = '';
       try {
         const parsed = new URL(url);
         const t = parsed.searchParams.get('t');
@@ -157,7 +143,7 @@
       return { embedUrl, type, videoData };
     }
 
-    // Twitch (канал или клип)
+    // Twitch
     let twitchMatch = url.match(/twitch\.tv\/(\w+)/);
     if (twitchMatch) {
       const channel = twitchMatch[1];
@@ -191,7 +177,7 @@
       return { embedUrl, type, videoData };
     }
 
-    // view_video.php (специфичный для некоторых сайтов)
+    // view_video.php
     if (url.includes('view_video.php?viewkey=')) {
       const keyMatch = url.match(/viewkey=([^&]+)/);
       if (keyMatch) {
@@ -204,14 +190,9 @@
           `${baseUrl}player.php?viewkey=${key}`
         ];
         let foundEmbed = null;
-        for (const candidate of candidates) {
-          try {
-            const resp = fetch(candidate, { method: 'HEAD', signal: AbortSignal.timeout(3000) });
-            foundEmbed = candidate;
-            break;
-          } catch (e) {}
-        }
-        embedUrl = foundEmbed || `${baseUrl}embed/${key}`;
+        // Пытаемся найти рабочий embed через HEAD (но CORS может мешать – просто берём первый)
+        foundEmbed = candidates[0]; // по умолчанию embed
+        embedUrl = foundEmbed;
         videoData = { service: 'custom', embedUrl };
         return { embedUrl, type, videoData };
       }
@@ -222,27 +203,51 @@
 
   // ---- основная функция fetchMetadata ----
   async function fetchMetadata(url) {
-    // Очищаем URL от трекеров
     const cleanedUrl = cleanUrl(url);
     
     // Сначала пробуем наши парсеры
     const parsed = parseVideoUrl(cleanedUrl);
     if (parsed && parsed.embedUrl) {
       let title = cleanedUrl;
+      let thumbnail = null;
+      // Пытаемся получить заголовок и превью через oembed
       try {
         const resp = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(cleanedUrl)}`, { signal: AbortSignal.timeout(3000) });
         if (resp.ok) {
           const data = await resp.json();
           if (data && data.title) title = data.title;
+          if (data && data.thumbnail_url) thumbnail = data.thumbnail_url;
         }
       } catch (e) {}
+      // Если noembed не дал превью, пробуем iframely
+      if (!thumbnail) {
+        try {
+          const resp = await fetch(`https://iframe.ly/api/oembed?url=${encodeURIComponent(cleanedUrl)}`, { signal: AbortSignal.timeout(3000) });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.thumbnail_url) thumbnail = data.thumbnail_url;
+          }
+        } catch (e) {}
+      }
+      // Если всё равно нет превью, попробуем microlink
+      if (!thumbnail) {
+        try {
+          const resp = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(cleanedUrl)}&data.image`, { signal: AbortSignal.timeout(3000) });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.data && data.data.image && data.data.image.url) {
+              thumbnail = data.data.image.url;
+            }
+          }
+        } catch (e) {}
+      }
       return {
         title: title,
-        thumbnail: null,
+        thumbnail: thumbnail,
         embedUrl: parsed.embedUrl,
         type: parsed.type,
         videoData: parsed.videoData,
-        cleanedUrl: cleanedUrl // сохраняем очищенный URL
+        cleanedUrl: cleanedUrl
       };
     }
 
