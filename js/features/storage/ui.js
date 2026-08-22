@@ -20,19 +20,16 @@
     refreshGridCallback
   } = window._StorageManager;
 
-  // ---- статус (минималистичный) ----
-  let statusElement = null; // будет ссылка на элемент в хедере
+  let statusElement = null;
 
   function updateStatus(text, type = 'info') {
     if (statusElement) {
       statusElement.textContent = text;
       statusElement.style.color = 'var(--text-secondary)';
       statusElement.style.opacity = '0.7';
-      // убираем цветные иконки
     }
   }
 
-  // ---- рендер закладок ----
   function renderBookmarks(modal) {
     const grid = modal?.querySelector('#bookmarks-grid');
     if (!grid) return;
@@ -165,7 +162,6 @@
     return wrapper;
   }
 
-  // ---- обработка файлов ----
   async function processFiles(files, modal) {
     const t = (key) => window.I18n?.translate(key) || key;
     for (const file of files) {
@@ -210,7 +206,6 @@
     return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
   }
 
-  // ---- открытие модалки ----
   async function openStorageModal(gameContext = null) {
     const t = (key) => window.I18n?.translate(key) || key;
     const user = getCurrentUser();
@@ -252,7 +247,7 @@
         </div>
         <div id="add-form" class="storage-add-form" style="display:none;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <input type="url" id="new-url" placeholder="${t('addLinkPlaceholder')}" autocomplete="off" class="storage-url-input">
+            <input type="url" id="new-url" placeholder="${t('addLinkPlaceholder')}" autocomplete="off" class="storage-url-input" style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-family); font-size:14px; min-width:150px;">
             <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> ${t('addButton')}</button>
           </div>
           <div style="margin-top:12px;border:2px dashed var(--border);border-radius:16px;padding:20px;text-align:center;color:var(--text-secondary);" id="drop-zone">
@@ -266,12 +261,9 @@
       </div>
     `;
 
-    // Используем createModal, добавив в header статус
     const { modal, closeModal } = createModal(t('storageModalTitle'), html, { size: 'full' });
-    // Добавляем статус в заголовок (справа от заголовка, перед крестиком)
     const header = modal.querySelector('.modal-header');
     if (header) {
-      // Находим заголовок h2
       const h2 = header.querySelector('h2');
       if (h2) {
         const statusSpan = document.createElement('span');
@@ -279,21 +271,16 @@
         statusSpan.style.cssText = 'font-size:12px; color:var(--text-secondary); margin-left:16px; opacity:0.7; font-weight:normal;';
         statusSpan.textContent = 'Готово';
         statusElement = statusSpan;
-        // Вставляем после h2
         h2.parentNode.insertBefore(statusSpan, h2.nextSibling);
       }
     }
 
-    // Сохраняем ссылку на модалку для обновления
     window._StorageUI = window._StorageUI || {};
     window._StorageUI.currentModal = modal;
 
-    // Устанавливаем колбэк статуса
     setStatusCallback(updateStatus);
-    // Устанавливаем колбэк обновления грида
     window._StorageManager.setRefreshGridCallback(() => renderBookmarks(modal));
 
-    // Стили (добавляем, если ещё нет)
     if (!document.getElementById('storage-ui-styles')) {
       const style = document.createElement('style');
       style.id = 'storage-ui-styles';
@@ -312,6 +299,8 @@
         .storage-add-form{background:var(--bg-inner-gradient);padding:16px;border-radius:20px;border:1px solid var(--border)}
         .storage-search{padding:6px 14px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;width:160px}
         .storage-search:focus{border-color:var(--accent);outline:none}
+        .storage-url-input{flex:1;padding:8px 16px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;min-width:150px}
+        .storage-url-input:focus{border-color:var(--accent);outline:none}
         .bookmark-card-wrapper{position:relative;transition:transform 0.2s}
         .bookmark-card-wrapper:hover{transform:translateY(-4px)}
         .bookmark-delete-btn{opacity:0;transition:opacity 0.2s;position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:28px;height:28px;color:#f44336;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;z-index:5}
@@ -328,10 +317,8 @@
       document.head.appendChild(style);
     }
 
-    // Рендер закладок
     renderBookmarks(modal);
 
-    // События
     modal.querySelectorAll('.sort-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         modal.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
@@ -367,9 +354,10 @@
       if (!url) { showToast(t('enterText'), 'error'); return; }
       try {
         const meta = await fetchMetadata(url);
+        const cleanedUrl = meta.cleanedUrl || url;
         await addBookmark({
-          url: url,
-          title: meta.title || url,
+          url: cleanedUrl,
+          title: meta.title || cleanedUrl,
           thumbnail: meta.thumbnail || null,
           embedUrl: meta.embedUrl || null,
           type: meta.type || 'link',
@@ -460,7 +448,6 @@
       input.click();
     });
 
-    // Закрытие с очисткой
     const closeWithCleanup = () => {
       statusElement = null;
       window._StorageUI.currentModal = null;
@@ -472,13 +459,12 @@
     return { modal, closeModal: closeWithCleanup };
   }
 
-  // Экспорт
   window._StorageUI = {
     openStorageModal,
     renderBookmarks,
     createBookmarkCard,
     processFiles,
-    updateStatus, // для доступа из manager
+    updateStatus,
     refreshBookmarksGrid: () => {
       const modal = window._StorageUI.currentModal;
       if (modal) renderBookmarks(modal);
@@ -486,7 +472,6 @@
     currentModal: null
   };
 
-  // Устанавливаем колбэк для manager
   window._StorageManager.setStatusCallback(updateStatus);
   window._StorageManager.setRefreshGridCallback(() => {
     const modal = window._StorageUI.currentModal;

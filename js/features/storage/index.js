@@ -18,7 +18,6 @@
     setStoragePassword: window._StorageManager.setStoragePassword,
     ensureStorage: window._StorageManager.ensureStorage,
     exportBookmarks: async () => {
-      // Экспорт с UI-диалогом (используем UI)
       const t = (key) => window.I18n?.translate(key) || key;
       const password = prompt('Введите пароль для шифрования экспортируемого файла (минимум 4 символа):');
       if (!password || password.length < 4) {
@@ -39,7 +38,6 @@
       }
     },
     importBookmarks: async () => {
-      // Импорт с UI-диалогом
       const t = (key) => window.I18n?.translate(key) || key;
       const input = document.createElement('input');
       input.type = 'file';
@@ -55,7 +53,6 @@
             if (!password) return;
             const added = await window._StorageManager.importBookmarksData(encrypted, password);
             window.UIUtils.showToast(`Импортировано ${added} закладок`, 'success');
-            // обновим UI, если модалка открыта
             if (window._StorageUI.currentModal) {
               window._StorageUI.renderBookmarks(window._StorageUI.currentModal);
             }
@@ -72,5 +69,5 @@
   // Заменяем существующий window.BookmarkStorage
   window.BookmarkStorage = BookmarkStorage;
 
-  console.log('[Storage] Инициализирован (модульная структура)');
+  console.log('[Storage] Инициализирован (модульная структура, оптимизирован)');
 })();
