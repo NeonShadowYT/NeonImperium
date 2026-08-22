@@ -175,7 +175,7 @@
                             author: ch.name,
                             date: new Date(item.pubDate),
                             thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
-                            embedUrl: `https://www.youtube.com/embed/${vid}`,
+                            embedUrl: `https://www.youtube-nocookie.com/embed/${vid}?rel=0&modestbranding=1&playsinline=1`,
                             videoData: { service: 'youtube', id: vid }
                         });
                     }).filter(v => v);
@@ -494,7 +494,6 @@
 
         // Мета
         const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
-        // Теперь item.date гарантированно Date
         const dateStr = item.date.toLocaleDateString();
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(item.author)} · <i class="fas fa-calendar-alt"></i> ${dateStr}`;
         if (item.type === 'twitch' && item.twitchData) {
@@ -521,26 +520,50 @@
         if (currentUser && hasScope('gist')) {
             const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: t('addToFavorites') });
             favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
-            favBtn.addEventListener('click', (e) => {
+            favBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (window.BookmarkStorage) {
-                    const bookmark = {
-                        url: item.type === 'post' ? `${location.origin}${location.pathname}?post=${item.id}` :
-                              item.type === 'video' ? `https://youtu.be/${item.id}` :
-                              `https://twitch.tv/${item.id}`,
-                        title: item.title,
-                        type: item.type === 'post' ? 'post' : 'video',
-                        thumbnail: item.thumbnail || 'images/default-news.webp',
-                        author: item.author,
-                        date: item.date,
-                        postData: item.type === 'post' ? { id: item.id, title: item.title, body: item.body, author: item.author, date: item.date.toISOString(), labels: item.labels, game: item.game } : undefined,
-                        videoData: item.type === 'video' ? { id: item.id, service: 'youtube' } : undefined,
-                        twitchData: item.type === 'twitch' ? { channel: item.id } : undefined
-                    };
-                    window.BookmarkStorage.addBookmark(bookmark)
-                        .then(() => showToast(t('addToFavorites'), 'success'))
-                        .catch(err => { if (err.message !== 'duplicate') showToast(t('loadError') + ': ' + err.message, 'error'); });
+                // Загружаем хранилище, если ещё не загружено
+                if (!window.BookmarkStorage) {
+                    try {
+                        if (window.loadStorageModules) {
+                            await window.loadStorageModules();
+                        } else {
+                            const modules = [
+                                'js/features/storage/core.js',
+                                'js/features/storage/metadata.js',
+                                'js/features/storage/manager.js',
+                                'js/features/storage/ui.js',
+                                'js/features/storage/index.js'
+                            ];
+                            for (const src of modules) {
+                                await window.Utils.loadModule(src);
+                            }
+                        }
+                    } catch (err) {
+                        showToast(t('loadModulesError'), 'error');
+                        return;
+                    }
                 }
+                if (!window.BookmarkStorage) {
+                    showToast(t('loadModulesError'), 'error');
+                    return;
+                }
+                const bookmark = {
+                    url: item.type === 'post' ? `${location.origin}${location.pathname}?post=${item.id}` :
+                          item.type === 'video' ? `https://youtu.be/${item.id}` :
+                          `https://twitch.tv/${item.id}`,
+                    title: item.title,
+                    type: item.type === 'post' ? 'post' : 'video',
+                    thumbnail: item.thumbnail || 'images/default-news.webp',
+                    author: item.author,
+                    date: item.date,
+                    postData: item.type === 'post' ? { id: item.id, title: item.title, body: item.body, author: item.author, date: item.date.toISOString(), labels: item.labels, game: item.game } : undefined,
+                    videoData: item.type === 'video' ? { id: item.id, service: 'youtube' } : undefined,
+                    twitchData: item.type === 'twitch' ? { channel: item.id } : undefined
+                };
+                window.BookmarkStorage.addBookmark(bookmark)
+                    .then(() => showToast(t('addToFavorites'), 'success'))
+                    .catch(err => { if (err.message !== 'duplicate') showToast(t('loadError') + ': ' + err.message, 'error'); });
             });
             card.appendChild(favBtn);
         }
@@ -571,7 +594,14 @@
                     position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
                     border: 'none', borderRadius: '12px'
                 });
-                const embedUrl = item.embedUrl || (item.type === 'video' ? `https://www.youtube.com/embed/${item.id}` : `https://player.twitch.tv/?channel=${item.id}&parent=${location.hostname}&autoplay=false`);
+                let embedUrl = item.embedUrl;
+                if (!embedUrl) {
+                    if (item.type === 'video' && item.id) {
+                        embedUrl = `https://www.youtube-nocookie.com/embed/${item.id}?rel=0&modestbranding=1&playsinline=1`;
+                    } else if (item.type === 'twitch' && item.id) {
+                        embedUrl = `https://player.twitch.tv/?channel=${item.id}&parent=${location.hostname}&autoplay=false`;
+                    }
+                }
                 iframe.src = embedUrl;
                 iframe.setAttribute('allowfullscreen', 'true');
                 iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';

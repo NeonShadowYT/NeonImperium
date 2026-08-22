@@ -366,10 +366,26 @@
     }
   }
 
+  // ----- ОБНОВЛЁННАЯ ФУНКЦИЯ addToBookmarks с динамической загрузкой хранилища -----
   async function addToBookmarks(postData) {
     if (!window.BookmarkStorage) {
       try {
-        await loadModule('js/features/storage.js');
+        // Используем глобальную функцию загрузки хранилища
+        if (window.loadStorageModules) {
+          await window.loadStorageModules();
+        } else {
+          // fallback: загружаем по одному
+          const modules = [
+            'js/features/storage/core.js',
+            'js/features/storage/metadata.js',
+            'js/features/storage/manager.js',
+            'js/features/storage/ui.js',
+            'js/features/storage/index.js'
+          ];
+          for (const src of modules) {
+            await window.Utils.loadModule(src);
+          }
+        }
       } catch (e) {
         showToast(t('loadModulesError'), 'error');
         return;
@@ -583,19 +599,14 @@
     const langHandler = () => {
       if (!activeFullModal || activeFullModal.modal !== modal) return;
       const t = window.I18n?.translate || (k => k);
-      // Заголовок
       const headerTitle = modal.querySelector('.modal-header h2');
-      if (headerTitle) headerTitle.textContent = title; // title не переводится, это название поста
-      // Заголовок раздела комментариев
+      if (headerTitle) headerTitle.textContent = title;
       const commentsHeader = modal.querySelector('.comments-section h3');
       if (commentsHeader) commentsHeader.textContent = t('comments') || 'Комментарии';
-      // Поле ввода
       const inputField = modal.querySelector('#new-comment-input');
       if (inputField) inputField.placeholder = t('enterText');
-      // Кнопка отправки
       const sendBtn = modal.querySelector('#submit-comment-btn');
       if (sendBtn) sendBtn.textContent = t('send');
-      // Индикатор лимитов
       const indicator = modal.querySelector('.rate-indicator-wrapper');
       if (indicator) {
         const span = indicator.querySelector('.rate-indicator');

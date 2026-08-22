@@ -374,28 +374,52 @@
     }
   }
 
-  // ----- ИЗМЕНЕНИЕ: инициализация страничных модулей перенесена после загрузки переводов -----
+  // ----- НОВАЯ ФУНКЦИЯ для загрузки модулей хранилища -----
+  async function loadStorageModules() {
+    const modules = [
+      'js/features/storage/core.js',
+      'js/features/storage/metadata.js',
+      'js/features/storage/manager.js',
+      'js/features/storage/ui.js',
+      'js/features/storage/index.js'
+    ];
+    for (const src of modules) {
+      if (!document.querySelector(`script[src="${src}"]`)) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          script.defer = true;
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+    }
+  }
+
+  // ----- ИНИЦИАЛИЗАЦИЯ СТРАНИЧНЫХ МОДУЛЕЙ (после переводов) -----
   function initPageModules() {
     if (window.initNewsFeed) window.initNewsFeed();
     if (window.initFeedback) window.initFeedback();
     if (window.initGameUpdates) window.initGameUpdates();
     if (window.initPlatform) window.initPlatform();
+    // Хранилище не инициализируется автоматически, оно загружается по требованию
+    // Но мы можем предзагрузить его для админов (опционально)
+    const user = window.GithubAuth?.getCurrentUser();
+    if (user && window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(user)) {
+      loadStorageModules().catch(() => {});
+    }
   }
 
-  // Функция, которая ждёт загрузки переводов, затем запускает модули
   function waitForLanguageAndInit() {
-    // Проверяем, загружены ли переводы
     if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
       const testKey = window.I18n.translate('siteTitle');
       if (testKey !== 'siteTitle') {
-        // Переводы загружены – инициализируем
         initPageModules();
         return;
       }
     }
-    // Если ещё нет – подписываемся на событие
     document.addEventListener('languageLoaded', initPageModules, { once: true });
-    // Фолбек: если через 500 мс переводы так и не загрузились, пробуем инициализировать (на случай ошибки)
     setTimeout(() => {
       if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
         const testKey = window.I18n.translate('siteTitle');
@@ -414,16 +438,30 @@
     registerServiceWorker();
     initDownloadConsent();
     initRateLimits();
+    // Предзагружаем storage-core и metadata (легковесные) для быстрого доступа
+    // но основная загрузка будет по требованию
+    const storageCore = document.createElement('script');
+    storageCore.src = 'js/features/storage/core.js';
+    storageCore.defer = true;
+    document.head.appendChild(storageCore);
+    const storageMetadata = document.createElement('script');
+    storageMetadata.src = 'js/features/storage/metadata.js';
+    storageMetadata.defer = true;
+    document.head.appendChild(storageMetadata);
+    // Остальные части загрузятся при необходимости через loadStorageModules
   }
 
   // Запуск
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       initNonLanguageDependent();
-      waitForLanguageAndInit(); // теперь новости и другие модули загружаются после переводов
+      waitForLanguageAndInit();
     });
   } else {
     initNonLanguageDependent();
     waitForLanguageAndInit();
   }
+
+  // Экспортируем функцию для использования в других модулях
+  window.loadStorageModules = loadStorageModules;
 })();
