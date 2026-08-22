@@ -30,27 +30,22 @@
     }
   }
 
-  // ---- обрезка длинных названий ----
   function truncateTitle(title, maxLength = 50) {
     if (!title) return 'Закладка';
     if (title.length <= maxLength) return title;
     return title.slice(0, maxLength) + '…';
   }
 
-  // ---- проверка возможности скачивания через бесплатные API ----
   async function getVideoDownloadUrl(url) {
     if (!url) return null;
     
-    // Список бесплатных API для скачивания (пробуем по порядку)
     const apis = [
-      // Cobalt API (открытый, бесплатный)
       {
         url: 'https://api.cobalt.tools/api/json',
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: (videoUrl) => JSON.stringify({ url: videoUrl, videoQuality: '720', audioFormat: 'best' })
       },
-      // Видео-парсер (бесплатный, без регистрации)
       {
         url: 'https://api.videofetcher.net/parse',
         method: 'GET',
@@ -79,13 +74,11 @@
         
         const data = await response.json();
         
-        // Парсим ответ Cobalt
         if (api.url.includes('cobalt.tools')) {
           if (data.status === 'success' && data.url) {
             return data.url;
           }
         }
-        // Парсим ответ VideoFetcher
         if (api.url.includes('videofetcher.net')) {
           if (data.url) {
             return data.url;
@@ -142,11 +135,9 @@
     card.className = 'bookmark-card';
     card.style.cursor = 'pointer';
 
-    // --- Медиа-блок ---
     const media = document.createElement('div');
     media.className = 'bookmark-media';
 
-    // Определяем, есть ли embedUrl для видео
     const isVideo = bm.type === 'video' && bm.embedUrl;
     const isPost = bm.type === 'post';
     const isSave = bm.type === 'save';
@@ -155,12 +146,10 @@
     if (isVideo) {
       // Видео: вставляем iframe с плеером
       const iframe = document.createElement('iframe');
-      // Добавляем параметры для лучшего отображения в карточке
       let src = bm.embedUrl;
       if (!src.includes('autoplay')) {
         src += (src.includes('?') ? '&' : '?') + 'autoplay=0';
       }
-      // Для YouTube добавляем параметры управления
       if (src.includes('youtube')) {
         src += '&controls=1&showinfo=0&iv_load_policy=3&rel=0';
       }
@@ -172,7 +161,6 @@
       iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
       media.appendChild(iframe);
     } else if (bm.thumbnail) {
-      // Есть превью-картинка (для постов или ссылок)
       const img = document.createElement('img');
       img.src = bm.thumbnail;
       img.alt = bm.title;
@@ -185,7 +173,6 @@
         media.appendChild(overlay);
       }
     } else {
-      // Заглушка-иконка
       const icon = document.createElement('div');
       icon.className = 'bookmark-icon';
       const icons = { post: 'fa-newspaper', video: 'fa-video', save: 'fa-save', link: 'fa-link' };
@@ -194,13 +181,12 @@
     }
     card.appendChild(media);
 
-    // --- Контент ---
     const content = document.createElement('div');
     content.className = 'bookmark-content';
     
     const title = document.createElement('h4');
     title.textContent = truncateTitle(bm.title, 50);
-    title.title = bm.title || 'Закладка'; // полный заголовок в подсказке
+    title.title = bm.title || 'Закладка';
     content.appendChild(title);
     
     const meta = document.createElement('div');
@@ -208,8 +194,7 @@
     meta.textContent = `${bm.type.charAt(0).toUpperCase()+bm.type.slice(1)} · ${formatDate(bm.added)}`;
     content.appendChild(meta);
 
-    // --- Кнопка скачивания (только для видео, если удалось получить ссылку) ---
-    // Будет добавлена асинхронно после проверки
+    // Кнопка скачивания (только для видео, если удалось получить ссылку)
     const downloadContainer = document.createElement('div');
     downloadContainer.style.cssText = 'margin-top:8px; display:none;';
     const downloadBtn = document.createElement('button');
@@ -225,17 +210,14 @@
 
     // --- Клик по карточке ---
     card.addEventListener('click', async (e) => {
-      // Игнорируем клики по кнопкам внутри
       if (e.target.closest('button')) return;
       
-      if (isVideo && bm.embedUrl) {
+      if (isVideo) {
         // Видео уже отображается в iframe, ничего не делаем (плеер сам кликабелен)
-        // Но можно прокрутить к видео, если нужно
         return;
       }
       
       if (isPost && bm.postData && bm.postData.id) {
-        // Пост: открываем в модалке
         if (window.UIFeedback) {
           window.UIFeedback.openFullModal(bm.postData);
         } else {
@@ -245,7 +227,6 @@
       }
       
       if (isSave && bm.saveData) {
-        // Сохранение: скачиваем файл
         try {
           const binary = atob(bm.saveData.content);
           const bytes = new Uint8Array(binary.length);
@@ -263,14 +244,12 @@
       }
       
       if (bm.url) {
-        // Ссылка: открываем в новом окне
         window.open(bm.url, '_blank');
       }
     });
 
     // --- Проверка возможности скачивания видео ---
     if (isVideo && bm.url) {
-      // Запускаем проверку асинхронно
       (async () => {
         try {
           const downloadUrl = await getVideoDownloadUrl(bm.url);
@@ -278,7 +257,6 @@
             downloadContainer.style.display = 'block';
             downloadBtn.onclick = (e) => {
               e.stopPropagation();
-              // Скачиваем через создание скрытой ссылки
               const a = document.createElement('a');
               a.href = downloadUrl;
               a.download = bm.title + '.mp4';

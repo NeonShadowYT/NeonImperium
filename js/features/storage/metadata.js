@@ -102,7 +102,10 @@
     let type = 'video';
     let videoData = null;
 
-    // YouTube
+    // YouTube (все вариации)
+    // 1. youtube.com/watch?v=ID
+    // 2. youtu.be/ID
+    // 3. youtube.com/embed/ID
     let ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
     if (ytMatch) {
       const id = ytMatch[1];
@@ -177,7 +180,7 @@
       return { embedUrl, type, videoData };
     }
 
-    // view_video.php
+    // view_video.php (специфичный для некоторых сайтов)
     if (url.includes('view_video.php?viewkey=')) {
       const keyMatch = url.match(/viewkey=([^&]+)/);
       if (keyMatch) {
@@ -210,7 +213,7 @@
     if (parsed && parsed.embedUrl) {
       let title = cleanedUrl;
       let thumbnail = null;
-      // Пытаемся получить заголовок и превью через oembed
+      // Пытаемся получить заголовок и превью через oembed (для улучшения)
       try {
         const resp = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(cleanedUrl)}`, { signal: AbortSignal.timeout(3000) });
         if (resp.ok) {
@@ -241,6 +244,10 @@
           }
         } catch (e) {}
       }
+      // Для YouTube можно сгенерировать превью сами
+      if (!thumbnail && parsed.videoData && parsed.videoData.service === 'youtube' && parsed.videoData.id) {
+        thumbnail = `https://img.youtube.com/vi/${parsed.videoData.id}/mqdefault.jpg`;
+      }
       return {
         title: title,
         thumbnail: thumbnail,
@@ -251,7 +258,7 @@
       };
     }
 
-    // Стандартные OEmbed-провайдеры
+    // Стандартные OEmbed-провайдеры (fallback)
     try {
       const resp1 = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(cleanedUrl)}`, { signal: AbortSignal.timeout(5000) });
       if (resp1.ok) {
