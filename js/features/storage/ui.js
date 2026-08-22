@@ -30,6 +30,79 @@
     }
   }
 
+  // ---- обрезка длинных названий ----
+  function truncateTitle(title, maxLength = 50) {
+    if (!title) return 'Закладка';
+    if (title.length <= maxLength) return title;
+    return title.slice(0, maxLength) + '…';
+  }
+
+  // ---- проверка возможности скачивания через бесплатные API ----
+  async function getVideoDownloadUrl(url) {
+    if (!url) return null;
+    
+    // Список бесплатных API для скачивания (пробуем по порядку)
+    const apis = [
+      // Cobalt API (открытый, бесплатный)
+      {
+        url: 'https://api.cobalt.tools/api/json',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: (videoUrl) => JSON.stringify({ url: videoUrl, videoQuality: '720', audioFormat: 'best' })
+      },
+      // Видео-парсер (бесплатный, без регистрации)
+      {
+        url: 'https://api.videofetcher.net/parse',
+        method: 'GET',
+        params: (videoUrl) => ({ url: videoUrl })
+      }
+    ];
+
+    for (const api of apis) {
+      try {
+        let response;
+        if (api.method === 'POST') {
+          response = await fetch(api.url, {
+            method: 'POST',
+            headers: api.headers,
+            body: api.body(url),
+            signal: AbortSignal.timeout(10000)
+          });
+        } else {
+          const params = new URLSearchParams(api.params(url));
+          response = await fetch(`${api.url}?${params.toString()}`, {
+            signal: AbortSignal.timeout(10000)
+          });
+        }
+        
+        if (!response.ok) continue;
+        
+        const data = await response.json();
+        
+        // Парсим ответ Cobalt
+        if (api.url.includes('cobalt.tools')) {
+          if (data.status === 'success' && data.url) {
+            return data.url;
+          }
+        }
+        // Парсим ответ VideoFetcher
+        if (api.url.includes('videofetcher.net')) {
+          if (data.url) {
+            return data.url;
+          }
+          if (data.video && data.video.url) {
+            return data.video.url;
+          }
+        }
+      } catch (e) {
+        console.warn('[Storage] API download error:', e);
+        continue;
+      }
+    }
+    
+    return null;
+  }
+
   function renderBookmarks(modal) {
     const grid = modal?.querySelector('#bookmarks-grid');
     if (!grid) return;
@@ -67,38 +140,49 @@
     wrapper.className = 'bookmark-card-wrapper';
     const card = document.createElement('div');
     card.className = 'bookmark-card';
-    card.style.cursor = 'default'; // не делаем всю карточку кликабельной
+    card.style.cursor = 'pointer';
 
     // --- Медиа-блок ---
     const media = document.createElement('div');
     media.className = 'bookmark-media';
 
-    // Если это видео и есть embedUrl – вставляем iframe
-    if (bm.type === 'video' && bm.embedUrl) {
+    // Определяем, есть ли embedUrl для видео
+    const isVideo = bm.type === 'video' && bm.embedUrl;
+    const isPost = bm.type === 'post';
+    const isSave = bm.type === 'save';
+    const isLink = bm.type === 'link';
+
+    if (isVideo) {
+      // Видео: вставляем iframe с плеером
       const iframe = document.createElement('iframe');
-      iframe.src = bm.embedUrl;
+      // Добавляем параметры для лучшего отображения в карточке
+      let src = bm.embedUrl;
+      if (!src.includes('autoplay')) {
+        src += (src.includes('?') ? '&' : '?') + 'autoplay=0';
+      }
+      // Для YouTube добавляем параметры управления
+      if (src.includes('youtube')) {
+        src += '&controls=1&showinfo=0&iv_load_policy=3&rel=0';
+      }
+      iframe.src = src;
       iframe.style.width = '100%';
       iframe.style.height = '100%';
       iframe.style.border = 'none';
       iframe.setAttribute('allowfullscreen', 'true');
       iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
-      // Добавляем параметр autoplay=0, чтобы не начинал играть сразу
-      if (!iframe.src.includes('autoplay')) {
-        iframe.src += (iframe.src.includes('?') ? '&' : '?') + 'autoplay=0';
-      }
       media.appendChild(iframe);
     } else if (bm.thumbnail) {
-      // Есть превью-картинка
+      // Есть превью-картинка (для постов или ссылок)
       const img = document.createElement('img');
       img.src = bm.thumbnail;
       img.alt = bm.title;
       img.onerror = () => img.style.display = 'none';
       media.appendChild(img);
-      if (bm.type === 'video') {
-        const play = document.createElement('div');
-        play.className = 'play-overlay';
-        play.innerHTML = '<i class="fas fa-play"></i>';
-        media.appendChild(play);
+      if (isPost) {
+        const overlay = document.createElement('div');
+        overlay.className = 'play-overlay';
+        overlay.innerHTML = '<i class="fas fa-newspaper"></i>';
+        media.appendChild(overlay);
       }
     } else {
       // Заглушка-иконка
@@ -113,35 +197,102 @@
     // --- Контент ---
     const content = document.createElement('div');
     content.className = 'bookmark-content';
+    
     const title = document.createElement('h4');
-    title.textContent = bm.title || 'Закладка';
+    title.textContent = truncateTitle(bm.title, 50);
+    title.title = bm.title || 'Закладка'; // полный заголовок в подсказке
     content.appendChild(title);
+    
     const meta = document.createElement('div');
     meta.style.cssText = 'font-size:12px;color:var(--text-secondary)';
     meta.textContent = `${bm.type.charAt(0).toUpperCase()+bm.type.slice(1)} · ${formatDate(bm.added)}`;
     content.appendChild(meta);
 
-    // Дополнительные действия: если видео и есть url, добавить кнопку "Открыть видео"
-    if (bm.type === 'video' && bm.url) {
-      const actions = document.createElement('div');
-      actions.style.cssText = 'display:flex; gap:8px; margin-top:8px;';
-      const openBtn = document.createElement('button');
-      openBtn.className = 'button small';
-      openBtn.textContent = t('open') || 'Открыть';
-      openBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        window.open(bm.url, '_blank');
-      });
-      actions.appendChild(openBtn);
-
-      // Можно добавить кнопку скачивания, если удалось получить прямую ссылку
-      // Пока оставляем только "Открыть"
-      content.appendChild(actions);
-    }
+    // --- Кнопка скачивания (только для видео, если удалось получить ссылку) ---
+    // Будет добавлена асинхронно после проверки
+    const downloadContainer = document.createElement('div');
+    downloadContainer.style.cssText = 'margin-top:8px; display:none;';
+    const downloadBtn = document.createElement('button');
+    downloadBtn.className = 'button small';
+    downloadBtn.textContent = '⬇ ' + t('downloadBtn') || 'Скачать';
+    downloadBtn.style.cssText = 'background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;font-family:var(--font-family);transition:0.2s;';
+    downloadBtn.addEventListener('mouseenter', () => { downloadBtn.style.transform = 'scale(1.05)'; });
+    downloadBtn.addEventListener('mouseleave', () => { downloadBtn.style.transform = 'scale(1)'; });
+    downloadContainer.appendChild(downloadBtn);
+    content.appendChild(downloadContainer);
 
     card.appendChild(content);
 
-    // Кнопка удаления
+    // --- Клик по карточке ---
+    card.addEventListener('click', async (e) => {
+      // Игнорируем клики по кнопкам внутри
+      if (e.target.closest('button')) return;
+      
+      if (isVideo && bm.embedUrl) {
+        // Видео уже отображается в iframe, ничего не делаем (плеер сам кликабелен)
+        // Но можно прокрутить к видео, если нужно
+        return;
+      }
+      
+      if (isPost && bm.postData && bm.postData.id) {
+        // Пост: открываем в модалке
+        if (window.UIFeedback) {
+          window.UIFeedback.openFullModal(bm.postData);
+        } else {
+          showToast(t('viewerNotAvailable'), 'error');
+        }
+        return;
+      }
+      
+      if (isSave && bm.saveData) {
+        // Сохранение: скачиваем файл
+        try {
+          const binary = atob(bm.saveData.content);
+          const bytes = new Uint8Array(binary.length);
+          for (let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          const blob = new Blob([bytes], { type: 'text/plain' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = bm.saveData.fileName || 'save.dat';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        } catch (err) {
+          showToast('Ошибка скачивания', 'error');
+        }
+        return;
+      }
+      
+      if (bm.url) {
+        // Ссылка: открываем в новом окне
+        window.open(bm.url, '_blank');
+      }
+    });
+
+    // --- Проверка возможности скачивания видео ---
+    if (isVideo && bm.url) {
+      // Запускаем проверку асинхронно
+      (async () => {
+        try {
+          const downloadUrl = await getVideoDownloadUrl(bm.url);
+          if (downloadUrl) {
+            downloadContainer.style.display = 'block';
+            downloadBtn.onclick = (e) => {
+              e.stopPropagation();
+              // Скачиваем через создание скрытой ссылки
+              const a = document.createElement('a');
+              a.href = downloadUrl;
+              a.download = bm.title + '.mp4';
+              a.target = '_blank';
+              a.click();
+            };
+          }
+        } catch (e) {
+          // Молча игнорируем ошибки
+        }
+      })();
+    }
+
+    // --- Кнопка удаления ---
     const del = document.createElement('button');
     del.className = 'bookmark-delete-btn';
     del.innerHTML = '<i class="fas fa-trash-alt"></i>';
@@ -290,13 +441,13 @@
         .storage-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
         .storage-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
         .storage-btn:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.2)}
-        .bookmarks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px}
+        .bookmarks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
         .storage-add-form{background:var(--bg-inner-gradient);padding:16px;border-radius:20px;border:1px solid var(--border)}
         .storage-search{padding:6px 14px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;width:160px}
         .storage-search:focus{border-color:var(--accent);outline:none}
         .storage-url-input{flex:1;padding:8px 16px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;min-width:150px}
         .storage-url-input:focus{border-color:var(--accent);outline:none}
-        .bookmark-card-wrapper{position:relative;transition:transform 0.2s}
+        .bookmark-card-wrapper{position:relative;transition:transform 0.2s;height:100%}
         .bookmark-card-wrapper:hover{transform:translateY(-4px)}
         .bookmark-delete-btn{opacity:0;transition:opacity 0.2s;position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:28px;height:28px;color:#f44336;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;z-index:5}
         .bookmark-card-wrapper:hover .bookmark-delete-btn{opacity:1}
@@ -307,7 +458,7 @@
         .play-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);border-radius:50%;width:60px;height:60px;display:flex;align-items:center;justify-content:center;color:white;font-size:30px;pointer-events:none}
         .bookmark-icon{display:flex;align-items:center;justify-content:center;font-size:48px;padding:20px 0;background:var(--bg-primary);border-bottom:1px solid var(--border);height:100%}
         .bookmark-content{padding:12px;flex:1;display:flex;flex-direction:column}
-        .bookmark-content h4{margin:0 0 4px;font-size:16px;color:var(--text-primary)}
+        .bookmark-content h4{margin:0 0 4px;font-size:16px;color:var(--text-primary);word-break:break-word}
         .bookmark-content .button.small{padding:4px 12px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:30px;cursor:pointer;font-family:var(--font-family);transition:0.2s}
         .bookmark-content .button.small:hover{background:var(--accent-light);transform:translateY(-2px)}
         #modal-status-mini { font-size:12px; color:var(--text-secondary); margin-left:16px; opacity:0.7; font-weight:normal; }
