@@ -72,6 +72,9 @@
         try {
             const result = await asyncFn();
             window.RateLimits.increment(actionType);
+            if (window.RateLimits.addHistory) {
+                window.RateLimits.addHistory(actionType, payload, 'completed');
+            }
             return { queued: false, result };
         } catch (err) {
             if (isRetryableError(err)) {

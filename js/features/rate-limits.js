@@ -1,5 +1,6 @@
 // js/features/rate-limits.js – с локализацией, обновление при смене языка
 // Добавлено шифрование истории и кеша через xorEncrypt/xorDecrypt
+// Теперь история записывается при любом успешном действии, очистка кеша защищена
 (function() {
   const { escapeHtml, xorEncrypt, xorDecrypt } = window.Utils || {};
   const { getCurrentUser } = window.GithubAuth || {};
@@ -395,13 +396,20 @@
     return [];
   }
 
+  // ---- Очистка кеша (защищённая) ----
   async function clearAllCacheInternal() {
     const cacheNames = await caches.keys();
     for (const name of cacheNames) {
       await caches.delete(name);
     }
-    const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token', 'github_token_local', 'remember_me', 'last_cache_clear'];
-    // Не удаляем зашифрованную историю и лимиты
+    // Защищённые ключи, которые НЕ удаляем
+    const exclude = [
+      'rate_limits', 'rate_history', 'license_agreed_v1', 'license_version',
+      'license_agreed_timestamp', 'preferredLanguage', 'github_token',
+      'github_token_local', 'remember_me', 'last_cache_clear',
+      // Ключи хранилища закладок (чтобы не потерять ID Gist)
+      'storage_gist_'
+    ];
     for (const key of Object.keys(localStorage)) {
       if (!exclude.some(ex => key.startsWith(ex))) {
         localStorage.removeItem(key);
@@ -415,9 +423,44 @@
     }
     if (window._cacheMap) window._cacheMap.clear();
     queueCache = null;
+    // Лимиты и история не удаляются
+  }
+
+  // ---- Очистка устаревшего кеша (stale) ----
+  function clearStaleCache() {
+    const now = Date.now();
+    const ttl = window.GithubCore?.CONFIG?.CACHE_TTL || 600000;
+    const excludedKeys = ['rate_limits', 'rate_history', 'license_', 'preferredLanguage', 'github_', 'remember_me', 'storage_gist_'];
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key && key.endsWith('_time')) {
+        const time = parseInt(sessionStorage.getItem(key), 10);
+        if (!isNaN(time) && now - time > ttl) {
+          const dataKey = key.replace('_time', '');
+          if (!excludedKeys.some(ex => dataKey.startsWith(ex))) {
+            sessionStorage.removeItem(dataKey);
+            sessionStorage.removeItem(key);
+          }
+        }
+      }
+    }
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.endsWith('_time')) {
+        const time = parseInt(localStorage.getItem(key), 10);
+        if (!isNaN(time) && now - time > ttl) {
+          const dataKey = key.replace('_time', '');
+          if (!excludedKeys.some(ex => dataKey.startsWith(ex))) {
+            localStorage.removeItem(dataKey);
+            localStorage.removeItem(key);
+          }
+        }
+      }
+    }
   }
 
   let activeRatePanel = null;
+  let refreshPanel = () => {};
 
   function openRatePanel() {
     const t = window.I18n?.translate || (k => k);
@@ -464,7 +507,7 @@
       if (e.target === modal) newCloseWithClean();
     });
 
-    // ---- обновление при смене языка ----
+    // обновление при смене языка
     const langHandler = () => {
       if (!activeRatePanel || activeRatePanel.modal !== modal) return;
       const t = window.I18n?.translate || (k => k);
@@ -489,7 +532,7 @@
 
     loadQueueItems(modal, t);
     loadHistoryItems(modal, t);
-    loadCacheItems(modal, t); // исправлено: передаём t
+    loadCacheItems(modal, t);
   }
 
   function buildPanelHTML(t) {
@@ -542,6 +585,7 @@
       .queue-cancel-btn{background:transparent;border:none;color:#f44336;cursor:pointer;font-size:14px}
       .queue-cancel-btn:hover{color:#d32f2f}
       .empty-queue{color:var(--text-secondary);text-align:center;padding:20px}
+      .cache-description{font-size:13px;color:var(--text-secondary);background:var(--bg-inner-gradient);padding:8px 16px;border-radius:12px;margin-bottom:10px}
     </style>`;
 
     const cacheKeys = getCacheKeys();
@@ -583,6 +627,9 @@
         <div id="rate-queue" class="rate-queue-list"><div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i> ${t('loading')}</div></div>
         <div id="rate-history" style="display:none;" class="rate-history-list"></div>
         <div id="rate-cache" style="display:none;" class="rate-cache-actions">
+          <div class="cache-description">
+            <i class="fas fa-info-circle"></i> ${t('cacheDescription') || 'Здесь хранятся временные данные: ответы GitHub API, превью изображений, результаты парсинга видео. Очистка не влияет на ваши закладки, лимиты и историю действий.'}
+          </div>
           <p><i class="fas fa-broom"></i> ${t('clearStaleCache')}:</p>
           <div class="cache-keys-list">
             ${cacheKeys.length === 0 ? `<p class="empty-queue">${t('noBookmarks')}</p>` :
@@ -597,7 +644,7 @@
             <button id="clear-stale-cache"><i class="fas fa-broom"></i> ${t('clearStaleCache')}</button>
             <button id="clear-all-cache"><i class="fas fa-trash-alt"></i> ${t('clearAllCache')}</button>
           </div>
-          <p style="font-size:12px; color:var(--text-secondary);">* ${t('save')} не удаляются.</p>
+          <p style="font-size:12px; color:var(--text-secondary);">${t('cacheNote') || '* Лимиты, история, лицензия и токены НЕ удаляются.'}</p>
         </div>
       </div>
     </div>
@@ -631,7 +678,7 @@
     });
     modal.querySelector('#clear-all-cache')?.addEventListener('click', () => {
       if (confirm(t('clearCacheConfirm'))) {
-        clearAllCache();
+        clearAllCacheInternal();
         window.UIUtils?.showToast(t('cacheCleared'), 'success');
         refreshPanel();
       }
@@ -730,7 +777,7 @@
         keys.add('session:' + key);
       }
     }
-    const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token', 'github_token_local', 'remember_me', 'last_cache_clear'];
+    const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token', 'github_token_local', 'remember_me', 'last_cache_clear', 'storage_gist_'];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && !exclude.some(ex => key.startsWith(ex))) {
@@ -749,55 +796,6 @@
     }
   }
 
-  function clearStaleCache() {
-    const now = Date.now();
-    const ttl = window.GithubCore?.CONFIG?.CACHE_TTL || 600000;
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const key = sessionStorage.key(i);
-      if (key && key.endsWith('_time')) {
-        const time = parseInt(sessionStorage.getItem(key), 10);
-        if (!isNaN(time) && now - time > ttl) {
-          const dataKey = key.replace('_time', '');
-          sessionStorage.removeItem(dataKey);
-          sessionStorage.removeItem(key);
-        }
-      }
-    }
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i);
-      if (key && key.endsWith('_time') && !key.startsWith('rate_limits') && !key.startsWith('license_')) {
-        const time = parseInt(localStorage.getItem(key), 10);
-        if (!isNaN(time) && now - time > ttl) {
-          const dataKey = key.replace('_time', '');
-          localStorage.removeItem(dataKey);
-          localStorage.removeItem(key);
-        }
-      }
-    }
-  }
-
-  function clearAllCache() {
-    const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token', 'github_token_local', 'remember_me', 'last_cache_clear'];
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i);
-      if (key && !exclude.some(ex => key.startsWith(ex))) {
-        localStorage.removeItem(key);
-      }
-    }
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const key = sessionStorage.key(i);
-      if (key && !key.startsWith('preferredLanguage') && !key.startsWith('github_') && !key.startsWith('encryption_')) {
-        sessionStorage.removeItem(key);
-      }
-    }
-    caches.keys().then(names => {
-      for (const name of names) {
-        caches.delete(name);
-      }
-    }).catch(console.warn);
-    queueCache = null;
-  }
-
   function updateTimerDisplay(modal) {
     const timerEl = modal?.querySelector('.rate-timer strong');
     if (!timerEl) return;
@@ -809,8 +807,6 @@
     const minutes = Math.floor((ms % 3600000) / 60000);
     timerEl.textContent = `${hours}ч ${minutes}м`;
   }
-
-  let refreshPanel = () => {};
 
   function updateIndicators() {
     document.querySelectorAll('.rate-indicator').forEach(el => {
@@ -952,6 +948,7 @@
     updateIndicators,
     getPendingActions,
     getHistory,
+    addHistory,          // <-- добавлен экспорт
     LIMITS,
     actionLabels,
     clearAllCache: clearAllCacheInternal,
