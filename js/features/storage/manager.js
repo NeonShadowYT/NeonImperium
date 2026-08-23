@@ -1,6 +1,6 @@
 // js/features/storage/manager.js
 // Управление состоянием хранилища: загрузка, сохранение, добавление, удаление, экспорт/импорт
-// Оптимизировано: кеширование Gist в localStorage, удаление byLogin, приоритет пароля,
+// Оптимизировано: поиск существующего Gist при потере ID, приоритет пароля,
 // цикл ввода пароля (до 3 попыток), отказоустойчивость.
 
 (function() {
@@ -92,7 +92,37 @@
     } catch (e) {}
   }
 
-  // ---- загрузка / создание хранилища с кешированием и лимитами ----
+  // ---- поиск существующего Gist'а по имени файла ----
+  async function findExistingGist(user, token) {
+    try {
+      const url = `https://api.github.com/gists?per_page=100`;
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json'
+      };
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) {
+        console.warn('[Storage] Не удалось получить список Gist\'ов:', resp.status);
+        return null;
+      }
+      const gists = await resp.json();
+      // Ищем Gist, в котором есть файл с именем GIST_FILENAME
+      const found = gists.find(g => {
+        const files = g.files;
+        return files && files[GIST_FILENAME];
+      });
+      if (found) {
+        console.log('[Storage] Найден существующий Gist:', found.id);
+        return found.id;
+      }
+      return null;
+    } catch (e) {
+      console.warn('[Storage] Ошибка поиска Gist\'ов:', e);
+      return null;
+    }
+  }
+
+  // ---- загрузка / создание хранилища с кешированием и поиском ----
   async function loadOrCreateStorage(forceRefresh = false) {
     const user = getCurrentUser();
     const token = getToken();
@@ -152,11 +182,26 @@
       }
     }
 
-    const stored = localStorage.getItem(STORAGE_KEY_PREFIX + user);
+    // Пытаемся получить gistId из localStorage
+    let stored = localStorage.getItem(STORAGE_KEY_PREFIX + user);
     if (stored) {
       try {
         gistId = JSON.parse(stored).gistId;
       } catch (e) {}
+    }
+
+    // Если gistId нет в localStorage – ищем среди всех Gist'ов пользователя
+    if (!gistId) {
+      console.log('[Storage] gistId не найден в localStorage, выполняем поиск...');
+      const foundId = await findExistingGist(user, token);
+      if (foundId) {
+        gistId = foundId;
+        // Сохраняем найденный ID в localStorage для будущих сессий
+        localStorage.setItem(STORAGE_KEY_PREFIX + user, JSON.stringify({ gistId }));
+        console.log('[Storage] Найденный gistId сохранён в localStorage');
+      } else {
+        console.log('[Storage] Существующий Gist не найден, будет создан новый.');
+      }
     }
 
     let gistData = null;
@@ -166,8 +211,22 @@
       gistData = await gistFetch(gistId);
     }
 
+    // Если Gist не найден (404) или gistId отсутствует – создаём новый
     if (!gistData) {
-      return await createNewStorage(user, token);
+      // Перед созданием нового проверяем ещё раз (на случай, если Gist появился)
+      if (!gistId) {
+        const foundId = await findExistingGist(user, token);
+        if (foundId) {
+          gistId = foundId;
+          localStorage.setItem(STORAGE_KEY_PREFIX + user, JSON.stringify({ gistId }));
+          gistData = await gistFetch(gistId);
+        }
+      }
+      if (!gistData) {
+        // Создаём новый Gist
+        console.log('[Storage] Создаём новый Gist');
+        return await createNewStorage(user, token);
+      }
     }
 
     const file = gistData.files?.[GIST_FILENAME];
@@ -248,7 +307,7 @@
           const keyPassword = await deriveKeyFromString(password);
           masterKeyArray = await decryptData(payload.masterKeyEncrypted.byPassword, keyPassword);
           usedMethod = 'password';
-          // Успех – сохраняем пароль в кеш (обфусцированно, но пока просто в sessionStorage)
+          // Успех – сохраняем пароль в кеш
           sessionStorage.setItem(PASSWORD_CACHE_KEY, password);
           break;
         } catch (e) {
@@ -264,7 +323,6 @@
       // Если пароль не получен (отказ или ошибка)
       if (!masterKeyArray) {
         // Предлагаем сброс с предупреждением
-        const t = (key) => window.I18n?.translate(key) || key;
         const shouldReset = await confirmResetStorage();
         if (shouldReset) {
           // Сбрасываем и создаём новое хранилище без пароля (с токеном)
@@ -280,8 +338,6 @@
         }
       }
 
-      // Если успешно расшифровали, но это была первая расшифровка, обновляем метаданные? Не обязательно.
-      // Возвращаем результат.
       return buildResult(masterKeyArray, payload, remoteUpdated);
     }
 
@@ -328,10 +384,8 @@
       return buildResult(masterKeyArray, payload, remoteUpdated);
     } catch (e) {
       // Токен не подошёл – запрашиваем старый токен
-      const t = (key) => window.I18n?.translate(key) || key;
       showToast('Текущий токен не подходит для расшифровки. Введите старый токен.', 'warning');
 
-      // Даём до 3 попыток ввести старый токен
       const MAX_ATTEMPTS = 3;
       let attempts = 0;
       let oldToken = null;
@@ -481,9 +535,6 @@
     if (!file) throw new Error('File not found');
     let payload = JSON.parse(file.content);
 
-    const hasPasswordBlock = !!payload.masterKeyEncrypted?.byPassword;
-
-    // Если пароль НЕ установлен (password === null), используем byToken
     if (password === null) {
       // Удаляем byPassword, добавляем byToken
       const keyToken = await deriveKeyFromString(token);
@@ -498,12 +549,9 @@
       const keyPassword = await deriveKeyFromString(password);
       const encryptedByPassword = await encryptData(masterKeyArray, keyPassword);
       payload.masterKeyEncrypted.byPassword = encryptedByPassword;
-      // Удаляем byToken, чтобы не было двух способов
       delete payload.masterKeyEncrypted.byToken;
-      // lastLogin и lastTokenHash больше не нужны, можно удалить или оставить для информации
-      // Но для совместимости оставим, но они не будут использоваться
       payload.lastLogin = login;
-      payload.lastTokenHash = null; // не храним хеш токена при пароле
+      payload.lastTokenHash = null;
       hasPassword = true;
     }
 
@@ -602,7 +650,6 @@
 
       // Если есть пароль, убедимся, что byToken удалён, а byPassword актуален
       if (hasPassword) {
-        // Проверяем, что byPassword существует, если нет – создаём
         if (!payload.masterKeyEncrypted?.byPassword) {
           const password = sessionStorage.getItem(PASSWORD_CACHE_KEY);
           if (password) {
@@ -610,16 +657,13 @@
             const exported = await crypto.subtle.exportKey('raw', masterKey);
             const masterKeyArray = Array.from(new Uint8Array(exported));
             payload.masterKeyEncrypted.byPassword = await encryptData(masterKeyArray, keyPassword);
-            // Удаляем byToken, если он есть
             delete payload.masterKeyEncrypted.byToken;
           }
         }
-        // Если byToken всё ещё есть, удаляем его (гарантия)
         if (payload.masterKeyEncrypted?.byToken) {
           delete payload.masterKeyEncrypted.byToken;
         }
       } else {
-        // Если пароля нет, проверяем byToken
         if (!payload.masterKeyEncrypted?.byToken) {
           const exported = await crypto.subtle.exportKey('raw', masterKey);
           const masterKeyArray = Array.from(new Uint8Array(exported));
@@ -632,7 +676,6 @@
             payload.lastTokenHash = await hashString(token);
           }
         }
-        // Удаляем byPassword, если он есть (не должно быть, но на всякий случай)
         if (payload.masterKeyEncrypted?.byPassword) {
           delete payload.masterKeyEncrypted.byPassword;
         }
@@ -937,7 +980,6 @@
     if (!file) throw new Error('File not found');
     let payload = JSON.parse(file.content);
 
-    // Если уже есть пароль, запрашиваем старый
     const hasOldPassword = !!payload.masterKeyEncrypted?.byPassword;
     if (hasOldPassword) {
       const oldPassword = await promptPassword('Введите текущий пароль:');
@@ -954,12 +996,10 @@
       throw new Error('Пароль не должен совпадать с токеном GitHub');
     }
 
-    // Пересоздаём мастер-ключ? Нет, оставляем тот же, только меняем шифрование.
     const exported = await crypto.subtle.exportKey('raw', masterKey);
     const masterKeyArray = Array.from(new Uint8Array(exported));
 
     if (newPassword) {
-      // Устанавливаем пароль – удаляем byToken
       const keyPassword = await deriveKeyFromString(newPassword);
       const encryptedByPassword = await encryptData(masterKeyArray, keyPassword);
       payload.masterKeyEncrypted.byPassword = encryptedByPassword;
@@ -969,7 +1009,6 @@
       sessionStorage.setItem(PASSWORD_CACHE_KEY, newPassword);
       hasPassword = true;
     } else {
-      // Отключаем пароль – добавляем byToken
       const keyToken = await deriveKeyFromString(token);
       const encryptedByToken = await encryptData(masterKeyArray, keyToken);
       payload.masterKeyEncrypted.byToken = encryptedByToken;
