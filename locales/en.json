@@ -376,5 +376,5 @@
   "importJSON": "Import JSON",
   "rememberMe": "Remember me",
   "createToken": "Create classic token",
-  "loginDescription": "To fully participate in the community you need a GitHub token.\n\nRequired scopes:\n• repo – create and edit posts, comments, reactions.\n• gist – personal bookmark storage.\n\nIf you provide only one of the scopes, the corresponding features will be unavailable. Without a token you can only read content.\n\n🔒 **Security:** token is stored locally in encrypted form (obfuscated) and sent only to the GitHub API. We do not store it on our servers. You can always revoke the token in your GitHub settings."
+  "loginDescription": "To fully participate in the community you need a GitHub token.\n\nRequired scopes:\n• repo – create and edit posts, comments, reactions.\n• gist – personal bookmark storage.\n\nIf you provide only one of the scopes, the corresponding features will be unavailable. Without a token you can only read content.\n\n🔒 Security: token is stored locally in encrypted form (obfuscated) and sent only to the GitHub API. We do not store it on our servers. You can always revoke the token in your GitHub settings."
 }

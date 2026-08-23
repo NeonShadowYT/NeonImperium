@@ -1,6 +1,5 @@
 // js/core/github-auth.js – с локализацией, обновление меню при смене языка
-// Исправлено расположение: ссылка слева от кнопок, чекбокс слева сверху
-// Улучшен дизайн прокрутки
+// Исправлено расположение элементов в модалке: ссылка и чекбокс слева, кнопки справа
 
 (function() {
   const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule, xorEncrypt, xorDecrypt, generateRandomKey } = window.Utils;
@@ -262,7 +261,7 @@
         </div>
 
         <!-- Поле ввода токена -->
-        <div style="position: relative; margin-bottom: 16px;">
+        <div style="position: relative; margin-bottom: 12px;">
           <input
             type="password"
             id="github-token-input"
@@ -303,72 +302,56 @@
           </button>
         </div>
 
-        <!-- Чекбокс "Запомнить меня" слева сверху -->
-        <div style="display: flex; align-items: center; margin-bottom: 16px; gap: 10px;">
+        <!-- Ссылка на создание токена и чекбокс (слева) -->
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+          <a href="https://github.com/settings/tokens/new" target="_blank" style="color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); font-size: 13px; align-self: flex-start;">
+            <i class="fas fa-external-link-alt"></i> <span data-lang="createToken">${t('createToken')}</span>
+          </a>
           <label class="custom-checkbox" style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-secondary); font-size: 14px;">
             <input type="checkbox" id="remember-me-checkbox" style="display: none;">
-            <span class="checkmark" style="
-              display: inline-block;
-              width: 20px;
-              height: 20px;
-              background: rgba(0,0,0,0.25);
-              border: 2px solid var(--glass-border);
-              border-radius: 6px;
-              position: relative;
-              transition: all 0.2s;
-              flex-shrink: 0;
-            "></span>
+            <span class="checkmark" style="display: inline-block; width: 20px; height: 20px; background: rgba(0,0,0,0.25); border: 2px solid var(--glass-border); border-radius: 6px; position: relative; transition: all 0.2s; flex-shrink: 0;"></span>
             <span data-lang="rememberMe">${t('rememberMe')}</span>
           </label>
         </div>
 
         <div id="modal-error-container" style="margin-bottom: 16px;"></div>
 
-        <!-- Кнопки и ссылка слева от них -->
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-          <!-- Ссылка на создание токена слева -->
-          <div style="font-size: 13px;">
-            <a href="https://github.com/settings/tokens/new" target="_blank" style="color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent);">
-              <i class="fas fa-external-link-alt"></i> <span data-lang="createToken">${t('createToken')}</span>
-            </a>
-          </div>
-          <!-- Кнопки справа -->
-          <div style="display: flex; gap: 12px;">
-            <button class="button" id="modal-cancel" style="
-              background: var(--glass-bg);
-              backdrop-filter: blur(4px);
-              color: var(--text-secondary);
-              border: 1px solid var(--glass-border);
-              padding: 10px 24px;
-              border-radius: var(--radius-pill);
-              font-family: var(--font-family);
-              cursor: pointer;
-              transition: all var(--transition);
-            " data-lang="feedbackCancel">${t('feedbackCancel')}</button>
-            <button class="button" id="modal-submit" style="
-              background: var(--accent);
-              color: #fff;
-              padding: 10px 28px;
-              border-radius: var(--radius-pill);
-              border: none;
-              font-family: var(--font-family);
-              cursor: pointer;
-              transition: all var(--transition);
-              box-shadow: 0 0 20px rgba(61,158,179,0.2);
-              position: relative;
-              overflow: hidden;
-            ">
-              <span style="position: relative; z-index: 1;" data-lang="githubLoginBtn">${t('githubLoginBtn')}</span>
-              <span style="
-                position: absolute;
-                inset: 0;
-                background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,0.2) 0%, transparent 60%);
-                opacity: 0;
-                transition: opacity 0.4s;
-                pointer-events: none;
-              "></span>
-            </button>
-          </div>
+        <!-- Кнопки справа -->
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+          <button class="button" id="modal-cancel" style="
+            background: var(--glass-bg);
+            backdrop-filter: blur(4px);
+            color: var(--text-secondary);
+            border: 1px solid var(--glass-border);
+            padding: 10px 24px;
+            border-radius: var(--radius-pill);
+            font-family: var(--font-family);
+            cursor: pointer;
+            transition: all var(--transition);
+          " data-lang="feedbackCancel">${t('feedbackCancel')}</button>
+          <button class="button" id="modal-submit" style="
+            background: var(--accent);
+            color: #fff;
+            padding: 10px 28px;
+            border-radius: var(--radius-pill);
+            border: none;
+            font-family: var(--font-family);
+            cursor: pointer;
+            transition: all var(--transition);
+            box-shadow: 0 0 20px rgba(61,158,179,0.2);
+            position: relative;
+            overflow: hidden;
+          ">
+            <span style="position: relative; z-index: 1;" data-lang="githubLoginBtn">${t('githubLoginBtn')}</span>
+            <span style="
+              position: absolute;
+              inset: 0;
+              background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,0.2) 0%, transparent 60%);
+              opacity: 0;
+              transition: opacity 0.4s;
+              pointer-events: none;
+            "></span>
+          </button>
         </div>
       </div>
     `;
@@ -451,24 +434,17 @@
         #why-need-content {
           transition: opacity 0.3s, transform 0.3s;
         }
-        /* Улучшенный дизайн прокрутки */
+        /* Стилизация скроллбара */
         .modal .modal-content::-webkit-scrollbar {
           width: 6px;
-          height: 6px;
         }
         .modal .modal-content::-webkit-scrollbar-track {
           background: rgba(0,0,0,0.1);
           border-radius: 10px;
-          margin: 4px 0;
         }
         .modal .modal-content::-webkit-scrollbar-thumb {
           background: var(--accent);
           border-radius: 10px;
-          border: 1px solid rgba(255,255,255,0.1);
-          transition: background 0.2s;
-        }
-        .modal .modal-content::-webkit-scrollbar-thumb:hover {
-          background: var(--accent-light);
         }
         .modal .modal-content {
           scrollbar-width: thin;
@@ -535,6 +511,7 @@
     if (title) title.textContent = t('githubLoginTitle');
     const content = modal.querySelector('#why-need-content');
     if (content) content.innerHTML = t('loginDescription');
+    // Обновляем ссылку
     const tokenLink = modal.querySelector('a[href*="settings/tokens/new"] span[data-lang="createToken"]');
     if (tokenLink) tokenLink.textContent = t('createToken');
   }
