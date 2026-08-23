@@ -12,14 +12,11 @@
   const LOGIN_COOLDOWN = 10000;
   const REMEMBER_ME_KEY = 'remember_me'; // флаг в localStorage
 
-  // Фиксированная соль для обфускации (не для криптозащиты, а чтобы скрыть от глаз)
   const OBFUSCATION_SALT = 'neon-github-token-salt-2024';
 
   let currentUserLogin = null;
   let currentScopes = [];
   let modal, tokenInput, tokenToggle, profileContainer, rememberCheckbox;
-
-  // Флаг, что модалка уже создана
   let modalCreated = false;
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -29,56 +26,33 @@
     profileContainer = createElement('div', 'nav-profile', {}, { role: 'button', tabindex: '0' });
     const langSwitcher = document.querySelector('.lang-switcher');
     navBar.insertBefore(profileContainer, langSwitcher || null);
-    
-    // Создаём модалку при первом запросе (лениво)
-    // Но для удобства создадим сразу, чтобы она была в DOM
-    createLoginModal();
+
+    // Ждём загрузку переводов перед созданием модалки
+    if (window.I18n && window.I18n.getCurrentLang()) {
+      createLoginModal();
+    } else {
+      document.addEventListener('languageLoaded', createLoginModal);
+    }
+
     restoreSession();
 
     window.addEventListener('github-login-requested', () => {
-      openLoginModal();
+      if (!modal) createLoginModal();
+      modal.classList.add('active');
+      if (tokenInput) tokenInput.focus();
     });
 
     window.addEventListener('languageChanged', () => {
       refreshProfileMenu();
-      // Обновляем текст в модалке, если она открыта
-      updateModalText();
+      updateLoginModalTexts();
     });
     window.addEventListener('languageLoaded', () => {
       refreshProfileMenu();
-      updateModalText();
+      updateLoginModalTexts();
     });
 
     window.dispatchEvent(new CustomEvent('github-auth-ready'));
   });
-
-  function openLoginModal() {
-    if (!modal) {
-      createLoginModal();
-    }
-    modal.classList.add('active');
-    if (tokenInput) tokenInput.focus();
-  }
-
-  function updateModalText() {
-    if (!modal) return;
-    const t = window.I18n?.translate || (k => k);
-    const titleEl = modal.querySelector('#github-modal-title');
-    if (titleEl) titleEl.textContent = t('githubLoginTitle');
-    const descEl = modal.querySelector('#login-description');
-    if (descEl) descEl.innerHTML = t('loginDescription');
-    const cancelBtn = modal.querySelector('#modal-cancel');
-    if (cancelBtn) cancelBtn.textContent = t('feedbackCancel');
-    const submitBtn = modal.querySelector('#modal-submit');
-    if (submitBtn) submitBtn.textContent = t('githubLoginBtn');
-    const rememberLabel = modal.querySelector('label[for="remember-me-checkbox"]');
-    if (rememberLabel) {
-      const span = rememberLabel.querySelector('.remember-main');
-      if (span) span.textContent = t('rememberMe');
-      const hint = rememberLabel.querySelector('.remember-hint');
-      if (hint) hint.textContent = t('rememberMeHint');
-    }
-  }
 
   function updateClientToken(token) {
     if (client && client.updateToken) {
@@ -91,9 +65,7 @@
     }
   }
 
-  // Проверка токена и восстановление сессии
   async function restoreSession() {
-    // 1. Пытаемся взять токен из sessionStorage (приоритет)
     let token = sessionStorage.getItem(TOKEN_KEY);
     if (token) {
       try {
@@ -117,19 +89,16 @@
       }
     }
 
-    // 2. Если нет в sessionStorage, пробуем localStorage (если включено "запомнить меня")
     const remember = localStorage.getItem(REMEMBER_ME_KEY) === 'true';
     if (remember) {
       const obfuscated = localStorage.getItem(TOKEN_LOCAL_KEY);
       if (obfuscated) {
-        // Расшифровка (обфускация) с фиксированной солью
         const decrypted = xorDecrypt(obfuscated, OBFUSCATION_SALT);
         if (decrypted) {
           token = decrypted;
           try {
             const userData = await silentValidateToken(token);
             if (userData) {
-              // Сохраняем токен в sessionStorage для текущей вкладки
               sessionStorage.setItem(TOKEN_KEY, token);
               currentUserLogin = userData.user.login;
               currentScopes = userData.scopes;
@@ -144,7 +113,6 @@
             }
           } catch (err) {
             if (err.message === 'unauthorized' || err.message?.includes('401')) {
-              // Токен недействителен – удаляем всё
               localStorage.removeItem(TOKEN_LOCAL_KEY);
               localStorage.removeItem(REMEMBER_ME_KEY);
               sessionStorage.removeItem(TOKEN_KEY);
@@ -154,7 +122,6 @@
       }
     }
 
-    // 3. Если ничего не вышло – выходим
     renderLoggedOutUI();
   }
 
@@ -180,8 +147,9 @@
   }
 
   function createLoginModal() {
-    if (modalCreated) return; // Уже создана
+    if (modalCreated) return;
     modalCreated = true;
+
     const t = window.I18n?.translate || (k => k);
     modal = createElement('div', 'modal', {}, { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'github-modal-title' });
     modal.style.cssText = `
@@ -198,13 +166,11 @@
       align-items: center;
       justify-content: center;
       animation: modalFadeIn 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
-      padding: 20px;
-      box-sizing: border-box;
     `;
     modal.innerHTML = `
       <div class="modal-content" style="
         max-width: 480px;
-        width: 100%;
+        width: 90%;
         max-height: 90vh;
         overflow-y: auto;
         background: var(--glass-bg);
@@ -217,22 +183,19 @@
         position: relative;
         overflow: hidden;
         transition: transform 0.3s, opacity 0.3s;
-        display: flex;
-        flex-direction: column;
       ">
         <div style="
-          position: sticky;
+          position: absolute;
           top: 0;
-          z-index: 10;
-          background: var(--glass-bg);
-          backdrop-filter: blur(16px);
-          margin: -32px -28px 20px -28px;
-          padding: 20px 28px 16px 28px;
-          border-bottom: 1px solid var(--glass-border);
-          display: flex;
-          align-items: center;
-          gap: 14px;
-        ">
+          left: 0;
+          right: 0;
+          height: 4px;
+          background: linear-gradient(90deg, transparent, var(--accent), var(--accent-light), var(--accent), transparent);
+          background-size: 200% 100%;
+          animation: shimmer 3s infinite linear;
+        "></div>
+
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 16px;">
           <div style="
             width: 48px;
             height: 48px;
@@ -252,56 +215,42 @@
             font-size: 26px;
             letter-spacing: 0.5px;
             text-shadow: var(--neon-text-glow);
-            flex: 1;
           ">${t('githubLoginTitle')}</h3>
-          <button class="modal-close" style="
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            color: var(--text-secondary);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all var(--transition);
-            font-size: 20px;
-            flex-shrink: 0;
-          "><i class="fas fa-times"></i></button>
         </div>
 
-        <!-- Аккордеон для пояснения -->
-        <div style="margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px;">
-          <button id="toggle-desc-btn" style="
-            background: rgba(61,158,179,0.08);
+        <!-- Аккордеон "Зачем это нужно?" -->
+        <div style="margin-bottom: 16px;">
+          <button id="why-need-toggle" style="
+            background: transparent;
             border: 1px solid var(--glass-border);
             border-radius: var(--radius-pill);
-            color: var(--text-secondary);
             padding: 8px 16px;
+            color: var(--accent);
             cursor: pointer;
             font-family: var(--font-family);
             font-size: 14px;
-            transition: 0.2s;
+            transition: all 0.2s;
+            width: 100%;
+            text-align: left;
             display: flex;
             align-items: center;
-            justify-content: center;
             gap: 8px;
           ">
-            <i class="fas fa-question-circle"></i>
-            <span>${t('whyNeed')}</span>
+            <i class="fas fa-info-circle"></i> <span data-lang="whyNeed">${t('whyNeed')}</span>
+            <span style="margin-left: auto; transition: transform 0.3s;">▾</span>
           </button>
-          <div id="login-description" style="
+          <div id="why-need-content" style="
             display: none;
+            margin-top: 12px;
+            padding: 14px 16px;
             background: rgba(0,0,0,0.2);
             border-radius: var(--radius-sm);
-            padding: 16px;
+            border-left: 3px solid var(--accent);
             font-size: 14px;
             line-height: 1.6;
             color: var(--text-secondary);
-            border-left: 3px solid var(--accent);
-            max-height: 200px;
-            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
           ">
             ${t('loginDescription')}
           </div>
@@ -348,13 +297,18 @@
           </button>
         </div>
 
-        <div style="display: flex; align-items: center; margin-bottom: 16px; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="remember-me-checkbox" style="
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-            accent-color: var(--accent);
-          ">
+        <div style="display: flex; align-items: center; margin-bottom: 16px; gap: 10px;">
+          <input
+            type="checkbox"
+            id="remember-me-checkbox"
+            style="
+              width: 18px;
+              height: 18px;
+              accent-color: var(--accent);
+              cursor: pointer;
+              flex-shrink: 0;
+            "
+          >
           <label for="remember-me-checkbox" style="
             color: var(--text-secondary);
             font-size: 14px;
@@ -363,14 +317,14 @@
             flex-direction: column;
             line-height: 1.3;
           ">
-            <span class="remember-main">${t('rememberMe')}</span>
-            <span class="remember-hint" style="font-size: 12px; opacity: 0.6;">${t('rememberMeHint')}</span>
+            <span data-lang="rememberMe">${t('rememberMe')}</span>
+            <span style="font-size: 12px; color: var(--text-secondary); opacity:0.6;" data-lang="rememberMeHint">${t('rememberMeHint')}</span>
           </label>
         </div>
 
         <div id="modal-error-container" style="margin-bottom: 16px;"></div>
 
-        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: auto;">
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
           <button class="button" id="modal-cancel" style="
             background: var(--glass-bg);
             backdrop-filter: blur(4px);
@@ -381,7 +335,7 @@
             font-family: var(--font-family);
             cursor: pointer;
             transition: all var(--transition);
-          ">${t('feedbackCancel')}</button>
+          " data-lang="feedbackCancel">${t('feedbackCancel')}</button>
           <button class="button" id="modal-submit" style="
             background: var(--accent);
             color: #fff;
@@ -395,7 +349,7 @@
             position: relative;
             overflow: hidden;
           ">
-            <span style="position: relative; z-index: 1;">${t('githubLoginBtn')}</span>
+            <span style="position: relative; z-index: 1;" data-lang="githubLoginBtn">${t('githubLoginBtn')}</span>
             <span style="
               position: absolute;
               inset: 0;
@@ -409,6 +363,18 @@
       </div>
     `;
     document.body.appendChild(modal);
+
+    // Аккордеон
+    const toggleBtn = modal.querySelector('#why-need-toggle');
+    const content = modal.querySelector('#why-need-content');
+    if (toggleBtn && content) {
+      toggleBtn.addEventListener('click', () => {
+        const isOpen = content.style.display === 'block';
+        content.style.display = isOpen ? 'none' : 'block';
+        const icon = toggleBtn.querySelector('span');
+        if (icon) icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+      });
+    }
 
     if (!document.getElementById('modal-animations-style')) {
       const style = document.createElement('style');
@@ -450,20 +416,12 @@
           border-color: var(--accent);
           color: var(--text-primary);
         }
-        #toggle-desc-btn:hover {
-          background: rgba(61,158,179,0.15);
+        #why-need-toggle:hover {
           border-color: var(--accent);
-          color: var(--text-primary);
+          background: rgba(61,158,179,0.05);
         }
-        .modal-content::-webkit-scrollbar {
-          width: 4px;
-        }
-        .modal-content::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .modal-content::-webkit-scrollbar-thumb {
-          background: var(--accent);
-          border-radius: 10px;
+        #why-need-content {
+          transition: opacity 0.3s, transform 0.3s;
         }
       `;
       document.head.appendChild(style);
@@ -482,18 +440,8 @@
       if (token) validateAndLogin(token);
     });
     document.getElementById('modal-cancel').addEventListener('click', closeModal);
-    modal.querySelector('.modal-close').addEventListener('click', closeModal);
     window.addEventListener('click', e => { if (e.target === modal) closeModal(); });
     window.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('active')) closeModal(); });
-
-    // Аккордеон для описания
-    const toggleBtn = document.getElementById('toggle-desc-btn');
-    const descDiv = document.getElementById('login-description');
-    toggleBtn.addEventListener('click', () => {
-      const isOpen = descDiv.style.display !== 'none';
-      descDiv.style.display = isOpen ? 'none' : 'block';
-      toggleBtn.querySelector('span').textContent = isOpen ? t('whyNeed') : 'Скрыть описание';
-    });
 
     const submitBtn = document.getElementById('modal-submit');
     submitBtn.addEventListener('mousemove', (e) => {
@@ -503,6 +451,31 @@
       submitBtn.style.setProperty('--ripple-x', x + '%');
       submitBtn.style.setProperty('--ripple-y', y + '%');
     });
+
+    // Обновляем тексты при загрузке переводов
+    updateLoginModalTexts();
+  }
+
+  function updateLoginModalTexts() {
+    if (!modal) return;
+    const t = window.I18n?.translate || (k => k);
+    const elements = modal.querySelectorAll('[data-lang]');
+    elements.forEach(el => {
+      const key = el.getAttribute('data-lang');
+      if (key) {
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+          if (el.placeholder !== undefined) el.placeholder = t(key);
+        } else {
+          el.textContent = t(key);
+        }
+      }
+    });
+    // Обновляем заголовок
+    const title = modal.querySelector('#github-modal-title');
+    if (title) title.textContent = t('githubLoginTitle');
+    // Обновляем содержимое аккордеона
+    const content = modal.querySelector('#why-need-content');
+    if (content) content.innerHTML = t('loginDescription');
   }
 
   function closeModal() {
@@ -511,14 +484,11 @@
     tokenInput.type = 'password';
     tokenToggle.innerHTML = '<i class="fas fa-eye"></i>';
     if (rememberCheckbox) rememberCheckbox.checked = false;
-    // Скрываем описание при закрытии
-    const descDiv = document.getElementById('login-description');
-    if (descDiv) descDiv.style.display = 'none';
-    const toggleBtn = document.getElementById('toggle-desc-btn');
-    if (toggleBtn) {
-      const t = window.I18n?.translate || (k => k);
-      toggleBtn.querySelector('span').textContent = t('whyNeed');
-    }
+    // Сворачиваем аккордеон
+    const content = modal.querySelector('#why-need-content');
+    if (content) content.style.display = 'none';
+    const icon = modal.querySelector('#why-need-toggle span');
+    if (icon) icon.style.transform = 'rotate(0deg)';
   }
 
   async function validateAndLogin(token, save = true) {
@@ -540,12 +510,10 @@
       currentUserLogin = userData.user.login;
       currentScopes = userData.scopes;
 
-      // Всегда сохраняем в sessionStorage (для текущей вкладки)
       sessionStorage.setItem(TOKEN_KEY, token);
       sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
       sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
 
-      // Если включено "запомнить меня" – сохраняем обфусцированный токен в localStorage
       const remember = rememberCheckbox && rememberCheckbox.checked;
       if (remember) {
         const obfuscated = xorEncrypt(token, OBFUSCATION_SALT);
@@ -646,7 +614,9 @@
     const t = window.I18n?.translate || (k => k);
     switch (action) {
       case 'login':
-        openLoginModal();
+        if (!modal) createLoginModal();
+        modal.classList.add('active');
+        tokenInput.focus();
         break;
       case 'about':
         window.UIUtils?.showToast(t('githubWarning'), 'info', 8000);
@@ -716,7 +686,6 @@
     getScopes: () => currentScopes,
     hasScope: scope => currentScopes.includes(scope),
     isAdmin: () => currentUserLogin && window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(currentUserLogin),
-    updateToken: updateClientToken,
-    openLoginModal // экспортируем для вызова извне
+    updateToken: updateClientToken
   };
 })();
