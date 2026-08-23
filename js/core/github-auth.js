@@ -1,5 +1,7 @@
 // js/core/github-auth.js – с локализацией, обновление меню при смене языка
 // Исправлено: модалка теперь прокручивается, влезает в экран, после выхода кнопка входа работает
+// Стилизован скроллбар, чекбокс, добавлена ссылка на создание токена
+
 (function() {
   const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule, xorEncrypt, xorDecrypt, generateRandomKey } = window.Utils;
   const GitHubClient = window.GitHubClient;
@@ -240,7 +242,7 @@
             gap: 8px;
           ">
             <i class="fas fa-info-circle"></i> <span data-lang="whyNeed">${t('whyNeed')}</span>
-            <span style="margin-left: auto; transition: transform 0.3s;">▾</span>
+            <span style="margin-left: auto; transition: transform 0.3s ease;">▾</span>
           </button>
           <div id="why-need-content" style="
             display: none;
@@ -261,6 +263,7 @@
           </div>
         </div>
 
+        <!-- Поле ввода токена -->
         <div style="position: relative; margin-bottom: 16px;">
           <input
             type="password"
@@ -302,28 +305,30 @@
           </button>
         </div>
 
+        <!-- Ссылка на создание токена -->
+        <div style="text-align: right; margin-bottom: 12px; font-size: 13px;">
+          <a href="https://github.com/settings/tokens/new" target="_blank" style="color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent);">
+            <i class="fas fa-external-link-alt"></i> Создать классический токен
+          </a>
+        </div>
+
+        <!-- Кастомный чекбокс "Запомни меня" -->
         <div style="display: flex; align-items: center; margin-bottom: 16px; gap: 10px;">
-          <input
-            type="checkbox"
-            id="remember-me-checkbox"
-            style="
-              width: 18px;
-              height: 18px;
-              accent-color: var(--accent);
-              cursor: pointer;
+          <label class="custom-checkbox" style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-secondary); font-size: 14px;">
+            <input type="checkbox" id="remember-me-checkbox" style="display: none;">
+            <span class="checkmark" style="
+              display: inline-block;
+              width: 20px;
+              height: 20px;
+              background: rgba(0,0,0,0.25);
+              border: 2px solid var(--glass-border);
+              border-radius: 6px;
+              position: relative;
+              transition: all 0.2s;
               flex-shrink: 0;
-            "
-          >
-          <label for="remember-me-checkbox" style="
-            color: var(--text-secondary);
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            line-height: 1.3;
-          ">
+            "></span>
             <span data-lang="rememberMe">${t('rememberMe')}</span>
-            <span style="font-size: 12px; color: var(--text-secondary); opacity:0.6;" data-lang="rememberMeHint">${t('rememberMeHint')}</span>
+            <span style="font-size: 12px; color: var(--text-secondary); opacity:0.6; margin-left: 4px;" data-lang="rememberMeHint">${t('rememberMeHint')}</span>
           </label>
         </div>
 
@@ -369,6 +374,7 @@
     `;
     document.body.appendChild(modal);
 
+    // ---- Обработчики ----
     // Аккордеон
     const toggleBtn = modal.querySelector('#why-need-toggle');
     const content = modal.querySelector('#why-need-content');
@@ -376,8 +382,25 @@
       toggleBtn.addEventListener('click', () => {
         const isOpen = content.style.display === 'block';
         content.style.display = isOpen ? 'none' : 'block';
-        const icon = toggleBtn.querySelector('span');
+        const icon = toggleBtn.querySelector('span:last-child');
         if (icon) icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+      });
+    }
+
+    // Кастомный чекбокс
+    const checkbox = modal.querySelector('#remember-me-checkbox');
+    const checkmark = modal.querySelector('.checkmark');
+    if (checkbox && checkmark) {
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          checkmark.style.background = 'var(--accent)';
+          checkmark.style.borderColor = 'var(--accent)';
+          checkmark.innerHTML = '<i class="fas fa-check" style="color:#fff; font-size:14px; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);"></i>';
+        } else {
+          checkmark.style.background = 'rgba(0,0,0,0.25)';
+          checkmark.style.borderColor = 'var(--glass-border)';
+          checkmark.innerHTML = '';
+        }
       });
     }
 
@@ -428,11 +451,7 @@
         #why-need-content {
           transition: opacity 0.3s, transform 0.3s;
         }
-        /* Исправление для прокрутки модалки */
-        .modal .modal-content {
-          max-height: 90vh;
-          overflow-y: auto;
-        }
+        /* Стилизация скроллбара модалки */
         .modal .modal-content::-webkit-scrollbar {
           width: 6px;
         }
@@ -443,6 +462,21 @@
         .modal .modal-content::-webkit-scrollbar-thumb {
           background: var(--accent);
           border-radius: 10px;
+        }
+        .modal .modal-content {
+          scrollbar-width: thin;
+          scrollbar-color: var(--accent) rgba(0,0,0,0.1);
+        }
+        /* Стиль ссылки создания токена */
+        .modal .modal-content a[href*="settings/tokens"] {
+          color: var(--accent);
+          text-decoration: none;
+          border-bottom: 1px dotted var(--accent);
+          transition: color 0.2s, border-color 0.2s;
+        }
+        .modal .modal-content a[href*="settings/tokens"]:hover {
+          color: var(--accent-light);
+          border-color: var(--accent-light);
         }
       `;
       document.head.appendChild(style);
@@ -504,11 +538,19 @@
     tokenInput.value = '';
     tokenInput.type = 'password';
     tokenToggle.innerHTML = '<i class="fas fa-eye"></i>';
-    if (rememberCheckbox) rememberCheckbox.checked = false;
+    if (rememberCheckbox) {
+      rememberCheckbox.checked = false;
+      const checkmark = modal.querySelector('.checkmark');
+      if (checkmark) {
+        checkmark.style.background = 'rgba(0,0,0,0.25)';
+        checkmark.style.borderColor = 'var(--glass-border)';
+        checkmark.innerHTML = '';
+      }
+    }
     // Сворачиваем аккордеон
     const content = modal.querySelector('#why-need-content');
     if (content) content.style.display = 'none';
-    const icon = modal.querySelector('#why-need-toggle span');
+    const icon = modal.querySelector('#why-need-toggle span:last-child');
     if (icon) icon.style.transform = 'rotate(0deg)';
   }
 
