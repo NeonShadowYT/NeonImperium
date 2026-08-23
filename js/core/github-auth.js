@@ -17,7 +17,12 @@
 
   let currentUserLogin = null;
   let currentScopes = [];
-  let modal, tokenInput, tokenToggle, profileContainer, rememberCheckbox;
+  let modal = null;
+  let tokenInput = null;
+  let tokenToggle = null;
+  let profileContainer = null;
+  let rememberCheckbox = null;
+  let modalOpen = false;
 
   document.addEventListener('DOMContentLoaded', () => {
     const navBar = document.querySelector('.nav-bar');
@@ -26,20 +31,18 @@
     profileContainer = createElement('div', 'nav-profile', {}, { role: 'button', tabindex: '0' });
     const langSwitcher = document.querySelector('.lang-switcher');
     navBar.insertBefore(profileContainer, langSwitcher || null);
-    createLoginModal();
     restoreSession();
 
     window.addEventListener('github-login-requested', () => {
-      if (modal) modal.classList.add('active');
-      else {
-        if (!modal) createLoginModal();
-        modal.classList.add('active');
-        if (tokenInput) tokenInput.focus();
-      }
+      openLoginModal();
     });
 
     window.addEventListener('languageChanged', () => {
       refreshProfileMenu();
+      // Если модалка открыта, обновляем её содержимое
+      if (modal && modal.classList.contains('active')) {
+        updateModalContent();
+      }
     });
     window.addEventListener('languageLoaded', () => {
       refreshProfileMenu();
@@ -90,14 +93,12 @@
     if (remember) {
       const obfuscated = localStorage.getItem(TOKEN_LOCAL_KEY);
       if (obfuscated) {
-        // Расшифровка (обфускация) с фиксированной солью
         const decrypted = xorDecrypt(obfuscated, OBFUSCATION_SALT);
         if (decrypted) {
           token = decrypted;
           try {
             const userData = await silentValidateToken(token);
             if (userData) {
-              // Сохраняем токен в sessionStorage для текущей вкладки
               sessionStorage.setItem(TOKEN_KEY, token);
               currentUserLogin = userData.user.login;
               currentScopes = userData.scopes;
@@ -112,7 +113,6 @@
             }
           } catch (err) {
             if (err.message === 'unauthorized' || err.message?.includes('401')) {
-              // Токен недействителен – удаляем всё
               localStorage.removeItem(TOKEN_LOCAL_KEY);
               localStorage.removeItem(REMEMBER_ME_KEY);
               sessionStorage.removeItem(TOKEN_KEY);
@@ -122,7 +122,6 @@
       }
     }
 
-    // 3. Если ничего не вышло – выходим
     renderLoggedOutUI();
   }
 
@@ -147,8 +146,23 @@
     }
   }
 
+  // ---- Создание/открытие модалки входа ----
+  function openLoginModal() {
+    // Если модалка уже существует, просто показываем её
+    if (modal) {
+      updateModalContent();
+      modal.classList.add('active');
+      if (tokenInput) tokenInput.focus();
+      return;
+    }
+
+    // Создаём новую модалку
+    createLoginModal();
+    modal.classList.add('active');
+    if (tokenInput) tokenInput.focus();
+  }
+
   function createLoginModal() {
-    const t = window.I18n?.translate || (k => k);
     modal = createElement('div', 'modal', {}, { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'github-modal-title' });
     modal.style.cssText = `
       display: none;
@@ -165,6 +179,70 @@
       justify-content: center;
       animation: modalFadeIn 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
     `;
+    document.body.appendChild(modal);
+    // Содержимое заполняется в updateModalContent
+    updateModalContent();
+
+    // Добавляем стили анимации, если их нет
+    if (!document.getElementById('modal-animations-style')) {
+      const style = document.createElement('style');
+      style.id = 'modal-animations-style';
+      style.textContent = `
+        @keyframes modalFadeIn {
+          0% { opacity: 0; transform: scale(0.96) translateY(-10px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .modal.active {
+          display: flex !important;
+          animation: modalFadeIn 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
+        }
+        .modal .modal-content {
+          animation: modalFadeIn 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
+        }
+        #github-token-input:focus {
+          border-color: var(--accent);
+          box-shadow: 0 0 0 3px rgba(61,158,179,0.2), 0 0 20px rgba(61,158,179,0.05);
+        }
+        #modal-submit:hover {
+          background: var(--accent-light);
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(61,158,179,0.4);
+        }
+        #modal-submit:active {
+          transform: scale(0.96);
+        }
+        #modal-submit:active span:last-child {
+          opacity: 1;
+          transition: opacity 0s;
+        }
+        #modal-cancel:hover {
+          background: rgba(61,158,179,0.12);
+          border-color: var(--accent);
+          color: var(--text-primary);
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Закрытие по клику вне модалки
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+    // Закрытие по Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
+    });
+  }
+
+  function updateModalContent() {
+    const t = window.I18n?.translate || (k => k);
+    // Если модалка не создана, выходим
+    if (!modal) return;
+
     modal.innerHTML = `
       <div class="modal-content" style="
         max-width: 480px;
@@ -214,7 +292,6 @@
           ">${t('githubLoginTitle')}</h3>
         </div>
 
-        <!-- Блок с пояснением -->
         <div style="
           margin-bottom: 20px;
           padding: 14px 16px;
@@ -321,87 +398,64 @@
         </div>
       </div>
     `;
-    document.body.appendChild(modal);
 
-    if (!document.getElementById('modal-animations-style')) {
-      const style = document.createElement('style');
-      style.id = 'modal-animations-style';
-      style.textContent = `
-        @keyframes modalFadeIn {
-          0% { opacity: 0; transform: scale(0.96) translateY(-10px); }
-          100% { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        @keyframes shimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-        .modal.active {
-          display: flex !important;
-          animation: modalFadeIn 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
-        }
-        .modal .modal-content {
-          animation: modalFadeIn 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
-        }
-        #github-token-input:focus {
-          border-color: var(--accent);
-          box-shadow: 0 0 0 3px rgba(61,158,179,0.2), 0 0 20px rgba(61,158,179,0.05);
-        }
-        #modal-submit:hover {
-          background: var(--accent-light);
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(61,158,179,0.4);
-        }
-        #modal-submit:active {
-          transform: scale(0.96);
-        }
-        #modal-submit:active span:last-child {
-          opacity: 1;
-          transition: opacity 0s;
-        }
-        #modal-cancel:hover {
-          background: rgba(61,158,179,0.12);
-          border-color: var(--accent);
-          color: var(--text-primary);
-        }
-      `;
-      document.head.appendChild(style);
-    }
-
+    // Получаем ссылки на элементы
     tokenInput = document.getElementById('github-token-input');
     tokenToggle = document.getElementById('token-toggle');
     rememberCheckbox = document.getElementById('remember-me-checkbox');
-    tokenToggle.addEventListener('click', () => {
-      const isPassword = tokenInput.type === 'password';
-      tokenInput.type = isPassword ? 'text' : 'password';
-      tokenToggle.innerHTML = isPassword ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
-    });
-    document.getElementById('modal-submit').addEventListener('click', () => {
-      const token = tokenInput.value.trim();
-      if (token) validateAndLogin(token);
-    });
-    document.getElementById('modal-cancel').addEventListener('click', closeModal);
-    window.addEventListener('click', e => { if (e.target === modal) closeModal(); });
-    window.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('active')) closeModal(); });
+
+    // Обработчики
+    if (tokenToggle) {
+      tokenToggle.addEventListener('click', () => {
+        const isPassword = tokenInput.type === 'password';
+        tokenInput.type = isPassword ? 'text' : 'password';
+        tokenToggle.innerHTML = isPassword ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
+      });
+    }
 
     const submitBtn = document.getElementById('modal-submit');
-    submitBtn.addEventListener('mousemove', (e) => {
-      const rect = submitBtn.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      submitBtn.style.setProperty('--ripple-x', x + '%');
-      submitBtn.style.setProperty('--ripple-y', y + '%');
-    });
+    if (submitBtn) {
+      submitBtn.addEventListener('click', () => {
+        const token = tokenInput ? tokenInput.value.trim() : '';
+        if (token) validateAndLogin(token);
+      });
+      // Эффект ripple
+      submitBtn.addEventListener('mousemove', (e) => {
+        const rect = submitBtn.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        submitBtn.style.setProperty('--ripple-x', x + '%');
+        submitBtn.style.setProperty('--ripple-y', y + '%');
+      });
+    }
+
+    const cancelBtn = document.getElementById('modal-cancel');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', closeModal);
+    }
   }
 
   function closeModal() {
-    modal.classList.remove('active');
-    tokenInput.value = '';
-    tokenInput.type = 'password';
-    tokenToggle.innerHTML = '<i class="fas fa-eye"></i>';
-    if (rememberCheckbox) rememberCheckbox.checked = false;
+    if (modal) {
+      modal.classList.remove('active');
+    }
+    if (tokenInput) {
+      tokenInput.value = '';
+      tokenInput.type = 'password';
+    }
+    if (tokenToggle) {
+      tokenToggle.innerHTML = '<i class="fas fa-eye"></i>';
+    }
+    if (rememberCheckbox) {
+      rememberCheckbox.checked = false;
+    }
+    // Очищаем ошибки
+    const errorContainer = document.getElementById('modal-error-container');
+    if (errorContainer) errorContainer.innerHTML = '';
+    modalOpen = false;
   }
 
-  async function validateAndLogin(token, save = true) {
+  async function validateAndLogin(token) {
     const t = window.I18n?.translate || (k => k);
     const lastAttempt = localStorage.getItem(LAST_LOGIN_ATTEMPT_KEY);
     if (lastAttempt && Date.now() - parseInt(lastAttempt) < LOGIN_COOLDOWN) {
@@ -420,12 +474,11 @@
       currentUserLogin = userData.user.login;
       currentScopes = userData.scopes;
 
-      // Всегда сохраняем в sessionStorage (для текущей вкладки)
+      // Всегда сохраняем в sessionStorage
       sessionStorage.setItem(TOKEN_KEY, token);
       sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
       sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
 
-      // Если включено "запомнить меня" – сохраняем обфусцированный токен в localStorage
       const remember = rememberCheckbox && rememberCheckbox.checked;
       if (remember) {
         const obfuscated = xorEncrypt(token, OBFUSCATION_SALT);
@@ -526,8 +579,7 @@
     const t = window.I18n?.translate || (k => k);
     switch (action) {
       case 'login':
-        modal.classList.add('active');
-        tokenInput.focus();
+        openLoginModal();
         break;
       case 'about':
         window.UIUtils?.showToast(t('githubWarning'), 'info', 8000);
