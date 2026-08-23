@@ -371,5 +371,8 @@
   "starveDeveloped": "Made with ❤️ Neon Shadow - independent developer from Russia",
   "refreshVideos": "Refresh videos",
   "exportAll": "Export all",
-  "importJSON": "Import JSON"
+  "importJSON": "Import JSON",
+  "rememberMe": "Remember me (keep session)",
+  "rememberMeHint": "Token will be stored in browser (obfuscated)",
+  "loginDescription": "To fully participate in the community (feedback, comments, reactions, bookmarks) you need a GitHub token.\n\n🔑 **Required scopes:**\n• **repo** – create and edit posts, comments, reactions.\n• **gist** – personal bookmark storage (save posts and videos).\n\nIf you provide only one of the scopes, the corresponding features will be unavailable. Without a token you can only read content.\n\nUse a **classic token** – it gives full control over your repositories, but it's safe because the token is only sent to the GitHub API and stored locally in encrypted form."
 }

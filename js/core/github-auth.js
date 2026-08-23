@@ -214,25 +214,20 @@
           ">${t('githubLoginTitle')}</h3>
         </div>
 
+        <!-- Блок с пояснением -->
         <div style="
-          margin-bottom: 24px;
+          margin-bottom: 20px;
           padding: 14px 16px;
           background: rgba(0,0,0,0.2);
           border-radius: var(--radius-sm);
           border-left: 3px solid var(--accent);
           font-size: 14px;
-          line-height: 1.5;
+          line-height: 1.6;
           color: var(--text-secondary);
+          white-space: pre-wrap;
+          word-break: break-word;
         ">
-          <p style="margin: 0 0 6px 0;">
-            <i class="fas fa-info-circle" style="color: var(--accent); margin-right: 8px;"></i>
-            ${t('githubTokenNote')}
-          </p>
-          <p style="margin: 0; font-size: 13px;">
-            <a href="https://github.com/settings/tokens" target="_blank" style="color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent);">
-              <i class="fas fa-external-link-alt"></i> Создать токен
-            </a>
-          </p>
+          ${t('loginDescription')}
         </div>
 
         <div style="position: relative; margin-bottom: 16px;">
@@ -279,7 +274,7 @@
         <div style="display: flex; align-items: center; margin-bottom: 16px; gap: 8px;">
           <input type="checkbox" id="remember-me-checkbox" style="width: 18px; height: 18px; cursor: pointer;">
           <label for="remember-me-checkbox" style="color: var(--text-secondary); font-size: 14px; cursor: pointer;">
-            ${t('rememberMe') || 'Запомнить меня (сохранить сессию)'}
+            ${t('rememberMe') || 'Запомнить меня'}
             <span style="font-size: 12px; color: var(--text-secondary); opacity:0.6; display:block;">
               ${t('rememberMeHint') || 'Токен будет сохранён в браузере (обфусцированно)'}
             </span>
