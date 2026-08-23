@@ -1,5 +1,7 @@
 // js/features/storage/ui.js
 // UI-рендеринг закладок, модалка, статус, обработка файлов
+// Оптимизировано: добавление/удаление без полной перерисовки, кеширование downloadUrl с TTL
+// Добавлено: групповые операции, запись видео через MediaRecorder, парсинг HTML, офлайн-кеширование
 
 (function() {
   const { escapeHtml, formatDate, loadModule, createElement, debounce } = window.GithubCore || {};
@@ -11,16 +13,23 @@
     ensureStorage,
     addBookmark,
     removeBookmark,
+    updateBookmark,
     getBookmarks,
     setBookmarks,
     triggerSave,
     exportBookmarksData,
     importBookmarksData,
+    importBookmarksBatch,
+    exportAllBookmarks,
+    batchUpdateVideoLinks,
     setStatusCallback,
     refreshGridCallback
   } = window._StorageManager;
 
   let statusElement = null;
+  const bookmarkElements = new Map();
+
+  const DOWNLOAD_URL_TTL = 24 * 60 * 60 * 1000;
 
   function updateStatus(text, type = 'info') {
     if (statusElement) {
@@ -36,101 +45,279 @@
     return title.slice(0, maxLength) + '…';
   }
 
-  async function getVideoDownloadUrl(url) {
+  // ---- Расширенное получение ссылки на скачивание с кешированием ----
+  async function getVideoDownloadUrl(url, forceRefresh = false) {
     if (!url) return null;
     
     const apis = [
+      // 1. Cobalt
       {
         url: 'https://api.cobalt.tools/api/json',
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: (videoUrl) => JSON.stringify({ url: videoUrl, videoQuality: '720', audioFormat: 'best' })
       },
+      // 2. VideoFetcher
       {
         url: 'https://api.videofetcher.net/parse',
         method: 'GET',
         params: (videoUrl) => ({ url: videoUrl })
+      },
+      // 3. Invidious
+      {
+        url: (videoUrl) => {
+          const match = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+          if (match) {
+            return `https://invidious.private.coffee/api/v1/videos/${match[1]}`;
+          }
+          return null;
+        },
+        method: 'GET',
+        parser: (data) => {
+          if (data && data.formatStreams && data.formatStreams.length) {
+            const stream = data.formatStreams.find(s => s.type && s.type.startsWith('video/mp4'));
+            return stream ? stream.url : null;
+          }
+          return null;
+        }
+      },
+      // 4. Piped
+      {
+        url: (videoUrl) => {
+          const match = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+          if (match) {
+            return `https://pipedapi.kavin.rocks/streams/${match[1]}`;
+          }
+          return null;
+        },
+        method: 'GET',
+        parser: (data) => {
+          if (data && data.videoStreams && data.videoStreams.length) {
+            const stream = data.videoStreams.find(s => s.quality === '720p' || s.quality === '1080p');
+            return stream ? stream.url : null;
+          }
+          return null;
+        }
+      },
+      // 5. yt-dlp-web
+      {
+        url: 'https://yt-dlp-web.herokuapp.com/api/info',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: (videoUrl) => JSON.stringify({ url: videoUrl }),
+        parser: (data) => {
+          if (data && data.url) return data.url;
+          if (data && data.formats && data.formats.length) {
+            const best = data.formats.find(f => f.quality && f.quality > 0);
+            return best ? best.url : null;
+          }
+          return null;
+        }
+      },
+      // 6. savefrom.net (неофициальный)
+      {
+        url: 'https://savefrom.net/',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: (videoUrl) => `url=${encodeURIComponent(videoUrl)}`,
+        parser: (html) => {
+          const match = html.match(/<a[^>]+href="([^"]+)"[^>]*class="[^"]*download[^"]*"/i);
+          return match ? match[1] : null;
+        }
+      },
+      // 7. y2mate.com
+      {
+        url: 'https://www.y2mate.com/mates/analyzeAjax',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: (videoUrl) => `url=${encodeURIComponent(videoUrl)}&type=YouTube`,
+        parser: (data) => {
+          if (data && data.downloadUrl) return data.downloadUrl;
+          return null;
+        }
       }
     ];
 
     for (const api of apis) {
       try {
+        let requestUrl;
+        if (typeof api.url === 'function') {
+          requestUrl = api.url(url);
+          if (!requestUrl) continue;
+        } else {
+          requestUrl = api.url;
+        }
+
         let response;
+        let bodyData;
         if (api.method === 'POST') {
-          response = await fetch(api.url, {
+          bodyData = typeof api.body === 'function' ? api.body(url) : api.body;
+          response = await fetch(requestUrl, {
             method: 'POST',
-            headers: api.headers,
-            body: api.body(url),
+            headers: api.headers || {},
+            body: bodyData,
             signal: AbortSignal.timeout(10000)
           });
         } else {
-          const params = new URLSearchParams(api.params(url));
-          response = await fetch(`${api.url}?${params.toString()}`, {
+          const params = typeof api.params === 'function' ? api.params(url) : {};
+          const query = new URLSearchParams(params).toString();
+          const fullUrl = query ? `${requestUrl}?${query}` : requestUrl;
+          response = await fetch(fullUrl, {
             signal: AbortSignal.timeout(10000)
           });
         }
-        
+
         if (!response.ok) continue;
-        
-        const data = await response.json();
-        
-        if (api.url.includes('cobalt.tools')) {
-          if (data.status === 'success' && data.url) {
-            return data.url;
+
+        let data;
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          data = await response.json();
+        } else {
+          data = await response.text();
+        }
+
+        let downloadUrl = null;
+        if (api.parser) {
+          downloadUrl = api.parser(data);
+        } else {
+          if (data && typeof data === 'object') {
+            downloadUrl = data.url || data.downloadUrl || data.download_url || data.link || data.download;
           }
         }
-        if (api.url.includes('videofetcher.net')) {
-          if (data.url) {
-            return data.url;
-          }
-          if (data.video && data.video.url) {
-            return data.video.url;
-          }
+
+        if (downloadUrl && downloadUrl.startsWith('http')) {
+          return downloadUrl;
         }
       } catch (e) {
-        console.warn('[Storage] API download error:', e);
+        console.warn('[Storage] API error:', e);
         continue;
       }
     }
-    
+
     return null;
   }
 
-  function renderBookmarks(modal) {
-    const grid = modal?.querySelector('#bookmarks-grid');
-    if (!grid) return;
-    const t = (key) => window.I18n?.translate(key) || key;
-
-    let bookmarks = getBookmarks() || [];
-    let filtered = bookmarks.slice();
-    const activeCat = modal.querySelector('.cat-btn.active');
-    const category = activeCat ? activeCat.dataset.cat : 'all';
-    const searchInput = modal.querySelector('#search-input');
-    const searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : '';
-    const sortOrder = modal.querySelector('.sort-btn.active')?.dataset.order || 'new';
-
-    if (category !== 'all') filtered = filtered.filter(b => b.type === category);
-    if (searchQuery) filtered = filtered.filter(b => b.title.toLowerCase().includes(searchQuery));
-    if (sortOrder === 'new') filtered.sort((a,b) => new Date(b.added) - new Date(a.added));
-    else filtered.sort((a,b) => new Date(a.added) - new Date(b.added));
-
-    grid.innerHTML = '';
-    if (!filtered.length) {
-      grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>${t('noBookmarks')}</p></div>`;
-      return;
+  // ---- Проверка и обновление downloadUrl в закладке ----
+  async function ensureDownloadUrl(bm) {
+    if (!bm || bm.type !== 'video' || !bm.url) return null;
+    if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) {
+      return bm.downloadUrl;
     }
-    const fragment = document.createDocumentFragment();
-    filtered.forEach(bm => {
-      const card = createBookmarkCard(bm, modal);
-      fragment.appendChild(card);
-    });
-    grid.appendChild(fragment);
+    try {
+      const url = await getVideoDownloadUrl(bm.url);
+      if (url) {
+        const expires = Date.now() + DOWNLOAD_URL_TTL;
+        await updateBookmark(bm.id, { downloadUrl: url, downloadUrlExpires: expires });
+        return url;
+      }
+    } catch (e) {
+      console.warn('Ошибка получения ссылки:', e);
+    }
+    return null;
   }
 
-  function createBookmarkCard(bm, modal) {
+  // ---- Прямое извлечение видео через MediaRecorder (запись экрана/потока) ----
+  async function recordVideoFromIframe(iframeElement, duration = 10000) {
+    try {
+      // Получаем поток из iframe (только если это видео-элемент внутри)
+      const videoEl = iframeElement.contentDocument?.querySelector('video');
+      if (!videoEl) {
+        // Если не удалось, пробуем захватить экран (пользователь должен разрешить)
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        return await recordStream(stream, duration);
+      }
+      // Если нашли video-элемент, используем его поток
+      const stream = videoEl.captureStream ? videoEl.captureStream() : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      return await recordStream(stream, duration);
+    } catch (err) {
+      console.warn('Recording failed:', err);
+      throw err;
+    }
+  }
+
+  async function recordStream(stream, duration = 10000) {
+    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+    const chunks = [];
+    mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+    mediaRecorder.start();
+    await new Promise(resolve => setTimeout(resolve, duration));
+    mediaRecorder.stop();
+    await new Promise(resolve => mediaRecorder.onstop = resolve);
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    stream.getTracks().forEach(t => t.stop());
+    return blob;
+  }
+
+  // ---- Парсинг HTML для извлечения ссылки на видео (для сайтов без oembed) ----
+  async function parseVideoFromHtml(url) {
+    try {
+      // Используем прокси для обхода CORS (публичный)
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+      if (!response.ok) return null;
+      const html = await response.text();
+      // Ищем видео-элементы
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const videoEl = doc.querySelector('video');
+      if (videoEl && videoEl.src) {
+        return videoEl.src;
+      }
+      // Ищем ссылки на видео в атрибутах source
+      const sources = doc.querySelectorAll('source[src]');
+      for (const src of sources) {
+        if (src.src.startsWith('http')) return src.src;
+      }
+      // Ищем ссылки в meta
+      const metaOgVideo = doc.querySelector('meta[property="og:video"]');
+      if (metaOgVideo) return metaOgVideo.content;
+      return null;
+    } catch (e) {
+      console.warn('HTML parse failed:', e);
+      return null;
+    }
+  }
+
+  // ---- Умное определение типа ссылки (по содержимому) ----
+  async function detectLinkType(url) {
+    try {
+      // Сначала пробуем oembed
+      const meta = await fetchMetadata(url);
+      if (meta.type === 'video' || meta.type === 'link') return meta;
+
+      // Если не удалось, пробуем парсинг HTML
+      const videoUrl = await parseVideoFromHtml(url);
+      if (videoUrl) {
+        return {
+          title: meta.title || url,
+          thumbnail: meta.thumbnail || null,
+          embedUrl: videoUrl,
+          type: 'video',
+          videoData: { service: 'parsed', url: videoUrl },
+          cleanedUrl: url
+        };
+      }
+
+      // Иначе считаем ссылкой
+      return {
+        title: meta.title || url,
+        thumbnail: null,
+        embedUrl: null,
+        type: 'link',
+        videoData: null,
+        cleanedUrl: url
+      };
+    } catch (e) {
+      return { title: url, thumbnail: null, embedUrl: null, type: 'link', videoData: null, cleanedUrl: url };
+    }
+  }
+
+  // ---- Создание DOM-элемента карточки (с учётом кеширования) ----
+  function createBookmarkCardElement(bm, modal) {
     const t = (key) => window.I18n?.translate(key) || key;
     const wrapper = document.createElement('div');
     wrapper.className = 'bookmark-card-wrapper';
+    wrapper.dataset.id = bm.id;
     const card = document.createElement('div');
     card.className = 'bookmark-card';
     card.style.cursor = 'pointer';
@@ -143,8 +330,9 @@
     const isSave = bm.type === 'save';
     const isLink = bm.type === 'link';
 
+    // Превью
     if (isVideo) {
-      // Видео: вставляем iframe с плеером
+      // Показываем iframe
       const iframe = document.createElement('iframe');
       let src = bm.embedUrl;
       if (!src.includes('autoplay')) {
@@ -160,6 +348,25 @@
       iframe.setAttribute('allowfullscreen', 'true');
       iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
       media.appendChild(iframe);
+      // Добавляем кнопку записи видео (экспериментально)
+      const recordBtn = document.createElement('button');
+      recordBtn.className = 'button small';
+      recordBtn.textContent = '📹 Записать 10с';
+      recordBtn.style.cssText = 'position:absolute; bottom:10px; right:10px; z-index:10; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:20px; padding:4px 12px; cursor:pointer;';
+      recordBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          const blob = await recordVideoFromIframe(iframe, 10000);
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `${bm.title || 'video'}.webm`;
+          a.click();
+          showToast('Запись сохранена', 'success');
+        } catch (err) {
+          showToast('Ошибка записи: ' + err.message, 'error');
+        }
+      });
+      media.appendChild(recordBtn);
     } else if (bm.thumbnail) {
       const img = document.createElement('img');
       img.src = bm.thumbnail;
@@ -194,26 +401,82 @@
     meta.textContent = `${bm.type.charAt(0).toUpperCase()+bm.type.slice(1)} · ${formatDate(bm.added)}`;
     content.appendChild(meta);
 
-    // Кнопка скачивания (только для видео, если удалось получить ссылку)
+    // Кнопка скачивания
     const downloadContainer = document.createElement('div');
-    downloadContainer.style.cssText = 'margin-top:8px; display:none;';
+    downloadContainer.style.cssText = 'margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;';
     const downloadBtn = document.createElement('button');
     downloadBtn.className = 'button small';
-    downloadBtn.textContent = '⬇ ' + t('downloadBtn') || 'Скачать';
+    downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
     downloadBtn.style.cssText = 'background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;font-family:var(--font-family);transition:0.2s;';
     downloadBtn.addEventListener('mouseenter', () => { downloadBtn.style.transform = 'scale(1.05)'; });
     downloadBtn.addEventListener('mouseleave', () => { downloadBtn.style.transform = 'scale(1)'; });
     downloadContainer.appendChild(downloadBtn);
+
+    const hasValidDownload = bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires;
+
+    if (hasValidDownload) {
+      downloadContainer.style.display = 'flex';
+      downloadBtn.onclick = (e) => {
+        e.stopPropagation();
+        const a = document.createElement('a');
+        a.href = bm.downloadUrl;
+        a.download = bm.title + '.mp4';
+        a.target = '_blank';
+        a.click();
+      };
+    } else if (isVideo) {
+      downloadContainer.style.display = 'none';
+      const fetchDownload = async (e) => {
+        e.stopPropagation();
+        if (downloadBtn.disabled) return;
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = '⏳ ...';
+        try {
+          const url = await ensureDownloadUrl(bm);
+          if (url) {
+            downloadContainer.style.display = 'flex';
+            downloadBtn.onclick = (ev) => {
+              ev.stopPropagation();
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = bm.title + '.mp4';
+              a.target = '_blank';
+              a.click();
+            };
+            downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
+            showToast('Ссылка получена', 'success');
+          } else {
+            showToast('Не удалось получить ссылку', 'error');
+            downloadBtn.textContent = '❌ Ошибка';
+            setTimeout(() => {
+              downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
+              downloadBtn.disabled = false;
+              downloadContainer.style.display = 'none';
+            }, 3000);
+          }
+        } catch (err) {
+          showToast('Ошибка: ' + err.message, 'error');
+          downloadBtn.textContent = '❌ Ошибка';
+          setTimeout(() => {
+            downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
+            downloadBtn.disabled = false;
+            downloadContainer.style.display = 'none';
+          }, 3000);
+        }
+      };
+      downloadBtn.addEventListener('click', fetchDownload);
+    } else {
+      downloadContainer.style.display = 'none';
+    }
     content.appendChild(downloadContainer);
 
     card.appendChild(content);
 
-    // --- Клик по карточке ---
+    // Клик по карточке
     card.addEventListener('click', async (e) => {
       if (e.target.closest('button')) return;
       
       if (isVideo) {
-        // Видео уже отображается в iframe, ничего не делаем (плеер сам кликабелен)
         return;
       }
       
@@ -248,29 +511,7 @@
       }
     });
 
-    // --- Проверка возможности скачивания видео ---
-    if (isVideo && bm.url) {
-      (async () => {
-        try {
-          const downloadUrl = await getVideoDownloadUrl(bm.url);
-          if (downloadUrl) {
-            downloadContainer.style.display = 'block';
-            downloadBtn.onclick = (e) => {
-              e.stopPropagation();
-              const a = document.createElement('a');
-              a.href = downloadUrl;
-              a.download = bm.title + '.mp4';
-              a.target = '_blank';
-              a.click();
-            };
-          }
-        } catch (e) {
-          // Молча игнорируем ошибки
-        }
-      })();
-    }
-
-    // --- Кнопка удаления ---
+    // Кнопка удаления
     const del = document.createElement('button');
     del.className = 'bookmark-delete-btn';
     del.innerHTML = '<i class="fas fa-trash-alt"></i>';
@@ -278,7 +519,6 @@
       e.stopPropagation();
       if (confirm(t('deleteConfirm'))) {
         await removeBookmark(bm.id);
-        if (modal) renderBookmarks(modal);
       }
     });
     wrapper.appendChild(card);
@@ -286,6 +526,59 @@
     return wrapper;
   }
 
+  // ---- Инкрементальное обновление ----
+  function addBookmarkCard(bm, modal) {
+    const grid = modal?.querySelector('#bookmarks-grid');
+    if (!grid) return;
+    const existing = grid.querySelector(`.bookmark-card-wrapper[data-id="${bm.id}"]`);
+    if (existing) existing.remove();
+    const wrapper = createBookmarkCardElement(bm, modal);
+    grid.prepend(wrapper);
+    bookmarkElements.set(bm.id, wrapper);
+  }
+
+  function removeBookmarkCard(id, modal) {
+    const grid = modal?.querySelector('#bookmarks-grid');
+    if (!grid) return;
+    const el = grid.querySelector(`.bookmark-card-wrapper[data-id="${id}"]`);
+    if (el) el.remove();
+    bookmarkElements.delete(id);
+  }
+
+  function renderBookmarks(modal) {
+    const grid = modal?.querySelector('#bookmarks-grid');
+    if (!grid) return;
+    const t = (key) => window.I18n?.translate(key) || key;
+
+    let bookmarks = getBookmarks() || [];
+    let filtered = bookmarks.slice();
+    const activeCat = modal.querySelector('.cat-btn.active');
+    const category = activeCat ? activeCat.dataset.cat : 'all';
+    const searchInput = modal.querySelector('#search-input');
+    const searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    const sortOrder = modal.querySelector('.sort-btn.active')?.dataset.order || 'new';
+
+    if (category !== 'all') filtered = filtered.filter(b => b.type === category);
+    if (searchQuery) filtered = filtered.filter(b => b.title.toLowerCase().includes(searchQuery));
+    if (sortOrder === 'new') filtered.sort((a,b) => new Date(b.added) - new Date(a.added));
+    else filtered.sort((a,b) => new Date(a.added) - new Date(b.added));
+
+    grid.innerHTML = '';
+    bookmarkElements.clear();
+    if (!filtered.length) {
+      grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>${t('noBookmarks')}</p></div>`;
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    filtered.forEach(bm => {
+      const wrapper = createBookmarkCardElement(bm, modal);
+      fragment.appendChild(wrapper);
+      bookmarkElements.set(bm.id, wrapper);
+    });
+    grid.appendChild(fragment);
+  }
+
+  // ---- Обработка файлов ----
   async function processFiles(files, modal) {
     const t = (key) => window.I18n?.translate(key) || key;
     for (const file of files) {
@@ -315,7 +608,6 @@
         showToast(e.message, 'error');
       }
     }
-    if (modal) renderBookmarks(modal);
   }
 
   function arrayBufferToBase64(buffer) {
@@ -330,6 +622,80 @@
     return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
   }
 
+  // ---- Групповые действия в модалке ----
+  function addBatchActions(modal) {
+    const t = (key) => window.I18n?.translate(key) || key;
+    const container = modal.querySelector('.storage-actions');
+    if (!container) return;
+
+    // Кнопка "Обновить видео"
+    const refreshBtn = document.createElement('button');
+    refreshBtn.className = 'storage-btn';
+    refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> ' + (t('refreshVideos') || 'Обновить видео');
+    refreshBtn.title = 'Обновить ссылки на скачивание для всех видео';
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+      try {
+        const result = await batchUpdateVideoLinks();
+        showToast(`Обновлено: ${result.updated}, ошибок: ${result.failed}`, result.failed > 0 ? 'warning' : 'success');
+        renderBookmarks(modal);
+      } catch (e) {
+        showToast('Ошибка: ' + e.message, 'error');
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> ' + (t('refreshVideos') || 'Обновить видео');
+      }
+    });
+    container.appendChild(refreshBtn);
+
+    // Кнопка "Экспорт всех"
+    const exportAllBtn = document.createElement('button');
+    exportAllBtn.className = 'storage-btn';
+    exportAllBtn.innerHTML = '<i class="fas fa-download"></i> ' + (t('exportAll') || 'Экспорт всех');
+    exportAllBtn.addEventListener('click', () => {
+      const all = exportAllBookmarks();
+      const json = JSON.stringify(all, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `neon-bookmarks-backup-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      showToast('Экспортировано ' + all.length + ' закладок', 'success');
+    });
+    container.appendChild(exportAllBtn);
+
+    // Кнопка "Импорт JSON"
+    const importBtn = document.createElement('button');
+    importBtn.className = 'storage-btn';
+    importBtn.innerHTML = '<i class="fas fa-upload"></i> ' + (t('importJSON') || 'Импорт JSON');
+    importBtn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          try {
+            const data = JSON.parse(ev.target.result);
+            if (!Array.isArray(data)) throw new Error('Ожидается массив закладок');
+            const result = await importBookmarksBatch(data);
+            showToast(`Импортировано: ${result.added}, пропущено: ${result.skipped}`, 'success');
+            renderBookmarks(modal);
+          } catch (err) {
+            showToast('Ошибка импорта: ' + err.message, 'error');
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    });
+    container.appendChild(importBtn);
+  }
+
+  // ---- Модалка хранилища ----
   async function openStorageModal(gameContext = null) {
     const t = (key) => window.I18n?.translate(key) || key;
     const user = getCurrentUser();
@@ -361,8 +727,8 @@
           </div>
           <div class="storage-actions">
             <button class="storage-btn" id="password-btn" title="Установить пароль на хранилище"><i class="fas fa-lock"></i></button>
-            <button class="storage-btn" id="export-btn" title="Экспорт закладок"><i class="fas fa-download"></i></button>
-            <button class="storage-btn" id="import-btn" title="Импорт закладок"><i class="fas fa-upload"></i></button>
+            <button class="storage-btn" id="export-btn" title="Экспорт закладок (зашифрованный)"><i class="fas fa-download"></i></button>
+            <button class="storage-btn" id="import-btn" title="Импорт закладок (зашифрованный)"><i class="fas fa-upload"></i></button>
             <div class="search-wrapper">
               <input type="text" id="search-input" placeholder="${t('searchPlaceholder')}" class="storage-search">
             </div>
@@ -444,8 +810,12 @@
       document.head.appendChild(style);
     }
 
+    // Добавляем групповые кнопки
+    addBatchActions(modal);
+
     renderBookmarks(modal);
 
+    // Обработчики сортировки/фильтрации
     modal.querySelectorAll('.sort-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         modal.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
@@ -465,6 +835,7 @@
     const searchInput = modal.querySelector('#search-input');
     searchInput.addEventListener('input', () => renderBookmarks(modal));
 
+    // Добавление закладки (с умным определением типа)
     const addForm = modal.querySelector('#add-form');
     const toggleAddBtn = modal.querySelector('#toggle-add-btn');
     let formVisible = false;
@@ -480,11 +851,11 @@
       const url = urlInput.value.trim();
       if (!url) { showToast(t('enterText'), 'error'); return; }
       try {
-        const meta = await fetchMetadata(url);
-        const cleanedUrl = meta.cleanedUrl || url;
+        // Используем умное определение
+        const meta = await detectLinkType(url);
         await addBookmark({
-          url: cleanedUrl,
-          title: meta.title || cleanedUrl,
+          url: meta.cleanedUrl || url,
+          title: meta.title || meta.cleanedUrl || url,
           thumbnail: meta.thumbnail || null,
           embedUrl: meta.embedUrl || null,
           type: meta.type || 'link',
@@ -492,12 +863,12 @@
           postData: meta.postData || null
         });
         urlInput.value = '';
-        renderBookmarks(modal);
       } catch (e) {
         if (e.message !== 'duplicate') showToast(e.message, 'error');
       }
     });
 
+    // Drag-and-drop файлов
     const dropZone = modal.querySelector('#drop-zone');
     const fileInput = modal.querySelector('#file-input');
     const fileSelectBtn = modal.querySelector('#file-select-btn');
@@ -516,6 +887,7 @@
       if (files.length) await processFiles(files, modal);
     });
 
+    // Пароль
     modal.querySelector('#password-btn').addEventListener('click', async () => {
       const t = (key) => window.I18n?.translate(key) || key;
       const newPass = prompt('Введите новый пароль для хранилища (оставьте пустым, чтобы отключить):\n\nВНИМАНИЕ: пароль становится обязательным для доступа, даже при наличии логина и токена.');
@@ -528,6 +900,7 @@
       }
     });
 
+    // Экспорт/импорт (зашифрованный)
     modal.querySelector('#export-btn').addEventListener('click', async () => {
       const t = (key) => window.I18n?.translate(key) || key;
       const password = prompt('Введите пароль для шифрования экспортируемого файла (минимум 4 символа):');
@@ -586,17 +959,35 @@
     return { modal, closeModal: closeWithCleanup };
   }
 
+  // ---- Экспорт публичного API ----
   window._StorageUI = {
     openStorageModal,
     renderBookmarks,
-    createBookmarkCard,
+    createBookmarkCardElement,
+    addBookmarkCard,
+    removeBookmarkCard,
     processFiles,
     updateStatus,
     refreshBookmarksGrid: () => {
       const modal = window._StorageUI.currentModal;
       if (modal) renderBookmarks(modal);
     },
-    currentModal: null
+    currentModal: null,
+    updateBookmarkCard: (id, updatedBm) => {
+      const modal = window._StorageUI.currentModal;
+      if (!modal) return;
+      const wrapper = modal.querySelector(`.bookmark-card-wrapper[data-id="${id}"]`);
+      if (wrapper) {
+        const newWrapper = createBookmarkCardElement(updatedBm, modal);
+        wrapper.replaceWith(newWrapper);
+        bookmarkElements.set(id, newWrapper);
+      }
+    },
+    // Экспортируем вспомогательные функции для использования в менеджере
+    getVideoDownloadUrl,
+    recordVideoFromIframe,
+    detectLinkType,
+    parseVideoFromHtml
   };
 
   window._StorageManager.setStatusCallback(updateStatus);

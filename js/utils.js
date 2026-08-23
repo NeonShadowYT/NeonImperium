@@ -219,6 +219,38 @@
         return false;
     }
 
+    // ----- НОВЫЕ ФУНКЦИИ ШИФРОВАНИЯ -----
+    // Простой XOR с ключом (для обфускации, не криптостойкий, но усложняет чтение)
+    function xorEncrypt(data, key) {
+        let result = '';
+        for (let i = 0; i < data.length; i++) {
+            result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+        }
+        return btoa(unescape(encodeURIComponent(result)));
+    }
+
+    function xorDecrypt(encrypted, key) {
+        try {
+            const decoded = decodeURIComponent(escape(atob(encrypted)));
+            let result = '';
+            for (let i = 0; i < decoded.length; i++) {
+                result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+            }
+            return result;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function generateRandomKey(length = 32) {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=';
+        let key = '';
+        for (let i = 0; i < length; i++) {
+            key += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return key;
+    }
+
     window.Utils = {
         escapeHtml, stripHtml, createElement, formatDate,
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
@@ -226,6 +258,9 @@
         createAbortable, loadModule,
         stripMarkdownAndHtml,
         getPlainTextLength,
-        containsGitHubToken
+        containsGitHubToken,
+        xorEncrypt,
+        xorDecrypt,
+        generateRandomKey
     };
 })();

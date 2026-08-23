@@ -368,5 +368,8 @@
   "starvePlayable": "⚙️ Starve Neon is already playable. Multiplayer, cross-platform, early stage.",
   "starvePlayableQuote": "Your feedback shapes the game. Join the community and influence development.",
   "starveFollow": "📸 FOLLOW THE DEVELOPMENT",
-  "starveDeveloped": "Made with ❤️ Neon Shadow - independent developer from Russia"
+  "starveDeveloped": "Made with ❤️ Neon Shadow - independent developer from Russia",
+  "refreshVideos": "Refresh videos",
+  "exportAll": "Export all",
+  "importJSON": "Import JSON"
 }

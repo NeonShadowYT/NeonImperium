@@ -2,6 +2,7 @@
 // Управление состоянием хранилища: загрузка, сохранение, добавление, удаление, экспорт/импорт
 // Оптимизировано: кеширование Gist в localStorage, удаление byLogin/byToken при наличии пароля,
 // минимизация запросов к API, работа с лимитами.
+// Добавлено: групповые операции, фоновое обновление downloadUrl для видео.
 
 (function() {
   const {
@@ -48,6 +49,7 @@
   let cachedLastUpdated = 0;
 
   let statusCallback = null;
+  let backgroundUpdateTimer = null;
 
   function updateStatus(text, type = 'info') {
     if (statusCallback) statusCallback(text, type);
@@ -424,6 +426,7 @@
       if (bm.thumbnail) priv.thumbnail = bm.thumbnail;
       if (bm.embedUrl) priv.embedUrl = bm.embedUrl;
       if (bm.downloadUrl) priv.downloadUrl = bm.downloadUrl;
+      if (bm.downloadUrlExpires) priv.downloadUrlExpires = bm.downloadUrlExpires;
       if (bm.postData) priv.postData = bm.postData;
       if (bm.videoData) priv.videoData = bm.videoData;
       if (bm.linkData) priv.linkData = bm.linkData;
@@ -550,11 +553,132 @@
     saveDebounced();
   }
 
+  // ---- НОВЫЙ МЕТОД: обновление существующей закладки ----
+  async function updateBookmark(id, updates) {
+    await ensureStorage();
+    const idx = bookmarks.findIndex(b => b.id === id);
+    if (idx === -1) throw new Error('Bookmark not found');
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        bookmarks[idx][key] = value;
+      }
+    }
+    cachedBookmarks = bookmarks.slice();
+    triggerSave();
+    if (window._StorageUI && window._StorageUI.updateBookmarkCard) {
+      window._StorageUI.updateBookmarkCard(id, bookmarks[idx]);
+    }
+    return bookmarks[idx];
+  }
+
+  // ---- ГРУППОВЫЕ ОПЕРАЦИИ ----
+  async function batchUpdateVideoLinks() {
+    await ensureStorage();
+    const videoBookmarks = bookmarks.filter(b => b.type === 'video' && b.url);
+    let updated = 0;
+    let failed = 0;
+    for (const bm of videoBookmarks) {
+      // Пропускаем, если ссылка ещё валидна
+      if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) {
+        continue;
+      }
+      try {
+        // Используем функцию получения ссылки из UI (если она доступна)
+        const { getVideoDownloadUrl } = window._StorageUI || {};
+        if (typeof getVideoDownloadUrl === 'function') {
+          const url = await getVideoDownloadUrl(bm.url);
+          if (url) {
+            const expires = Date.now() + 24 * 60 * 60 * 1000;
+            await updateBookmark(bm.id, { downloadUrl: url, downloadUrlExpires: expires });
+            updated++;
+          } else {
+            failed++;
+          }
+        } else {
+          // fallback – просто помечаем как неудачное
+          failed++;
+        }
+      } catch (e) {
+        failed++;
+        console.warn('Failed to update video link for', bm.id, e);
+      }
+    }
+    return { updated, failed, total: videoBookmarks.length };
+  }
+
+  // ---- Фоновое обновление (запускается раз в сутки) ----
+  function startBackgroundUpdate() {
+    if (backgroundUpdateTimer) return;
+    backgroundUpdateTimer = setInterval(async () => {
+      if (!navigator.onLine) return;
+      try {
+        const result = await batchUpdateVideoLinks();
+        if (result.updated > 0) {
+          updateStatus(`Обновлено ${result.updated} видео-ссылок`, 'success');
+        }
+      } catch (e) {
+        console.warn('Background update error:', e);
+      }
+    }, 24 * 60 * 60 * 1000); // 24 часа
+  }
+
+  function stopBackgroundUpdate() {
+    if (backgroundUpdateTimer) {
+      clearInterval(backgroundUpdateTimer);
+      backgroundUpdateTimer = null;
+    }
+  }
+
+  // ---- Групповой экспорт всех закладок (без шифрования, только для резервного копирования) ----
+  function exportAllBookmarks() {
+    return bookmarks.slice();
+  }
+
+  // ---- Импорт закладок (добавление с проверкой дубликатов) ----
+  async function importBookmarksBatch(bookmarksArray) {
+    await ensureStorage();
+    let added = 0;
+    let skipped = 0;
+    for (const bm of bookmarksArray) {
+      try {
+        // Проверяем дубликат по url или saveData.hash
+        if (bm.url && bookmarks.some(b => b.url === bm.url)) {
+          skipped++;
+          continue;
+        }
+        if (bm.saveData && bm.saveData.hash && bookmarks.some(b => b.saveData && b.saveData.hash === bm.saveData.hash)) {
+          skipped++;
+          continue;
+        }
+        // Создаём новую закладку без вызова addBookmark (чтобы избежать лишних toasts)
+        const newBm = {
+          id: 'bm-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+          added: new Date().toISOString(),
+          ...bm
+        };
+        bookmarks.unshift(newBm);
+        added++;
+        if (bookmarks.length > MAX_BOOKMARKS) {
+          bookmarks.splice(MAX_BOOKMARKS);
+        }
+      } catch (e) {
+        console.warn('Import skip:', e);
+      }
+    }
+    if (added > 0) {
+      cachedBookmarks = bookmarks.slice();
+      triggerSave();
+    }
+    return { added, skipped };
+  }
+
   // ---- публичные API ----
   async function ensureStorage(forceRefresh = false) {
     if (isInitialized && !forceRefresh) return { bookmarks };
     try {
       const result = await loadOrCreateStorage(forceRefresh);
+      // Запускаем фоновое обновление после первой инициализации
+      if (!backgroundUpdateTimer) startBackgroundUpdate();
       return result;
     } catch (e) {
       console.error('Ensure storage error:', e);
@@ -599,6 +723,7 @@
       thumbnail: bookmarkData.thumbnail || null,
       embedUrl: bookmarkData.embedUrl || null,
       downloadUrl: bookmarkData.downloadUrl || null,
+      downloadUrlExpires: bookmarkData.downloadUrlExpires || null,
       postData: bookmarkData.postData || null,
       videoData: bookmarkData.videoData || null,
       linkData: bookmarkData.linkData || null,
@@ -617,8 +742,8 @@
     cachedBookmarks = bookmarks.slice();
     triggerSave();
     showToast(t('bookmarkAdded'), 'success');
-    if (window._StorageUI && window._StorageUI.refreshBookmarksGrid) {
-      window._StorageUI.refreshBookmarksGrid();
+    if (window._StorageUI && window._StorageUI.addBookmarkCard) {
+      window._StorageUI.addBookmarkCard(newBookmark);
     }
     return newBookmark;
   }
@@ -626,12 +751,14 @@
   async function removeBookmark(id) {
     await ensureStorage();
     const t = (key) => window.I18n?.translate(key) || key;
-    bookmarks = bookmarks.filter(b => b.id !== id);
+    const idx = bookmarks.findIndex(b => b.id === id);
+    if (idx === -1) return;
+    bookmarks.splice(idx, 1);
     cachedBookmarks = bookmarks.slice();
     triggerSave();
     showToast(t('bookmarkDeleted'), 'success');
-    if (window._StorageUI && window._StorageUI.refreshBookmarksGrid) {
-      window._StorageUI.refreshBookmarksGrid();
+    if (window._StorageUI && window._StorageUI.removeBookmarkCard) {
+      window._StorageUI.removeBookmarkCard(id);
     }
   }
 
@@ -665,6 +792,7 @@
     hasPassword = false;
     isInitialized = false;
     sessionStorage.removeItem(PASSWORD_CACHE_KEY);
+    stopBackgroundUpdate();
     if (!silent) showToast('Хранилище сброшено', 'info');
   }
 
@@ -804,6 +932,7 @@
     ensureStorage,
     addBookmark,
     removeBookmark,
+    updateBookmark,
     loadBookmarks,
     resetStorage,
     setStoragePassword,
@@ -812,6 +941,12 @@
     setStatusCallback,
     getBookmarks: () => bookmarks,
     setBookmarks: (newBookmarks) => { bookmarks = newBookmarks; cachedBookmarks = newBookmarks.slice(); },
-    setRefreshGridCallback: (cb) => { window._StorageManager.refreshGridCallback = cb; }
+    setRefreshGridCallback: (cb) => { window._StorageManager.refreshGridCallback = cb; },
+    // Новые групповые методы
+    batchUpdateVideoLinks,
+    exportAllBookmarks,
+    importBookmarksBatch,
+    startBackgroundUpdate,
+    stopBackgroundUpdate
   };
 })();

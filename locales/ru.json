@@ -358,5 +358,8 @@
   "starvePlayable": "⚙️ Starve Neon уже играбелен. Мультиплеер, кроссплатформа, ранняя стадия.",
   "starvePlayableQuote": "Твой отзыв меняет игру. Присоединяйся к сообществу и влияй на развитие.",
   "starveFollow": "📸 СЛЕДИ ЗА РАЗРАБОТКОЙ",
-  "starveDeveloped": "Разработано с ❤️ Neon Shadow - независимым разработчиком из России"
+  "starveDeveloped": "Разработано с ❤️ Neon Shadow - независимым разработчиком из России",
+  "refreshVideos": "Обновить видео",
+  "exportAll": "Экспорт всех",
+  "importJSON": "Импорт JSON"
 }

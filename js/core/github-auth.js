@@ -1,18 +1,23 @@
 // js/core/github-auth.js – с локализацией, обновление меню при смене языка
 (function() {
-  const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule } = window.Utils;
+  const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule, xorEncrypt, xorDecrypt, generateRandomKey } = window.Utils;
   const GitHubClient = window.GitHubClient;
   const client = window.GitHubAPIClient;
 
-  const TOKEN_KEY = 'github_token';
+  const TOKEN_KEY = 'github_token';               // sessionStorage
+  const TOKEN_LOCAL_KEY = 'github_token_local';   // localStorage (обфусцированный)
   const USER_CACHE_KEY = 'github_user';
   const SCOPES_CACHE_KEY = 'github_scopes';
   const LAST_LOGIN_ATTEMPT_KEY = 'last_login_attempt';
   const LOGIN_COOLDOWN = 10000;
+  const REMEMBER_ME_KEY = 'remember_me'; // флаг в localStorage
+
+  // Фиксированная соль для обфускации (не для криптозащиты, а чтобы скрыть от глаз)
+  const OBFUSCATION_SALT = 'neon-github-token-salt-2024';
 
   let currentUserLogin = null;
   let currentScopes = [];
-  let modal, tokenInput, tokenToggle, profileContainer;
+  let modal, tokenInput, tokenToggle, profileContainer, rememberCheckbox;
 
   document.addEventListener('DOMContentLoaded', () => {
     const navBar = document.querySelector('.nav-bar');
@@ -33,11 +38,9 @@
       }
     });
 
-    // Обновление интерфейса при смене языка
     window.addEventListener('languageChanged', () => {
       refreshProfileMenu();
     });
-    // Также при загрузке переводов
     window.addEventListener('languageLoaded', () => {
       refreshProfileMenu();
     });
@@ -56,55 +59,70 @@
     }
   }
 
+  // Проверка токена и восстановление сессии
   async function restoreSession() {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (!token) {
-      renderLoggedOutUI();
-      return;
-    }
-
-    updateClientToken(token);
-
-    const cachedUser = sessionStorage.getItem(USER_CACHE_KEY);
-    const cachedScopes = sessionStorage.getItem(SCOPES_CACHE_KEY);
-    if (cachedUser) {
+    // 1. Пытаемся взять токен из sessionStorage (приоритет)
+    let token = sessionStorage.getItem(TOKEN_KEY);
+    if (token) {
       try {
-        const user = JSON.parse(cachedUser);
-        currentUserLogin = user.login;
-        currentScopes = cachedScopes ? JSON.parse(cachedScopes) : [];
-        renderLoggedInUI(user);
-        if (window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(user.login)) preloadAdminModules();
-        return;
-      } catch (e) {}
+        const userData = await silentValidateToken(token);
+        if (userData) {
+          currentUserLogin = userData.user.login;
+          currentScopes = userData.scopes;
+          sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
+          sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
+          renderLoggedInUI(userData.user);
+          if (window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(userData.user.login)) preloadAdminModules();
+          window.dispatchEvent(new CustomEvent('github-login-success', {
+            detail: { login: userData.user.login, scopes: userData.scopes }
+          }));
+          return;
+        }
+      } catch (err) {
+        if (err.message === 'unauthorized' || err.message?.includes('401')) {
+          sessionStorage.removeItem(TOKEN_KEY);
+        }
+      }
     }
 
-    try {
-      const userData = await silentValidateToken(token);
-      if (userData) {
-        currentUserLogin = userData.user.login;
-        currentScopes = userData.scopes;
-        sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
-        sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
-        renderLoggedInUI(userData.user);
-        if (window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(userData.user.login)) preloadAdminModules();
-        window.dispatchEvent(new CustomEvent('github-login-success', {
-          detail: { login: userData.user.login, scopes: userData.scopes }
-        }));
-        return;
+    // 2. Если нет в sessionStorage, пробуем localStorage (если включено "запомнить меня")
+    const remember = localStorage.getItem(REMEMBER_ME_KEY) === 'true';
+    if (remember) {
+      const obfuscated = localStorage.getItem(TOKEN_LOCAL_KEY);
+      if (obfuscated) {
+        // Расшифровка (обфускация) с фиксированной солью
+        const decrypted = xorDecrypt(obfuscated, OBFUSCATION_SALT);
+        if (decrypted) {
+          token = decrypted;
+          try {
+            const userData = await silentValidateToken(token);
+            if (userData) {
+              // Сохраняем токен в sessionStorage для текущей вкладки
+              sessionStorage.setItem(TOKEN_KEY, token);
+              currentUserLogin = userData.user.login;
+              currentScopes = userData.scopes;
+              sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
+              sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
+              renderLoggedInUI(userData.user);
+              if (window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(userData.user.login)) preloadAdminModules();
+              window.dispatchEvent(new CustomEvent('github-login-success', {
+                detail: { login: userData.user.login, scopes: userData.scopes }
+              }));
+              return;
+            }
+          } catch (err) {
+            if (err.message === 'unauthorized' || err.message?.includes('401')) {
+              // Токен недействителен – удаляем всё
+              localStorage.removeItem(TOKEN_LOCAL_KEY);
+              localStorage.removeItem(REMEMBER_ME_KEY);
+              sessionStorage.removeItem(TOKEN_KEY);
+            }
+          }
+        }
       }
-    } catch (err) {
-      if (err.message === 'unauthorized' || err.message?.includes('401')) {
-        localStorage.removeItem(TOKEN_KEY);
-        sessionStorage.removeItem(USER_CACHE_KEY);
-        sessionStorage.removeItem(SCOPES_CACHE_KEY);
-        updateClientToken(null);
-        renderLoggedOutUI();
-        window.UIUtils?.showToast('Токен недействителен. Войдите снова.', 'error');
-        return;
-      }
-      renderLoggedOutUI();
-      return;
     }
+
+    // 3. Если ничего не вышло – выходим
     renderLoggedOutUI();
   }
 
@@ -217,7 +235,7 @@
           </p>
         </div>
 
-        <div style="position: relative; margin-bottom: 24px;">
+        <div style="position: relative; margin-bottom: 16px;">
           <input
             type="password"
             id="github-token-input"
@@ -256,6 +274,16 @@
           >
             <i class="fas fa-eye"></i>
           </button>
+        </div>
+
+        <div style="display: flex; align-items: center; margin-bottom: 16px; gap: 8px;">
+          <input type="checkbox" id="remember-me-checkbox" style="width: 18px; height: 18px; cursor: pointer;">
+          <label for="remember-me-checkbox" style="color: var(--text-secondary); font-size: 14px; cursor: pointer;">
+            ${t('rememberMe') || 'Запомнить меня (сохранить сессию)'}
+            <span style="font-size: 12px; color: var(--text-secondary); opacity:0.6; display:block;">
+              ${t('rememberMeHint') || 'Токен будет сохранён в браузере (обфусцированно)'}
+            </span>
+          </label>
         </div>
 
         <div id="modal-error-container" style="margin-bottom: 16px;"></div>
@@ -346,6 +374,7 @@
 
     tokenInput = document.getElementById('github-token-input');
     tokenToggle = document.getElementById('token-toggle');
+    rememberCheckbox = document.getElementById('remember-me-checkbox');
     tokenToggle.addEventListener('click', () => {
       const isPassword = tokenInput.type === 'password';
       tokenInput.type = isPassword ? 'text' : 'password';
@@ -374,6 +403,7 @@
     tokenInput.value = '';
     tokenInput.type = 'password';
     tokenToggle.innerHTML = '<i class="fas fa-eye"></i>';
+    if (rememberCheckbox) rememberCheckbox.checked = false;
   }
 
   async function validateAndLogin(token, save = true) {
@@ -394,12 +424,24 @@
       if (!userData) throw new Error('empty');
       currentUserLogin = userData.user.login;
       currentScopes = userData.scopes;
-      if (save) {
-        localStorage.setItem(TOKEN_KEY, token);
-        sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
-        sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
-        updateClientToken(token);
+
+      // Всегда сохраняем в sessionStorage (для текущей вкладки)
+      sessionStorage.setItem(TOKEN_KEY, token);
+      sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(userData.user));
+      sessionStorage.setItem(SCOPES_CACHE_KEY, JSON.stringify(userData.scopes));
+
+      // Если включено "запомнить меня" – сохраняем обфусцированный токен в localStorage
+      const remember = rememberCheckbox && rememberCheckbox.checked;
+      if (remember) {
+        const obfuscated = xorEncrypt(token, OBFUSCATION_SALT);
+        localStorage.setItem(TOKEN_LOCAL_KEY, obfuscated);
+        localStorage.setItem(REMEMBER_ME_KEY, 'true');
+      } else {
+        localStorage.removeItem(TOKEN_LOCAL_KEY);
+        localStorage.removeItem(REMEMBER_ME_KEY);
       }
+
+      updateClientToken(token);
       renderLoggedInUI(userData.user);
       closeModal();
       window.dispatchEvent(new CustomEvent('github-login-success', {
@@ -411,7 +453,9 @@
       if (err.name === 'AbortError') {
         window.UIUtils?.showToast('Таймаут соединения. Попробуйте снова.', 'error');
       } else if (err.message === 'unauthorized' || err.message?.includes('401')) {
-        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(TOKEN_LOCAL_KEY);
+        localStorage.removeItem(REMEMBER_ME_KEY);
+        sessionStorage.removeItem(TOKEN_KEY);
         sessionStorage.removeItem(USER_CACHE_KEY);
         sessionStorage.removeItem(SCOPES_CACHE_KEY);
         updateClientToken(null);
@@ -444,7 +488,6 @@
         </div>
         ${storageItem}
         <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> ${t('ratePanel')}</div>
-        <div class="profile-dropdown-item" data-action="revoke-token"><i class="fas fa-external-link-alt"></i> ${t('manageTokens')}</div>
         <div class="profile-dropdown-divider"></div>
         <div class="profile-dropdown-item" data-action="logout"><i class="fas fa-sign-out-alt"></i> ${t('logout')}</div>
       </div>
@@ -518,7 +561,9 @@
         window.open('https://github.com/settings/tokens', '_blank');
         break;
       case 'logout':
-        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(TOKEN_LOCAL_KEY);
+        localStorage.removeItem(REMEMBER_ME_KEY);
+        sessionStorage.removeItem(TOKEN_KEY);
         sessionStorage.removeItem(USER_CACHE_KEY);
         sessionStorage.removeItem(SCOPES_CACHE_KEY);
         updateClientToken(null);
@@ -536,10 +581,8 @@
     window.Utils.loadModule('js/features/ui-feedback.js').catch(() => {});
   }
 
-  // ==== НОВОЕ: перерисовка меню при загрузке/смене языка ====
   function refreshProfileMenu() {
-    // Если пользователь залогинен – перерисовываем залогиненное меню, иначе – выходное
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = sessionStorage.getItem(TOKEN_KEY);
     if (token && currentUserLogin) {
       const user = sessionStorage.getItem(USER_CACHE_KEY);
       if (user) {
@@ -555,7 +598,7 @@
 
   window.GithubAuth = {
     getCurrentUser: () => currentUserLogin,
-    getToken: () => localStorage.getItem(TOKEN_KEY),
+    getToken: () => sessionStorage.getItem(TOKEN_KEY),
     getScopes: () => currentScopes,
     hasScope: scope => currentScopes.includes(scope),
     isAdmin: () => currentUserLogin && window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(currentUserLogin),
