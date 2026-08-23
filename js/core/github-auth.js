@@ -628,11 +628,33 @@
         window.UIUtils?.showToast(`Вы ${currentUserLogin}, scopes: ${currentScopes.join(', ') || 'нет'}`, 'info', 6000);
         break;
       case 'storage':
-        if (!currentScopes.includes('gist')) return window.UIUtils?.showToast(t('needGistScope'), 'error');
-        if (!window.BookmarkStorage) {
-          try { await window.Utils.loadModule('js/features/storage.js'); } catch { return window.UIUtils?.showToast(t('loadModulesError'), 'error'); }
+        if (!currentScopes.includes('gist')) {
+          window.UIUtils?.showToast(t('needGistScope'), 'error');
+          return;
         }
-        window.BookmarkStorage?.openStorageModal();
+        if (!window.BookmarkStorage) {
+          try {
+            if (typeof window.loadStorageModules === 'function') {
+              await window.loadStorageModules();
+            } else {
+              // fallback: загружаем индексный модуль
+              await window.Utils.loadModule('js/features/storage/index.js');
+            }
+          } catch (e) {
+            console.warn('Storage load error:', e);
+            window.UIUtils?.showToast(t('loadModulesError'), 'error');
+            return;
+          }
+        }
+        // После загрузки модуля, если всё ещё нет, пробуем ещё раз подождать
+        if (!window.BookmarkStorage) {
+          await new Promise(r => setTimeout(r, 100));
+        }
+        if (window.BookmarkStorage && typeof window.BookmarkStorage.openStorageModal === 'function') {
+          window.BookmarkStorage.openStorageModal();
+        } else {
+          window.UIUtils?.showToast(t('loadModulesError'), 'error');
+        }
         break;
       case 'rate-panel':
         if (window.RateLimits) {
