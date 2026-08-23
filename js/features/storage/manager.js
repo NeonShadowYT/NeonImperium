@@ -3,6 +3,7 @@
 // Оптимизировано: поиск существующего Gist при потере ID, приоритет пароля,
 // цикл ввода пароля (до 3 попыток), отказоустойчивость.
 // Хеш токена не хранится в Gist – только в sessionStorage для проверки изменений.
+// saveData (бинарники) не шифруются.
 
 (function() {
   const {
@@ -274,7 +275,6 @@
   async function processGistPayload(payload, user, token) {
     const remoteUpdated = payload.lastUpdated || 0;
     let masterKeyArray = null;
-    let usedMethod = null;
     const hasPasswordBlock = !!payload.masterKeyEncrypted?.byPassword;
     hasPassword = hasPasswordBlock;
 
@@ -286,7 +286,6 @@
         try {
           const keyPassword = await deriveKeyFromString(cachedPassword);
           masterKeyArray = await decryptData(payload.masterKeyEncrypted.byPassword, keyPassword);
-          usedMethod = 'password';
           // успешно, возвращаем результат
           return buildResult(masterKeyArray, payload, remoteUpdated);
         } catch (e) {
@@ -303,7 +302,7 @@
 
       while (attempts < MAX_ATTEMPTS) {
         const input = await promptPassword(
-          `Введите пароль для доступа к хранилищу (попытка ${attempts+1}/${MAX_ATTEMPTS}):`
+          `Хранилище защищено паролем. Введите пароль для доступа (попытка ${attempts+1}/${MAX_ATTEMPTS}):`
         );
         if (input === null) {
           cancelled = true;
@@ -319,7 +318,6 @@
         try {
           const keyPassword = await deriveKeyFromString(password);
           masterKeyArray = await decryptData(payload.masterKeyEncrypted.byPassword, keyPassword);
-          usedMethod = 'password';
           // Успех – сохраняем пароль в кеш
           sessionStorage.setItem(PASSWORD_CACHE_KEY, password);
           break;
@@ -347,6 +345,7 @@
             lastUpdated: newStorage.lastUpdated
           };
         } else {
+          // Пользователь отказался от сброса – бросаем исключение, чтобы не создавать новый Gist
           throw new Error('Доступ к хранилищу отклонён. Невозможно загрузить данные.');
         }
       }
@@ -376,8 +375,6 @@
     try {
       const keyToken = await deriveKeyFromString(token);
       masterKeyArray = await decryptData(encryptedByToken, keyToken);
-      usedMethod = 'token';
-
       // Проверяем, изменился ли токен (по локальному хешу)
       const currentTokenHash = await hashString(token);
       const storedHash = getStoredTokenHash();
