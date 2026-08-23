@@ -1,6 +1,6 @@
 // js/core/github-auth.js – с локализацией, обновление меню при смене языка
-// Исправлено: модалка теперь прокручивается, влезает в экран, после выхода кнопка входа работает
-// Стилизован скроллбар, чекбокс, добавлена ссылка на создание токена
+// Упрощена модалка: чекбокс без пояснений, аккордеон содержит всю информацию
+// Добавлен перевод для ссылки "Создать классический токен"
 
 (function() {
   const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule, xorEncrypt, xorDecrypt, generateRandomKey } = window.Utils;
@@ -30,7 +30,6 @@
     const langSwitcher = document.querySelector('.lang-switcher');
     navBar.insertBefore(profileContainer, langSwitcher || null);
 
-    // Ждём загрузку переводов перед созданием модалки
     if (window.I18n && window.I18n.getCurrentLang()) {
       createLoginModal();
     } else {
@@ -187,7 +186,6 @@
         padding: 32px 28px;
         position: relative;
         overflow: hidden;
-        transition: transform 0.3s, opacity 0.3s;
       ">
         <div style="
           position: absolute;
@@ -305,14 +303,14 @@
           </button>
         </div>
 
-        <!-- Ссылка на создание токена -->
+        <!-- Ссылка на создание токена (переводимая) -->
         <div style="text-align: right; margin-bottom: 12px; font-size: 13px;">
           <a href="https://github.com/settings/tokens/new" target="_blank" style="color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent);">
-            <i class="fas fa-external-link-alt"></i> Создать классический токен
+            <i class="fas fa-external-link-alt"></i> <span data-lang="createToken">${t('createToken')}</span>
           </a>
         </div>
 
-        <!-- Кастомный чекбокс "Запомни меня" -->
+        <!-- Чекбокс "Запомнить меня" (без доп. пояснений) -->
         <div style="display: flex; align-items: center; margin-bottom: 16px; gap: 10px;">
           <label class="custom-checkbox" style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-secondary); font-size: 14px;">
             <input type="checkbox" id="remember-me-checkbox" style="display: none;">
@@ -328,7 +326,6 @@
               flex-shrink: 0;
             "></span>
             <span data-lang="rememberMe">${t('rememberMe')}</span>
-            <span style="font-size: 12px; color: var(--text-secondary); opacity:0.6; margin-left: 4px;" data-lang="rememberMeHint">${t('rememberMeHint')}</span>
           </label>
         </div>
 
@@ -451,7 +448,7 @@
         #why-need-content {
           transition: opacity 0.3s, transform 0.3s;
         }
-        /* Стилизация скроллбара модалки */
+        /* Стилизация скроллбара */
         .modal .modal-content::-webkit-scrollbar {
           width: 6px;
         }
@@ -467,7 +464,7 @@
           scrollbar-width: thin;
           scrollbar-color: var(--accent) rgba(0,0,0,0.1);
         }
-        /* Стиль ссылки создания токена */
+        /* Ссылка создания токена */
         .modal .modal-content a[href*="settings/tokens"] {
           color: var(--accent);
           text-decoration: none;
@@ -507,7 +504,6 @@
       submitBtn.style.setProperty('--ripple-y', y + '%');
     });
 
-    // Обновляем тексты при загрузке переводов
     updateLoginModalTexts();
   }
 
@@ -525,12 +521,13 @@
         }
       }
     });
-    // Обновляем заголовок
     const title = modal.querySelector('#github-modal-title');
     if (title) title.textContent = t('githubLoginTitle');
-    // Обновляем содержимое аккордеона
     const content = modal.querySelector('#why-need-content');
     if (content) content.innerHTML = t('loginDescription');
+    // Обновляем ссылку
+    const tokenLink = modal.querySelector('a[href*="settings/tokens/new"] span[data-lang="createToken"]');
+    if (tokenLink) tokenLink.textContent = t('createToken');
   }
 
   function closeModal() {
@@ -547,7 +544,6 @@
         checkmark.innerHTML = '';
       }
     }
-    // Сворачиваем аккордеон
     const content = modal.querySelector('#why-need-content');
     if (content) content.style.display = 'none';
     const icon = modal.querySelector('#why-need-toggle span:last-child');

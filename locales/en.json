@@ -330,6 +330,8 @@
   "cacheCleared": "All cache cleared",
   "staleCacheCleared": "Stale cache cleared",
   "history": "History",
+  "cacheNote": "* Limits, history, license and tokens are NOT deleted.",
+  "cacheDescription": "Temporary data: GitHub API responses, image previews, video parsing results. Clearing does not affect your bookmarks, limits, or action history.",
 
   "starveDetailedTitle": "⚔️ WOKE UP IN THE RUINS",
   "starveDetailedDesc1": "No memory, no gear, no allies.",
@@ -372,7 +374,7 @@
   "refreshVideos": "Refresh videos",
   "exportAll": "Export all",
   "importJSON": "Import JSON",
-  "rememberMe": "Remember me (keep session)",
-  "rememberMeHint": "Token will be stored in browser (obfuscated)",
-  "loginDescription": "To fully participate in the community you need a GitHub token.\n\nRequired scopes:\n• repo – create and edit posts, comments, reactions.\n• gist – personal bookmark storage.\n\nIf you provide only one of the scopes, the corresponding features will be unavailable. Without a token you can only read content.\n\nUse a classic token – it gives full control over your repositories, but it's safe because the token is only sent to the GitHub API and stored locally in encrypted form."
+  "rememberMe": "Remember me",
+  "createToken": "Create classic token",
+  "loginDescription": "To fully participate in the community you need a GitHub token.\n\nRequired scopes:\n• repo – create and edit posts, comments, reactions.\n• gist – personal bookmark storage.\n\nIf you provide only one of the scopes, the corresponding features will be unavailable. Without a token you can only read content.\n\n🔒 **Security:** token is stored locally in encrypted form (obfuscated) and sent only to the GitHub API. We do not store it on our servers. You can always revoke the token in your GitHub settings."
 }
