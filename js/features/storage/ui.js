@@ -3,6 +3,7 @@
 // Оптимизировано: добавление/удаление без полной перерисовки, кеширование downloadUrl с TTL
 // Добавлено: групповые операции, запись видео через MediaRecorder, парсинг HTML, офлайн-кеширование
 // Исправлено: клик по видео открывает модальный плеер, кнопка записи минималистична
+// Добавлена прокси-загрузка видео через allorigins.win
 
 (function() {
   const { escapeHtml, formatDate, loadModule, createElement, debounce } = window.GithubCore || {};
@@ -46,7 +47,7 @@
     return title.slice(0, maxLength) + '…';
   }
 
-  // ---- Расширенное получение ссылки на скачивание с кешированием ----
+  // ---- Расширенное получение ссылки на скачивание с кешированием + прокси ----
   async function getVideoDownloadUrl(url, forceRefresh = false) {
     if (!url) return null;
 
@@ -173,6 +174,7 @@
       }
     ];
 
+    // Пробуем все API
     for (const api of apis) {
       try {
         let requestUrl;
@@ -228,6 +230,34 @@
         console.warn('[Storage] API error:', e);
         continue;
       }
+    }
+
+    // Если ничего не получилось, пробуем прокси через allorigins для парсинга HTML
+    try {
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+      if (response.ok) {
+        const html = await response.text();
+        // Ищем ссылку на видео в HTML
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        // Ищем video тег с src
+        const videoEl = doc.querySelector('video[src]');
+        if (videoEl && videoEl.src) {
+          return videoEl.src;
+        }
+        // Ищем source
+        const source = doc.querySelector('source[src]');
+        if (source && source.src) {
+          return source.src;
+        }
+        // Ищем meta og:video
+        const meta = doc.querySelector('meta[property="og:video"]');
+        if (meta && meta.content) {
+          return meta.content;
+        }
+      }
+    } catch (e) {
+      console.warn('[Storage] Proxy fallback failed:', e);
     }
 
     return null;

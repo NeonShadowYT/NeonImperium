@@ -15,6 +15,10 @@
 
         setToken(token) {
             this.token = token;
+            // Сбрасываем кеш для запросов к API, чтобы использовать новый токен
+            // Это важно, чтобы после логина запросы шли с правильной авторизацией
+            window.GithubCore?.cacheRemoveByPrefix('gh_api_/repos/');
+            console.log('[GitHubClient] Токен обновлён, кеш API очищен');
         }
 
         getToken() {

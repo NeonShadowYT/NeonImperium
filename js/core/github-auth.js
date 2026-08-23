@@ -1,4 +1,5 @@
 // js/core/github-auth.js – с локализацией, обновление меню при смене языка
+// Исправлено: модалка теперь прокручивается, влезает в экран, после выхода кнопка входа работает
 (function() {
   const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule, xorEncrypt, xorDecrypt, generateRandomKey } = window.Utils;
   const GitHubClient = window.GitHubClient;
@@ -166,11 +167,13 @@
       align-items: center;
       justify-content: center;
       animation: modalFadeIn 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
+      padding: 20px;
+      box-sizing: border-box;
     `;
     modal.innerHTML = `
       <div class="modal-content" style="
         max-width: 480px;
-        width: 90%;
+        width: 100%;
         max-height: 90vh;
         overflow-y: auto;
         background: var(--glass-bg);
@@ -251,6 +254,8 @@
             color: var(--text-secondary);
             white-space: pre-wrap;
             word-break: break-word;
+            max-height: 200px;
+            overflow-y: auto;
           ">
             ${t('loginDescription')}
           </div>
@@ -422,6 +427,22 @@
         }
         #why-need-content {
           transition: opacity 0.3s, transform 0.3s;
+        }
+        /* Исправление для прокрутки модалки */
+        .modal .modal-content {
+          max-height: 90vh;
+          overflow-y: auto;
+        }
+        .modal .modal-content::-webkit-scrollbar {
+          width: 6px;
+        }
+        .modal .modal-content::-webkit-scrollbar-track {
+          background: rgba(0,0,0,0.1);
+          border-radius: 10px;
+        }
+        .modal .modal-content::-webkit-scrollbar-thumb {
+          background: var(--accent);
+          border-radius: 10px;
         }
       `;
       document.head.appendChild(style);
@@ -616,7 +637,7 @@
       case 'login':
         if (!modal) createLoginModal();
         modal.classList.add('active');
-        tokenInput.focus();
+        if (tokenInput) tokenInput.focus();
         break;
       case 'about':
         window.UIUtils?.showToast(t('githubWarning'), 'info', 8000);
@@ -637,7 +658,6 @@
             if (typeof window.loadStorageModules === 'function') {
               await window.loadStorageModules();
             } else {
-              // fallback: загружаем индексный модуль
               await window.Utils.loadModule('js/features/storage/index.js');
             }
           } catch (e) {
@@ -646,7 +666,6 @@
             return;
           }
         }
-        // После загрузки модуля, если всё ещё нет, пробуем ещё раз подождать
         if (!window.BookmarkStorage) {
           await new Promise(r => setTimeout(r, 100));
         }

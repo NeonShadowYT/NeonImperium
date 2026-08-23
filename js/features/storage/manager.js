@@ -874,6 +874,7 @@
     }
   }
 
+  // ---- addBookmark с передачей модалки для UI ----
   async function addBookmark(bookmarkData) {
     await ensureStorage();
     const t = (key) => window.I18n?.translate(key) || key;
@@ -930,8 +931,11 @@
     cachedBookmarks = bookmarks.slice();
     triggerSave();
     showToast(t('bookmarkAdded'), 'success');
-    if (window._StorageUI && window._StorageUI.addBookmarkCard) {
-      window._StorageUI.addBookmarkCard(newBookmark);
+
+    // Добавляем карточку в UI, если модалка открыта
+    const modal = window._StorageUI?.currentModal;
+    if (window._StorageUI && window._StorageUI.addBookmarkCard && modal) {
+      window._StorageUI.addBookmarkCard(newBookmark, modal);
     }
     return newBookmark;
   }
@@ -945,8 +949,9 @@
     cachedBookmarks = bookmarks.slice();
     triggerSave();
     showToast(t('bookmarkDeleted'), 'success');
-    if (window._StorageUI && window._StorageUI.removeBookmarkCard) {
-      window._StorageUI.removeBookmarkCard(id);
+    const modal = window._StorageUI?.currentModal;
+    if (window._StorageUI && window._StorageUI.removeBookmarkCard && modal) {
+      window._StorageUI.removeBookmarkCard(id, modal);
     }
   }
 

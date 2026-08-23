@@ -1,5 +1,6 @@
 // js/features/storage/metadata.js
 // Извлечение метаданных из URL, парсинг видео, очистка URL от трекеров
+// Добавлена поддержка прокси allorigins.win для получения видео с сайтов без oembed
 
 (function() {
   const { showToast } = window.UIUtils || {};
@@ -103,9 +104,6 @@
     let videoData = null;
 
     // YouTube (все вариации)
-    // 1. youtube.com/watch?v=ID
-    // 2. youtu.be/ID
-    // 3. youtube.com/embed/ID
     let ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
     if (ytMatch) {
       const id = ytMatch[1];
@@ -193,8 +191,7 @@
           `${baseUrl}player.php?viewkey=${key}`
         ];
         let foundEmbed = null;
-        // Пытаемся найти рабочий embed через HEAD (но CORS может мешать – просто берём первый)
-        foundEmbed = candidates[0]; // по умолчанию embed
+        foundEmbed = candidates[0];
         embedUrl = foundEmbed;
         videoData = { service: 'custom', embedUrl };
         return { embedUrl, type, videoData };
@@ -204,7 +201,7 @@
     return null;
   }
 
-  // ---- основная функция fetchMetadata ----
+  // ---- основная функция fetchMetadata с прокси ----
   async function fetchMetadata(url) {
     const cleanedUrl = cleanUrl(url);
     
@@ -213,7 +210,7 @@
     if (parsed && parsed.embedUrl) {
       let title = cleanedUrl;
       let thumbnail = null;
-      // Пытаемся получить заголовок и превью через oembed (для улучшения)
+      // Пытаемся получить заголовок и превью через oembed
       try {
         const resp = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(cleanedUrl)}`, { signal: AbortSignal.timeout(3000) });
         if (resp.ok) {
@@ -247,6 +244,27 @@
       // Для YouTube можно сгенерировать превью сами
       if (!thumbnail && parsed.videoData && parsed.videoData.service === 'youtube' && parsed.videoData.id) {
         thumbnail = `https://img.youtube.com/vi/${parsed.videoData.id}/mqdefault.jpg`;
+      }
+      // Если всё ещё нет превью, пробуем через прокси allorigins для парсинга HTML
+      if (!thumbnail) {
+        try {
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanedUrl)}`;
+          const proxyResp = await fetch(proxyUrl, { signal: AbortSignal.timeout(5000) });
+          if (proxyResp.ok) {
+            const html = await proxyResp.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            // Ищем og:image
+            const ogImage = doc.querySelector('meta[property="og:image"]');
+            if (ogImage && ogImage.content) thumbnail = ogImage.content;
+            // Или thumbnail из microdata
+            if (!thumbnail) {
+              const img = doc.querySelector('img[itemprop="thumbnailUrl"]');
+              if (img && img.src) thumbnail = img.src;
+            }
+          }
+        } catch (e) {
+          console.warn('Proxy fetch for thumbnail failed:', e);
+        }
       }
       return {
         title: title,
@@ -305,6 +323,52 @@
             embedUrl: embedHtml ? extractIframeSrc(embedHtml) : null,
             type: data.data.embed?.type === 'video' ? 'video' : 'link',
             videoData: data.data.embed?.type === 'video' ? { service: 'microlink', embedUrl: embedHtml } : null,
+            cleanedUrl: cleanedUrl
+          };
+        }
+      }
+    } catch (e) {}
+
+    // Если ничего не найдено, пробуем прокси allorigins для получения HTML и поиска видео
+    try {
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanedUrl)}`;
+      const proxyResp = await fetch(proxyUrl, { signal: AbortSignal.timeout(5000) });
+      if (proxyResp.ok) {
+        const html = await proxyResp.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        // Ищем video
+        const videoEl = doc.querySelector('video[src]');
+        if (videoEl && videoEl.src) {
+          return {
+            title: doc.querySelector('title')?.textContent || cleanedUrl,
+            thumbnail: null,
+            embedUrl: videoEl.src,
+            type: 'video',
+            videoData: { service: 'proxy', url: videoEl.src },
+            cleanedUrl: cleanedUrl
+          };
+        }
+        // Ищем source
+        const source = doc.querySelector('source[src]');
+        if (source && source.src) {
+          return {
+            title: doc.querySelector('title')?.textContent || cleanedUrl,
+            thumbnail: null,
+            embedUrl: source.src,
+            type: 'video',
+            videoData: { service: 'proxy', url: source.src },
+            cleanedUrl: cleanedUrl
+          };
+        }
+        // Ищем og:video
+        const ogVideo = doc.querySelector('meta[property="og:video"]');
+        if (ogVideo && ogVideo.content) {
+          return {
+            title: doc.querySelector('title')?.textContent || cleanedUrl,
+            thumbnail: doc.querySelector('meta[property="og:image"]')?.content || null,
+            embedUrl: ogVideo.content,
+            type: 'video',
+            videoData: { service: 'proxy', url: ogVideo.content },
             cleanedUrl: cleanedUrl
           };
         }

@@ -674,6 +674,17 @@
             const retryBtn = container.querySelector('#news-retry-btn');
             if (retryBtn) retryBtn.innerHTML = `<i class="fas fa-sync"></i> ${t('newsRetryVideo')}`;
         });
+
+        // ---- ОБРАБОТКА ВХОДА/ВЫХОДА ДЛЯ ОБНОВЛЕНИЯ ЛЕНТЫ ----
+        window.addEventListener('github-login-success', () => {
+            // Сбрасываем кеш и перезагружаем
+            window.GithubCore.cacheRemoveByPrefix(CACHE_KEY);
+            refreshNewsFeed();
+        });
+        window.addEventListener('github-logout', () => {
+            window.GithubCore.cacheRemoveByPrefix(CACHE_KEY);
+            refreshNewsFeed();
+        });
     }
 
     function refreshNewsFeed() {
