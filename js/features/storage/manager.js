@@ -1,8 +1,7 @@
 // js/features/storage/manager.js
 // Управление состоянием хранилища: загрузка, сохранение, добавление, удаление, экспорт/импорт
-// Оптимизировано: кеширование Gist в localStorage, удаление byLogin/byToken при наличии пароля,
-// минимизация запросов к API, работа с лимитами.
-// Добавлено: групповые операции, фоновое обновление downloadUrl для видео.
+// Оптимизировано: кеширование Gist в localStorage, удаление byLogin, приоритет пароля,
+// цикл ввода пароля (до 3 попыток), отказоустойчивость.
 
 (function() {
   const {
@@ -207,42 +206,178 @@
     const hasPasswordBlock = !!payload.masterKeyEncrypted?.byPassword;
     hasPassword = hasPasswordBlock;
 
+    // ---------- 1. Если есть byPassword – приоритет пароля ----------
     if (hasPasswordBlock) {
-      let password = sessionStorage.getItem(PASSWORD_CACHE_KEY);
-      if (!password) {
-        password = await promptPassword('Введите пароль для доступа к хранилищу:');
-        if (!password) throw new Error('Password required');
-      }
-      try {
-        const keyPassword = await deriveKeyFromString(password);
-        masterKeyArray = await decryptData(payload.masterKeyEncrypted.byPassword, keyPassword);
-        usedMethod = 'password';
-        sessionStorage.setItem(PASSWORD_CACHE_KEY, password);
-      } catch (e) {
-        sessionStorage.removeItem(PASSWORD_CACHE_KEY);
-        throw new Error('Invalid password');
-      }
-    } else {
-      const encryptedByLogin = payload.masterKeyEncrypted?.byLogin;
-      const encryptedByToken = payload.masterKeyEncrypted?.byToken;
-
-      if (encryptedByLogin) {
+      // Попытка взять пароль из кеша (обфусцированного)
+      let cachedPassword = sessionStorage.getItem(PASSWORD_CACHE_KEY);
+      if (cachedPassword) {
         try {
-          const keyLogin = await deriveKeyFromString(user);
-          masterKeyArray = await decryptData(encryptedByLogin, keyLogin);
-          usedMethod = 'login';
-        } catch (e) {}
+          const keyPassword = await deriveKeyFromString(cachedPassword);
+          masterKeyArray = await decryptData(payload.masterKeyEncrypted.byPassword, keyPassword);
+          usedMethod = 'password';
+          // успешно, возвращаем результат
+          return buildResult(masterKeyArray, payload, remoteUpdated);
+        } catch (e) {
+          // кеш невалиден, удаляем и запрашиваем заново
+          sessionStorage.removeItem(PASSWORD_CACHE_KEY);
+        }
       }
 
-      if (!masterKeyArray && encryptedByToken) {
+      // Цикл ввода пароля (до 3 попыток)
+      const MAX_ATTEMPTS = 3;
+      let attempts = 0;
+      let password = null;
+      let cancelled = false;
+
+      while (attempts < MAX_ATTEMPTS) {
+        const input = await promptPassword(
+          `Введите пароль для доступа к хранилищу (попытка ${attempts+1}/${MAX_ATTEMPTS}):`
+        );
+        if (input === null) {
+          cancelled = true;
+          break;
+        }
+        password = input.trim();
+        if (!password) {
+          showToast('Пароль не может быть пустым', 'error');
+          attempts++;
+          continue;
+        }
+
         try {
-          const keyToken = await deriveKeyFromString(token);
-          masterKeyArray = await decryptData(encryptedByToken, keyToken);
-          usedMethod = 'token';
-        } catch (e) {}
+          const keyPassword = await deriveKeyFromString(password);
+          masterKeyArray = await decryptData(payload.masterKeyEncrypted.byPassword, keyPassword);
+          usedMethod = 'password';
+          // Успех – сохраняем пароль в кеш (обфусцированно, но пока просто в sessionStorage)
+          sessionStorage.setItem(PASSWORD_CACHE_KEY, password);
+          break;
+        } catch (e) {
+          attempts++;
+          if (attempts < MAX_ATTEMPTS) {
+            showToast(`Неверный пароль. Осталось попыток: ${MAX_ATTEMPTS - attempts}`, 'error');
+          } else {
+            showToast('Неверный пароль. Попытки исчерпаны.', 'error');
+          }
+        }
+      }
+
+      // Если пароль не получен (отказ или ошибка)
+      if (!masterKeyArray) {
+        // Предлагаем сброс с предупреждением
+        const t = (key) => window.I18n?.translate(key) || key;
+        const shouldReset = await confirmResetStorage();
+        if (shouldReset) {
+          // Сбрасываем и создаём новое хранилище без пароля (с токеном)
+          await resetStorage(true);
+          const newStorage = await createNewStorage(user, token);
+          return {
+            masterKey: newStorage.masterKey,
+            bookmarks: newStorage.bookmarks,
+            lastUpdated: newStorage.lastUpdated
+          };
+        } else {
+          throw new Error('Доступ к хранилищу отклонён. Невозможно загрузить данные.');
+        }
+      }
+
+      // Если успешно расшифровали, но это была первая расшифровка, обновляем метаданные? Не обязательно.
+      // Возвращаем результат.
+      return buildResult(masterKeyArray, payload, remoteUpdated);
+    }
+
+    // ---------- 2. Нет пароля – используем byToken (byLogin удалён) ----------
+    const encryptedByToken = payload.masterKeyEncrypted?.byToken;
+    if (!encryptedByToken) {
+      // Если нет ни пароля, ни токена – хранилище повреждено, предлагаем сброс
+      const shouldReset = await confirmResetStorage();
+      if (shouldReset) {
+        await resetStorage(true);
+        const newStorage = await createNewStorage(user, token);
+        return {
+          masterKey: newStorage.masterKey,
+          bookmarks: newStorage.bookmarks,
+          lastUpdated: newStorage.lastUpdated
+        };
+      } else {
+        throw new Error('Нет доступного способа расшифровки хранилища.');
+      }
+    }
+
+    // Пытаемся расшифровать текущим токеном
+    try {
+      const keyToken = await deriveKeyFromString(token);
+      masterKeyArray = await decryptData(encryptedByToken, keyToken);
+      usedMethod = 'token';
+      // Проверяем, не изменился ли токен – если изменился, обновим шифрование
+      const storedTokenHash = payload.lastTokenHash || null;
+      const currentTokenHash = await hashString(token);
+      if (storedTokenHash !== currentTokenHash) {
+        // Токен изменился – обновим шифрование в фоне (не блокируем загрузку)
+        const masterKeyCrypto = await crypto.subtle.importKey(
+          'raw',
+          new Uint8Array(masterKeyArray),
+          { name: 'AES-GCM' },
+          true,
+          ['encrypt', 'decrypt']
+        );
+        // Обновляем в фоне (без ожидания)
+        updateMasterKeyEncryption(masterKeyCrypto, user, token, null)
+          .then(() => console.log('Шифрование обновлено новым токеном'))
+          .catch(err => console.warn('Не удалось обновить шифрование токеном:', err));
+      }
+      return buildResult(masterKeyArray, payload, remoteUpdated);
+    } catch (e) {
+      // Токен не подошёл – запрашиваем старый токен
+      const t = (key) => window.I18n?.translate(key) || key;
+      showToast('Текущий токен не подходит для расшифровки. Введите старый токен.', 'warning');
+
+      // Даём до 3 попыток ввести старый токен
+      const MAX_ATTEMPTS = 3;
+      let attempts = 0;
+      let oldToken = null;
+      let cancelled = false;
+
+      while (attempts < MAX_ATTEMPTS) {
+        const input = await promptPassword(
+          `Введите старый GitHub-токен, которым было зашифровано хранилище (попытка ${attempts+1}/${MAX_ATTEMPTS}):`
+        );
+        if (input === null) {
+          cancelled = true;
+          break;
+        }
+        oldToken = input.trim();
+        if (!oldToken) {
+          showToast('Токен не может быть пустым', 'error');
+          attempts++;
+          continue;
+        }
+
+        try {
+          const keyOld = await deriveKeyFromString(oldToken);
+          masterKeyArray = await decryptData(encryptedByToken, keyOld);
+          // Успех – обновляем шифрование на новый токен
+          const masterKeyCrypto = await crypto.subtle.importKey(
+            'raw',
+            new Uint8Array(masterKeyArray),
+            { name: 'AES-GCM' },
+            true,
+            ['encrypt', 'decrypt']
+          );
+          await updateMasterKeyEncryption(masterKeyCrypto, user, token, null);
+          showToast('Хранилище успешно обновлено под новый токен', 'success');
+          break;
+        } catch (err) {
+          attempts++;
+          if (attempts < MAX_ATTEMPTS) {
+            showToast(`Неверный токен. Осталось попыток: ${MAX_ATTEMPTS - attempts}`, 'error');
+          } else {
+            showToast('Неверный токен. Попытки исчерпаны.', 'error');
+          }
+        }
       }
 
       if (!masterKeyArray) {
+        // Не удалось ввести старый токен – предлагаем сброс
         const shouldReset = await confirmResetStorage();
         if (shouldReset) {
           await resetStorage(true);
@@ -253,25 +388,16 @@
             lastUpdated: newStorage.lastUpdated
           };
         } else {
-          throw new Error('Unable to decrypt storage. No password set or credentials changed.');
+          throw new Error('Не удалось расшифровать хранилище. Доступ отклонён.');
         }
       }
 
-      const storedLogin = payload.lastLogin || null;
-      const storedTokenHash = payload.lastTokenHash || null;
-      const currentTokenHash = await hashString(token);
-      if (storedLogin !== user || storedTokenHash !== currentTokenHash) {
-        const masterKeyCrypto = await crypto.subtle.importKey(
-          'raw',
-          new Uint8Array(masterKeyArray),
-          { name: 'AES-GCM' },
-          true,
-          ['encrypt', 'decrypt']
-        );
-        await updateMasterKeyEncryption(masterKeyCrypto, user, token, null);
-      }
+      return buildResult(masterKeyArray, payload, remoteUpdated);
     }
+  }
 
+  // Вспомогательная функция для сборки результата
+  async function buildResult(masterKeyArray, payload, remoteUpdated) {
     const masterKeyCrypto = await crypto.subtle.importKey(
       'raw',
       new Uint8Array(masterKeyArray),
@@ -299,7 +425,7 @@
     };
   }
 
-  // ---- создание нового хранилища (без пароля) ----
+  // ---- создание нового хранилища (без пароля, только byToken) ----
   async function createNewStorage(user, token) {
     const newMasterKey = await crypto.subtle.generateKey(
       { name: 'AES-GCM', length: 256 },
@@ -309,16 +435,13 @@
     const exported = await crypto.subtle.exportKey('raw', newMasterKey);
     const masterKeyArray = Array.from(new Uint8Array(exported));
 
-    const keyLogin = await deriveKeyFromString(user);
     const keyToken = await deriveKeyFromString(token);
-    const encryptedByLogin = await encryptData(masterKeyArray, keyLogin);
     const encryptedByToken = await encryptData(masterKeyArray, keyToken);
 
     const payload = {
       version: VERSION,
       salt: SALT,
       masterKeyEncrypted: {
-        byLogin: encryptedByLogin,
         byToken: encryptedByToken,
         byPassword: null
       },
@@ -347,6 +470,7 @@
   }
 
   // ---- обновление зашифрованных блоков мастер-ключа (без изменения закладок) ----
+  // password = null означает отключить пароль, если передана строка – установить пароль
   async function updateMasterKeyEncryption(masterKeyCrypto, login, token, password = null) {
     const exported = await crypto.subtle.exportKey('raw', masterKeyCrypto);
     const masterKeyArray = Array.from(new Uint8Array(exported));
@@ -358,24 +482,29 @@
     let payload = JSON.parse(file.content);
 
     const hasPasswordBlock = !!payload.masterKeyEncrypted?.byPassword;
-    if (!hasPasswordBlock) {
-      const keyLogin = await deriveKeyFromString(login);
+
+    // Если пароль НЕ установлен (password === null), используем byToken
+    if (password === null) {
+      // Удаляем byPassword, добавляем byToken
       const keyToken = await deriveKeyFromString(token);
-      const encryptedByLogin = await encryptData(masterKeyArray, keyLogin);
       const encryptedByToken = await encryptData(masterKeyArray, keyToken);
-      payload.masterKeyEncrypted.byLogin = encryptedByLogin;
       payload.masterKeyEncrypted.byToken = encryptedByToken;
+      payload.masterKeyEncrypted.byPassword = null;
       payload.lastLogin = login;
       payload.lastTokenHash = await hashString(token);
-    }
-
-    if (password !== undefined) {
-      if (password) {
-        const keyPassword = await deriveKeyFromString(password);
-        payload.masterKeyEncrypted.byPassword = await encryptData(masterKeyArray, keyPassword);
-      } else {
-        payload.masterKeyEncrypted.byPassword = null;
-      }
+      hasPassword = false;
+    } else {
+      // Устанавливаем пароль – удаляем byToken, оставляем только byPassword
+      const keyPassword = await deriveKeyFromString(password);
+      const encryptedByPassword = await encryptData(masterKeyArray, keyPassword);
+      payload.masterKeyEncrypted.byPassword = encryptedByPassword;
+      // Удаляем byToken, чтобы не было двух способов
+      delete payload.masterKeyEncrypted.byToken;
+      // lastLogin и lastTokenHash больше не нужны, можно удалить или оставить для информации
+      // Но для совместимости оставим, но они не будут использоваться
+      payload.lastLogin = login;
+      payload.lastTokenHash = null; // не храним хеш токена при пароле
+      hasPassword = true;
     }
 
     payload.lastUpdated = Date.now();
@@ -471,13 +600,9 @@
       payload.encryptedBookmarks = encryptedPrivate;
       payload.lastUpdated = Date.now();
 
+      // Если есть пароль, убедимся, что byToken удалён, а byPassword актуален
       if (hasPassword) {
-        if (payload.masterKeyEncrypted?.byLogin) {
-          delete payload.masterKeyEncrypted.byLogin;
-        }
-        if (payload.masterKeyEncrypted?.byToken) {
-          delete payload.masterKeyEncrypted.byToken;
-        }
+        // Проверяем, что byPassword существует, если нет – создаём
         if (!payload.masterKeyEncrypted?.byPassword) {
           const password = sessionStorage.getItem(PASSWORD_CACHE_KEY);
           if (password) {
@@ -485,22 +610,31 @@
             const exported = await crypto.subtle.exportKey('raw', masterKey);
             const masterKeyArray = Array.from(new Uint8Array(exported));
             payload.masterKeyEncrypted.byPassword = await encryptData(masterKeyArray, keyPassword);
+            // Удаляем byToken, если он есть
+            delete payload.masterKeyEncrypted.byToken;
           }
         }
+        // Если byToken всё ещё есть, удаляем его (гарантия)
+        if (payload.masterKeyEncrypted?.byToken) {
+          delete payload.masterKeyEncrypted.byToken;
+        }
       } else {
-        if (!payload.masterKeyEncrypted?.byLogin || !payload.masterKeyEncrypted?.byToken) {
+        // Если пароля нет, проверяем byToken
+        if (!payload.masterKeyEncrypted?.byToken) {
           const exported = await crypto.subtle.exportKey('raw', masterKey);
           const masterKeyArray = Array.from(new Uint8Array(exported));
           const user = getCurrentUser();
           const token = getToken();
           if (user && token) {
-            const keyLogin = await deriveKeyFromString(user);
             const keyToken = await deriveKeyFromString(token);
-            payload.masterKeyEncrypted.byLogin = await encryptData(masterKeyArray, keyLogin);
             payload.masterKeyEncrypted.byToken = await encryptData(masterKeyArray, keyToken);
             payload.lastLogin = user;
             payload.lastTokenHash = await hashString(token);
           }
+        }
+        // Удаляем byPassword, если он есть (не должно быть, но на всякий случай)
+        if (payload.masterKeyEncrypted?.byPassword) {
+          delete payload.masterKeyEncrypted.byPassword;
         }
       }
 
@@ -553,7 +687,7 @@
     saveDebounced();
   }
 
-  // ---- НОВЫЙ МЕТОД: обновление существующей закладки ----
+  // ---- обновление существующей закладки ----
   async function updateBookmark(id, updates) {
     await ensureStorage();
     const idx = bookmarks.findIndex(b => b.id === id);
@@ -571,19 +705,17 @@
     return bookmarks[idx];
   }
 
-  // ---- ГРУППОВЫЕ ОПЕРАЦИИ ----
+  // ---- групповые операции ----
   async function batchUpdateVideoLinks() {
     await ensureStorage();
     const videoBookmarks = bookmarks.filter(b => b.type === 'video' && b.url);
     let updated = 0;
     let failed = 0;
     for (const bm of videoBookmarks) {
-      // Пропускаем, если ссылка ещё валидна
       if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) {
         continue;
       }
       try {
-        // Используем функцию получения ссылки из UI (если она доступна)
         const { getVideoDownloadUrl } = window._StorageUI || {};
         if (typeof getVideoDownloadUrl === 'function') {
           const url = await getVideoDownloadUrl(bm.url);
@@ -595,7 +727,6 @@
             failed++;
           }
         } else {
-          // fallback – просто помечаем как неудачное
           failed++;
         }
       } catch (e) {
@@ -606,7 +737,7 @@
     return { updated, failed, total: videoBookmarks.length };
   }
 
-  // ---- Фоновое обновление (запускается раз в сутки) ----
+  // ---- фоновое обновление (раз в сутки) ----
   function startBackgroundUpdate() {
     if (backgroundUpdateTimer) return;
     backgroundUpdateTimer = setInterval(async () => {
@@ -619,7 +750,7 @@
       } catch (e) {
         console.warn('Background update error:', e);
       }
-    }, 24 * 60 * 60 * 1000); // 24 часа
+    }, 24 * 60 * 60 * 1000);
   }
 
   function stopBackgroundUpdate() {
@@ -629,19 +760,18 @@
     }
   }
 
-  // ---- Групповой экспорт всех закладок (без шифрования, только для резервного копирования) ----
+  // ---- экспорт всех закладок (без шифрования) ----
   function exportAllBookmarks() {
     return bookmarks.slice();
   }
 
-  // ---- Импорт закладок (добавление с проверкой дубликатов) ----
+  // ---- импорт закладок (добавление с проверкой дубликатов) ----
   async function importBookmarksBatch(bookmarksArray) {
     await ensureStorage();
     let added = 0;
     let skipped = 0;
     for (const bm of bookmarksArray) {
       try {
-        // Проверяем дубликат по url или saveData.hash
         if (bm.url && bookmarks.some(b => b.url === bm.url)) {
           skipped++;
           continue;
@@ -650,7 +780,6 @@
           skipped++;
           continue;
         }
-        // Создаём новую закладку без вызова addBookmark (чтобы избежать лишних toasts)
         const newBm = {
           id: 'bm-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
           added: new Date().toISOString(),
@@ -677,7 +806,6 @@
     if (isInitialized && !forceRefresh) return { bookmarks };
     try {
       const result = await loadOrCreateStorage(forceRefresh);
-      // Запускаем фоновое обновление после первой инициализации
       if (!backgroundUpdateTimer) startBackgroundUpdate();
       return result;
     } catch (e) {
@@ -809,8 +937,8 @@
     if (!file) throw new Error('File not found');
     let payload = JSON.parse(file.content);
 
+    // Если уже есть пароль, запрашиваем старый
     const hasOldPassword = !!payload.masterKeyEncrypted?.byPassword;
-
     if (hasOldPassword) {
       const oldPassword = await promptPassword('Введите текущий пароль:');
       if (!oldPassword) throw new Error('Old password required');
@@ -826,36 +954,32 @@
       throw new Error('Пароль не должен совпадать с токеном GitHub');
     }
 
+    // Пересоздаём мастер-ключ? Нет, оставляем тот же, только меняем шифрование.
     const exported = await crypto.subtle.exportKey('raw', masterKey);
     const masterKeyArray = Array.from(new Uint8Array(exported));
 
-    const keyLogin = await deriveKeyFromString(user);
-    const keyToken = await deriveKeyFromString(token);
-    const encryptedByLogin = await encryptData(masterKeyArray, keyLogin);
-    const encryptedByToken = await encryptData(masterKeyArray, keyToken);
-
-    let encryptedByPassword = null;
     if (newPassword) {
+      // Устанавливаем пароль – удаляем byToken
       const keyPassword = await deriveKeyFromString(newPassword);
-      encryptedByPassword = await encryptData(masterKeyArray, keyPassword);
+      const encryptedByPassword = await encryptData(masterKeyArray, keyPassword);
+      payload.masterKeyEncrypted.byPassword = encryptedByPassword;
+      delete payload.masterKeyEncrypted.byToken;
+      payload.lastLogin = user;
+      payload.lastTokenHash = null;
       sessionStorage.setItem(PASSWORD_CACHE_KEY, newPassword);
       hasPassword = true;
     } else {
+      // Отключаем пароль – добавляем byToken
+      const keyToken = await deriveKeyFromString(token);
+      const encryptedByToken = await encryptData(masterKeyArray, keyToken);
+      payload.masterKeyEncrypted.byToken = encryptedByToken;
+      delete payload.masterKeyEncrypted.byPassword;
+      payload.lastLogin = user;
+      payload.lastTokenHash = await hashString(token);
       sessionStorage.removeItem(PASSWORD_CACHE_KEY);
       hasPassword = false;
     }
 
-    if (newPassword) {
-      if (payload.masterKeyEncrypted?.byLogin) delete payload.masterKeyEncrypted.byLogin;
-      if (payload.masterKeyEncrypted?.byToken) delete payload.masterKeyEncrypted.byToken;
-    } else {
-      payload.masterKeyEncrypted.byLogin = encryptedByLogin;
-      payload.masterKeyEncrypted.byToken = encryptedByToken;
-      payload.lastLogin = user;
-      payload.lastTokenHash = await hashString(token);
-    }
-
-    payload.masterKeyEncrypted.byPassword = encryptedByPassword;
     payload.lastUpdated = Date.now();
 
     const content = JSON.stringify(payload);
@@ -942,7 +1066,6 @@
     getBookmarks: () => bookmarks,
     setBookmarks: (newBookmarks) => { bookmarks = newBookmarks; cachedBookmarks = newBookmarks.slice(); },
     setRefreshGridCallback: (cb) => { window._StorageManager.refreshGridCallback = cb; },
-    // Новые групповые методы
     batchUpdateVideoLinks,
     exportAllBookmarks,
     importBookmarksBatch,

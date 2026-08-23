@@ -648,51 +648,6 @@
       }
     });
     container.appendChild(refreshBtn);
-
-    // Кнопка "Экспорт всех"
-    const exportAllBtn = document.createElement('button');
-    exportAllBtn.className = 'storage-btn';
-    exportAllBtn.innerHTML = '<i class="fas fa-download"></i> ' + (t('exportAll') || 'Экспорт всех');
-    exportAllBtn.addEventListener('click', () => {
-      const all = exportAllBookmarks();
-      const json = JSON.stringify(all, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `neon-bookmarks-backup-${new Date().toISOString().slice(0,10)}.json`;
-      a.click();
-      showToast('Экспортировано ' + all.length + ' закладок', 'success');
-    });
-    container.appendChild(exportAllBtn);
-
-    // Кнопка "Импорт JSON"
-    const importBtn = document.createElement('button');
-    importBtn.className = 'storage-btn';
-    importBtn.innerHTML = '<i class="fas fa-upload"></i> ' + (t('importJSON') || 'Импорт JSON');
-    importBtn.addEventListener('click', () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.json';
-      input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (ev) => {
-          try {
-            const data = JSON.parse(ev.target.result);
-            if (!Array.isArray(data)) throw new Error('Ожидается массив закладок');
-            const result = await importBookmarksBatch(data);
-            showToast(`Импортировано: ${result.added}, пропущено: ${result.skipped}`, 'success');
-            renderBookmarks(modal);
-          } catch (err) {
-            showToast('Ошибка импорта: ' + err.message, 'error');
-          }
-        };
-        reader.readAsText(file);
-      };
-      input.click();
-    });
-    container.appendChild(importBtn);
   }
 
   // ---- Модалка хранилища ----
