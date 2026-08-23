@@ -2,6 +2,7 @@
 // UI-рендеринг закладок, модалка, статус, обработка файлов
 // Оптимизировано: добавление/удаление без полной перерисовки, кеширование downloadUrl с TTL
 // Добавлено: групповые операции, запись видео через MediaRecorder, парсинг HTML, офлайн-кеширование
+// Исправлено: клик по видео открывает модальный плеер, кнопка записи минималистична
 
 (function() {
   const { escapeHtml, formatDate, loadModule, createElement, debounce } = window.GithubCore || {};
@@ -48,7 +49,7 @@
   // ---- Расширенное получение ссылки на скачивание с кешированием ----
   async function getVideoDownloadUrl(url, forceRefresh = false) {
     if (!url) return null;
-    
+
     const apis = [
       // 1. Cobalt
       {
@@ -134,6 +135,40 @@
         parser: (data) => {
           if (data && data.downloadUrl) return data.downloadUrl;
           return null;
+        }
+      },
+      // 8. loader.to
+      {
+        url: (videoUrl) => {
+          const match = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+          if (match) {
+            return `https://loader.to/api/?link=${encodeURIComponent(videoUrl)}&mode=video`;
+          }
+          return null;
+        },
+        method: 'GET',
+        parser: (data) => {
+          try {
+            const json = JSON.parse(data);
+            return json.downloadUrl || null;
+          } catch { return null; }
+        }
+      },
+      // 9. ssyoutube.com (через api)
+      {
+        url: (videoUrl) => {
+          const match = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+          if (match) {
+            return `https://ssyoutube.com/api/convert?url=${encodeURIComponent(videoUrl)}`;
+          }
+          return null;
+        },
+        method: 'GET',
+        parser: (data) => {
+          try {
+            const json = JSON.parse(data);
+            return json.downloadUrl || null;
+          } catch { return null; }
         }
       }
     ];
@@ -312,6 +347,59 @@
     }
   }
 
+  // ---- Открытие видео в модальном окне ----
+  function openVideoModal(bm) {
+    const t = window.I18n?.translate || (k => k);
+    const html = `
+      <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;background:#000;border-radius:12px;">
+        <iframe src="${bm.embedUrl}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen allow="autoplay; encrypted-media; gyroscope; picture-in-picture"></iframe>
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <span style="color:var(--text-primary);font-size:18px;">${escapeHtml(bm.title)}</span>
+        <div style="display:flex;gap:8px;">
+          <button class="button small" id="video-download-btn" style="background:var(--accent);color:#fff;">${t('downloadBtn') || 'Скачать'}</button>
+          <button class="button small" id="video-record-btn" style="background:rgba(0,0,0,0.5);color:#fff;">⏺ ${t('record') || 'Записать 10с'}</button>
+        </div>
+      </div>
+    `;
+    const { modal, closeModal } = createModal(bm.title, html, { size: 'full' });
+    // Обработчик скачивания
+    const downloadBtn = modal.querySelector('#video-download-btn');
+    if (downloadBtn) {
+      downloadBtn.addEventListener('click', async () => {
+        const url = await ensureDownloadUrl(bm);
+        if (url) {
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = bm.title + '.mp4';
+          a.target = '_blank';
+          a.click();
+        } else {
+          showToast('Не удалось получить ссылку', 'error');
+        }
+      });
+    }
+    // Обработчик записи
+    const recordBtn = modal.querySelector('#video-record-btn');
+    if (recordBtn) {
+      recordBtn.addEventListener('click', async () => {
+        const iframe = modal.querySelector('iframe');
+        if (!iframe) { showToast('Плеер не найден', 'error'); return; }
+        try {
+          const blob = await recordVideoFromIframe(iframe, 10000);
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `${bm.title || 'video'}.webm`;
+          a.click();
+          showToast('Запись сохранена', 'success');
+        } catch (err) {
+          showToast('Ошибка записи: ' + err.message, 'error');
+        }
+      });
+    }
+    return { modal, closeModal };
+  }
+
   // ---- Создание DOM-элемента карточки (с учётом кеширования) ----
   function createBookmarkCardElement(bm, modal) {
     const t = (key) => window.I18n?.translate(key) || key;
@@ -348,11 +436,37 @@
       iframe.setAttribute('allowfullscreen', 'true');
       iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
       media.appendChild(iframe);
-      // Добавляем кнопку записи видео (экспериментально)
+      // Добавляем кнопку записи (минималистичная, справа снизу)
       const recordBtn = document.createElement('button');
-      recordBtn.className = 'button small';
-      recordBtn.textContent = '📹 Записать 10с';
-      recordBtn.style.cssText = 'position:absolute; bottom:10px; right:10px; z-index:10; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:20px; padding:4px 12px; cursor:pointer;';
+      recordBtn.className = 'record-btn-mini';
+      recordBtn.innerHTML = '⏺';
+      recordBtn.style.cssText = `
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        background: rgba(0,0,0,0.6);
+        border: none;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.5;
+        transition: opacity 0.2s, transform 0.2s;
+        z-index: 10;
+      `;
+      recordBtn.addEventListener('mouseenter', () => {
+        recordBtn.style.opacity = '1';
+        recordBtn.style.transform = 'scale(1.1)';
+      });
+      recordBtn.addEventListener('mouseleave', () => {
+        recordBtn.style.opacity = '0.5';
+        recordBtn.style.transform = 'scale(1)';
+      });
       recordBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         try {
@@ -390,12 +504,12 @@
 
     const content = document.createElement('div');
     content.className = 'bookmark-content';
-    
+
     const title = document.createElement('h4');
     title.textContent = truncateTitle(bm.title, 50);
     title.title = bm.title || 'Закладка';
     content.appendChild(title);
-    
+
     const meta = document.createElement('div');
     meta.style.cssText = 'font-size:12px;color:var(--text-secondary)';
     meta.textContent = `${bm.type.charAt(0).toUpperCase()+bm.type.slice(1)} · ${formatDate(bm.added)}`;
@@ -475,11 +589,13 @@
     // Клик по карточке
     card.addEventListener('click', async (e) => {
       if (e.target.closest('button')) return;
-      
-      if (isVideo) {
+
+      if (isVideo && bm.embedUrl) {
+        e.stopPropagation();
+        openVideoModal(bm);
         return;
       }
-      
+
       if (isPost && bm.postData && bm.postData.id) {
         if (window.UIFeedback) {
           window.UIFeedback.openFullModal(bm.postData);
@@ -488,7 +604,7 @@
         }
         return;
       }
-      
+
       if (isSave && bm.saveData) {
         try {
           const binary = atob(bm.saveData.content);
@@ -505,7 +621,7 @@
         }
         return;
       }
-      
+
       if (bm.url) {
         window.open(bm.url, '_blank');
       }
@@ -761,6 +877,29 @@
         .bookmark-content .button.small{padding:4px 12px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:30px;cursor:pointer;font-family:var(--font-family);transition:0.2s}
         .bookmark-content .button.small:hover{background:var(--accent-light);transform:translateY(-2px)}
         #modal-status-mini { font-size:12px; color:var(--text-secondary); margin-left:16px; opacity:0.7; font-weight:normal; }
+        .record-btn-mini {
+          background: rgba(0,0,0,0.6);
+          border: none;
+          border-radius: 50%;
+          width: 28px;
+          height: 28px;
+          color: #fff;
+          font-size: 14px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          opacity: 0.5;
+          transition: opacity 0.2s, transform 0.2s;
+          z-index: 10;
+          position: absolute;
+          bottom: 8px;
+          right: 8px;
+        }
+        .record-btn-mini:hover {
+          opacity: 1;
+          transform: scale(1.1);
+        }
       `;
       document.head.appendChild(style);
     }
@@ -942,7 +1081,8 @@
     getVideoDownloadUrl,
     recordVideoFromIframe,
     detectLinkType,
-    parseVideoFromHtml
+    parseVideoFromHtml,
+    openVideoModal
   };
 
   window._StorageManager.setStatusCallback(updateStatus);
