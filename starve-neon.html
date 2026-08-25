@@ -17,13 +17,6 @@
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
-
-    <style>
-        body {
-            background-image: var(--bg-gradient-overlay) !important;
-        }
-    </style>
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
@@ -33,7 +26,6 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'"><noscript>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
-    <!-- Ядро -->
     <script src="js/utils.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/github-client.js" defer></script>
@@ -43,7 +35,6 @@
     <script src="js/features/ui-feedback.js" defer></script>
     <script src="js/lang.js" defer></script>
     <script src="js/effects.js" defer></script>
-    <!-- Страничные скрипты -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="js/pages/feedback.js" defer></script>
     <script src="js/pages/game-updates.js" defer></script>
@@ -313,10 +304,7 @@
                 <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
                 <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
             </div>
-            <div class="lang-switcher">
-                <button class="lang-btn active" data-lang-code="ru">RU</button>
-                <button class="lang-btn" data-lang-code="en">EN</button>
-            </div>
+            <div class="lang-switcher"></div>
         </nav>
 
         <header class="card header-card game-header" style="background-image: url('images/starve-neon-preview.webp');">
@@ -372,7 +360,6 @@
                 </section>
             </div>
 
-            <!-- Секция скачивания -->
             <section class="card download-card" id="download-section">
                 <div class="download-sections">
                     <div class="download-subsection">
@@ -403,7 +390,6 @@
                 </div>
             </section>
 
-            <!-- ===== ОПИСАНИЕ ===== -->
             <section class="card">
                 <h2>
                     <i class="fas fa-align-left"></i>
@@ -411,8 +397,6 @@
                 </h2>
 
                 <div class="starve-description">
-
-                    <!-- 1. Очнулся в обломках – banner-world.webm, гифка справа -->
                     <div class="desc-block block-accent1 image-right">
                         <div class="desc-image">
                             <video autoplay muted loop playsinline>
@@ -430,7 +414,6 @@
                         </div>
                     </div>
 
-                    <!-- 2. Смерть - туториал – без гифки -->
                     <div class="desc-block block-accent2 no-image">
                         <div class="desc-text">
                             <h3>
@@ -442,7 +425,6 @@
                         </div>
                     </div>
 
-                    <!-- 3. Прогрессия через риск – banner-development.webm, гифка слева -->
                     <div class="desc-block block-accent3 image-left">
                         <div class="desc-image">
                             <video autoplay muted loop playsinline>
@@ -459,7 +441,6 @@
                         </div>
                     </div>
 
-                    <!-- 4. Твой билд – banner-interface.webm, гифка справа -->
                     <div class="desc-block block-accent4 image-right">
                         <div class="desc-image">
                             <video autoplay muted loop playsinline>
@@ -476,7 +457,6 @@
                         </div>
                     </div>
 
-                    <!-- 5. Мир не ждёт тебя – banner-allies.webm, гифка слева -->
                     <div class="desc-block block-accent5 image-left">
                         <div class="desc-image">
                             <video autoplay muted loop playsinline>
@@ -493,7 +473,6 @@
                         </div>
                     </div>
 
-                    <!-- 6. Твой остров – banner-building.webm, гифка справа, текст разбит на два абзаца -->
                     <div class="desc-block block-accent1 image-right">
                         <div class="desc-image">
                             <video autoplay muted loop playsinline>
@@ -511,7 +490,6 @@
                         </div>
                     </div>
 
-                    <!-- 7. Фракции – без гифки -->
                     <div class="desc-block block-accent2 no-image">
                         <div class="desc-text">
                             <h3>
@@ -523,7 +501,6 @@
                         </div>
                     </div>
 
-                    <!-- 8. Играй как хочешь – banner-status.webm, гифка слева, текст разбит на два абзаца -->
                     <div class="desc-block block-accent6 image-left">
                         <div class="desc-image">
                             <video autoplay muted loop playsinline>
@@ -541,7 +518,6 @@
                         </div>
                     </div>
 
-                    <!-- Следи за разработкой – социальные ссылки разделены на три строки -->
                     <div class="desc-block no-image block-follow" style="text-align: center; border-left: none;">
                         <div class="desc-text" style="background: var(--glass-bg); backdrop-filter: blur(4px);">
                             <h3>
@@ -550,7 +526,6 @@
                             </h3>
                             <p data-lang="starveFeedback">Твой отзыв меняет игру. Присоединяйся к сообществу и влияй на развитие.</p>
                             <div class="social-links">
-                                <!-- Основные площадки -->
                                 <div class="social-row">
                                     <a target="_blank" href="https://www.youtube.com/@NeonShadow-neon">
                                         <img alt="YouTube" src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white">
@@ -568,7 +543,6 @@
                                         <img alt="Boosty" src="https://img.shields.io/badge/Boosty-FF5E00?style=for-the-badge&logo=boosty&logoColor=white">
                                     </a>
                                 </div>
-                                <!-- Личные контакты -->
                                 <div class="social-row">
                                     <a target="_blank" href="https://t.me/NeonCyndows">
                                         <img alt="Telegram DM" src="https://img.shields.io/badge/Telegram-Личка-26A5E4?style=for-the-badge&logo=telegram&logoColor=white">
@@ -577,7 +551,6 @@
                                         <img alt="Discord DM" src="https://img.shields.io/badge/Discord-Личка-5865F2?style=for-the-badge&logo=discord&logoColor=white">
                                     </a>
                                 </div>
-                                <!-- GitHub -->
                                 <div class="social-row">
                                     <a target="_blank" href="https://github.com/NeonShadowYT">
                                         <img title="GitHub" alt="GitHub" src="https://img.shields.io/badge/GitHub-2d2f48?style=for-the-badge&logo=github&logoColor=white">
@@ -591,7 +564,6 @@
                     </div>
             </section>
 
-            <!-- Системные требования -->
             <section class="card">
                 <h2>
                     <i class="fas fa-microchip"></i>
@@ -642,7 +614,6 @@
                 </div>
             </section>
 
-            <!-- Видео -->
             <section class="card">
                 <h2>
                     <i class="fas fa-video"></i>
@@ -658,7 +629,6 @@
                 </div>
             </section>
 
-            <!-- Обратная связь -->
             <section class="card" id="feedback-section" data-game="starve-neon">
                 <div class="feedback-container">
                     <div class="loading-spinner">
@@ -668,7 +638,6 @@
                 </div>
             </section>
 
-            <!-- Обновления -->
             <section class="card">
                 <div class="updates-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                     <div style="display: flex; align-items: center; gap: 8px;">

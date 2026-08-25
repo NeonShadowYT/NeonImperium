@@ -26,6 +26,7 @@
     <script src="js/core/github-auth.js" defer></script>
     <script src="js/lang.js" defer></script>
     <script src="js/dust-particles.js" defer></script>
+    <script src="js/common-init.js" defer></script>
 
     <style>
         /* Critical CSS */
@@ -38,7 +39,6 @@
             position: relative;
             overflow: hidden;
             border-radius: var(--radius-md);
-            /* margin-bottom убран */
         }
         .bg-gif-layer {
             position: absolute;
@@ -83,13 +83,11 @@
             z-index: 10;
         }
 
-        /* Явно задаём цвет текста кнопки, чтобы он не менялся при наведении */
         .button,
         .button:hover {
             color: white !important;
         }
 
-        /* Соцсети – копия стилей из starve-neon */
         .social-links-404 {
             display: flex;
             flex-wrap: wrap;
@@ -125,14 +123,10 @@
                 <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
                 <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
             </div>
-            <div class="lang-switcher">
-                <button class="lang-btn active" data-lang-code="ru">RU</button>
-                <button class="lang-btn" data-lang-code="en">EN</button>
-            </div>
+            <div class="lang-switcher"></div>
         </nav>
 
         <div class="page-404-wrapper">
-            <!-- Фон -->
             <div class="bg-gif-layer" id="bgGifLayer">
                 <img src="https://img.itch.zone/aW1nLzIyNjAyNTM1LmdpZg==/original/HYXFD4.gif" alt="фон" loading="lazy">
             </div>
@@ -144,7 +138,6 @@
                     <p class="text-secondary" data-lang="notFoundDesc" style="font-size: 18px; margin-bottom: 30px;"></p>
                     <a href="index.html" class="button wide" data-lang="backHome">Вернуться на главную</a>
 
-                    <!-- Блок социальных сетей (как в Starve Neon) -->
                     <div class="social-links-404">
                         <a target="_blank" href="https://www.youtube.com/@NeonShadow-neon">
                             <img alt="YouTube" src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white">

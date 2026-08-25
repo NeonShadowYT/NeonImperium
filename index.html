@@ -25,7 +25,6 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'"><noscript>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
-    <!-- Ядро должно загружаться первым -->
     <script src="js/utils.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/github-client.js" defer></script>
@@ -36,7 +35,6 @@
     <script src="js/lang.js" defer></script>
     <script src="js/effects.js" defer></script>
     <script src="js/common-init.js" defer></script>
-    <!-- Страничные скрипты -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="js/pages/news-feed.js" defer></script>
     <script src="js/dust-particles.js" defer></script>
@@ -59,7 +57,6 @@
             border: 1px solid var(--border);
         }
         .lazy-yt.loaded iframe { border-color: var(--accent); }
-        /* Critical CSS */
         body { margin:0; background:#0f0f1a; font-family: 'Russo One', sans-serif; }
         .nav-bar { background:#1e1e30; border-radius:40px; padding:6px 20px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
         .page { max-width:1200px; margin:0 auto; width:100%; }
@@ -75,10 +72,7 @@
                 <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
                 <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
             </div>
-            <div class="lang-switcher">
-                <button class="lang-btn active" data-lang-code="ru">RU</button>
-                <button class="lang-btn" data-lang-code="en">EN</button>
-            </div>
+            <div class="lang-switcher"></div>
         </nav>
 
         <header class="card header-card game-header" style="background-image: url('images/neon-imperium-header.webp');">
@@ -101,7 +95,6 @@
         </header>
 
         <main>
-            <!-- ===== ГЛАВНЫЕ ПРОЕКТЫ ===== -->
             <section class="card">
                 <h2>
                     <i class="fas fa-rocket"></i>
@@ -142,7 +135,6 @@
                 </div>
             </section>
 
-            <!-- ===== НЕБОЛЬШИЕ ПРОЕКТЫ ===== -->
             <section class="card">
                 <h2>
                     <i class="fas fa-flask"></i>
@@ -181,7 +173,6 @@
                 </div>
             </section>
 
-            <!-- ===== НОВОСТИ ===== -->
             <section class="card" id="news-section">
                 <div id="news-feed" class="video-grid">
                     <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
@@ -191,7 +182,6 @@
                 </div>
             </section>
 
-            <!-- ===== РАЗРАБОТЧИКИ И ЮТУБЕРЫ ===== -->
             <div class="row">
                 <section class="card half">
                     <h2>
