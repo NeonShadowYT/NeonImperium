@@ -898,10 +898,10 @@
 
 /* ========== НОВЫЕ ПРАВКИ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ ========== */
 
-/* Отключаем анимации на мобилках и при reduced motion */
+/* Отключаем анимации на мобилках и при reduced motion, И ВОССТАНАВЛИВАЕМ ВИДИМОСТЬ */
 @media (prefers-reduced-motion: reduce),
        (max-width: 768px) {
-    /* Все анимации отключаем */
+    /* Все анимации отключаем, а opacity и transform сбрасываем в 1 и none */
     .card, .project-card-link, .feature-item, .req-item, .consumption-card, .video-grid iframe,
     .project-card-link:hover .project-card,
     .project-card .image-wrapper img,
@@ -918,6 +918,7 @@
         transition: none !important;
         transform: none !important;
         background-position: initial !important;
+        opacity: 1 !important;  /* Восстанавливаем видимость */
     }
     /* Отключаем градиентный фон у текста */
     .desc-text h3 span[data-lang] {
@@ -956,6 +957,15 @@
     }
     .modal-content-full::before {
         animation: none !important;
+    }
+
+    /* Скелетон – тоже должен быть видимым */
+    .skeleton-image,
+    .skeleton-title,
+    .skeleton-text {
+        animation: none !important;
+        background: var(--bg-card) !important;
+        opacity: 1 !important;
     }
 }
 

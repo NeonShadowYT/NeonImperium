@@ -1,8 +1,15 @@
 // js/features/dust-particles.js
 // Фоновые динамические частицы (пылинки + редкие звёздочки) с эффектом случайного блуждания.
 // Звёздочки имеют тусклый голубовато-серый цвет и малую яркость.
+// На мобильных устройствах отключаются (проверка window.isMobile).
 
 (function() {
+    // Проверяем, мобильное устройство (глобальная переменная, установленная в common-init)
+    if (window.isMobile) {
+        console.log('[DustParticles] Disabled on mobile');
+        return;
+    }
+
     let canvas, ctx, particles = [];
     let animationId = null;
     let width, height;
@@ -235,7 +242,6 @@
             if (p.currentOpacity <= 0.001) continue;
 
             if (p.isStar) {
-                // Звёздочки – тусклые, голубовато-серые
                 const brightness = p.currentOpacity;
                 const r = 180 + 40 * brightness;
                 const g = 200 + 30 * brightness;
@@ -249,7 +255,6 @@
                 ctx.moveTo(-rad, 0);
                 ctx.lineTo(rad, 0);
                 ctx.stroke();
-                // диагональные штрихи
                 ctx.lineWidth = 0.6;
                 const d = rad * 0.4;
                 ctx.moveTo(-d, -d);
@@ -258,7 +263,6 @@
                 ctx.lineTo(-d, d);
                 ctx.stroke();
             } else {
-                // Обычные пылинки
                 const r = Math.min(255, Math.floor(BASE_R * p.colorFactor));
                 const g = Math.min(255, Math.floor(BASE_G * p.colorFactor));
                 const b = Math.min(255, Math.floor(BASE_B * p.colorFactor));
