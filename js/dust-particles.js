@@ -1,6 +1,6 @@
 // js/features/dust-particles.js
-// Фоновые динамические частицы (пылинки + звёздочки) с эффектом случайного блуждания.
-// Звёздочки появляются реже, имеют мерцание и циклически превращаются в точки.
+// Фоновые динамические частицы (пылинки) с эффектом случайного блуждания
+// Плавное появление, масштабирование при ресайзе без исчезновения
 
 (function() {
     let canvas, ctx, particles = [];
@@ -10,7 +10,7 @@
 
     // Настройки
     const CONFIG = {
-        PARTICLE_COUNT: 80,                // общее количество частиц
+        PARTICLE_COUNT: 80,
         MIN_RADIUS: 1,
         MAX_RADIUS: 2.5,
         BASE_SPEED: 0.25,
@@ -20,20 +20,10 @@
         MAX_OPACITY: 0.18,
         OPACITY_WAVE_SPEED: 0.003,
         FADE_IN_SPEED: 0.02,
-        DENSITY_THRESHOLD: 0.7,
-
-        // Настройки звёздочек
-        STAR_RATIO: 0.08,                  // 8% от общего количества будут звёздами
-        STAR_RADIUS_MIN: 3,
-        STAR_RADIUS_MAX: 5,
-        STAR_CYCLE_DURATION: 15000,        // 15 секунд в состоянии звезды
-        STAR_DIM_DURATION: 5000,           // 5 секунд в состоянии точки
-        STAR_TWINKLE_SPEED: 0.02,          // скорость мерцания
-        STAR_BRIGHTNESS_MAX: 0.9,
-        STAR_BRIGHTNESS_MIN: 0.3
+        DENSITY_THRESHOLD: 0.7     // если после ресайза частиц стало меньше 70% от целевого количества – досоздаём
     };
 
-    // Акцентный цвет #3d9eb3 (для пылинок)
+    // Акцентный цвет #3d9eb3
     const BASE_R = 61;
     const BASE_G = 158;
     const BASE_B = 179;
@@ -78,8 +68,10 @@
             for (const p of particles) {
                 p.x *= scaleX;
                 p.y *= scaleY;
+                // Также можно масштабировать скорость, чтобы движение не сбивалось
                 p.vx *= scaleX;
                 p.vy *= scaleY;
+                // Ограничиваем скорость после масштабирования
                 let speed = Math.hypot(p.vx, p.vy);
                 if (speed > CONFIG.MAX_SPEED) {
                     p.vx = (p.vx / speed) * CONFIG.MAX_SPEED;
@@ -90,6 +82,7 @@
             const expectedCount = CONFIG.PARTICLE_COUNT;
             const currentCount = particles.length;
             const areaRatio = (newWidth * newHeight) / (oldWidth * oldHeight);
+            // Если площадь увеличилась, а количество частиц не увеличилось – добавляем недостающие
             if (currentCount < expectedCount * CONFIG.DENSITY_THRESHOLD || areaRatio > 1.2) {
                 const needed = Math.min(expectedCount - currentCount, Math.floor(expectedCount * 0.3));
                 for (let i = 0; i < needed; i++) {
@@ -119,49 +112,29 @@
         return min + Math.random() * (max - min);
     }
 
-    function createParticle(x, y, isStar = false) {
+    function createParticle(x, y) {
         const colorFactor = randomRange(0.7, 1.3);
         return {
             x: x !== undefined ? x : Math.random() * width,
             y: y !== undefined ? y : Math.random() * height,
             vx: randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED),
             vy: randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED),
-            // Радиус для звёзд больше
-            radius: isStar
-                ? randomRange(CONFIG.STAR_RADIUS_MIN, CONFIG.STAR_RADIUS_MAX)
-                : randomRange(CONFIG.MIN_RADIUS, CONFIG.MAX_RADIUS),
-            baseOpacity: isStar
-                ? randomRange(CONFIG.STAR_BRIGHTNESS_MIN, CONFIG.STAR_BRIGHTNESS_MAX)
-                : randomRange(CONFIG.MIN_OPACITY, CONFIG.MAX_OPACITY),
+            radius: randomRange(CONFIG.MIN_RADIUS, CONFIG.MAX_RADIUS),
+            baseOpacity: randomRange(CONFIG.MIN_OPACITY, CONFIG.MAX_OPACITY),
             opacityPhase: Math.random() * Math.PI * 2,
-            fadeProgress: 1,
-            colorFactor: colorFactor,
-            isStar: isStar || false,
-            // Для звёзд: фаза цикла (0..1), 0 = звезда, 1 = точка
-            starPhase: Math.random(), // начальная фаза случайна
-            starTimer: 0,
-            currentRadius: 0,
-            currentOpacity: 0
+            fadeProgress: 1,            // при создании сразу видимы (можно 0, если нужен fade-in)
+            colorFactor: colorFactor
         };
     }
 
     function initParticlesFull() {
         particles = [];
-        const total = CONFIG.PARTICLE_COUNT;
-        const starCount = Math.floor(total * CONFIG.STAR_RATIO);
-        for (let i = 0; i < total; i++) {
-            const isStar = i < starCount;
-            particles.push(createParticle(undefined, undefined, isStar));
-        }
-        // Перемешаем массив, чтобы звёзды не были сгруппированы в начале
-        for (let i = particles.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [particles[i], particles[j]] = [particles[j], particles[i]];
+        for (let i = 0; i < CONFIG.PARTICLE_COUNT; i++) {
+            particles.push(createParticle());
         }
     }
 
     function updateParticles() {
-        const now = performance.now(); // для тайминга циклов звёзд
         for (let i = 0; i < particles.length; i++) {
             const p = particles[i];
 
@@ -188,14 +161,11 @@
             if (p.y > height) { p.y = 0; respawn = true; }
 
             if (respawn) {
+                // Сброс fade (появится снова плавно)
                 p.fadeProgress = 0;
                 p.vx = randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED);
                 p.vy = randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED);
                 p.opacityPhase = Math.random() * Math.PI * 2;
-                if (p.isStar) {
-                    p.starPhase = Math.random();
-                    p.starTimer = 0;
-                }
                 continue;
             }
 
@@ -205,108 +175,32 @@
                 if (p.fadeProgress > 1) p.fadeProgress = 1;
             }
 
-            // Обновление фазы мерцания (для всех частиц)
+            // Мерцание
             p.opacityPhase += CONFIG.OPACITY_WAVE_SPEED;
             const opacityFactor = (Math.sin(p.opacityPhase) + 1) / 2;
             const wave = 0.6 + 0.4 * opacityFactor;
-
-            if (p.isStar) {
-                // ---- Обработка цикла звезда ⇄ точка ----
-                const cycleDuration = CONFIG.STAR_CYCLE_DURATION + CONFIG.STAR_DIM_DURATION;
-                p.starTimer += 16; // приблизительно один кадр
-                const elapsed = p.starTimer % cycleDuration;
-                let phase = elapsed / CONFIG.STAR_CYCLE_DURATION; // 0..1 во время звезды
-
-                let isStarActive = elapsed < CONFIG.STAR_CYCLE_DURATION;
-                let starProgress = isStarActive ? phase : 0;
-                // Мерцание во время звезды
-                let twinkle = 0.8 + 0.2 * Math.sin(p.opacityPhase * 2); // дополнительная пульсация
-
-                if (isStarActive) {
-                    // Состояние звезды: большой радиус, яркий цвет, мерцание
-                    p.currentRadius = p.radius * (0.9 + 0.1 * Math.sin(p.opacityPhase));
-                    let brightness = p.baseOpacity * wave * twinkle;
-                    // Увеличиваем яркость для звёзд
-                    brightness = Math.min(1, brightness * 1.5);
-                    p.currentOpacity = brightness * p.fadeProgress;
-                } else {
-                    // Состояние точки: уменьшенный радиус, тусклый цвет
-                    const dimProgress = (elapsed - CONFIG.STAR_CYCLE_DURATION) / CONFIG.STAR_DIM_DURATION;
-                    // Плавное уменьшение
-                    const shrink = 1 - dimProgress * 0.8; // от 1 до 0.2
-                    p.currentRadius = p.radius * 0.3 * shrink;
-                    // Тускнеем до уровня обычной пылинки
-                    const dimOpacity = p.baseOpacity * 0.2 * (1 - dimProgress * 0.5);
-                    p.currentOpacity = dimOpacity * p.fadeProgress;
-                }
-
-                // Если цикл завершился, сбрасываем таймер
-                if (elapsed >= cycleDuration - 1) {
-                    p.starTimer = 0;
-                }
-            } else {
-                // Обычная пылинка
-                p.currentRadius = p.radius;
-                p.currentOpacity = p.baseOpacity * p.fadeProgress * wave;
-            }
+            let targetOpacity = p.baseOpacity * p.fadeProgress * wave;
+            p.currentOpacity = targetOpacity;
         }
     }
 
     function drawParticles() {
         if (!ctx) return;
         ctx.clearRect(0, 0, width, height);
-        ctx.shadowBlur = 0;
+        ctx.shadowBlur = 0; // без теней
 
         for (const p of particles) {
             if (p.currentOpacity <= 0.001) continue;
 
-            let r, g, b;
-            if (p.isStar) {
-                // Звёздочки: бело-голубой цвет с высокой яркостью
-                const brightness = p.currentOpacity;
-                r = 200 + 55 * brightness;
-                g = 220 + 35 * brightness;
-                b = 255 * brightness;
-                // рисуем звёздочку в виде ✦ (ромб или крест)
-                drawStar(ctx, p.x, p.y, p.currentRadius, p.currentOpacity);
-            } else {
-                // Обычные пылинки – цветной круг
-                r = Math.min(255, Math.floor(BASE_R * p.colorFactor));
-                g = Math.min(255, Math.floor(BASE_G * p.colorFactor));
-                b = Math.min(255, Math.floor(BASE_B * p.colorFactor));
-                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${p.currentOpacity})`;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.currentRadius, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-    }
+            const r = Math.min(255, Math.floor(BASE_R * p.colorFactor));
+            const g = Math.min(255, Math.floor(BASE_G * p.colorFactor));
+            const b = Math.min(255, Math.floor(BASE_B * p.colorFactor));
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${p.currentOpacity})`;
 
-    // Рисование звёздочки (✦) как крест из четырёх лучей
-    function drawStar(ctx, x, y, radius, opacity) {
-        if (radius < 1) return;
-        ctx.save();
-        ctx.translate(x, y);
-        const r = radius;
-        ctx.globalAlpha = opacity;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
-        ctx.lineWidth = 1.5;
-        // Рисуем четыре луча: вертикальный и горизонтальный
-        ctx.beginPath();
-        ctx.moveTo(0, -r);
-        ctx.lineTo(0, r);
-        ctx.moveTo(-r, 0);
-        ctx.lineTo(r, 0);
-        ctx.stroke();
-        // Небольшие диагональные штрихи для красоты
-        ctx.lineWidth = 0.8;
-        const d = r * 0.4;
-        ctx.moveTo(-d, -d);
-        ctx.lineTo(d, d);
-        ctx.moveTo(d, -d);
-        ctx.lineTo(-d, d);
-        ctx.stroke();
-        ctx.restore();
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 
     function animate() {
