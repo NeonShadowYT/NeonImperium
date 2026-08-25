@@ -800,3 +800,41 @@
         gap: 8px;
     }
 }
+
+/* ============================================================
+   ТОЛЬКО АНИМИРОВАННЫЙ ГРАДИЕНТ ДЛЯ ОПИСАНИЯ STARVE NEON
+   ============================================================ */
+
+/* Заголовки блоков в описании */
+.desc-text h3 {
+    background: linear-gradient(135deg, #3d9eb3, #9b59b6, #3d9eb3);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: gradientText 6s ease-in-out infinite alternate;
+    /* fallback для старых браузеров */
+    @supports not (background-clip: text) {
+        color: var(--accent);
+        background: none;
+        animation: none;
+    }
+}
+
+/* Боковые линии цитат (.quote) – делаем анимированный градиент через border-image */
+.quote {
+    border-left: 4px solid transparent;
+    border-image: linear-gradient(to bottom, #3d9eb3, #9b59b6) 1;
+    animation: gradientBorder 6s ease-in-out infinite alternate;
+}
+
+/* Анимации */
+@keyframes gradientText {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+}
+
+@keyframes gradientBorder {
+    0% { border-image-source: linear-gradient(to bottom, #3d9eb3, #9b59b6); }
+    100% { border-image-source: linear-gradient(to bottom, #9b59b6, #3d9eb3); }
+}
