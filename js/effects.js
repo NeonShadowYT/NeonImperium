@@ -1,4 +1,4 @@
-// effects.js — 3D tilt и параллакс для шапок (только десктоп)
+// effects.js — 3D tilt, параллакс для шапок и эффект "жидкого стекла" (только десктоп)
 
 function throttleAnimation(fn) {
     let running = false;
@@ -56,7 +56,7 @@ function initTiltEffect() {
     });
 }
 
-// Параллакс для шапок игр (на десктопе) — исправлен сброс при скролле
+// Параллакс для шапок игр (на десктопе)
 function initHeaderParallax() {
     const headers = document.querySelectorAll('.game-header');
     if (headers.length === 0) return;
@@ -99,6 +99,39 @@ function initHeaderParallax() {
     });
 }
 
+// НОВАЯ ФУНКЦИЯ: эффект "жидкого стекла" – обновляем CSS-переменные для карточек
+function initGlassEffect() {
+    // Селекторы карточек, на которые будет действовать эффект
+    const selectors = [
+        '.card', '.project-card', '.desc-block', '.req-item',
+        '.consumption-card', '.feedback-item', '.update-card',
+        '.feature-item', '.trailer-card', '.developer-card',
+        '.download-card', '.license-section-card', '.license-hero'
+    ];
+    const selectorString = selectors.join(', ');
+
+    // Функция обновления переменных для элемента
+    function updateGlassVariables(e) {
+        const target = e.target.closest(selectorString);
+        if (!target) {
+            // Если мышь не над карточкой, можно сбросить переменные на body (опционально)
+            // Но лучше ничего не делать, чтобы не было миганий
+            return;
+        }
+        const rect = target.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        target.style.setProperty('--mouse-x', x + '%');
+        target.style.setProperty('--mouse-y', y + '%');
+    }
+
+    // Throttled версия
+    const throttledUpdate = throttleAnimation(updateGlassVariables);
+
+    // Добавляем обработчик на документ, но только если поддерживается pointer-events
+    document.addEventListener('mousemove', throttledUpdate);
+}
+
 // Инициализация после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
     const isTouch = 'ontouchstart' in window;
@@ -106,5 +139,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!isTouch) {
         initTiltEffect();
         initHeaderParallax();
+        initGlassEffect(); // добавляем новый эффект
     }
 });

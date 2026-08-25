@@ -800,3 +800,154 @@
         gap: 8px;
     }
 }
+
+/* ============================================================
+   НОВЫЕ СТИЛИ: Эффект "жидкого стекла" и анимированный градиент
+   ============================================================ */
+
+/* --- 1. Жидкое стекло для карточек --- */
+.card,
+.project-card,
+.desc-block,
+.req-item,
+.consumption-card,
+.feedback-item,
+.update-card,
+.feature-item,
+.trailer-card,
+.developer-card,
+.download-card,
+.license-section-card,
+.license-hero {
+    /* Основной фон + переливающийся градиент по координатам мыши */
+    background: radial-gradient(
+        circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+        rgba(61, 158, 179, 0.15) 0%,
+        rgba(100, 80, 200, 0.08) 40%,
+        transparent 70%
+    ), var(--glass-bg);
+    transition: background 0.25s ease, border-color 0.3s, box-shadow 0.3s;
+    will-change: background;
+}
+
+/* Лёгкая пульсация при наведении (только на десктопе) */
+@media (hover: hover) and (pointer: fine) {
+    .card:hover,
+    .project-card:hover,
+    .desc-block:hover,
+    .req-item:hover,
+    .consumption-card:hover,
+    .feedback-item:hover,
+    .update-card:hover,
+    .feature-item:hover,
+    .trailer-card:hover,
+    .developer-card:hover,
+    .download-card:hover,
+    .license-section-card:hover,
+    .license-hero:hover {
+        animation: pulseGlow 2s ease-in-out infinite alternate;
+    }
+}
+
+@keyframes pulseGlow {
+    0% { box-shadow: var(--shadow), 0 0 15px rgba(61,158,179,0.05); }
+    100% { box-shadow: var(--shadow-hover), 0 0 30px rgba(61,158,179,0.15); }
+}
+
+/* Отключаем эффект на мобильных (тач-устройства) – чтобы не было "залипания" */
+@media (hover: none) and (pointer: coarse) {
+    .card,
+    .project-card,
+    .desc-block,
+    .req-item,
+    .consumption-card,
+    .feedback-item,
+    .update-card,
+    .feature-item,
+    .trailer-card,
+    .developer-card,
+    .download-card,
+    .license-section-card,
+    .license-hero {
+        background: var(--glass-bg);
+        transition: none;
+        animation: none !important;
+    }
+}
+
+/* --- 2. Анимированный градиент для заголовков --- */
+h2,
+h3,
+.game-title,
+.desc-text h3,
+.feedback-header h2,
+.modal-header h2,
+.license-hero h1 {
+    background: linear-gradient(135deg, #3d9eb3, #9b59b6, #3d9eb3);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: gradientText 6s ease-in-out infinite alternate;
+    /* fallback для старых браузеров */
+    @supports not (background-clip: text) {
+        color: var(--accent);
+        background: none;
+        animation: none;
+    }
+}
+
+@keyframes gradientText {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+}
+
+/* --- 3. Анимированный градиент для боковых линий (.quote и .desc-block) --- */
+.quote,
+.desc-block {
+    position: relative;
+}
+
+.quote::before,
+.desc-block::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(to bottom, #3d9eb3, #9b59b6);
+    background-size: 100% 200%;
+    animation: gradientBorder 6s ease-in-out infinite alternate;
+    border-radius: 4px;
+    z-index: 1;
+}
+
+/* Для .desc-block уже есть border-left, но мы используем псевдоэлемент поверх,
+   поэтому скрываем оригинальный border-left, чтобы не мешал */
+.desc-block {
+    border-left: none !important;
+}
+
+/* Для .quote, которые уже имеют border-left, также скрываем и используем псевдоэлемент */
+.quote {
+    border-left: none !important;
+}
+
+/* Для блоков, у которых border-left задан через style (например, в .desc-block.no-image), переопределяем */
+.desc-block.no-image {
+    border-left: none !important;
+}
+
+/* Если нужно сохранить цветовые акценты (например, block-accent1..6) – оставляем их через цвет текста, но не через border-left */
+.block-accent1 .desc-text h3 { color: #ff6b6b; }
+.block-accent2 .desc-text h3 { color: #ffd93d; }
+.block-accent3 .desc-text h3 { color: #ff8c00; }
+.block-accent4 .desc-text h3 { color: #9b59b6; }
+.block-accent5 .desc-text h3 { color: #6bcbff; }
+.block-accent6 .desc-text h3 { color: #39ff14; }
+
+@keyframes gradientBorder {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 0% 100%; }
+}
