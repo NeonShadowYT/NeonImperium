@@ -847,9 +847,12 @@
 .quote {
     position: relative;
     border-left: none !important;
-    padding-left: 20px;
-    border-radius: 12px 0 0 12px;
+    padding: 12px 16px 12px 20px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
+    background: var(--glass-bg);
+    backdrop-filter: blur(4px);
+    margin: 12px 0;
 }
 
 .quote::before {
