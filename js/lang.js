@@ -1,4 +1,5 @@
 // js/lang.js — локализация без встроенных словарей, только из JSON-файлов
+// Теперь поддерживает HTML-теги в переводах (безопасно, т.к. контент доверенный)
 (function() {
     const SUPPORTED = ['ru', 'en'];
     const DEFAULT = 'ru';
@@ -62,14 +63,14 @@
             const key = el.getAttribute('data-lang');
             const text = translate(key);
             if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                if (el.placeholder !== undefined) el.placeholder = text;
-                else el.textContent = text;
-            } else {
-                if (el.classList.contains('markdown-body')) {
-                    el.innerHTML = text.replace(/\n/g, '<br>');
+                if (el.placeholder !== undefined) {
+                    el.placeholder = text;
                 } else {
                     el.textContent = text;
                 }
+            } else {
+                // Вставляем как HTML, чтобы поддерживать <strong>, <em> и т.д.
+                el.innerHTML = text;
             }
         });
 
