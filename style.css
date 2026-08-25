@@ -805,39 +805,57 @@
    АНИМИРОВАННЫЙ ГРАДИЕНТ ДЛЯ ОПИСАНИЯ STARVE NEON
    ============================================================ */
 
-/* Заголовки блоков в описании – усиленный контраст */
+/* Определяем пары цветов для каждого блока (основной и светлый оттенок) */
+.block-accent1 { --color1: #ff6b6b; --color2: #ff9a9e; }
+.block-accent2 { --color1: #ffd93d; --color2: #ffe68a; }
+.block-accent3 { --color1: #ff8c00; --color2: #ffb347; }
+.block-accent4 { --color1: #9b59b6; --color2: #c39bd3; }
+.block-accent5 { --color1: #6bcbff; --color2: #a8d8ff; }
+.block-accent6 { --color1: #39ff14; --color2: #7fff7f; }
+
+/* Заголовки блоков в описании */
 .desc-text h3 {
-    background: linear-gradient(135deg, #00d4ff, #a855f7, #00d4ff);
+    background-image: linear-gradient(135deg, var(--color1), var(--color2), var(--color1));
     background-size: 200% 200%;
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    animation: gradientText 5s ease-in-out infinite alternate;
-    font-weight: bold; /* делаем жирнее для лучшей читаемости */
-    text-shadow: none; /* убираем тень, чтобы не мешала градиенту */
+    animation: gradientMove 5s ease-in-out infinite alternate;
+    font-weight: bold;
     /* fallback для старых браузеров */
     @supports not (background-clip: text) {
-        color: #00d4ff;
+        color: var(--color1);
         background: none;
         animation: none;
     }
 }
 
-/* Боковые линии цитат – синхронизированный градиент */
-.quote {
-    border-left: 4px solid transparent;
-    border-image: linear-gradient(to bottom, #00d4ff, #a855f7) 1;
-    animation: gradientBorder 5s ease-in-out infinite alternate;
-    padding-left: 16px; /* небольшой отступ для красоты */
-}
-
-/* Анимации */
-@keyframes gradientText {
+@keyframes gradientMove {
     0% { background-position: 0% 50%; }
     100% { background-position: 100% 50%; }
 }
 
-@keyframes gradientBorder {
-    0% { border-image-source: linear-gradient(to bottom, #00d4ff, #a855f7); }
-    100% { border-image-source: linear-gradient(to bottom, #a855f7, #00d4ff); }
+/* Боковые линии цитат – через псевдоэлемент, наследует цвета от блока */
+.quote {
+    position: relative;
+    border-left: none !important;
+    padding-left: 20px;
+}
+
+.quote::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(to bottom, var(--color1), var(--color2), var(--color1));
+    background-size: 100% 200%;
+    animation: gradientMoveVertical 5s ease-in-out infinite alternate;
+    border-radius: 4px;
+}
+
+@keyframes gradientMoveVertical {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 0% 100%; }
 }
