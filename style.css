@@ -848,8 +848,7 @@
     position: relative;
     border-left: none !important;
     padding-left: 20px;
-    /* Скругление левого края, чтобы псевдоэлемент тоже был скруглён */
-    border-radius: 4px 0 0 4px;
+    border-radius: 12px 0 0 12px;
     overflow: hidden;
 }
 
@@ -863,7 +862,6 @@
     background: linear-gradient(to bottom, var(--color1), var(--color2), var(--color1));
     background-size: 100% 200%;
     animation: gradientMoveVertical 5s ease-in-out infinite alternate;
-    border-radius: 4px;
 }
 
 @keyframes gradientMoveVertical {
