@@ -805,16 +805,16 @@
    АНИМИРОВАННЫЙ ГРАДИЕНТ ДЛЯ ОПИСАНИЯ STARVE NEON
    ============================================================ */
 
-/* Определяем пары цветов для каждого блока (основной и светлый оттенок) */
-.block-accent1 { --color1: #ff6b6b; --color2: #ff9a9e; }
-.block-accent2 { --color1: #ffd93d; --color2: #ffe68a; }
-.block-accent3 { --color1: #ff8c00; --color2: #ffb347; }
-.block-accent4 { --color1: #9b59b6; --color2: #c39bd3; }
-.block-accent5 { --color1: #6bcbff; --color2: #a8d8ff; }
-.block-accent6 { --color1: #39ff14; --color2: #7fff7f; }
+/* Определяем пары цветов для каждого блока (основной и насыщенный оттенок) */
+.block-accent1 { --color1: #ff6b6b; --color2: #e63946; }
+.block-accent2 { --color1: #ffd93d; --color2: #f4a236; }
+.block-accent3 { --color1: #ff8c00; --color2: #e67e22; }
+.block-accent4 { --color1: #9b59b6; --color2: #8e44ad; }
+.block-accent5 { --color1: #6bcbff; --color2: #3498db; }
+.block-accent6 { --color1: #39ff14; --color2: #2ecc71; }
 
-/* Заголовки блоков в описании */
-.desc-text h3 {
+/* Только текст внутри span[data-lang] получает градиент */
+.desc-text h3 span[data-lang] {
     background-image: linear-gradient(135deg, var(--color1), var(--color2), var(--color1));
     background-size: 200% 200%;
     -webkit-background-clip: text;
@@ -828,6 +828,14 @@
         background: none;
         animation: none;
     }
+}
+
+/* Эмодзи остаются обычного цвета */
+.desc-text h3 .emoji {
+    color: var(--text-primary); /* или белый, как остальной текст */
+    background: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
 }
 
 @keyframes gradientMove {
