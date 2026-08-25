@@ -603,7 +603,7 @@
       ? `<div class="profile-dropdown-item" data-action="storage"><i class="fas fa-box-archive"></i> ${t('storage')}</div>`
       : '';
     profileContainer.innerHTML = `
-      <img src="${user.avatar_url || 'images/default-avatar.webp'}" alt="${user.login}" class="nav-profile-avatar" onerror="this.src='images/default-avatar.webp'" width="32" height="32">
+      <img src="${user.avatar_url || 'images/starve-neon-icon.webp'}" alt="${user.login}" class="nav-profile-avatar" onerror="this.src='images/starve-neon-icon.webp'" width="32" height="32">
       <span class="nav-profile-login">${escapeHtml(user.login)}</span>
       <i class="fas fa-chevron-right nav-profile-chevron"></i>
       <div class="profile-dropdown">
