@@ -235,28 +235,25 @@
 
         .social-links {
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
+            align-items: center;
             gap: 12px;
-            justify-content: center;
             margin: 20px 0 10px;
         }
+
         .social-row {
             display: flex;
             flex-wrap: wrap;
-            gap: 12px;
             justify-content: center;
-            width: 100%;
-        }
-        .social-row + .social-row {
-            margin-top: 10px;
+            gap: 10px;
         }
 
-        .social-links a {
+        .social-row a {
             display: inline-block;
             transition: transform 0.2s;
         }
 
-        .social-links a:hover {
+        .social-row a:hover {
             transform: translateY(-3px);
         }
 
@@ -319,6 +316,9 @@
             }
             .summary-grid {
                 grid-template-columns: 1fr;
+            }
+            .social-row {
+                gap: 8px;
             }
         }
     </style>
@@ -497,7 +497,7 @@
                         </div>
                     </div>
 
-                    <!-- 6. Твой остров – banner-building.webm, гифка справа -->
+                    <!-- 6. Твой остров – banner-building.webm, гифка справа, текст разбит на два абзаца -->
                     <div class="desc-block block-accent1 image-right">
                         <div class="desc-image">
                             <video autoplay muted loop playsinline>
@@ -507,8 +507,8 @@
                         <div class="desc-text">
                             <h3><span data-lang="starveIslandTitle">🏰 ТВОЙ ОСТРОВ - ТВОЯ КРЕПОСТЬ</span></h3>
                             <p data-lang="starveIslandDesc">Строй стены, ставь верстаки, укрепляй фундамент. Как в Rust.</p>
-                            <p>Но без соседей, которые придут ночью, пока ты в офлайне. У каждого игрока - свой личный остров.</p>
-                            <div class="quote" data-lang="starveIslandQuote">Фракции могут устроить рейд - и они опаснее, чем любой игрок. В планах - клановые базы и рейды на чужие острова. Пока - отбивайся и строй.</div>
+                            <p data-lang="starveIslandQuote1">Но без соседей, которые придут ночью, пока ты в офлайне. У каждого игрока - свой личный остров.</p>
+                            <p data-lang="starveIslandQuote2">Фракции могут устроить рейд - и они опаснее, чем любой игрок. В планах - клановые базы и рейды на чужие острова. Пока - отбивайся и строй.</p>
                         </div>
                     </div>
 
@@ -521,7 +521,7 @@
                         </div>
                     </div>
 
-                    <!-- 8. Играй как хочешь – banner-status.webm, гифка слева -->
+                    <!-- 8. Играй как хочешь – banner-status.webm, гифка слева, текст разбит на два абзаца -->
                     <div class="desc-block block-accent6 image-left">
                         <div class="desc-image">
                             <video autoplay muted loop playsinline>
@@ -530,9 +530,9 @@
                         </div>
                         <div class="desc-text">
                             <h3><span data-lang="starvePlayTitle">⚡ ИГРАЙ КАК ХОЧЕШЬ</span></h3>
-                            <p>ПК и телефон - в одном лобби. Без скидок на FPS. Без доната и рекламы. Всё за игру. Пасс без дедлайнов - играй в своём темпе.</p>
-                            <div class="quote">Заходи каждый день - получай валюту на скины. Крафт на ходу, авто-экипировка, автопоедание, автобег, автопрыжок.</div>
-                            <!-- Убираем data-lang для этих новых элементов, но оставляем для статики -->
+                            <p data-lang="starvePlayDesc1">ПК и телефон - в одном лобби. Без скидок на FPS. <strong>Без доната и рекламы.</strong> Всё за игру. Пасс без дедлайнов - играй в своём темпе.</p>
+                            <p data-lang="starvePlayDesc2">Заходи каждый день - получай валюту на скины. Крафт на ходу, авто-экипировка, автопоедание, автобег, автопрыжок.</p>
+                            <div class="quote" data-lang="starvePlayQuote"><strong>Я сделал игру удобной, но не лёгкой.</strong></div>
                         </div>
                     </div>
 
@@ -541,24 +541,24 @@
                         <div class="desc-text" style="background: var(--glass-bg); backdrop-filter: blur(4px);">
                             <h3 style="color: var(--accent);"><span data-lang="starveSummaryTitle">📋 КОРОТКО О ГЛАВНОМ</span></h3>
                             <div class="summary-grid">
-                                <div class="summary-item"><span class="emoji">☠️</span> <span data-lang="starveSummary1">Смерть в вылазке = потеря всего снаряжения</span></div>
-                                <div class="summary-item"><span class="emoji">⚡</span> <span data-lang="starveSummary2">Быстрая прогрессия за риск, а не за часы фарма</span></div>
-                                <div class="summary-item"><span class="emoji">🏝️</span> <span data-lang="starveSummary3">У каждого свой остров - без оффлайн рейдов</span></div>
-                                <div class="summary-item"><span class="emoji">🧬</span> <span data-lang="starveSummary4">Генетика: под свой геймплей, остальное слабеет</span></div>
-                                <div class="summary-item"><span class="emoji">👁️</span> <span data-lang="starveSummary5">Живой мир с рассказчиком, который не спит</span></div>
-                                <div class="summary-item"><span class="emoji">🤝</span> <span data-lang="starveSummary6">Фракции с репутацией и уникальными ресурсами</span></div>
-                                <div class="summary-item"><span class="emoji">🎄</span> <span data-lang="starveSummary7">Сезонные ивенты, вайпы, поддержка модов и редактора даже на мобилке</span></div>
-                                <div class="summary-item"><span class="emoji">📱</span> <span data-lang="starveSummary8">Кроссплатформа, бесплатно, без доната и рекламы</span></div>
+                                <div class="summary-item"><span data-lang="starveSummary1">☠️ Смерть в вылазке = потеря всего снаряжения</span></div>
+                                <div class="summary-item"><span data-lang="starveSummary2">⚡ Быстрая прогрессия за риск, а не за часы фарма</span></div>
+                                <div class="summary-item"><span data-lang="starveSummary3">🏝️ У каждого свой остров - без оффлайн рейдов</span></div>
+                                <div class="summary-item"><span data-lang="starveSummary4">🧬 Генетика: Под свой геймплей, остальное слабеет</span></div>
+                                <div class="summary-item"><span data-lang="starveSummary5">👁️ Живой мир с рассказчиком, который не спит</span></div>
+                                <div class="summary-item"><span data-lang="starveSummary6">🤝 Фракции с репутацией и уникальными ресурсами</span></div>
+                                <div class="summary-item"><span data-lang="starveSummary7">🎄 Сезонные ивенты, вайпы, поддержка модов и редактора даже на мобилке</span></div>
+                                <div class="summary-item"><span data-lang="starveSummary8">📱 Кроссплатформа, бесплатно, без доната и рекламы</span></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Социальные сети -->
+                    <!-- Следи за разработкой – социальные ссылки разделены на три строки -->
                     <div class="desc-block no-image" style="text-align: center; border-left: none;">
                         <div class="desc-text" style="background: var(--glass-bg); backdrop-filter: blur(4px);">
                             <h3 style="color: var(--text-primary);"><span data-lang="starveFollow">📸 СЛЕДИ ЗА РАЗРАБОТКОЙ</span></h3>
                             <div class="social-links">
-                                <!-- Ряд 1: основные соцсети -->
+                                <!-- Основные площадки -->
                                 <div class="social-row">
                                     <a target="_blank" href="https://www.youtube.com/@NeonShadow-neon">
                                         <img alt="YouTube" src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white">
@@ -576,7 +576,7 @@
                                         <img alt="Boosty" src="https://img.shields.io/badge/Boosty-FF5E00?style=for-the-badge&logo=boosty&logoColor=white">
                                     </a>
                                 </div>
-                                <!-- Ряд 2: личные контакты -->
+                                <!-- Личные контакты -->
                                 <div class="social-row">
                                     <a target="_blank" href="https://t.me/NeonCyndows">
                                         <img alt="Telegram DM" src="https://img.shields.io/badge/Telegram-Личка-26A5E4?style=for-the-badge&logo=telegram&logoColor=white">
@@ -585,7 +585,7 @@
                                         <img alt="Discord DM" src="https://img.shields.io/badge/Discord-Личка-5865F2?style=for-the-badge&logo=discord&logoColor=white">
                                     </a>
                                 </div>
-                                <!-- Ряд 3: GitHub -->
+                                <!-- GitHub -->
                                 <div class="social-row">
                                     <a target="_blank" href="https://github.com/NeonShadowYT">
                                         <img title="GitHub" alt="GitHub" src="https://img.shields.io/badge/GitHub-2d2f48?style=for-the-badge&logo=github&logoColor=white">
