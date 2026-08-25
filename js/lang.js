@@ -110,6 +110,7 @@
         translations = await fetchTranslations(currentLang) || {};
         updateElements();
 
+        // Обработчики для кнопок (оставлены для обратной совместимости, но они будут заменены выпадающим списком)
         document.querySelectorAll('.lang-btn').forEach(btn => {
             btn.addEventListener('click', () => setLanguage(btn.dataset.langCode));
         });

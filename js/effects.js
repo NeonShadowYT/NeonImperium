@@ -14,6 +14,10 @@ function throttleAnimation(fn) {
 
 // 3D Tilt для карточек (только на десктопе)
 function initTiltEffect() {
+    // Проверяем, мобильное устройство или маленький экран
+    const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
+    if (isMobile) return;
+
     const cards = document.querySelectorAll('.tilt-card');
     if (cards.length === 0) return;
 
@@ -58,6 +62,9 @@ function initTiltEffect() {
 
 // Параллакс для шапок игр (на десктопе) — исправлен сброс при скролле
 function initHeaderParallax() {
+    const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
+    if (isMobile) return;
+
     const headers = document.querySelectorAll('.game-header');
     if (headers.length === 0) return;
 
@@ -101,9 +108,9 @@ function initHeaderParallax() {
 
 // Инициализация после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
-    const isTouch = 'ontouchstart' in window;
-    
-    if (!isTouch) {
+    // На мобилках и при малом экране не включаем эффекты
+    const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
+    if (!isMobile) {
         initTiltEffect();
         initHeaderParallax();
     }

@@ -1,4 +1,7 @@
 // js/common-init.js – инициализация после загрузки переводов
+// Добавлено: кликабельность видео для пользователей с отключенным автоплеем,
+// выпадающий список языка вместо двух кнопок,
+// исправление трейлера, улучшение шапки.
 (function() {
   function addPreconnects() {
     const links = [
@@ -232,6 +235,40 @@
         el.classList.add('loaded');
       });
     }
+
+    // ---- ДОБАВЛЯЕМ КЛИКАБЕЛЬНОСТЬ ДЛЯ ВИДЕО (если не запускается) ----
+    document.querySelectorAll('.lazy-yt').forEach(el => {
+      el.addEventListener('click', function(e) {
+        // Если клик был по iframe, и видео не играет – пытаемся запустить
+        const iframe = this.querySelector('iframe');
+        if (iframe) {
+          // Пытаемся отправить команду на воспроизведение (не всегда работает)
+          try {
+            iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+          } catch (err) {}
+        }
+      });
+    });
+
+    // Для видео в описании Starve Neon (блоки desc-block с video)
+    document.querySelectorAll('.desc-block .desc-image video').forEach(video => {
+      const block = video.closest('.desc-block');
+      if (block) {
+        block.style.cursor = 'pointer';
+        block.addEventListener('click', function(e) {
+          // Предотвращаем срабатывание, если клик внутри текста или других элементов
+          if (e.target.closest('.desc-text')) return;
+          const vid = this.querySelector('video');
+          if (vid) {
+            if (vid.paused) {
+              vid.play().catch(() => {});
+            } else {
+              vid.pause();
+            }
+          }
+        });
+      }
+    });
   }
 
   function loadDustParticles() {
@@ -397,6 +434,67 @@
     }
   }
 
+  // ----- ФУНКЦИЯ ЗАМЕНЫ ПЕРЕКЛЮЧАТЕЛЯ ЯЗЫКА НА ВЫПАДАЮЩИЙ СПИСОК -----
+  function transformLangSwitcherToDropdown() {
+    const switcher = document.querySelector('.lang-switcher');
+    if (!switcher) return;
+    // Если уже заменён, не делаем повторно
+    if (switcher.querySelector('.lang-dropdown')) return;
+
+    const currentLang = window.I18n?.getCurrentLang() || 'ru';
+    const t = window.I18n?.translate || (k => k);
+
+    // Создаём контейнер dropdown
+    const dropdown = document.createElement('div');
+    dropdown.className = 'lang-dropdown';
+
+    // Кнопка-триггер
+    const btn = document.createElement('button');
+    btn.className = 'lang-dropdown-btn';
+    const langNames = { ru: '🇷🇺 RU', en: '🇬🇧 EN' };
+    btn.innerHTML = `${langNames[currentLang] || currentLang.toUpperCase()} <i class="fas fa-chevron-down"></i>`;
+    dropdown.appendChild(btn);
+
+    // Меню
+    const menu = document.createElement('div');
+    menu.className = 'lang-dropdown-menu';
+    const languages = [
+      { code: 'ru', label: '🇷🇺 Русский' },
+      { code: 'en', label: '🇬🇧 English' }
+    ];
+    languages.forEach(lang => {
+      const item = document.createElement('div');
+      item.className = 'lang-dropdown-item' + (lang.code === currentLang ? ' active' : '');
+      item.textContent = lang.label;
+      item.dataset.langCode = lang.code;
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.I18n?.setLanguage(lang.code);
+        menu.classList.remove('open');
+        // Обновляем текст кнопки
+        const label = lang.code === 'ru' ? '🇷🇺 RU' : '🇬🇧 EN';
+        btn.innerHTML = `${label} <i class="fas fa-chevron-down"></i>`;
+        // Обновляем активный класс
+        menu.querySelectorAll('.lang-dropdown-item').forEach(el => el.classList.toggle('active', el.dataset.langCode === lang.code));
+      });
+      menu.appendChild(item);
+    });
+    dropdown.appendChild(menu);
+
+    // Открытие/закрытие
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('open');
+    });
+    document.addEventListener('click', () => {
+      menu.classList.remove('open');
+    });
+
+    // Заменяем старый switcher
+    switcher.innerHTML = '';
+    switcher.appendChild(dropdown);
+  }
+
   // ----- ИНИЦИАЛИЗАЦИЯ СТРАНИЧНЫХ МОДУЛЕЙ (после переводов) -----
   function initPageModules() {
     if (window.initNewsFeed) window.initNewsFeed();
@@ -416,15 +514,21 @@
       const testKey = window.I18n.translate('siteTitle');
       if (testKey !== 'siteTitle') {
         initPageModules();
+        // После загрузки языка трансформируем переключатель
+        transformLangSwitcherToDropdown();
         return;
       }
     }
-    document.addEventListener('languageLoaded', initPageModules, { once: true });
+    document.addEventListener('languageLoaded', () => {
+      initPageModules();
+      transformLangSwitcherToDropdown();
+    }, { once: true });
     setTimeout(() => {
       if (window.I18n && window.I18n.getCurrentLang && window.I18n.getCurrentLang() !== null) {
         const testKey = window.I18n.translate('siteTitle');
         if (testKey !== 'siteTitle') {
           initPageModules();
+          transformLangSwitcherToDropdown();
         }
       }
     }, 500);

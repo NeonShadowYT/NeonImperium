@@ -895,3 +895,221 @@
     -webkit-background-clip: unset;
     background-clip: unset;
 }
+
+/* ========== НОВЫЕ ПРАВКИ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ ========== */
+
+/* Отключаем анимации на мобилках и при reduced motion */
+@media (prefers-reduced-motion: reduce),
+       (max-width: 768px) {
+    /* Все анимации отключаем */
+    .card, .project-card-link, .feature-item, .req-item, .consumption-card, .video-grid iframe,
+    .project-card-link:hover .project-card,
+    .project-card .image-wrapper img,
+    .game-icon,
+    .profile-card-link,
+    .button,
+    .download-button,
+    .social-icon,
+    .tilt-card,
+    .desc-text h3 span[data-lang],
+    .quote::before,
+    .block-follow .desc-text h3 span[data-lang] {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+        background-position: initial !important;
+    }
+    /* Отключаем градиентный фон у текста */
+    .desc-text h3 span[data-lang] {
+        background: none !important;
+        -webkit-background-clip: unset !important;
+        background-clip: unset !important;
+        color: var(--text-primary) !important;
+    }
+    .block-follow .desc-text h3 span[data-lang] {
+        color: var(--text-primary) !important;
+    }
+    .quote::before {
+        display: none;
+    }
+    /* Убираем наклоны и поднятия */
+    .tilt-card:hover {
+        transform: none !important;
+    }
+    .project-card-link:hover {
+        transform: none !important;
+    }
+    .project-card-link:hover .project-card {
+        transform: none !important;
+        box-shadow: var(--shadow) !important;
+    }
+    /* Убираем мерцание */
+    .req-item::before {
+        animation: none !important;
+    }
+    .game-header::before {
+        opacity: 0.3;
+    }
+    /* Убираем рябь и сложные фоны */
+    body {
+        background-image: radial-gradient(circle at 30% 10%, rgba(61,158,179,0.03) 0%, transparent 60%);
+    }
+    .modal-content-full::before {
+        animation: none !important;
+    }
+}
+
+/* Исправление трейлера – не вылезает за карточку */
+.trailer-card .lazy-yt {
+    padding-bottom: 56.25% !important; /* 16:9 */
+    position: relative;
+    width: 100%;
+    height: 0;
+    overflow: hidden;
+    border-radius: 12px;
+}
+.trailer-card .lazy-yt iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 12px;
+}
+
+/* Шапка на мобилках – тёмный фон, без закруглений */
+@media (max-width: 768px) {
+    .game-header .header-overlay {
+        background: rgba(0,0,0,0.7) !important;
+        backdrop-filter: blur(4px);
+        padding: 30px 16px;
+        border-radius: 0;
+    }
+    .game-header .header-content {
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(4px);
+        border-radius: 20px;
+        padding: 16px 24px;
+        border: 1px solid rgba(255,255,255,0.08);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        flex-direction: row;
+        justify-content: center;
+        gap: 16px;
+        width: 100%;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    .game-icon-circle {
+        width: 64px;
+        height: 64px;
+        flex-shrink: 0;
+    }
+    .game-icon {
+        max-width: 56px;
+        max-height: 56px;
+    }
+    .header-text .game-title {
+        font-size: 28px;
+        margin-bottom: 4px;
+    }
+    .version-badge {
+        font-size: 12px;
+        padding: 4px 12px;
+    }
+    .version-row {
+        flex-direction: row;
+        gap: 8px;
+    }
+    .social-icons.small .social-icon {
+        font-size: 18px;
+    }
+    .game-header {
+        background-size: cover !important;
+        background-position: center !important;
+        border-radius: 20px;
+        overflow: hidden;
+    }
+}
+
+/* Убираем жёлтые квадраты (outline) на мобилках */
+*:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+@media (max-width: 768px) {
+    *:focus-visible {
+        outline: none !important;
+    }
+    /* Для доступности оставляем визуальный индикатор, но без жёлтого */
+    .button:focus-visible,
+    .nav-link:focus-visible,
+    .lang-btn:focus-visible,
+    .download-button:focus-visible,
+    .social-icon:focus-visible {
+        outline: 2px solid var(--accent) !important;
+        outline-offset: 2px !important;
+        border-radius: var(--radius-pill);
+    }
+}
+
+/* Выпадающий список для языка – стили (используется в JS) */
+.lang-dropdown {
+    position: relative;
+    display: inline-block;
+}
+.lang-dropdown-btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-size: 14px;
+    font-family: var(--font-family);
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.lang-dropdown-btn:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(61,158,179,0.3);
+}
+.lang-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 4px 0;
+    min-width: 100px;
+    box-shadow: var(--shadow);
+    display: none;
+    z-index: 1000;
+}
+.lang-dropdown-menu.open {
+    display: block;
+}
+.lang-dropdown-item {
+    padding: 8px 16px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background var(--transition);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.lang-dropdown-item:hover {
+    background: rgba(61,158,179,0.12);
+    color: var(--text-primary);
+}
+.lang-dropdown-item.active {
+    background: var(--accent);
+    color: white;
+}
