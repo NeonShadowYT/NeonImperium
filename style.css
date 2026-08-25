@@ -802,30 +802,33 @@
 }
 
 /* ============================================================
-   ТОЛЬКО АНИМИРОВАННЫЙ ГРАДИЕНТ ДЛЯ ОПИСАНИЯ STARVE NEON
+   АНИМИРОВАННЫЙ ГРАДИЕНТ ДЛЯ ОПИСАНИЯ STARVE NEON
    ============================================================ */
 
-/* Заголовки блоков в описании */
+/* Заголовки блоков в описании – усиленный контраст */
 .desc-text h3 {
-    background: linear-gradient(135deg, #3d9eb3, #9b59b6, #3d9eb3);
+    background: linear-gradient(135deg, #00d4ff, #a855f7, #00d4ff);
     background-size: 200% 200%;
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    animation: gradientText 6s ease-in-out infinite alternate;
+    animation: gradientText 5s ease-in-out infinite alternate;
+    font-weight: bold; /* делаем жирнее для лучшей читаемости */
+    text-shadow: none; /* убираем тень, чтобы не мешала градиенту */
     /* fallback для старых браузеров */
     @supports not (background-clip: text) {
-        color: var(--accent);
+        color: #00d4ff;
         background: none;
         animation: none;
     }
 }
 
-/* Боковые линии цитат (.quote) – делаем анимированный градиент через border-image */
+/* Боковые линии цитат – синхронизированный градиент */
 .quote {
     border-left: 4px solid transparent;
-    border-image: linear-gradient(to bottom, #3d9eb3, #9b59b6) 1;
-    animation: gradientBorder 6s ease-in-out infinite alternate;
+    border-image: linear-gradient(to bottom, #00d4ff, #a855f7) 1;
+    animation: gradientBorder 5s ease-in-out infinite alternate;
+    padding-left: 16px; /* небольшой отступ для красоты */
 }
 
 /* Анимации */
@@ -835,6 +838,6 @@
 }
 
 @keyframes gradientBorder {
-    0% { border-image-source: linear-gradient(to bottom, #3d9eb3, #9b59b6); }
-    100% { border-image-source: linear-gradient(to bottom, #9b59b6, #3d9eb3); }
+    0% { border-image-source: linear-gradient(to bottom, #00d4ff, #a855f7); }
+    100% { border-image-source: linear-gradient(to bottom, #a855f7, #00d4ff); }
 }
