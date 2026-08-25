@@ -18,10 +18,10 @@
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
 
+    <!-- Фон теперь как на всех страницах (без лишнего градиента) -->
     <style>
-        body {
-            background-image: var(--bg-gradient-overlay) !important;
-        }
+        /* Убираем переопределение – оставляем стандартный фон из style.css */
+        /* body { background-image: var(--bg-gradient-overlay) !important; } – удалено */
     </style>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -71,27 +71,223 @@
             border: 1px solid var(--border);
         }
 
-        /* ---- Детальное описание с гифками в тексте ---- */
-        .starve-description {
-            margin-top: 30px;
-        }
+        /* ===== НОВЫЕ ЭФФЕКТЫ: жидкое стекло, анимированный градиент ===== */
 
-        .desc-block {
+        /* Стекло с переливанием (используем для карточек и блоков) */
+        .glass-liquid {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px) saturate(180%);
+            -webkit-backdrop-filter: blur(10px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 0 60px rgba(61,158,179,0.03);
             position: relative;
             overflow: hidden;
+            transition: border-color 0.4s, box-shadow 0.4s;
+        }
+
+        /* Анимированный перелив (движущийся градиент поверх стекла) */
+        .glass-liquid::before {
+            content: '';
+            position: absolute;
+            inset: -50%;
+            background: conic-gradient(from 0deg, 
+                rgba(61,158,179,0.05), 
+                rgba(255,255,255,0.02), 
+                rgba(61,158,179,0.08), 
+                rgba(255,255,255,0.02), 
+                rgba(61,158,179,0.05)
+            );
+            animation: glassSwirl 12s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+            mix-blend-mode: overlay;
+        }
+
+        @keyframes glassSwirl {
+            0% { transform: rotate(0deg) scale(1); }
+            100% { transform: rotate(360deg) scale(1.5); }
+        }
+
+        /* При наведении на карточку стекло оживает */
+        .glass-liquid:hover {
+            border-color: var(--accent);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 40px rgba(61,158,179,0.15), inset 0 0 80px rgba(61,158,179,0.05);
+        }
+
+        .glass-liquid:hover::before {
+            animation-duration: 6s;
+        }
+
+        /* Контент поверх стекла */
+        .glass-liquid > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Анимированный градиентный текст (для заголовков h3 с акцентными цветами) */
+        .gradient-text {
+            background: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d);
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientShift 6s ease-in-out infinite alternate;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Анимированная засечка (левая граница с градиентом) */
+        .border-glow {
+            border-left: 4px solid transparent;
+            background-image: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d);
+            background-size: 300% 300%;
+            background-clip: padding-box;
+            -webkit-background-clip: padding-box;
+            animation: gradientShift 6s ease-in-out infinite alternate;
+            border-image: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d) 1;
+            border-image-slice: 1;
+            border-image-source: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d);
+        }
+
+        /* Для засечек в цитатах */
+        .quote.glow {
+            border-left-color: transparent;
+            border-image: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d) 1;
+            border-image-slice: 1;
+            border-image-source: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d);
+            animation: borderPulse 4s ease-in-out infinite alternate;
+        }
+
+        @keyframes borderPulse {
+            0% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        /* Адаптация под существующие блоки – применяем классы */
+        .desc-block {
+            /* уже есть стекло, добавляем glass-liquid */
             background: var(--glass-bg);
-            backdrop-filter: blur(8px);
-            border-radius: var(--radius-md);
-            margin-bottom: 24px;
-            border: 1px solid var(--glass-border);
-            transition: border-color 0.3s, box-shadow 0.3s;
-            box-shadow: var(--glass-shadow);
-            min-height: 200px;
+            backdrop-filter: blur(10px) saturate(180%);
+            -webkit-backdrop-filter: blur(10px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 0 60px rgba(61,158,179,0.03);
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.4s, box-shadow 0.4s;
+        }
+
+        .desc-block::before {
+            content: '';
+            position: absolute;
+            inset: -50%;
+            background: conic-gradient(from 0deg, 
+                rgba(61,158,179,0.05), 
+                rgba(255,255,255,0.02), 
+                rgba(61,158,179,0.08), 
+                rgba(255,255,255,0.02), 
+                rgba(61,158,179,0.05)
+            );
+            animation: glassSwirl 12s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+            mix-blend-mode: overlay;
+        }
+
+        .desc-block > * {
+            position: relative;
+            z-index: 1;
         }
 
         .desc-block:hover {
             border-color: var(--accent);
-            box-shadow: var(--shadow-hover);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 40px rgba(61,158,179,0.15), inset 0 0 80px rgba(61,158,179,0.05);
+        }
+
+        .desc-block:hover::before {
+            animation-duration: 6s;
+        }
+
+        /* Цветные заголовки теперь с градиентом */
+        .desc-text h3 {
+            background: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d);
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientShift 6s ease-in-out infinite alternate;
+            display: inline-block;
+        }
+
+        /* Убираем статичный цвет для h3 в акцентных блоках, чтобы градиент перекрыл */
+        .block-accent1 .desc-text h3,
+        .block-accent2 .desc-text h3,
+        .block-accent3 .desc-text h3,
+        .block-accent4 .desc-text h3,
+        .block-accent5 .desc-text h3,
+        .block-accent6 .desc-text h3 {
+            color: transparent; /* сам градиент задан выше */
+        }
+
+        /* Засечки цитат с анимацией */
+        .desc-text .quote {
+            border-left: 4px solid transparent;
+            border-image: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d) 1;
+            border-image-slice: 1;
+            border-image-source: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d);
+            animation: borderPulse 4s ease-in-out infinite alternate;
+        }
+
+        /* Карточки проектов тоже со стеклом */
+        .project-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px) saturate(180%);
+            -webkit-backdrop-filter: blur(10px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 0 60px rgba(61,158,179,0.03);
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.4s, box-shadow 0.4s, transform 0.3s;
+        }
+
+        .project-card::before {
+            content: '';
+            position: absolute;
+            inset: -50%;
+            background: conic-gradient(from 0deg, 
+                rgba(61,158,179,0.05), 
+                rgba(255,255,255,0.02), 
+                rgba(61,158,179,0.08), 
+                rgba(255,255,255,0.02), 
+                rgba(61,158,179,0.05)
+            );
+            animation: glassSwirl 12s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+            mix-blend-mode: overlay;
+        }
+
+        .project-card > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .project-card-link:hover .project-card {
+            border-color: var(--accent);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 40px rgba(61,158,179,0.15), inset 0 0 80px rgba(61,158,179,0.05);
+            transform: translateY(-6px) scale(1.01);
+        }
+
+        .project-card-link:hover .project-card::before {
+            animation-duration: 6s;
+        }
+
+        /* Остальные стили описания (адаптив и т.д.) – без изменений */
+        .starve-description {
+            margin-top: 30px;
         }
 
         .desc-image {
@@ -149,14 +345,6 @@
             margin-left: 45%;
         }
 
-        .desc-text h3 {
-            margin: 0 0 12px 0;
-            font-size: 22px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
         .desc-text p {
             margin: 10px 0;
             color: var(--text-secondary);
@@ -169,7 +357,6 @@
             padding: 16px 24px;
             background: rgba(0,0,0,0.3);
             border-radius: 12px;
-            border-left: 4px solid var(--accent);
             color: var(--text-secondary);
             font-style: normal;
             font-size: 15px;
@@ -178,25 +365,6 @@
         .desc-text .quote strong {
             color: var(--text-primary);
         }
-
-        /* Цветовые акценты */
-        .block-accent1 .desc-text h3 { color: #ff6b6b; }
-        .block-accent1 .desc-text .quote { border-left-color: #ff6b6b; }
-
-        .block-accent2 .desc-text h3 { color: #ffd93d; }
-        .block-accent2 .desc-text .quote { border-left-color: #ffd93d; }
-
-        .block-accent3 .desc-text h3 { color: #ff8c00; }
-        .block-accent3 .desc-text .quote { border-left-color: #ff8c00; }
-
-        .block-accent4 .desc-text h3 { color: #9b59b6; }
-        .block-accent4 .desc-text .quote { border-left-color: #9b59b6; }
-
-        .block-accent5 .desc-text h3 { color: #6bcbff; }
-        .block-accent5 .desc-text .quote { border-left-color: #6bcbff; }
-
-        .block-accent6 .desc-text h3 { color: #39ff14; }
-        .block-accent6 .desc-text .quote { border-left-color: #39ff14; }
 
         .desc-block.no-image .desc-text {
             width: 100%;
@@ -361,7 +529,7 @@
 
         <main>
             <div class="row">
-                <section class="card trailer-card">
+                <section class="card trailer-card glass-liquid">
                     <h2>
                         <i class="fas fa-film"></i>
                         <span data-lang="trailerTitle">Трейлер</span>
@@ -369,7 +537,7 @@
                     <div class="lazy-yt" data-src="https://www.youtube.com/embed/eAUn6Solqbg?si=L7zUsV1M4aePPgp6"></div>
                 </section>
 
-                <section class="card developer-card">
+                <section class="card developer-card glass-liquid">
                     <h2>
                         <i class="fas fa-user-astronaut"></i>
                         <span data-lang="developerTitle">Разработчик</span>
@@ -392,7 +560,7 @@
             </div>
 
             <!-- Секция скачивания -->
-            <section class="card download-card" id="download-section">
+            <section class="card download-card glass-liquid" id="download-section">
                 <div class="download-sections">
                     <div class="download-subsection">
                         <h3><i class="fas fa-store"></i> <span data-lang="storeTitle">Площадки</span></h3>
@@ -423,7 +591,7 @@
             </section>
 
             <!-- ===== ОПИСАНИЕ ===== -->
-            <section class="card">
+            <section class="card glass-liquid">
                 <h2>
                     <i class="fas fa-align-left"></i>
                     <span data-lang="descriptionTitle">Описание</span>
@@ -497,7 +665,7 @@
                         </div>
                     </div>
 
-                    <!-- 6. Твой остров – banner-building.webm, гифка справа, текст разбит на два абзаца -->
+                    <!-- 6. Твой остров – banner-building.webm, гифка справа -->
                     <div class="desc-block block-accent1 image-right">
                         <div class="desc-image">
                             <video autoplay muted loop playsinline>
@@ -521,7 +689,7 @@
                         </div>
                     </div>
 
-                    <!-- 8. Играй как хочешь – banner-status.webm, гифка слева, текст разбит на два абзаца -->
+                    <!-- 8. Играй как хочешь – banner-status.webm, гифка слева -->
                     <div class="desc-block block-accent6 image-left">
                         <div class="desc-image">
                             <video autoplay muted loop playsinline>
@@ -553,12 +721,11 @@
                         </div>
                     </div>
 
-                    <!-- Следи за разработкой – социальные ссылки разделены на три строки -->
+                    <!-- Следи за разработкой – социальные ссылки -->
                     <div class="desc-block no-image" style="text-align: center; border-left: none;">
                         <div class="desc-text" style="background: var(--glass-bg); backdrop-filter: blur(4px);">
                             <h3 style="color: var(--text-primary);"><span data-lang="starveFollow">📸 СЛЕДИ ЗА РАЗРАБОТКОЙ</span></h3>
                             <div class="social-links">
-                                <!-- Основные площадки -->
                                 <div class="social-row">
                                     <a target="_blank" href="https://www.youtube.com/@NeonShadow-neon">
                                         <img alt="YouTube" src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white">
@@ -576,7 +743,6 @@
                                         <img alt="Boosty" src="https://img.shields.io/badge/Boosty-FF5E00?style=for-the-badge&logo=boosty&logoColor=white">
                                     </a>
                                 </div>
-                                <!-- Личные контакты -->
                                 <div class="social-row">
                                     <a target="_blank" href="https://t.me/NeonCyndows">
                                         <img alt="Telegram DM" src="https://img.shields.io/badge/Telegram-Личка-26A5E4?style=for-the-badge&logo=telegram&logoColor=white">
@@ -585,7 +751,6 @@
                                         <img alt="Discord DM" src="https://img.shields.io/badge/Discord-Личка-5865F2?style=for-the-badge&logo=discord&logoColor=white">
                                     </a>
                                 </div>
-                                <!-- GitHub -->
                                 <div class="social-row">
                                     <a target="_blank" href="https://github.com/NeonShadowYT">
                                         <img title="GitHub" alt="GitHub" src="https://img.shields.io/badge/GitHub-2d2f48?style=for-the-badge&logo=github&logoColor=white">
@@ -602,14 +767,14 @@
             </section>
 
             <!-- Системные требования -->
-            <section class="card">
+            <section class="card glass-liquid">
                 <h2>
                     <i class="fas fa-microchip"></i>
                     <span data-lang="requirementsTitle">Системные требования</span>
                 </h2>
                 <p class="text-secondary" data-lang="requirementsNote">Примерные значения основанные на стандартных настройках для этих устройств</p>
                 <div class="requirements-grid">
-                    <div class="req-item tilt-card">
+                    <div class="req-item tilt-card glass-liquid">
                         <div class="req-label">
                             <i class="fas fa-tachometer-alt"></i>
                             40-60 <span class="fps-badge">FPS</span>
@@ -619,7 +784,7 @@
                             <div class="req-spec"><i class="fas fa-tv"></i> <span data-lang="gpu60">GT 730 4GB</span></div>
                         </div>
                     </div>
-                    <div class="req-item tilt-card">
+                    <div class="req-item tilt-card glass-liquid">
                         <div class="req-label">
                             <i class="fas fa-tachometer-alt"></i>
                             120-180 <span class="fps-badge">FPS</span>
@@ -629,7 +794,7 @@
                             <div class="req-spec"><i class="fas fa-tv"></i> <span data-lang="gpu180">GT 1030 2GB</span></div>
                         </div>
                     </div>
-                    <div class="req-item tilt-card">
+                    <div class="req-item tilt-card glass-liquid">
                         <div class="req-label">
                             <i class="fas fa-tachometer-alt"></i>
                             600-1000 <span class="fps-badge">FPS</span>
@@ -640,7 +805,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="consumption-card tilt-card">
+                <div class="consumption-card tilt-card glass-liquid">
                     <h3><i class="fas fa-chart-line"></i> <span data-lang="consumptionTitle">Потребление</span></h3>
                     <p class="text-secondary" data-lang="consumptionNote">Примерные значения</p>
                     <table class="consumption-table">
@@ -653,7 +818,7 @@
             </section>
 
             <!-- Видео -->
-            <section class="card">
+            <section class="card glass-liquid">
                 <h2>
                     <i class="fas fa-video"></i>
                     <span data-lang="videoTitle">Видео</span>
@@ -669,7 +834,7 @@
             </section>
 
             <!-- Обратная связь -->
-            <section class="card" id="feedback-section" data-game="starve-neon">
+            <section class="card glass-liquid" id="feedback-section" data-game="starve-neon">
                 <div class="feedback-container">
                     <div class="loading-spinner">
                         <i class="fas fa-circle-notch fa-spin"></i>
@@ -679,7 +844,7 @@
             </section>
 
             <!-- Обновления -->
-            <section class="card">
+            <section class="card glass-liquid">
                 <div class="updates-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);"></i>

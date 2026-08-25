@@ -800,3 +800,81 @@
         gap: 8px;
     }
 }
+
+/* Стекло с переливанием */
+.glass-liquid {
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px) saturate(180%);
+    -webkit-backdrop-filter: blur(10px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 0 60px rgba(61,158,179,0.03);
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.4s, box-shadow 0.4s;
+}
+
+.glass-liquid::before {
+    content: '';
+    position: absolute;
+    inset: -50%;
+    background: conic-gradient(from 0deg, 
+        rgba(61,158,179,0.05), 
+        rgba(255,255,255,0.02), 
+        rgba(61,158,179,0.08), 
+        rgba(255,255,255,0.02), 
+        rgba(61,158,179,0.05)
+    );
+    animation: glassSwirl 12s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+    mix-blend-mode: overlay;
+}
+
+@keyframes glassSwirl {
+    0% { transform: rotate(0deg) scale(1); }
+    100% { transform: rotate(360deg) scale(1.5); }
+}
+
+.glass-liquid:hover {
+    border-color: var(--accent);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 40px rgba(61,158,179,0.15), inset 0 0 80px rgba(61,158,179,0.05);
+}
+
+.glass-liquid:hover::before {
+    animation-duration: 6s;
+}
+
+.glass-liquid > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Анимированный градиентный текст */
+.gradient-text {
+    background: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradientShift 6s ease-in-out infinite alternate;
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Анимированная засечка */
+.border-glow {
+    border-left: 4px solid transparent;
+    border-image: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d) 1;
+    border-image-slice: 1;
+    border-image-source: linear-gradient(135deg, var(--accent), #ff6b6b, var(--accent-light), #ffd93d);
+    animation: borderPulse 4s ease-in-out infinite alternate;
+}
+
+@keyframes borderPulse {
+    0% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
