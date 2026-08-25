@@ -1,10 +1,20 @@
 // js/common-init.js – инициализация после загрузки переводов
 // Добавлено: кликабельность видео, выпадающий список языка без флага и стрелки,
-// единое определение мобильного устройства, отключение пылинок на мобилках.
+// единое определение мобильного устройства, отключение пылинок на мобилках,
+// добавление класса .is-mobile на body для CSS.
 (function() {
   // ---- Единое определение мобильного устройства ----
   const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
   window.isMobile = isMobile;
+
+  // Добавляем класс на body сразу, как только он доступен
+  if (document.body) {
+    if (isMobile) document.body.classList.add('is-mobile');
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (isMobile) document.body.classList.add('is-mobile');
+    });
+  }
 
   function addPreconnects() {
     const links = [
@@ -538,10 +548,13 @@
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
+      // класс уже добавлен в начале, но на всякий случай
+      if (window.isMobile) document.body.classList.add('is-mobile');
       initNonLanguageDependent();
       waitForLanguageAndInit();
     });
   } else {
+    if (window.isMobile) document.body.classList.add('is-mobile');
     initNonLanguageDependent();
     waitForLanguageAndInit();
   }

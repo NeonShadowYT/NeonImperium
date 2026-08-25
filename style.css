@@ -1041,22 +1041,6 @@
     .header-text .game-title {
         font-size: 26px !important;
     }
-
-    /* ---------- ОТКЛЮЧАЕМ ЖЁЛТЫЕ КВАДРАТЫ (outline и tap highlight) ---------- */
-    * {
-        outline: none !important;
-        -webkit-tap-highlight-color: transparent !important;
-    }
-    /* Для доступности оставляем только для интерактивных элементов, но без жёлтого */
-    .button:focus-visible,
-    .nav-link:focus-visible,
-    .lang-dropdown-btn:focus-visible,
-    .download-button:focus-visible,
-    .social-icon:focus-visible {
-        outline: 2px solid var(--accent) !important;
-        outline-offset: 2px !important;
-        border-radius: var(--radius-pill);
-    }
 }
 
 /* Трейлер – растягивается на всю высоту карточки */
@@ -1170,4 +1154,16 @@
 .lang-dropdown-item.active {
     background: var(--accent);
     color: white;
+}
+/* ===== Удаление жёлтых квадратов на мобильных устройствах ===== */
+.is-mobile * {
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+.is-mobile .button:focus-visible,
+.is-mobile .nav-link:focus-visible,
+.is-mobile .lang-dropdown-btn:focus-visible,
+.is-mobile .download-button:focus-visible,
+.is-mobile .social-icon:focus-visible {
+    outline: none !important;
 }
