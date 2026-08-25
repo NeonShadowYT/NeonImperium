@@ -4,7 +4,7 @@
 (function() {
   // ---- Единое определение мобильного устройства ----
   const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
-  window.isMobile = isMobile; // глобально для других модулей
+  window.isMobile = isMobile;
 
   function addPreconnects() {
     const links = [
@@ -239,7 +239,6 @@
       });
     }
 
-    // ---- ДОБАВЛЯЕМ КЛИКАБЕЛЬНОСТЬ ДЛЯ ВИДЕО (если не запускается) ----
     document.querySelectorAll('.lazy-yt').forEach(el => {
       el.addEventListener('click', function(e) {
         const iframe = this.querySelector('iframe');
@@ -251,7 +250,6 @@
       });
     });
 
-    // Для видео в описании Starve Neon (блоки desc-block с video)
     document.querySelectorAll('.desc-block .desc-image video').forEach(video => {
       const block = video.closest('.desc-block');
       if (block) {
@@ -272,7 +270,6 @@
   }
 
   function loadDustParticles() {
-    // Если мобильное устройство – не загружаем пылинки вообще
     if (window.isMobile) {
       console.log('[common-init] Dust particles disabled on mobile');
       return;
@@ -416,7 +413,6 @@
     }
   }
 
-  // ----- НОВАЯ ФУНКЦИЯ для загрузки модулей хранилища -----
   async function loadStorageModules() {
     const modules = [
       'js/features/storage/core.js',
@@ -439,12 +435,9 @@
     }
   }
 
-  // ----- ФУНКЦИЯ ЗАМЕНЫ ПЕРЕКЛЮЧАТЕЛЯ ЯЗЫКА НА ВЫПАДАЮЩИЙ СПИСОК (без флага и стрелки) -----
   function transformLangSwitcherToDropdown() {
     const switcher = document.querySelector('.lang-switcher');
     if (!switcher) return;
-
-    // Полностью очищаем контейнер, чтобы старые кнопки не мелькали
     switcher.innerHTML = '';
 
     const currentLang = window.I18n?.getCurrentLang() || 'ru';
@@ -454,7 +447,6 @@
 
     const btn = document.createElement('button');
     btn.className = 'lang-dropdown-btn';
-    // Только код языка, без флага и стрелки
     btn.textContent = currentLang.toUpperCase();
     dropdown.appendChild(btn);
 
@@ -491,7 +483,6 @@
     switcher.appendChild(dropdown);
   }
 
-  // ----- ИНИЦИАЛИЗАЦИЯ СТРАНИЧНЫХ МОДУЛЕЙ (после переводов) -----
   function initPageModules() {
     if (window.initNewsFeed) window.initNewsFeed();
     if (window.initFeedback) window.initFeedback();
@@ -531,11 +522,10 @@
     loadPageScripts();
     ensureMarked().then(() => {});
     initLazyYT();
-    loadDustParticles(); // загружаем только если не мобилка
+    loadDustParticles();
     registerServiceWorker();
     initDownloadConsent();
     initRateLimits();
-    // Предзагружаем storage-core и metadata
     const storageCore = document.createElement('script');
     storageCore.src = 'js/features/storage/core.js';
     storageCore.defer = true;
