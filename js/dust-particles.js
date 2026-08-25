@@ -5,10 +5,7 @@
 
 (function() {
     // Проверяем, мобильное устройство (глобальная переменная, установленная в common-init)
-    if (window.isMobile) {
-        console.log('[DustParticles] Disabled on mobile');
-        return;
-    }
+    if (window.isMobile) return;
 
     let canvas, ctx, particles = [];
     let animationId = null;

@@ -456,3 +456,45 @@
         transition-duration: 0.01ms !important;
     }
 }
+
+/* ===== Навигация на мобильных ===== */
+@media (max-width: 900px) {
+  .nav-bar {
+    flex-wrap: nowrap !important;
+    padding: 6px 8px;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+  }
+  .nav-bar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari */
+  }
+  .nav-links {
+    flex: 0 1 auto;
+    flex-wrap: nowrap !important;
+    overflow: visible;
+    gap: 2px;
+  }
+  .nav-link {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .lang-switcher {
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  .nav-profile {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    margin-left: 2px;
+  }
+  .nav-profile .profile-dropdown {
+    right: 0;
+    left: auto;
+    min-width: 160px;
+    max-width: 90vw;
+  }
+}

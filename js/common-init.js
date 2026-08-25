@@ -4,23 +4,32 @@
 // добавление класса .is-mobile на body для CSS.
 (function() {
   // ---- Единое определение мобильного устройства ----
-  const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
+  const isMobile = (() => {
+    // Проверка на touch-устройства через медиа-запросы (более надёжно)
+    const hasTouch = window.matchMedia('(pointer: coarse)').matches || 
+                    window.matchMedia('(hover: none)').matches ||
+                    ('ontouchstart' in window);
+    // Также учитываем узкий экран, но теперь это вторично
+    const isNarrow = window.innerWidth <= 768;
+    return hasTouch || isNarrow;
+  })();
+
   window.isMobile = isMobile;
 
   // НЕМЕДЛЕННО добавляем класс на body
-  // Используем document.documentElement, если body ещё не создан
-  if (document.body) {
-      document.body.classList.add('is-mobile');
-  } else {
-      // Если body ещё нет, добавляем класс при первой возможности
+  (function addMobileClass() {
+    if (document.body) {
+      document.body.classList.toggle('is-mobile', isMobile);
+    } else {
       const observer = new MutationObserver(() => {
-          if (document.body) {
-              document.body.classList.add('is-mobile');
-              observer.disconnect();
-          }
+        if (document.body) {
+          document.body.classList.toggle('is-mobile', isMobile);
+          observer.disconnect();
+        }
       });
       observer.observe(document.documentElement, { childList: true, subtree: true });
-  }
+    }
+  })();
 
   function addPreconnects() {
     const links = [

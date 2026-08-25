@@ -1193,3 +1193,33 @@
     -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
     -moz-outline-radius: 0 !important;
 }
+/* ===== Удаление жёлтых квадратов на мобильных ===== */
+.is-mobile *,
+.is-mobile *:focus,
+.is-mobile *:active,
+.is-mobile *:focus-visible,
+.is-mobile a,
+.is-mobile a:focus,
+.is-mobile a:active,
+.is-mobile a:focus-visible,
+.is-mobile button,
+.is-mobile button:focus,
+.is-mobile button:active,
+.is-mobile button:focus-visible,
+.is-mobile input,
+.is-mobile input:focus,
+.is-mobile input:active,
+.is-mobile input:focus-visible,
+.is-mobile textarea,
+.is-mobile textarea:focus,
+.is-mobile textarea:active,
+.is-mobile textarea:focus-visible,
+.is-mobile [tabindex]:focus,
+.is-mobile [tabindex]:active,
+.is-mobile [tabindex]:focus-visible {
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
+    -moz-outline-radius: 0 !important;
+    box-shadow: none !important; /* на случай, если обводка через box-shadow */
+}
