@@ -1,6 +1,5 @@
 // js/common-init.js – инициализация после загрузки переводов
-// Добавлено: кликабельность видео для пользователей с отключенным автоплеем,
-// выпадающий список языка вместо двух кнопок,
+// Добавлено: кликабельность видео, выпадающий список языка без флага и стрелки,
 // единое определение мобильного устройства, отключение пылинок на мобилках.
 (function() {
   // ---- Единое определение мобильного устройства ----
@@ -243,7 +242,6 @@
     // ---- ДОБАВЛЯЕМ КЛИКАБЕЛЬНОСТЬ ДЛЯ ВИДЕО (если не запускается) ----
     document.querySelectorAll('.lazy-yt').forEach(el => {
       el.addEventListener('click', function(e) {
-        // Если клик был по iframe, и видео не играет – пытаемся запустить
         const iframe = this.querySelector('iframe');
         if (iframe) {
           try {
@@ -445,10 +443,11 @@
   function transformLangSwitcherToDropdown() {
     const switcher = document.querySelector('.lang-switcher');
     if (!switcher) return;
-    if (switcher.querySelector('.lang-dropdown')) return;
+
+    // Полностью очищаем контейнер, чтобы старые кнопки не мелькали
+    switcher.innerHTML = '';
 
     const currentLang = window.I18n?.getCurrentLang() || 'ru';
-    const t = window.I18n?.translate || (k => k);
 
     const dropdown = document.createElement('div');
     dropdown.className = 'lang-dropdown';
@@ -489,7 +488,6 @@
       menu.classList.remove('open');
     });
 
-    switcher.innerHTML = '';
     switcher.appendChild(dropdown);
   }
 
