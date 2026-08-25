@@ -7,13 +7,19 @@
   const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
   window.isMobile = isMobile;
 
-  // Добавляем класс на body сразу, как только он доступен
+  // НЕМЕДЛЕННО добавляем класс на body
+  // Используем document.documentElement, если body ещё не создан
   if (document.body) {
-    if (isMobile) document.body.classList.add('is-mobile');
+      document.body.classList.add('is-mobile');
   } else {
-    document.addEventListener('DOMContentLoaded', () => {
-      if (isMobile) document.body.classList.add('is-mobile');
-    });
+      // Если body ещё нет, добавляем класс при первой возможности
+      const observer = new MutationObserver(() => {
+          if (document.body) {
+              document.body.classList.add('is-mobile');
+              observer.disconnect();
+          }
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
   function addPreconnects() {

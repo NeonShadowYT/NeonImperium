@@ -1167,3 +1167,29 @@
 .is-mobile .social-icon:focus-visible {
     outline: none !important;
 }
+/* ===== Окончательное удаление жёлтых квадратов на мобильных ===== */
+.is-mobile *,
+.is-mobile *:focus,
+.is-mobile *:active,
+.is-mobile *:focus-visible,
+.is-mobile a,
+.is-mobile a:focus,
+.is-mobile a:active,
+.is-mobile a:focus-visible,
+.is-mobile button,
+.is-mobile button:focus,
+.is-mobile button:active,
+.is-mobile button:focus-visible,
+.is-mobile input,
+.is-mobile input:focus,
+.is-mobile input:active,
+.is-mobile input:focus-visible,
+.is-mobile div,
+.is-mobile div:focus,
+.is-mobile div:active,
+.is-mobile div:focus-visible {
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
+    -moz-outline-radius: 0 !important;
+}
