@@ -1,12 +1,16 @@
 // js/features/dust-particles.js
 // Фоновые динамические частицы (пылинки) с эффектом случайного блуждания
 // Плавное появление, масштабирование при ресайзе без исчезновения
+// + звездные частицы, появляющиеся при движении мыши (опционально)
 
 (function() {
     let canvas, ctx, particles = [];
+    let starParticles = [];
     let animationId = null;
     let width, height;
     let isEnabled = true;
+    let mouseX = -1000, mouseY = -1000;
+    let starSpawnTimer = 0;
 
     // Настройки
     const CONFIG = {
@@ -20,7 +24,12 @@
         MAX_OPACITY: 0.18,
         OPACITY_WAVE_SPEED: 0.003,
         FADE_IN_SPEED: 0.02,
-        DENSITY_THRESHOLD: 0.7     // если после ресайза частиц стало меньше 70% от целевого количества – досоздаём
+        DENSITY_THRESHOLD: 0.7,
+        STAR_COUNT: 30,
+        STAR_SPAWN_RATE: 0.3, // вероятность спавна звезды при движении мыши
+        STAR_LIFETIME: 60,    // кадров
+        STAR_SIZE_MIN: 2,
+        STAR_SIZE_MAX: 6
     };
 
     // Акцентный цвет #3d9eb3
@@ -52,6 +61,19 @@
 
         window.addEventListener('resize', onResize);
         onResize(); // установит начальные размеры и создаст частицы
+
+        // Отслеживаем движение мыши для спавна звезд
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseleave', () => { mouseX = -1000; mouseY = -1000; });
+    }
+
+    function onMouseMove(e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        // Спавним звезды с вероятностью
+        if (Math.random() < CONFIG.STAR_SPAWN_RATE) {
+            spawnStar(mouseX, mouseY);
+        }
     }
 
     function onResize() {
@@ -62,27 +84,22 @@
         const newHeight = window.innerHeight;
 
         if (oldWidth && oldHeight && particles.length) {
-            // Масштабируем координаты существующих частиц пропорционально
             const scaleX = newWidth / oldWidth;
             const scaleY = newHeight / oldHeight;
             for (const p of particles) {
                 p.x *= scaleX;
                 p.y *= scaleY;
-                // Также можно масштабировать скорость, чтобы движение не сбивалось
                 p.vx *= scaleX;
                 p.vy *= scaleY;
-                // Ограничиваем скорость после масштабирования
                 let speed = Math.hypot(p.vx, p.vy);
                 if (speed > CONFIG.MAX_SPEED) {
                     p.vx = (p.vx / speed) * CONFIG.MAX_SPEED;
                     p.vy = (p.vy / speed) * CONFIG.MAX_SPEED;
                 }
             }
-            // Проверяем плотность: если после ресайза частиц стало слишком мало относительно площади
             const expectedCount = CONFIG.PARTICLE_COUNT;
             const currentCount = particles.length;
             const areaRatio = (newWidth * newHeight) / (oldWidth * oldHeight);
-            // Если площадь увеличилась, а количество частиц не увеличилось – добавляем недостающие
             if (currentCount < expectedCount * CONFIG.DENSITY_THRESHOLD || areaRatio > 1.2) {
                 const needed = Math.min(expectedCount - currentCount, Math.floor(expectedCount * 0.3));
                 for (let i = 0; i < needed; i++) {
@@ -93,7 +110,6 @@
                 }
             }
         } else {
-            // Первый запуск: просто создаём все частицы
             width = newWidth;
             height = newHeight;
             canvas.width = width;
@@ -122,7 +138,7 @@
             radius: randomRange(CONFIG.MIN_RADIUS, CONFIG.MAX_RADIUS),
             baseOpacity: randomRange(CONFIG.MIN_OPACITY, CONFIG.MAX_OPACITY),
             opacityPhase: Math.random() * Math.PI * 2,
-            fadeProgress: 1,            // при создании сразу видимы (можно 0, если нужен fade-in)
+            fadeProgress: 1,
             colorFactor: colorFactor
         };
     }
@@ -134,26 +150,82 @@
         }
     }
 
+    // ---- Звездные частицы ----
+    function spawnStar(x, y) {
+        if (starParticles.length > CONFIG.STAR_COUNT) {
+            starParticles.shift(); // удаляем старые
+        }
+        const size = randomRange(CONFIG.STAR_SIZE_MIN, CONFIG.STAR_SIZE_MAX);
+        const angle = Math.random() * Math.PI * 2;
+        const speed = randomRange(0.5, 2);
+        starParticles.push({
+            x: x + randomRange(-20, 20),
+            y: y + randomRange(-20, 20),
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: size,
+            life: CONFIG.STAR_LIFETIME + Math.random() * 30,
+            maxLife: CONFIG.STAR_LIFETIME + Math.random() * 30,
+            color: `hsl(${180 + Math.random() * 40}, 80%, 70%)`
+        });
+    }
+
+    function updateStars() {
+        for (let i = starParticles.length - 1; i >= 0; i--) {
+            const s = starParticles[i];
+            s.x += s.vx;
+            s.y += s.vy;
+            s.vx *= 0.98;
+            s.vy *= 0.98;
+            s.life--;
+            if (s.life <= 0) {
+                starParticles.splice(i, 1);
+            }
+        }
+    }
+
+    function drawStars() {
+        if (!ctx) return;
+        for (const s of starParticles) {
+            const alpha = s.life / s.maxLife;
+            const size = s.size * (0.3 + 0.7 * alpha);
+            ctx.save();
+            ctx.globalAlpha = alpha * 0.8;
+            ctx.translate(s.x, s.y);
+            // Рисуем крестик (звёздочку)
+            ctx.rotate(Date.now() / 1000 + s.x);
+            ctx.fillStyle = s.color || '#fff';
+            ctx.shadowColor = 'rgba(61,158,179,0.5)';
+            ctx.shadowBlur = 10;
+            // Четыре луча
+            ctx.fillRect(-size/6, -size/2, size/3, size);
+            ctx.fillRect(-size/2, -size/6, size, size/3);
+            ctx.restore();
+            // Дополнительное свечение
+            ctx.save();
+            ctx.globalAlpha = alpha * 0.2;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, size * 1.5, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(61,158,179,0.3)';
+            ctx.shadowBlur = 20;
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
     function updateParticles() {
         for (let i = 0; i < particles.length; i++) {
             const p = particles[i];
-
-            // Броуновское движение
             p.vx += (Math.random() - 0.5) * CONFIG.NOISE_STRENGTH;
             p.vy += (Math.random() - 0.5) * CONFIG.NOISE_STRENGTH;
-
-            // Ограничение скорости
             let speed = Math.hypot(p.vx, p.vy);
             if (speed > CONFIG.MAX_SPEED) {
                 p.vx = (p.vx / speed) * CONFIG.MAX_SPEED;
                 p.vy = (p.vy / speed) * CONFIG.MAX_SPEED;
             }
-
-            // Движение
             p.x += p.vx;
             p.y += p.vy;
 
-            // Телепортация за границы
             let respawn = false;
             if (p.x < 0) { p.x = width; respawn = true; }
             if (p.x > width) { p.x = 0; respawn = true; }
@@ -161,7 +233,6 @@
             if (p.y > height) { p.y = 0; respawn = true; }
 
             if (respawn) {
-                // Сброс fade (появится снова плавно)
                 p.fadeProgress = 0;
                 p.vx = randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED);
                 p.vy = randomRange(-CONFIG.BASE_SPEED, CONFIG.BASE_SPEED);
@@ -169,38 +240,38 @@
                 continue;
             }
 
-            // Плавное появление (если частица была пересоздана)
             if (p.fadeProgress < 1) {
                 p.fadeProgress += CONFIG.FADE_IN_SPEED;
                 if (p.fadeProgress > 1) p.fadeProgress = 1;
             }
 
-            // Мерцание
             p.opacityPhase += CONFIG.OPACITY_WAVE_SPEED;
             const opacityFactor = (Math.sin(p.opacityPhase) + 1) / 2;
             const wave = 0.6 + 0.4 * opacityFactor;
             let targetOpacity = p.baseOpacity * p.fadeProgress * wave;
             p.currentOpacity = targetOpacity;
         }
+
+        updateStars();
     }
 
     function drawParticles() {
         if (!ctx) return;
         ctx.clearRect(0, 0, width, height);
-        ctx.shadowBlur = 0; // без теней
+        ctx.shadowBlur = 0;
 
         for (const p of particles) {
             if (p.currentOpacity <= 0.001) continue;
-
             const r = Math.min(255, Math.floor(BASE_R * p.colorFactor));
             const g = Math.min(255, Math.floor(BASE_G * p.colorFactor));
             const b = Math.min(255, Math.floor(BASE_B * p.colorFactor));
             ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${p.currentOpacity})`;
-
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
             ctx.fill();
         }
+
+        drawStars();
     }
 
     function animate() {
@@ -225,6 +296,7 @@
         if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
         canvas = null;
         ctx = null;
+        document.removeEventListener('mousemove', onMouseMove);
     }
 
     function handleVisibilityChange() {
