@@ -172,7 +172,7 @@
             return;
           }
 
-          const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`;
+          const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
           const iframe = document.createElement('iframe');
           iframe.src = embedUrl;
           iframe.setAttribute('frameborder', '0');

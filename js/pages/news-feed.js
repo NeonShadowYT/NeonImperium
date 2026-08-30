@@ -597,7 +597,7 @@
                 let embedUrl = item.embedUrl;
                 if (!embedUrl) {
                     if (item.type === 'video' && item.id) {
-                        embedUrl = `https://www.youtube-nocookie.com/embed/${item.id}?rel=0&modestbranding=1&playsinline=1`;
+                        embedUrl = `https://www.youtube-nocookie.com/embed/${item.id}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
                     } else if (item.type === 'twitch' && item.id) {
                         embedUrl = `https://player.twitch.tv/?channel=${item.id}&parent=${location.hostname}&autoplay=false`;
                     }

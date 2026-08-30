@@ -71,7 +71,7 @@
     }
 
     function insertYouTube(textarea) {
-        const url = prompt('Введите ссылку на YouTube видео:', 'https://youtu.be/...');
+        const url = prompt('Введите ссылку на YouTube видео:', 'https://www.youtube-nocookie.com/...');
         if (!url) return;
         let videoId = '';
         const patterns = [/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/, /youtube\.com\/embed\/([^&\n?#]+)/];
@@ -80,7 +80,8 @@
             if (match) { videoId = match[1]; break; }
         }
         if (videoId) {
-            insertAtCursor(textarea, `\n<div class="youtube-embed"><iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>\n`);
+            const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?origin=${encodeURIComponent(location.origin)}`;
+            insertAtCursor(textarea, `\n<div class="youtube-embed"><iframe src="${embedUrl}" frameborder="0" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>\n`);
         } else {
             insertAtCursor(textarea, url);
         }
