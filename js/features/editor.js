@@ -80,7 +80,7 @@
             if (match) { videoId = match[1]; break; }
         }
         if (videoId) {
-            insertAtCursor(textarea, `\n<div class="youtube-embed"><iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe></div>\n`);
+            insertAtCursor(textarea, `\n<div class="youtube-embed"><iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>\n`);
         } else {
             insertAtCursor(textarea, url);
         }

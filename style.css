@@ -1109,6 +1109,11 @@
         -moz-outline-radius: 0 !important;
         box-shadow: none !important;
     }
+
+    /* ОТСТУП ДЛЯ КОНТЕНТА, ЧТОБЫ НАВБАР НЕ ПЕРЕКРЫВАЛ СТРАНИЦУ (только на мобильных) */
+    .page {
+        padding-top: 70px;
+    }
 }
 
 /* 2. Отключаем анимации для пользователей, предпочитающих reduced motion */
@@ -1431,9 +1436,4 @@
         -moz-outline-radius: 0 !important;
         box-shadow: none !important;
     }
-}
-
-/* ===== ОТСТУП ДЛЯ КОНТЕНТА, ЧТОБЫ НАВБАР НЕ ПЕРЕКРЫВАЛ СТРАНИЦУ ===== */
-.page {
-    padding-top: 70px;
 }
