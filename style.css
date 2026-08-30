@@ -997,27 +997,31 @@
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
     }
+    /* ---- ВОССТАНАВЛИВАЕМ ЗАТУХАНИЕ ГИФОК (маска и прозрачность) ---- */
     .desc-block .desc-image {
-        mask-image: none !important;
+        mask-image: none !important; /* удаляем переопределение, оставляем как на ПК */
         -webkit-mask-image: none !important;
-        opacity: 0.7 !important;
+        opacity: 1 !important; /* убираем прозрачность, чтобы маска работала нормально */
     }
     .desc-block:hover .desc-text {
         background: rgba(0,0,0,0.6) !important;
     }
 
-    /* ---------- УБИРАЕМ ЗАТЕНЕНИЯ В БЛОКЕ СКАЧИВАНИЯ ---------- */
-    .download-card {
-        background: var(--bg-card) !important;
-    }
+    /* ---------- ВОЗВРАЩАЕМ ГИФКИ НА ФОНЕ СКАЧИВАНИЯ (СТАТИЧНЫМИ) ---------- */
     .download-card .bg-gif-layer,
     .download-card .bg-gif-mask {
+        display: block !important; /* показываем */
+    }
+    /* Оставляем только первый слой активным, остальные скрываем */
+    .download-card .bg-gif-layer:not(:first-child) {
         display: none !important;
     }
-    .download-subsection {
-        background: rgba(0,0,0,0.3) !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
+    /* Убираем анимацию переключения для мобилок (делаем статичным) */
+    .download-card .bg-gif-layer {
+        transition: none !important;
+    }
+    .download-card .bg-gif-layer.active {
+        opacity: 1 !important;
     }
 
     /* ---------- ШАПКА: закругление оставляем, затенение убираем ---------- */
@@ -1108,11 +1112,6 @@
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
         -moz-outline-radius: 0 !important;
         box-shadow: none !important;
-    }
-
-    /* ОТСТУП ДЛЯ КОНТЕНТА, ЧТОБЫ НАВБАР НЕ ПЕРЕКРЫВАЛ СТРАНИЦУ (только на мобильных) */
-    .page {
-        padding-top: 70px;
     }
 }
 
@@ -1205,27 +1204,29 @@
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
     }
+    /* ---- ВОССТАНАВЛИВАЕМ ЗАТУХАНИЕ ГИФОК (маска и прозрачность) ---- */
     .desc-block .desc-image {
         mask-image: none !important;
         -webkit-mask-image: none !important;
-        opacity: 0.7 !important;
+        opacity: 1 !important;
     }
     .desc-block:hover .desc-text {
         background: rgba(0,0,0,0.6) !important;
     }
 
-    /* ---------- УБИРАЕМ ЗАТЕНЕНИЯ В БЛОКЕ СКАЧИВАНИЯ ---------- */
-    .download-card {
-        background: var(--bg-card) !important;
-    }
+    /* ---------- ВОЗВРАЩАЕМ ГИФКИ НА ФОНЕ СКАЧИВАНИЯ (СТАТИЧНЫМИ) ---------- */
     .download-card .bg-gif-layer,
     .download-card .bg-gif-mask {
+        display: block !important;
+    }
+    .download-card .bg-gif-layer:not(:first-child) {
         display: none !important;
     }
-    .download-subsection {
-        background: rgba(0,0,0,0.3) !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
+    .download-card .bg-gif-layer {
+        transition: none !important;
+    }
+    .download-card .bg-gif-layer.active {
+        opacity: 1 !important;
     }
 
     /* ---------- ШАПКА: закругление оставляем, затенение убираем ---------- */
