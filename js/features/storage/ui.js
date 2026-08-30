@@ -382,7 +382,7 @@
     const t = window.I18n?.translate || (k => k);
     const html = `
       <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;background:#000;border-radius:12px;">
-        <iframe src="${bm.embedUrl}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen allow="autoplay; encrypted-media; gyroscope; picture-in-picture"></iframe>
+        <iframe src="${bm.embedUrl}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen allow="autoplay; encrypted-media; gyroscope; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <span style="color:var(--text-primary);font-size:18px;">${escapeHtml(bm.title)}</span>

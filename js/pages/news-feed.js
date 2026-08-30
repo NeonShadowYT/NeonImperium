@@ -605,6 +605,7 @@
                 iframe.src = embedUrl;
                 iframe.setAttribute('allowfullscreen', 'true');
                 iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
+                iframe.referrerPolicy = 'strict-origin-when-cross-origin';
                 const imgWrapper = card.querySelector('.image-wrapper');
                 if (imgWrapper) {
                     imgWrapper.innerHTML = '';

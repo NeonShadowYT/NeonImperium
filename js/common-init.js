@@ -180,6 +180,7 @@
           iframe.loading = 'lazy';
           iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
           iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
+          iframe.referrerPolicy = 'strict-origin-when-cross-origin';
           iframe.style.width = '100%';
           iframe.style.height = '100%';
           iframe.style.border = 'none';
@@ -244,6 +245,7 @@
         iframe.src = embedUrl;
         iframe.setAttribute('frameborder', '0');
         iframe.setAttribute('allowfullscreen', '');
+        iframe.referrerPolicy = 'strict-origin-when-cross-origin';
         iframe.style.width = '100%';
         iframe.style.height = '100%';
         iframe.style.border = 'none';
