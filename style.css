@@ -986,26 +986,9 @@
         opacity: 1 !important;
     }
 
-    /* ---------- УБИРАЕМ ЗАТЕНЕНИЯ В ОПИСАНИИ (НО ОСТАВЛЯЕМ МАСКИ ДЛЯ ГИФОК) ---------- */
-    .desc-block {
-        background: var(--glass-bg) !important;
-        backdrop-filter: blur(4px) !important;
-        -webkit-backdrop-filter: blur(4px) !important;
-    }
-    .desc-text {
-        background: var(--glass-bg) !important;
-        backdrop-filter: blur(4px) !important;
-        -webkit-backdrop-filter: blur(4px) !important;
-    }
-    /* ВОЗВРАЩАЕМ МАСКИ И ПРОЗРАЧНОСТЬ ДЛЯ ГИФОК В ОПИСАНИИ */
-    .desc-block .desc-image {
-        mask-image: none !important;
-        -webkit-mask-image: none !important;
-        opacity: 1 !important;
-    }
-    .desc-block:hover .desc-text {
-        background: var(--glass-bg) !important;
-    }
+    /* ---------- ОПИСАНИЕ STARVE NEON: ОСТАВЛЯЕМ КАК НА ПК (с масками и размытием) ---------- */
+    /* НЕ переопределяем .desc-block, .desc-text, .desc-image – они остаются как на ПК */
+    /* Это обеспечит плавное затухание гифок */
 
     /* ---------- БЛОК СКАЧИВАНИЯ: ПОКАЗЫВАЕМ ГИФКИ (НО ОНИ СТАТИЧНЫ, РОТАЦИЯ ОТКЛЮЧЕНА В JS) ---------- */
     .download-card {
@@ -1055,7 +1038,7 @@
         font-size: 26px !important;
     }
 
-    /* Отключаем backdrop-filter у некоторых карточек для производительности */
+    /* Отключаем backdrop-filter у некоторых карточек для производительности, но НЕ у .desc-block и .desc-text */
     .card,
     .project-card,
     .profile-card,
@@ -1190,7 +1173,7 @@
         opacity: 1 !important;
     }
 
-    /* ---------- УБИРАЕМ ЗАТЕНЕНИЯ В ОПИСАНИИ (НО ОСТАВЛЯЕМ МАСКИ ДЛЯ ГИФОК) ---------- */
+    /* ---------- ОПИСАНИЕ STARVE NEON: ОСТАВЛЯЕМ КАК НА ПК (с масками и размытием) ---------- */
     .desc-block {
         background: var(--glass-bg) !important;
         backdrop-filter: blur(4px) !important;
@@ -1201,7 +1184,6 @@
         backdrop-filter: blur(4px) !important;
         -webkit-backdrop-filter: blur(4px) !important;
     }
-    /* ВОЗВРАЩАЕМ МАСКИ И ПРОЗРАЧНОСТЬ ДЛЯ ГИФОК В ОПИСАНИИ */
     .desc-block .desc-image {
         mask-image: none !important;
         -webkit-mask-image: none !important;
@@ -1259,7 +1241,7 @@
         font-size: 26px !important;
     }
 
-    /* Отключаем backdrop-filter у некоторых карточек для производительности */
+    /* Отключаем backdrop-filter у некоторых карточек для производительности, но НЕ у .desc-block и .desc-text */
     .card,
     .project-card,
     .profile-card,
