@@ -2,8 +2,6 @@
 // Добавлено: кликабельность видео, выпадающий список языка без флага и стрелки,
 // единое определение мобильного устройства, отключение пылинок на мобилках,
 // добавление класса .is-mobile на body для CSS.
-// ИСПРАВЛЕНО: видео с YouTube (включая плейлисты) корректно встраиваются.
-
 (function() {
   // ---- Единое определение мобильного устройства ----
   const isMobile = (() => {
@@ -34,8 +32,7 @@
     const links = [
       'https://api.github.com',
       'https://api.rss2json.com',
-      'https://cdnjs.cloudflare.com',
-      'https://www.youtube-nocookie.com'
+      'https://cdnjs.cloudflare.com'
     ];
     links.forEach(url => {
       const link = document.createElement('link');
@@ -112,96 +109,139 @@
     return tryLoad(0);
   }
 
-  // ---- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ПАРСИНГА YOUTUBE ----
+  // ---- УНИВЕРСАЛЬНЫЙ ПАРСЕР YOUTUBE ССЫЛОК ----
   function parseYouTubeUrl(url) {
-    if (!url) return null;
-    let videoId = null;
-    let playlistId = null;
-    let start = null;
+    try {
+      const parsed = new URL(url);
+      const isYoutube = parsed.hostname.includes('youtube.com') || parsed.hostname.includes('youtu.be');
+      if (!isYoutube) return null;
 
-    // Попробуем извлечь videoId
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
-      /youtube\.com\/embed\/([^&\n?#]+)/
-    ];
-    for (const p of patterns) {
-      const match = url.match(p);
-      if (match) { videoId = match[1]; break; }
+      let videoId = null;
+      let playlistId = null;
+      let start = null;
+
+      // 1. Попытка получить videoId из pathname (youtu.be/xxxx)
+      if (parsed.hostname.includes('youtu.be')) {
+        const pathParts = parsed.pathname.split('/').filter(p => p);
+        if (pathParts.length > 0) {
+          videoId = pathParts[0];
+        }
+      }
+
+      // 2. Из searchParams
+      const params = new URLSearchParams(parsed.search);
+      if (params.has('v')) {
+        videoId = params.get('v');
+      }
+      if (params.has('list')) {
+        playlistId = params.get('list');
+      }
+      if (params.has('t')) {
+        start = params.get('t');
+      } else if (params.has('start')) {
+        start = params.get('start');
+      }
+
+      // 3. Если pathname содержит /embed/ или /watch/ - извлекаем id
+      if (!videoId && parsed.pathname.includes('/embed/')) {
+        const parts = parsed.pathname.split('/embed/');
+        if (parts.length > 1) {
+          const idPart = parts[1].split('?')[0];
+          if (idPart && idPart !== 'videoseries') {
+            videoId = idPart;
+          }
+        }
+      }
+      if (!videoId && parsed.pathname.includes('/watch/')) {
+        const parts = parsed.pathname.split('/watch/');
+        if (parts.length > 1) {
+          const idPart = parts[1].split('?')[0];
+          if (idPart && idPart !== 'videoseries') {
+            videoId = idPart;
+          }
+        }
+      }
+
+      // 4. Если нет videoId, но есть playlistId – используем плейлист
+      if (!videoId && playlistId) {
+        // Плейлист без конкретного видео
+        let embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${playlistId}`;
+        if (start) embedUrl += `&start=${start}`;
+        embedUrl += `&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+        return { embedUrl, videoId: null, playlistId, start };
+      }
+
+      // 5. Если есть videoId – формируем embed с ним и возможно list
+      if (videoId) {
+        let embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}`;
+        const queryParams = new URLSearchParams();
+        queryParams.set('rel', '0');
+        queryParams.set('modestbranding', '1');
+        queryParams.set('playsinline', '1');
+        queryParams.set('origin', location.origin);
+        if (playlistId) queryParams.set('list', playlistId);
+        if (start) queryParams.set('start', start);
+        const qs = queryParams.toString();
+        if (qs) embedUrl += '?' + qs;
+        return { embedUrl, videoId, playlistId, start };
+      }
+
+      // 6. Если ничего не найдено – пытаемся использовать как есть (возможно, просто ссылка на плейлист без v)
+      if (parsed.pathname.includes('/playlist')) {
+        const listParam = params.get('list');
+        if (listParam) {
+          let embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${listParam}`;
+          if (start) embedUrl += `&start=${start}`;
+          embedUrl += `&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+          return { embedUrl, videoId: null, playlistId: listParam, start };
+        }
+      }
+
+      return null;
+    } catch (e) {
+      return null;
     }
-
-    // Извлекаем playlistId
-    const playlistMatch = url.match(/[?&]list=([^&\n?#]+)/);
-    if (playlistMatch) playlistId = playlistMatch[1];
-
-    // Извлекаем start time (t= или start=)
-    const timeMatch = url.match(/[?&](?:t|start)=(\d+)/);
-    if (timeMatch) start = timeMatch[1];
-
-    // Если нет videoId, но есть playlistId – используем плейлист
-    if (!videoId && playlistId) {
-      // Возвращаем объект для плейлиста
-      return {
-        type: 'playlist',
-        playlistId: playlistId,
-        start: start,
-        embedUrl: `https://www.youtube-nocookie.com/embed/videoseries?list=${playlistId}${start ? '&start='+start : ''}&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`
-      };
-    }
-
-    if (videoId) {
-      let embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
-      if (playlistId) embedUrl += `&list=${playlistId}`;
-      if (start) embedUrl += `&start=${start}`;
-      return {
-        type: 'video',
-        videoId: videoId,
-        playlistId: playlistId,
-        start: start,
-        embedUrl: embedUrl
-      };
-    }
-
-    return null;
   }
 
-  function showYouTubeFallback(container, videoUrl) {
-    const t = window.I18n?.translate || (k => k);
-    container.innerHTML = '';
-    container.style.position = 'relative';
-    container.style.width = '100%';
-    container.style.paddingBottom = '56.25%';
-    container.style.background = 'var(--bg-primary)';
-    container.style.borderRadius = '12px';
-    container.style.overflow = 'hidden';
-
-    const fallbackDiv = document.createElement('div');
-    fallbackDiv.style.cssText = `
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: var(--bg-primary);
-      border-radius: 12px;
-      padding: 20px;
-      text-align: center;
-      gap: 12px;
-      animation: fadeInUp 0.4s ease;
-    `;
-    fallbackDiv.innerHTML = `
-      <i class="fab fa-youtube" style="font-size:32px;color:var(--accent);"></i>
-      <p style="color:var(--text-secondary);font-size:14px;margin:0;">${t('videoLoadFailed')}</p>
-      <button class="button small" onclick="window.open('${videoUrl || '#'}', '_blank')" style="background:var(--accent);color:#fff;">
-        <i class="fas fa-external-link-alt"></i> ${t('open')}
-      </button>
-    `;
-    container.appendChild(fallbackDiv);
-    container.classList.add('loaded');
-  }
-
+  // ---- ИНИЦИАЛИЗАЦИЯ ЛАЗИВЫХ YOUTUBE ПЛЕЕРОВ ----
   function initLazyYT() {
+    function showYouTubeFallback(container, videoUrl) {
+      const t = window.I18n?.translate || (k => k);
+      container.innerHTML = '';
+      container.style.position = 'relative';
+      container.style.width = '100%';
+      container.style.paddingBottom = '56.25%';
+      container.style.background = 'var(--bg-primary)';
+      container.style.borderRadius = '12px';
+      container.style.overflow = 'hidden';
+
+      const fallbackDiv = document.createElement('div');
+      fallbackDiv.style.cssText = `
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-primary);
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        gap: 12px;
+        animation: fadeInUp 0.4s ease;
+      `;
+      fallbackDiv.innerHTML = `
+        <i class="fab fa-youtube" style="font-size:32px;color:var(--accent);"></i>
+        <p style="color:var(--text-secondary);font-size:14px;margin:0;">${t('videoLoadFailed')}</p>
+        <button class="button small" onclick="window.open('${videoUrl || '#'}', '_blank')" style="background:var(--accent);color:#fff;">
+          <i class="fas fa-external-link-alt"></i> ${t('open')}
+        </button>
+      `;
+      container.appendChild(fallbackDiv);
+      container.classList.add('loaded');
+    }
+
     if ('IntersectionObserver' in window) {
       const obs = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
@@ -210,24 +250,40 @@
           const src = el.dataset.src;
           if (!src) return;
 
-          // Парсим URL
+          // Используем парсер
           const parsed = parseYouTubeUrl(src);
-          if (!parsed) {
+          let embedUrl = parsed ? parsed.embedUrl : null;
+
+          // Если парсер не сработал, пытаемся старым методом (простым)
+          if (!embedUrl) {
+            let videoId = '';
+            const patterns = [
+              /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+              /youtube\.com\/embed\/([^&\n?#]+)/
+            ];
+            for (const p of patterns) {
+              const match = src.match(p);
+              if (match) { videoId = match[1]; break; }
+            }
+            if (videoId) {
+              embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+            } else {
+              // Возможно, это плейлист
+              const listMatch = src.match(/[?&]list=([^&]+)/);
+              if (listMatch) {
+                const list = listMatch[1];
+                embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${list}&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+              }
+            }
+          }
+
+          if (!embedUrl) {
             showYouTubeFallback(el, src);
             return;
           }
 
-          const embedUrl = parsed.embedUrl;
-          // Добавляем параметры, если их нет
-          let finalUrl = embedUrl;
-          // Убедимся, что есть origin
-          if (!finalUrl.includes('origin=')) {
-            const sep = finalUrl.includes('?') ? '&' : '?';
-            finalUrl += `${sep}origin=${encodeURIComponent(location.origin)}`;
-          }
-
           const iframe = document.createElement('iframe');
-          iframe.src = finalUrl;
+          iframe.src = embedUrl;
           iframe.setAttribute('frameborder', '0');
           iframe.setAttribute('allowfullscreen', '');
           iframe.loading = 'lazy';
@@ -251,7 +307,7 @@
               errorOccurred = true;
               showYouTubeFallback(el, src);
             }
-          }, 15000);
+          }, 10000);
 
           iframe.onload = function() {
             clearTimeout(timeout);
@@ -284,24 +340,31 @@
         obs.observe(el);
       });
     } else {
-      // Fallback для старых браузеров
+      // Fallback для браузеров без IntersectionObserver
       document.querySelectorAll('.lazy-yt').forEach((el) => {
         if (el.querySelector('iframe')) return;
         const src = el.dataset.src;
         if (!src) return;
         const parsed = parseYouTubeUrl(src);
-        if (!parsed) {
+        let embedUrl = parsed ? parsed.embedUrl : null;
+        if (!embedUrl) {
+          // Старые методы
+          let videoId = src.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
+          if (videoId) {
+            embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+          } else {
+            const listMatch = src.match(/[?&]list=([^&]+)/);
+            if (listMatch) {
+              embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${listMatch[1]}&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+            }
+          }
+        }
+        if (!embedUrl) {
           showYouTubeFallback(el, src);
           return;
         }
-        const embedUrl = parsed.embedUrl;
-        let finalUrl = embedUrl;
-        if (!finalUrl.includes('origin=')) {
-          const sep = finalUrl.includes('?') ? '&' : '?';
-          finalUrl += `${sep}origin=${encodeURIComponent(location.origin)}`;
-        }
         const iframe = document.createElement('iframe');
-        iframe.src = finalUrl;
+        iframe.src = embedUrl;
         iframe.setAttribute('frameborder', '0');
         iframe.setAttribute('allowfullscreen', '');
         iframe.referrerPolicy = 'strict-origin-when-cross-origin';
@@ -325,7 +388,7 @@
       });
     }
 
-    // Клик для запуска видео (для плеера)
+    // Клик для воспроизведения (если плеер уже загружен)
     document.querySelectorAll('.lazy-yt').forEach(el => {
       el.addEventListener('click', function(e) {
         const iframe = this.querySelector('iframe');
@@ -337,7 +400,7 @@
       });
     });
 
-    // Видео в блоках описания (для клика по видео)
+    // Для видео в описании (блоки desc-block) – клик для паузы/воспроизведения
     document.querySelectorAll('.desc-block .desc-image video').forEach(video => {
       const block = video.closest('.desc-block');
       if (block) {
@@ -366,8 +429,6 @@
     const script = document.createElement('script');
     script.src = 'js/dust-particles.js';
     script.defer = true;
-    script.onload = () => {};
-    script.onerror = () => console.warn('Failed to load dust particles');
     document.head.appendChild(script);
   }
 

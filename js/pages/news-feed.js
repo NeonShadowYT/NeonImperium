@@ -12,11 +12,11 @@
     // ---------- Конфигурация ----------
     const CACHE_KEY = 'news_feed_data_v2';
     const CACHE_TTL = 5 * 60 * 1000;           // 5 минут
-    const STALE_WHILE_REVALIDATE = true;        // всегда отдаём кеш, обновляем в фоне
-    const SOURCE_TIMEOUT = 10000;               // 10 сек на каждый источник
+    const STALE_WHILE_REVALIDATE = true;
+    const SOURCE_TIMEOUT = 10000;
     const MAX_RETRIES = 3;
-    const RETRY_DELAY = 1000;                   // начальная задержка, экспоненциально растёт
-    const MAX_DISPLAY_ITEMS = 6;                // ограничение на главной
+    const RETRY_DELAY = 1000;
+    const MAX_DISPLAY_ITEMS = 6;
 
     // ---------- Внутреннее состояние ----------
     let currentItems = [];
@@ -29,13 +29,12 @@
     // ---------- Вспомогательные функции ----------
     const t = (key) => window.I18n?.translate(key) || key;
 
-    // Приведение элемента к единому формату с гарантией Date
     function normalizeItem(item) {
         let date = item.date;
         if (!(date instanceof Date)) {
             date = new Date(date);
             if (isNaN(date.getTime())) {
-                date = new Date(); // fallback
+                date = new Date();
             }
         }
         return {
@@ -54,9 +53,82 @@
         };
     }
 
-    // Нормализация массива элементов
     function normalizeItems(items) {
         return items.map(item => normalizeItem(item));
+    }
+
+    // ---------- Парсинг YouTube (дублируем из common-init, но можно использовать глобальную, если есть) ----------
+    function parseYouTubeUrl(url) {
+        try {
+            const parsed = new URL(url);
+            const isYoutube = parsed.hostname.includes('youtube.com') || parsed.hostname.includes('youtu.be');
+            if (!isYoutube) return null;
+
+            let videoId = null;
+            let playlistId = null;
+            let start = null;
+
+            if (parsed.hostname.includes('youtu.be')) {
+                const pathParts = parsed.pathname.split('/').filter(p => p);
+                if (pathParts.length > 0) videoId = pathParts[0];
+            }
+
+            const params = new URLSearchParams(parsed.search);
+            if (params.has('v')) videoId = params.get('v');
+            if (params.has('list')) playlistId = params.get('list');
+            if (params.has('t')) start = params.get('t');
+            else if (params.has('start')) start = params.get('start');
+
+            if (!videoId && parsed.pathname.includes('/embed/')) {
+                const parts = parsed.pathname.split('/embed/');
+                if (parts.length > 1) {
+                    const idPart = parts[1].split('?')[0];
+                    if (idPart && idPart !== 'videoseries') videoId = idPart;
+                }
+            }
+            if (!videoId && parsed.pathname.includes('/watch/')) {
+                const parts = parsed.pathname.split('/watch/');
+                if (parts.length > 1) {
+                    const idPart = parts[1].split('?')[0];
+                    if (idPart && idPart !== 'videoseries') videoId = idPart;
+                }
+            }
+
+            if (!videoId && playlistId) {
+                let embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${playlistId}`;
+                if (start) embedUrl += `&start=${start}`;
+                embedUrl += `&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+                return { embedUrl, videoId: null, playlistId, start };
+            }
+
+            if (videoId) {
+                let embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}`;
+                const queryParams = new URLSearchParams();
+                queryParams.set('rel', '0');
+                queryParams.set('modestbranding', '1');
+                queryParams.set('playsinline', '1');
+                queryParams.set('origin', location.origin);
+                if (playlistId) queryParams.set('list', playlistId);
+                if (start) queryParams.set('start', start);
+                const qs = queryParams.toString();
+                if (qs) embedUrl += '?' + qs;
+                return { embedUrl, videoId, playlistId, start };
+            }
+
+            if (parsed.pathname.includes('/playlist')) {
+                const listParam = params.get('list');
+                if (listParam) {
+                    let embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${listParam}`;
+                    if (start) embedUrl += `&start=${start}`;
+                    embedUrl += `&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+                    return { embedUrl, videoId: null, playlistId: listParam, start };
+                }
+            }
+
+            return null;
+        } catch (e) {
+            return null;
+        }
     }
 
     // ---------- Загрузка источников с повторами ----------
@@ -78,7 +150,6 @@
 
     // ---------- Загрузка постов (GitHub Issues) ----------
     async function loadPosts(signal) {
-        // Проверяем лимиты
         if (window.RateLimits && !window.RateLimits.checkLimit('posts')) {
             console.warn('[NewsFeed] Лимит постов исчерпан, пропускаем запрос');
             return [];
@@ -112,11 +183,10 @@
             const currentUser = getCurrentUser();
             return all.map(i => {
                 const labels = i.labels.map(l => l.name);
-                // проверка приватности
                 if (labels.includes('private')) {
                     const allowed = window.GithubCore.extractAllowed(i.body);
                     if (!allowed || !allowed.split(',').map(s => s.trim()).includes(currentUser)) {
-                        return null; // пропускаем
+                        return null;
                     }
                 }
                 return normalizeItem({
@@ -128,7 +198,7 @@
                     date: new Date(i.created_at),
                     labels: labels,
                     game: labels.find(l => l.startsWith('game:'))?.split(':')[1] || null,
-                    thumbnail: null // будет извлечено позже при рендере
+                    thumbnail: null
                 });
             }).filter(Boolean);
         } catch (err) {
@@ -168,7 +238,9 @@
                     const items = data.items.slice(0, 3).map(item => {
                         const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
                         if (!vid) return null;
-                        const embedUrl = `https://www.youtube-nocookie.com/embed/${vid}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+                        // Используем парсер для получения embed-ссылки с origin
+                        const parsed = parseYouTubeUrl(item.link);
+                        const embedUrl = parsed ? parsed.embedUrl : null;
                         return normalizeItem({
                             type: 'video',
                             id: vid,
@@ -176,7 +248,7 @@
                             author: ch.name,
                             date: new Date(item.pubDate),
                             thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
-                            embedUrl: embedUrl,
+                            embedUrl: embedUrl || `https://www.youtube-nocookie.com/embed/${vid}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`,
                             videoData: { service: 'youtube', id: vid }
                         });
                     }).filter(v => v);
@@ -187,7 +259,6 @@
                 }
             }
             clearTimeout(timeoutId);
-            // сортировка по дате
             all.sort((a, b) => b.date - a.date);
             return all.slice(0, 12);
         } catch (err) {
@@ -212,7 +283,6 @@
             for (const channel of TWITCH_CHANNELS) {
                 if (controller.signal.aborted) break;
                 try {
-                    // Пробуем twitchinsights (быстрый и надёжный)
                     const url = `https://api.twitchinsights.net/v1/streams?channel=${channel}`;
                     const resp = await fetch(url, { signal: controller.signal });
                     if (!resp.ok) continue;
@@ -250,26 +320,20 @@
 
     // ---------- Основная функция fetchNewsFeed ----------
     async function fetchNewsFeed({ signal, forceRefresh = false, maxAge = CACHE_TTL } = {}) {
-        // 1. Проверка кеша
         const cached = cacheGet(CACHE_KEY, maxAge);
         if (cached && !forceRefresh) {
-            // Нормализуем даты в кеше
             const items = normalizeItems(cached.items || []);
             console.log(`[NewsFeed] Загрузка из кеша: ${items.length} элементов`);
-            // Фоновое обновление (stale-while-revalidate)
             if (navigator.onLine) {
                 scheduleBackgroundRefresh();
             }
             return { items, fromCache: true, isStale: false };
         }
 
-        // 2. Если кеша нет или forceRefresh – загружаем из сети
         if (isLoading) {
-            // Если уже идёт загрузка, ждём её завершения
             return new Promise((resolve) => {
                 const check = () => {
                     if (!isLoading) {
-                        // После загрузки берём из кеша
                         const fresh = cacheGet(CACHE_KEY, maxAge);
                         if (fresh) {
                             const items = normalizeItems(fresh.items || []);
@@ -297,7 +361,6 @@
 
         try {
             console.log('[NewsFeed] Загрузка из сети...');
-            // Параллельная загрузка всех источников с таймаутами
             const postsPromise = fetchWithRetry(() => loadPosts(abortController.signal), 'posts');
             const videosPromise = fetchWithRetry(() => loadVideos(abortController.signal), 'videos');
             const twitchPromise = fetchWithRetry(() => loadTwitchStreams(abortController.signal), 'twitch');
@@ -316,12 +379,9 @@
                 }
             });
 
-            // Сортируем по дате (новые сверху)
             allItems.sort((a, b) => b.date - a.date);
-            // Ограничим количество (например, 20, но для кеша можно больше)
             const limited = allItems.slice(0, 20);
 
-            // Сохраняем в кеш (нормализованные элементы уже имеют Date, при JSON-сериализации они станут строками)
             cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
 
             console.log(`[NewsFeed] Загружено: ${limited.length} элементов (посты: ${results[0].status === 'fulfilled' ? results[0].value.length : 0}, видео: ${results[1].status === 'fulfilled' ? results[1].value.length : 0}, стримы: ${results[2].status === 'fulfilled' ? results[2].value.length : 0})`);
@@ -330,7 +390,6 @@
             return { items: limited, fromCache: false, isStale: false };
         } catch (err) {
             console.error('[NewsFeed] Критическая ошибка загрузки:', err);
-            // Если есть кеш, возвращаем его даже устаревший
             const stale = cacheGet(CACHE_KEY, Infinity);
             if (stale) {
                 const items = normalizeItems(stale.items || []);
@@ -349,11 +408,9 @@
     function scheduleBackgroundRefresh() {
         if (backgroundRefreshScheduled) return;
         backgroundRefreshScheduled = true;
-        // Запускаем через 1 секунду после загрузки страницы
         setTimeout(async () => {
             try {
                 if (!navigator.onLine) return;
-                // Проверяем, не слишком ли часто обновляемся
                 const lastUpdate = cacheGet(CACHE_KEY + '_last_update', Infinity);
                 if (lastUpdate && Date.now() - lastUpdate < CACHE_TTL / 2) {
                     backgroundRefreshScheduled = false;
@@ -362,7 +419,6 @@
                 console.log('[NewsFeed] Фоновое обновление...');
                 const result = await fetchNewsFeed({ forceRefresh: true });
                 if (result && result.items.length > 0) {
-                    // Обновляем интерфейс, если он открыт
                     if (container) {
                         renderNewsFeed(result.items);
                     }
@@ -397,10 +453,8 @@
     function renderNewsFeed(items) {
         if (!container) return;
 
-        // Ограничиваем количество отображаемых элементов
         const displayItems = items.slice(0, MAX_DISPLAY_ITEMS);
 
-        // Создаём или обновляем заголовок с кнопкой "Добавить новость" для админов
         let header = container.parentNode?.querySelector('.news-header');
         if (!header) {
             header = createElement('div', 'news-header', {
@@ -423,7 +477,6 @@
             container.parentNode.insertBefore(header, container);
         }
 
-        // Кнопка "Добавить новость" для админов
         const existingBtn = header.querySelector('.admin-news-btn');
         if (isAdmin() && hasScope('repo')) {
             if (!existingBtn) {
@@ -466,7 +519,6 @@
         container.innerHTML = '';
         container.appendChild(grid);
 
-        // Обновляем тексты для кнопок "Повторить" (если есть)
         container.querySelectorAll('[data-lang]').forEach(el => {
             const key = el.getAttribute('data-lang');
             if (key) el.textContent = t(key);
@@ -477,7 +529,6 @@
         const cardWrapper = createElement('div', 'project-card-link card-interactive');
 
         const card = createElement('div', 'project-card');
-        // Изображение
         const imgWrapper = createElement('div', 'image-wrapper');
         const img = createElement('img', 'project-image', {}, {
             src: item.thumbnail || 'images/default-news.webp',
@@ -488,12 +539,10 @@
         imgWrapper.appendChild(img);
         card.appendChild(imgWrapper);
 
-        // Заголовок
         const title = createElement('h3');
         title.textContent = item.title.length > 70 ? item.title.slice(0, 70) + '…' : item.title;
         card.appendChild(title);
 
-        // Мета
         const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
         const dateStr = item.date.toLocaleDateString();
         meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(item.author)} · <i class="fas fa-calendar-alt"></i> ${dateStr}`;
@@ -502,7 +551,6 @@
         }
         card.appendChild(meta);
 
-        // Краткое описание (для постов)
         if (item.type === 'post' && item.body) {
             const summary = window.GithubCore.extractSummary(item.body) || item.body.replace(/\n/g, ' ').substring(0, 120) + '…';
             const preview = createElement('p', 'text-secondary', {
@@ -516,14 +564,12 @@
             card.appendChild(preview);
         }
 
-        // Кнопка добавления в закладки (для авторизованных)
         const currentUser = getCurrentUser();
         if (currentUser && hasScope('gist')) {
             const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: t('addToFavorites') });
             favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
             favBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                // Загружаем хранилище, если ещё не загружено
                 if (!window.BookmarkStorage) {
                     try {
                         if (window.loadStorageModules) {
@@ -571,7 +617,6 @@
 
         cardWrapper.appendChild(card);
 
-        // Клик – открыть подробности (пост) или видео
         cardWrapper.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
             if (item.type === 'post') {
@@ -598,14 +643,12 @@
                 let embedUrl = item.embedUrl;
                 if (!embedUrl) {
                     if (item.type === 'video' && item.id) {
-                        embedUrl = `https://www.youtube-nocookie.com/embed/${item.id}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+                        // Пробуем парсер
+                        const parsed = parseYouTubeUrl(`https://youtu.be/${item.id}`);
+                        embedUrl = parsed ? parsed.embedUrl : `https://www.youtube-nocookie.com/embed/${item.id}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
                     } else if (item.type === 'twitch' && item.id) {
                         embedUrl = `https://player.twitch.tv/?channel=${item.id}&parent=${location.hostname}&autoplay=false`;
                     }
-                }
-                if (embedUrl && !embedUrl.includes('origin=') && embedUrl.includes('youtube')) {
-                    const sep = embedUrl.includes('?') ? '&' : '?';
-                    embedUrl += `${sep}origin=${encodeURIComponent(location.origin)}`;
                 }
                 iframe.src = embedUrl;
                 iframe.setAttribute('allowfullscreen', 'true');
@@ -625,13 +668,12 @@
 
     // ---------- Публичный API ----------
     async function initNewsFeed() {
-        if (container) return; // уже инициализирован
+        if (container) return;
         container = document.getElementById('news-feed');
         if (!container) return;
 
         currentUser = getCurrentUser();
 
-        // Показываем скелетон
         container.innerHTML = '';
         container.appendChild(renderSkeleton(MAX_DISPLAY_ITEMS));
 
@@ -658,10 +700,8 @@
             if (retryBtn) retryBtn.addEventListener('click', () => refreshNewsFeed());
         }
 
-        // Подписка на изменение языка – обновляем только тексты
         window.addEventListener('languageChanged', () => {
             if (!container) return;
-            // Обновляем заголовок
             const header = container.parentNode?.querySelector('.news-header');
             if (header) {
                 const titleSpan = header.querySelector('h2 span');
@@ -671,19 +711,15 @@
                 const btn = header.querySelector('.admin-news-btn');
                 if (btn) btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
             }
-            // Обновляем все элементы с data-lang внутри контейнера
             container.querySelectorAll('[data-lang]').forEach(el => {
                 const key = el.getAttribute('data-lang');
                 if (key) el.textContent = t(key);
             });
-            // Кнопка "Повторить" в пустом состоянии может не иметь data-lang, обновляем вручную
             const retryBtn = container.querySelector('#news-retry-btn');
             if (retryBtn) retryBtn.innerHTML = `<i class="fas fa-sync"></i> ${t('newsRetryVideo')}`;
         });
 
-        // ---- ОБРАБОТКА ВХОДА/ВЫХОДА ДЛЯ ОБНОВЛЕНИЯ ЛЕНТЫ ----
         window.addEventListener('github-login-success', () => {
-            // Сбрасываем кеш и перезагружаем
             window.GithubCore.cacheRemoveByPrefix(CACHE_KEY);
             refreshNewsFeed();
         });
@@ -695,10 +731,8 @@
 
     function refreshNewsFeed() {
         if (!container) return;
-        // Показываем скелетон
         container.innerHTML = '';
         container.appendChild(renderSkeleton(MAX_DISPLAY_ITEMS));
-        // Принудительное обновление
         fetchNewsFeed({ forceRefresh: true })
             .then(result => {
                 if (result) renderNewsFeed(result.items);
@@ -710,7 +744,6 @@
             });
     }
 
-    // Экспорт
     window.initNewsFeed = initNewsFeed;
     window.refreshNewsFeed = refreshNewsFeed;
 })();
