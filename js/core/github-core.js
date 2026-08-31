@@ -10,11 +10,14 @@
         ALLOWED_AUTHORS: ['NeonShadowYT', 'GoldenCreeper567']
     };
 
+    // Импортируем все утилиты из window.Utils
     const {
         escapeHtml, stripHtml, createElement, formatDate,
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
         deduplicateByNumber, debounce, throttle, renderMarkdown,
-        createAbortable, loadModule
+        createAbortable, loadModule,
+        stripMarkdownAndHtml, getPlainTextLength, containsGitHubToken,
+        xorEncrypt, xorDecrypt, generateRandomKey
     } = window.Utils;
 
     function extractMeta(body, tag) {
@@ -204,7 +207,13 @@
         encryptPrivateBody, decryptPrivateBody,
         performAction,
         isActionStillValid,
-        isRetryableError
+        isRetryableError,
+        stripMarkdownAndHtml,
+        getPlainTextLength,
+        containsGitHubToken,
+        xorEncrypt,
+        xorDecrypt,
+        generateRandomKey
     };
 
     window.performAction = performAction;
