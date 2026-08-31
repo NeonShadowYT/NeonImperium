@@ -168,6 +168,7 @@
                     const items = data.items.slice(0, 3).map(item => {
                         const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
                         if (!vid) return null;
+                        const embedUrl = `https://www.youtube-nocookie.com/embed/${vid}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
                         return normalizeItem({
                             type: 'video',
                             id: vid,
@@ -175,7 +176,7 @@
                             author: ch.name,
                             date: new Date(item.pubDate),
                             thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
-                            embedUrl: `https://www.youtube-nocookie.com/embed/${vid}?rel=0&modestbranding=1&playsinline=1`,
+                            embedUrl: embedUrl,
                             videoData: { service: 'youtube', id: vid }
                         });
                     }).filter(v => v);
@@ -589,7 +590,7 @@
                     labels: item.labels
                 });
             } else {
-                // Видео или стрим – открываем плеер прямо в карточке (или модалку)
+                // Видео или стрим – открываем плеер прямо в карточке
                 const iframe = createElement('iframe', '', {
                     position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
                     border: 'none', borderRadius: '12px'
@@ -601,6 +602,10 @@
                     } else if (item.type === 'twitch' && item.id) {
                         embedUrl = `https://player.twitch.tv/?channel=${item.id}&parent=${location.hostname}&autoplay=false`;
                     }
+                }
+                if (embedUrl && !embedUrl.includes('origin=') && embedUrl.includes('youtube')) {
+                    const sep = embedUrl.includes('?') ? '&' : '?';
+                    embedUrl += `${sep}origin=${encodeURIComponent(location.origin)}`;
                 }
                 iframe.src = embedUrl;
                 iframe.setAttribute('allowfullscreen', 'true');

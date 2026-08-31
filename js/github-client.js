@@ -16,13 +16,20 @@
         setToken(token) {
             this.token = token;
             // Сбрасываем кеш для запросов к API, чтобы использовать новый токен
-            // Это важно, чтобы после логина запросы шли с правильной авторизацией
             window.GithubCore?.cacheRemoveByPrefix('gh_api_/repos/');
             console.log('[GitHubClient] Токен обновлён, кеш API очищен');
         }
 
         getToken() {
-            return this.token || localStorage.getItem('github_token');
+            // Приоритет: переданный токен > sessionStorage > localStorage (для совместимости)
+            if (this.token) return this.token;
+            const sessionToken = sessionStorage.getItem('github_token');
+            if (sessionToken) return sessionToken;
+            // Если ничего нет, пробуем взять из localStorage (но там может быть зашифрованный, мы его не используем)
+            // Для обратной совместимости с предыдущей версией, попробуем прочитать обычный токен
+            const localToken = localStorage.getItem('github_token');
+            if (localToken) return localToken;
+            return null;
         }
 
         // Универсальный метод запроса с ретраями
@@ -35,6 +42,9 @@
             };
             if (token) {
                 headers['Authorization'] = `Bearer ${token}`;
+            } else {
+                // Если токена нет, не делаем запрос, а кидаем ошибку
+                throw new Error('No GitHub token provided');
             }
 
             let lastError;
@@ -50,7 +60,6 @@
 
                     // Успех
                     if (response.ok) {
-                        // Для DELETE и других без тела
                         if (response.status === 204) return null;
                         return await response.json();
                     }
@@ -58,7 +67,6 @@
                     // Ошибки, которые можно повторить
                     if (response.status >= 500 || response.status === 429) {
                         lastError = new Error(`HTTP ${response.status}`);
-                        // Экспоненциальная задержка
                         const delay = RETRY_DELAY * Math.pow(2, attempt);
                         await new Promise(r => setTimeout(r, delay));
                         continue;
