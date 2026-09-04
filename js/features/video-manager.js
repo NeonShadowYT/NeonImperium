@@ -10,6 +10,7 @@
     function showVideoFallback(container, videoUrl) {
         const t = window.I18n?.translate || (k => k);
         emptyElement(container);
+        container.className = 'lazy-yt fallback-loaded';
         container.style.position = 'relative';
         container.style.width = '100%';
         container.style.paddingBottom = '56.25%';
@@ -17,39 +18,25 @@
         container.style.borderRadius = '12px';
         container.style.overflow = 'hidden';
 
-        const fallbackDiv = createElement('div', null, {
-            position: 'absolute',
-            top: 0, left: 0,
-            width: '100%', height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--bg-primary)',
-            borderRadius: '12px',
-            padding: '20px',
-            textAlign: 'center',
-            gap: '12px',
-            animation: 'fadeInUp 0.4s ease'
-        });
+        const fallbackDiv = createElement('div', 'video-fallback');
         fallbackDiv.innerHTML = `
             <i class="fab fa-youtube" style="font-size:32px;color:var(--accent);"></i>
-            <p style="color:var(--text-secondary);font-size:14px;margin:0;">${t('videoLoadFailed')}</p>
-            <button class="button small" onclick="window.open('${videoUrl || '#'}', '_blank')" style="background:var(--accent);color:#fff;">
+            <p class="video-fallback-text">${t('videoLoadFailed')}</p>
+            <button class="button small video-open-btn" onclick="window.open('${videoUrl || '#'}', '_blank')">
                 <i class="fas fa-external-link-alt"></i> ${t('open')}
             </button>
-            <button class="button small retry-video" style="background:var(--bg-inner-gradient);color:var(--text-secondary);">
+            <button class="button small retry-video-btn">
                 <i class="fas fa-redo"></i> ${t('retry') || 'Повторить'}
             </button>
         `;
         container.appendChild(fallbackDiv);
         container.classList.add('loaded');
 
-        const retryBtn = fallbackDiv.querySelector('.retry-video');
+        const retryBtn = fallbackDiv.querySelector('.retry-video-btn');
         if (retryBtn) {
             retryBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                container.classList.remove('loaded');
+                container.classList.remove('loaded', 'fallback-loaded');
                 container.dataset.loaded = 'false';
                 loadVideo(container);
             });
@@ -63,7 +50,6 @@
         const src = container.dataset.src;
         if (!src) return;
 
-        // Проверяем, не загружено ли уже
         if (container.dataset.loaded === 'true' && container.querySelector('iframe')) return;
 
         const parsed = window.Utils.parseYouTubeUrl(src);
@@ -82,7 +68,7 @@
         iframe.sandbox = 'allow-same-origin allow-scripts allow-popups allow-forms allow-presentation';
         iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
         iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-        iframe.style.cssText = 'width:100%;height:100%;border:none;border-radius:12px;';
+        iframe.className = 'video-iframe';
 
         let errorOccurred = false;
         let timeoutId = null;
@@ -97,7 +83,6 @@
 
         iframe.onerror = onError;
 
-        // Таймаут 30 сек
         timeoutId = setTimeout(() => {
             if (!iframe.contentWindow && !errorOccurred) {
                 errorOccurred = true;
@@ -114,6 +99,7 @@
         };
 
         emptyElement(container);
+        container.className = 'lazy-yt';
         container.style.position = 'relative';
         container.style.paddingBottom = '56.25%';
         container.style.background = '#000';
@@ -122,6 +108,8 @@
         iframe.style.position = 'absolute';
         iframe.style.top = '0';
         iframe.style.left = '0';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
         container.appendChild(iframe);
     }
 
@@ -131,7 +119,6 @@
     function initLazyVideo() {
         const containers = document.querySelectorAll('.lazy-yt:not([data-loaded="true"])');
         if (!('IntersectionObserver' in window)) {
-            // Fallback: загружаем сразу
             containers.forEach(el => loadVideo(el));
             return;
         }

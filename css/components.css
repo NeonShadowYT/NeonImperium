@@ -775,3 +775,55 @@
 .github-login-modal .why-need-toggle { background: transparent; border: 1px solid var(--glass-border); border-radius: var(--radius-pill); padding: 8px 16px; color: var(--accent); cursor: pointer; font-family: var(--font-family); font-size: 14px; transition: all 0.2s; width: 100%; text-align: left; display: flex; align-items: center; gap: 8px; }
 .github-login-modal .why-need-toggle:hover { border-color: var(--accent); background: rgba(61,158,179,0.05); }
 .github-login-modal .why-need-content { display: none; margin-top: 12px; padding: 14px 16px; background: rgba(0,0,0,0.2); border-radius: var(--radius-sm); border-left: 3px solid var(--accent); font-size: 14px; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
+/* ---- Видео-менеджер ---- */
+.video-fallback {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    gap: 12px;
+    animation: fadeInUp 0.4s ease;
+}
+.video-fallback-text {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin: 0;
+}
+.video-open-btn {
+    background: var(--accent);
+    color: #fff;
+}
+.video-open-btn:hover {
+    background: var(--accent-light);
+}
+.retry-video-btn {
+    background: var(--bg-inner-gradient);
+    color: var(--text-secondary);
+}
+.retry-video-btn:hover {
+    background: var(--accent);
+    color: #fff;
+}
+.video-iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 12px;
+}
+.lazy-yt.fallback-loaded .video-fallback {
+    position: relative;
+    height: auto;
+    padding: 20px;
+}
