@@ -1,78 +1,23 @@
 // js/features/storage/ui.js
-// UI-рендеринг закладок — использует preview.js и download.js для получения данных
-// Исправлено: оверлей показывается только при наличии превью
 (function() {
   const { escapeHtml, formatDate, loadModule, createElement, debounce } = window.GithubCore || {};
   const { getCurrentUser, hasScope } = window.GithubAuth || {};
   const { showToast, createModal } = window.UIUtils || {};
 
-  const {
-    ensureStorage,
-    addBookmark,
-    removeBookmark,
-    updateBookmark,
-    getBookmarks,
-    setBookmarks,
-    triggerSave,
-    exportBookmarksData,
-    importBookmarksData,
-    importBookmarksBatch,
-    exportAllBookmarks,
-    batchUpdateVideoLinks,
-    setStatusCallback,
-    refreshGridCallback
-  } = window._StorageManager || {};
+  let _StorageManager = null;
+  let _StoragePreview = null;
+  let _StorageDownload = null;
 
-  let _fetchVideoPreview = null;
-  let _fetchVideoDownloadUrl = null;
-
-  async function ensurePreviewModules() {
-    if (_fetchVideoPreview && _fetchVideoDownloadUrl) return;
-
-    if (window._StoragePreview && typeof window._StoragePreview.fetchVideoPreview === 'function') {
-      _fetchVideoPreview = window._StoragePreview.fetchVideoPreview;
-    }
-    if (window._StorageDownload && typeof window._StorageDownload.fetchVideoDownloadUrl === 'function') {
-      _fetchVideoDownloadUrl = window._StorageDownload.fetchVideoDownloadUrl;
-    }
-
-    if (_fetchVideoPreview && _fetchVideoDownloadUrl) return;
-
+  async function ensureModules() {
     if (window._StorageEnsure) {
       await window._StorageEnsure();
-      if (window._StoragePreview && typeof window._StoragePreview.fetchVideoPreview === 'function') {
-        _fetchVideoPreview = window._StoragePreview.fetchVideoPreview;
-      }
-      if (window._StorageDownload && typeof window._StorageDownload.fetchVideoDownloadUrl === 'function') {
-        _fetchVideoDownloadUrl = window._StorageDownload.fetchVideoDownloadUrl;
-      }
-      if (_fetchVideoPreview && _fetchVideoDownloadUrl) return;
     }
-
-    const loadModules = async () => {
-      if (!window._StoragePreview) {
-        await new Promise((resolve) => {
-          const script = document.createElement('script');
-          script.src = 'js/features/storage/preview.js';
-          script.defer = true;
-          script.onload = resolve;
-          document.head.appendChild(script);
-        });
-      }
-      if (!window._StorageDownload) {
-        await new Promise((resolve) => {
-          const script = document.createElement('script');
-          script.src = 'js/features/storage/download.js';
-          script.defer = true;
-          script.onload = resolve;
-          document.head.appendChild(script);
-        });
-      }
-      _fetchVideoPreview = window._StoragePreview?.fetchVideoPreview || null;
-      _fetchVideoDownloadUrl = window._StorageDownload?.fetchVideoDownloadUrl || null;
-    };
-
-    await loadModules();
+    _StorageManager = window._StorageManager;
+    _StoragePreview = window._StoragePreview;
+    _StorageDownload = window._StorageDownload;
+    if (!_StorageManager || !_StoragePreview || !_StorageDownload) {
+      throw new Error('Storage modules not loaded');
+    }
   }
 
   let statusElement = null;
@@ -93,20 +38,17 @@
   }
 
   async function ensureDownloadUrl(bm) {
-    await ensurePreviewModules();
-    if (!_fetchVideoDownloadUrl) {
-      console.warn('[StorageUI] fetchVideoDownloadUrl не доступна');
-      return null;
-    }
+    await ensureModules();
+    if (!_StorageDownload) return null;
     if (!bm || bm.type !== 'video' || !bm.url) return null;
     if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) {
       return bm.downloadUrl;
     }
     try {
-      const url = await _fetchVideoDownloadUrl(bm.url);
+      const url = await _StorageDownload.fetchVideoDownloadUrl(bm.url, true);
       if (url) {
         const expires = Date.now() + 24 * 60 * 60 * 1000;
-        await updateBookmark(bm.id, { downloadUrl: url, downloadUrlExpires: expires });
+        await _StorageManager.updateBookmark(bm.id, { downloadUrl: url, downloadUrlExpires: expires });
         return url;
       }
     } catch (e) {
@@ -116,22 +58,19 @@
   }
 
   async function ensurePreview(bm) {
-    await ensurePreviewModules();
-    if (!_fetchVideoPreview) {
-      console.warn('[StorageUI] fetchVideoPreview не доступна');
-      return bm;
-    }
-    if (!bm || bm.type !== 'video' || !bm.url) return null;
+    await ensureModules();
+    if (!_StoragePreview) return bm;
+    if (!bm || bm.type !== 'video' || !bm.url) return bm;
     if (bm.thumbnail && bm.embedUrl) return bm;
     try {
-      const preview = await _fetchVideoPreview(bm.url);
+      const preview = await _StoragePreview.fetchVideoPreview(bm.url);
       if (preview && (preview.thumbnail || preview.embedUrl)) {
         const updates = {};
         if (preview.thumbnail && !bm.thumbnail) updates.thumbnail = preview.thumbnail;
         if (preview.embedUrl && !bm.embedUrl) updates.embedUrl = preview.embedUrl;
         if (preview.title && !bm.title) updates.title = preview.title;
         if (Object.keys(updates).length > 0) {
-          await updateBookmark(bm.id, updates);
+          await _StorageManager.updateBookmark(bm.id, updates);
           return { ...bm, ...updates };
         }
       }
@@ -143,21 +82,17 @@
 
   function loadVideoPlayerInCard(mediaContainer, bm) {
     if (mediaContainer.querySelector('iframe')) return;
-
     let embedUrl = bm.embedUrl;
     if (!embedUrl) {
-      if (bm.url) {
-        const match = bm.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
-        if (match) {
-          embedUrl = `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
-        }
+      const match = bm.url?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+      if (match) {
+        embedUrl = `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
       }
     }
     if (!embedUrl) {
       showToast('Не удалось определить ссылку для плеера', 'error');
       return;
     }
-
     mediaContainer.innerHTML = '';
     const iframe = document.createElement('iframe');
     iframe.src = embedUrl;
@@ -190,7 +125,6 @@
     const isSave = bm.type === 'save';
 
     if (isVideo) {
-      // Показываем превью, если есть, иначе стандартную заглушку
       const img = document.createElement('img');
       img.src = bm.thumbnail || 'images/default-news.webp';
       img.alt = bm.title;
@@ -198,7 +132,6 @@
       img.onerror = () => { img.src = 'images/default-news.webp'; };
       media.appendChild(img);
 
-      // Оверлей с кнопкой play показываем ТОЛЬКО если есть превью (thumbnail)
       if (bm.thumbnail) {
         const overlay = document.createElement('div');
         overlay.className = 'play-overlay';
@@ -392,7 +325,7 @@
     del.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (confirm(t('deleteConfirm'))) {
-        await removeBookmark(bm.id);
+        await _StorageManager.removeBookmark(bm.id);
       }
     });
     wrapper.appendChild(card);
@@ -423,7 +356,7 @@
     if (!grid) return;
     const t = (key) => window.I18n?.translate(key) || key;
 
-    let bookmarks = getBookmarks() || [];
+    let bookmarks = _StorageManager.getBookmarks() || [];
     let filtered = bookmarks.slice();
     const activeCat = modal.querySelector('.cat-btn.active');
     const category = activeCat ? activeCat.dataset.cat : 'all';
@@ -480,7 +413,7 @@
         const buffer = await file.arrayBuffer();
         const base64 = arrayBufferToBase64(buffer);
         const hash = await hashBuffer(buffer);
-        await addBookmark({
+        await _StorageManager.addBookmark({
           url: null,
           title: file.name,
           saveData: {
@@ -537,16 +470,44 @@
     container.appendChild(refreshBtn);
   }
 
-  async function openStorageModal(gameContext = null) {
-    await ensurePreviewModules();
+  async function batchUpdateVideoLinks() {
+    await ensureModules();
+    const bookmarks = _StorageManager.getBookmarks() || [];
+    const videoBookmarks = bookmarks.filter(b => b.type === 'video' && b.url);
+    let updated = 0;
+    let failed = 0;
+    for (const bm of videoBookmarks) {
+      if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) {
+        // Ссылка ещё актуальна, можно пропустить или обновить принудительно
+        // Для обновления всех можно использовать forceRefresh: true
+        continue;
+      }
+      try {
+        const url = await _StorageDownload.fetchVideoDownloadUrl(bm.url, true);
+        if (url) {
+          const expires = Date.now() + 24 * 60 * 60 * 1000;
+          await _StorageManager.updateBookmark(bm.id, { downloadUrl: url, downloadUrlExpires: expires });
+          updated++;
+        } else {
+          failed++;
+        }
+      } catch (e) {
+        failed++;
+        console.warn('Failed to update video link for', bm.id, e);
+      }
+    }
+    return { updated, failed, total: videoBookmarks.length };
+  }
 
+  async function openStorageModal(gameContext = null) {
+    await ensureModules();
     const t = (key) => window.I18n?.translate(key) || key;
     const user = getCurrentUser();
     if (!user) { showToast(t('loginToGitHub'), 'error'); return; }
     if (!hasScope('gist')) { showToast(t('needGistScope'), 'error'); return; }
 
     try {
-      await ensureStorage();
+      await _StorageManager.ensureStorage();
     } catch (e) {
       showToast('Ошибка загрузки хранилища: ' + e.message, 'error');
       return;
@@ -611,8 +572,8 @@
     window._StorageUI = window._StorageUI || {};
     window._StorageUI.currentModal = modal;
 
-    setStatusCallback(updateStatus);
-    window._StorageManager.setRefreshGridCallback(() => renderBookmarks(modal));
+    _StorageManager.setStatusCallback(updateStatus);
+    _StorageManager.setRefreshGridCallback(() => renderBookmarks(modal));
 
     if (!document.getElementById('storage-ui-styles')) {
       const style = document.createElement('style');
@@ -687,16 +648,12 @@
     const urlInput = modal.querySelector('#new-url');
     const confirmAdd = modal.querySelector('#confirm-add');
     confirmAdd.addEventListener('click', async () => {
-      await ensurePreviewModules();
+      await ensureModules();
       const url = urlInput.value.trim();
       if (!url) { showToast(t('enterText'), 'error'); return; }
       try {
-        if (!_fetchVideoPreview) {
-          showToast('Модуль превью не загружен', 'error');
-          return;
-        }
-        const preview = await _fetchVideoPreview(url);
-        await addBookmark({
+        const preview = await _StoragePreview.fetchVideoPreview(url);
+        await _StorageManager.addBookmark({
           url: url,
           title: preview?.title || url,
           thumbnail: preview?.thumbnail || null,
@@ -733,7 +690,7 @@
       const newPass = prompt('Введите новый пароль для хранилища (оставьте пустым, чтобы отключить):\n\nВНИМАНИЕ: пароль становится обязательным для доступа, даже при наличии логина и токена.');
       if (newPass === null) return;
       try {
-        await setStoragePassword(newPass || null);
+        await _StorageManager.setStoragePassword(newPass || null);
         showToast('Пароль обновлён', 'success');
       } catch (e) {
         showToast(e.message, 'error');
@@ -747,7 +704,7 @@
         return;
       }
       try {
-        const encrypted = await exportBookmarksData(password);
+        const encrypted = await _StorageManager.exportBookmarksData(password);
         const blob = new Blob([JSON.stringify(encrypted)], { type: 'application/json' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -773,7 +730,7 @@
             const encrypted = JSON.parse(ev.target.result);
             const password = prompt('Введите пароль для расшифровки импортируемого файла:');
             if (!password) return;
-            const added = await importBookmarksData(encrypted, password);
+            const added = await _StorageManager.importBookmarksData(encrypted, password);
             showToast(`Импортировано ${added} закладок`, 'success');
             renderBookmarks(modal);
           } catch (err) {
@@ -796,6 +753,7 @@
     return { modal, closeModal: closeWithCleanup };
   }
 
+  // Экспорт
   window._StorageUI = {
     openStorageModal,
     renderBookmarks,
@@ -818,12 +776,16 @@
         wrapper.replaceWith(newWrapper);
         bookmarkElements.set(id, newWrapper);
       }
-    }
+    },
+    batchUpdateVideoLinks,
+    ensureDownloadUrl
   };
 
-  window._StorageManager.setStatusCallback(updateStatus);
-  window._StorageManager.setRefreshGridCallback(() => {
-    const modal = window._StorageUI.currentModal;
-    if (modal) renderBookmarks(modal);
-  });
+  if (window._StorageManager) {
+    window._StorageManager.setStatusCallback(updateStatus);
+    window._StorageManager.setRefreshGridCallback(() => {
+      const modal = window._StorageUI.currentModal;
+      if (modal) renderBookmarks(modal);
+    });
+  }
 })();
