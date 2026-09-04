@@ -42,7 +42,6 @@
     return title.slice(0, maxLength) + '…';
   }
 
-  // ---- Проверка и обновление downloadUrl в закладке ----
   async function ensureDownloadUrl(bm) {
     if (!bm || bm.type !== 'video' || !bm.url) return null;
     if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) {
@@ -61,7 +60,6 @@
     return null;
   }
 
-  // ---- Проверка и обновление превью в закладке ----
   async function ensurePreview(bm) {
     if (!bm || bm.type !== 'video' || !bm.url) return null;
     if (bm.thumbnail && bm.embedUrl) return bm;
@@ -83,10 +81,8 @@
     return bm;
   }
 
-  // ---- Загрузка плеера в карточку по клику ----
   function loadVideoPlayerInCard(mediaContainer, bm) {
     if (mediaContainer.querySelector('iframe')) return;
-
     let embedUrl = bm.embedUrl;
     if (!embedUrl) {
       if (bm.url) {
@@ -100,7 +96,6 @@
       showToast('Не удалось определить ссылку для плеера', 'error');
       return;
     }
-
     mediaContainer.innerHTML = '';
     const iframe = document.createElement('iframe');
     iframe.src = embedUrl;
@@ -116,7 +111,6 @@
     if (overlay) overlay.remove();
   }
 
-  // ---- Создание DOM-элемента карточки ----
   function createBookmarkCardElement(bm, modal) {
     const t = (key) => window.I18n?.translate(key) || key;
     const wrapper = document.createElement('div');
@@ -293,7 +287,6 @@
     if (!isVideo) {
       card.addEventListener('click', async (e) => {
         if (e.target.closest('button')) return;
-
         if (isPost && bm.postData && bm.postData.id) {
           if (window.UIFeedback) {
             window.UIFeedback.openFullModal(bm.postData);
@@ -302,7 +295,6 @@
           }
           return;
         }
-
         if (isSave && bm.saveData) {
           try {
             const binary = atob(bm.saveData.content);
@@ -319,7 +311,6 @@
           }
           return;
         }
-
         if (bm.url) {
           window.open(bm.url, '_blank');
         }
@@ -340,7 +331,6 @@
     return wrapper;
   }
 
-  // ---- Добавление карточки в сетку ----
   function addBookmarkCard(bm, modal) {
     const grid = modal?.querySelector('#bookmarks-grid');
     if (!grid) return;
@@ -351,7 +341,6 @@
     bookmarkElements.set(bm.id, wrapper);
   }
 
-  // ---- Удаление карточки из сетки ----
   function removeBookmarkCard(id, modal) {
     const grid = modal?.querySelector('#bookmarks-grid');
     if (!grid) return;
@@ -360,7 +349,6 @@
     bookmarkElements.delete(id);
   }
 
-  // ---- Рендеринг закладок ----
   function renderBookmarks(modal) {
     const grid = modal?.querySelector('#bookmarks-grid');
     if (!grid) return;
@@ -393,7 +381,6 @@
     });
     grid.appendChild(fragment);
 
-    // Фоновое обновление превью для видео без превью
     const videoWithoutPreview = filtered.filter(b => b.type === 'video' && !b.thumbnail);
     if (videoWithoutPreview.length > 0) {
       setTimeout(async () => {
@@ -412,7 +399,6 @@
     }
   }
 
-  // ---- Обработка файлов ----
   async function processFiles(files, modal) {
     const t = (key) => window.I18n?.translate(key) || key;
     for (const file of files) {
@@ -456,7 +442,6 @@
     return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
   }
 
-  // ---- Групповые действия ----
   function addBatchActions(modal) {
     const t = (key) => window.I18n?.translate(key) || key;
     const container = modal.querySelector('.storage-actions');
@@ -483,7 +468,6 @@
     container.appendChild(refreshBtn);
   }
 
-  // ---- Модалка хранилища ----
   async function openStorageModal(gameContext = null) {
     const t = (key) => window.I18n?.translate(key) || key;
     const user = getCurrentUser();
@@ -736,7 +720,7 @@
     return { modal, closeModal: closeWithCleanup };
   }
 
-  // ---- Экспорт ----
+  // ---- Экспорт публичного API ----
   window._StorageUI = {
     openStorageModal,
     renderBookmarks,
