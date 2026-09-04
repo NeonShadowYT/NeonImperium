@@ -1,9 +1,12 @@
 // js/features/storage/ui.js
 // UI-рендеринг закладок, модалка, статус, обработка файлов
-// Использует CSS-классы вместо inline-стилей
+// Оптимизировано: добавление/удаление без полной перерисовки, кеширование downloadUrl с TTL
+// Добавлено: групповые операции, запись видео через MediaRecorder, парсинг HTML, офлайн-кеширование
+// Исправлено: клик по видео открывает модальный плеер, кнопка записи минималистична
+// Добавлена прокси-загрузка видео через allorigins.win
 
 (function() {
-  const { escapeHtml, formatDate, loadModule, createElement } = window.GithubCore || {};
+  const { escapeHtml, formatDate, loadModule, createElement, debounce } = window.GithubCore || {};
   const { getCurrentUser, hasScope } = window.GithubAuth || {};
   const { showToast, createModal } = window.UIUtils || {};
   const { fetchMetadata } = window._StorageMetadata || {};
@@ -235,13 +238,23 @@
       const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
       if (response.ok) {
         const html = await response.text();
+        // Ищем ссылку на видео в HTML
         const doc = new DOMParser().parseFromString(html, 'text/html');
+        // Ищем video тег с src
         const videoEl = doc.querySelector('video[src]');
-        if (videoEl && videoEl.src) return videoEl.src;
+        if (videoEl && videoEl.src) {
+          return videoEl.src;
+        }
+        // Ищем source
         const source = doc.querySelector('source[src]');
-        if (source && source.src) return source.src;
+        if (source && source.src) {
+          return source.src;
+        }
+        // Ищем meta og:video
         const meta = doc.querySelector('meta[property="og:video"]');
-        if (meta && meta.content) return meta.content;
+        if (meta && meta.content) {
+          return meta.content;
+        }
       }
     } catch (e) {
       console.warn('[Storage] Proxy fallback failed:', e);
@@ -269,14 +282,17 @@
     return null;
   }
 
-  // ---- Прямое извлечение видео через MediaRecorder ----
+  // ---- Прямое извлечение видео через MediaRecorder (запись экрана/потока) ----
   async function recordVideoFromIframe(iframeElement, duration = 10000) {
     try {
+      // Получаем поток из iframe (только если это видео-элемент внутри)
       const videoEl = iframeElement.contentDocument?.querySelector('video');
       if (!videoEl) {
+        // Если не удалось, пробуем захватить экран (пользователь должен разрешить)
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         return await recordStream(stream, duration);
       }
+      // Если нашли video-элемент, используем его поток
       const stream = videoEl.captureStream ? videoEl.captureStream() : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       return await recordStream(stream, duration);
     } catch (err) {
@@ -298,20 +314,26 @@
     return blob;
   }
 
-  // ---- Парсинг HTML для извлечения ссылки на видео ----
+  // ---- Парсинг HTML для извлечения ссылки на видео (для сайтов без oembed) ----
   async function parseVideoFromHtml(url) {
     try {
+      // Используем прокси для обхода CORS (публичный)
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
       const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
       if (!response.ok) return null;
       const html = await response.text();
+      // Ищем видео-элементы
       const doc = new DOMParser().parseFromString(html, 'text/html');
       const videoEl = doc.querySelector('video');
-      if (videoEl && videoEl.src) return videoEl.src;
+      if (videoEl && videoEl.src) {
+        return videoEl.src;
+      }
+      // Ищем ссылки на видео в атрибутах source
       const sources = doc.querySelectorAll('source[src]');
       for (const src of sources) {
         if (src.src.startsWith('http')) return src.src;
       }
+      // Ищем ссылки в meta
       const metaOgVideo = doc.querySelector('meta[property="og:video"]');
       if (metaOgVideo) return metaOgVideo.content;
       return null;
@@ -321,11 +343,14 @@
     }
   }
 
-  // ---- Умное определение типа ссылки ----
+  // ---- Умное определение типа ссылки (по содержимому) ----
   async function detectLinkType(url) {
     try {
+      // Сначала пробуем oembed
       const meta = await fetchMetadata(url);
       if (meta.type === 'video' || meta.type === 'link') return meta;
+
+      // Если не удалось, пробуем парсинг HTML
       const videoUrl = await parseVideoFromHtml(url);
       if (videoUrl) {
         return {
@@ -337,6 +362,8 @@
           cleanedUrl: url
         };
       }
+
+      // Иначе считаем ссылкой
       return {
         title: meta.title || url,
         thumbnail: null,
@@ -355,26 +382,26 @@
     const t = window.I18n?.translate || (k => k);
     let embedUrl = bm.embedUrl;
     if (embedUrl && embedUrl.includes('youtube')) {
-      if (!embedUrl.includes('origin=')) {
-        const separator = embedUrl.includes('?') ? '&' : '?';
-        embedUrl += `${separator}origin=${encodeURIComponent(location.origin)}`;
-      }
+        // Добавляем origin, если его нет
+        if (!embedUrl.includes('origin=')) {
+            const separator = embedUrl.includes('?') ? '&' : '?';
+            embedUrl += `${separator}origin=${encodeURIComponent(location.origin)}`;
+        }
     }
     const html = `
-      <div class="video-modal-wrapper">
-        <div class="video-modal-player">
-          <iframe src="${embedUrl}" allowfullscreen allow="autoplay; encrypted-media; gyroscope; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>
-        </div>
-        <div class="video-modal-controls">
-          <span class="video-modal-title">${escapeHtml(bm.title)}</span>
-          <div class="video-modal-buttons">
-            <button class="button small" id="video-download-btn">${t('downloadBtn') || 'Скачать'}</button>
-            <button class="button small" id="video-record-btn">⏺ ${t('record') || 'Записать 10с'}</button>
-          </div>
+      <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;background:#000;border-radius:12px;">
+        <iframe src="${embedUrl}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen allow="autoplay; encrypted-media; gyroscope; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <span style="color:var(--text-primary);font-size:18px;">${escapeHtml(bm.title)}</span>
+        <div style="display:flex;gap:8px;">
+          <button class="button small" id="video-download-btn" style="background:var(--accent);color:#fff;">${t('downloadBtn') || 'Скачать'}</button>
+          <button class="button small" id="video-record-btn" style="background:rgba(0,0,0,0.5);color:#fff;">⏺ ${t('record') || 'Записать 10с'}</button>
         </div>
       </div>
     `;
     const { modal, closeModal } = createModal(bm.title, html, { size: 'full' });
+    // Обработчик скачивания
     const downloadBtn = modal.querySelector('#video-download-btn');
     if (downloadBtn) {
       downloadBtn.addEventListener('click', async () => {
@@ -390,6 +417,7 @@
         }
       });
     }
+    // Обработчик записи
     const recordBtn = modal.querySelector('#video-record-btn');
     if (recordBtn) {
       recordBtn.addEventListener('click', async () => {
@@ -410,15 +438,15 @@
     return { modal, closeModal };
   }
 
-  // ---- Создание DOM-элемента карточки (использует классы) ----
+  // ---- Создание DOM-элемента карточки (с учётом кеширования) ----
   function createBookmarkCardElement(bm, modal) {
     const t = (key) => window.I18n?.translate(key) || key;
     const wrapper = document.createElement('div');
     wrapper.className = 'bookmark-card-wrapper';
     wrapper.dataset.id = bm.id;
-
     const card = document.createElement('div');
     card.className = 'bookmark-card';
+    card.style.cursor = 'pointer';
 
     const media = document.createElement('div');
     media.className = 'bookmark-media';
@@ -428,7 +456,9 @@
     const isSave = bm.type === 'save';
     const isLink = bm.type === 'link';
 
+    // Превью
     if (isVideo) {
+      // Показываем iframe
       const iframe = document.createElement('iframe');
       let src = bm.embedUrl;
       if (!src.includes('autoplay')) {
@@ -438,13 +468,43 @@
         src += '&controls=1&showinfo=0&iv_load_policy=3&rel=0';
       }
       iframe.src = src;
+      iframe.style.width = '100%';
+      iframe.style.height = '100%';
+      iframe.style.border = 'none';
       iframe.setAttribute('allowfullscreen', 'true');
       iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
       media.appendChild(iframe);
-      // Кнопка записи
+      // Добавляем кнопку записи (минималистичная, справа снизу)
       const recordBtn = document.createElement('button');
       recordBtn.className = 'record-btn-mini';
       recordBtn.innerHTML = '⏺';
+      recordBtn.style.cssText = `
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        background: rgba(0,0,0,0.6);
+        border: none;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.5;
+        transition: opacity 0.2s, transform 0.2s;
+        z-index: 10;
+      `;
+      recordBtn.addEventListener('mouseenter', () => {
+        recordBtn.style.opacity = '1';
+        recordBtn.style.transform = 'scale(1.1)';
+      });
+      recordBtn.addEventListener('mouseleave', () => {
+        recordBtn.style.opacity = '0.5';
+        recordBtn.style.transform = 'scale(1)';
+      });
       recordBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         try {
@@ -489,16 +549,19 @@
     content.appendChild(title);
 
     const meta = document.createElement('div');
-    meta.className = 'bookmark-meta';
+    meta.style.cssText = 'font-size:12px;color:var(--text-secondary)';
     meta.textContent = `${bm.type.charAt(0).toUpperCase()+bm.type.slice(1)} · ${formatDate(bm.added)}`;
     content.appendChild(meta);
 
     // Кнопка скачивания
     const downloadContainer = document.createElement('div');
-    downloadContainer.className = 'bookmark-download-container';
+    downloadContainer.style.cssText = 'margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;';
     const downloadBtn = document.createElement('button');
     downloadBtn.className = 'button small';
     downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
+    downloadBtn.style.cssText = 'background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;font-family:var(--font-family);transition:0.2s;';
+    downloadBtn.addEventListener('mouseenter', () => { downloadBtn.style.transform = 'scale(1.05)'; });
+    downloadBtn.addEventListener('mouseleave', () => { downloadBtn.style.transform = 'scale(1)'; });
     downloadContainer.appendChild(downloadBtn);
 
     const hasValidDownload = bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires;
@@ -560,19 +623,6 @@
     content.appendChild(downloadContainer);
 
     card.appendChild(content);
-    wrapper.appendChild(card);
-
-    // Кнопка удаления
-    const del = document.createElement('button');
-    del.className = 'bookmark-delete-btn';
-    del.innerHTML = '<i class="fas fa-trash-alt"></i>';
-    del.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (confirm(t('deleteConfirm'))) {
-        await removeBookmark(bm.id);
-      }
-    });
-    wrapper.appendChild(del);
 
     // Клик по карточке
     card.addEventListener('click', async (e) => {
@@ -615,6 +665,18 @@
       }
     });
 
+    // Кнопка удаления
+    const del = document.createElement('button');
+    del.className = 'bookmark-delete-btn';
+    del.innerHTML = '<i class="fas fa-trash-alt"></i>';
+    del.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (confirm(t('deleteConfirm'))) {
+        await removeBookmark(bm.id);
+      }
+    });
+    wrapper.appendChild(card);
+    wrapper.appendChild(del);
     return wrapper;
   }
 
@@ -720,6 +782,7 @@
     const container = modal.querySelector('.storage-actions');
     if (!container) return;
 
+    // Кнопка "Обновить видео"
     const refreshBtn = document.createElement('button');
     refreshBtn.className = 'storage-btn';
     refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> ' + (t('refreshVideos') || 'Обновить видео');
@@ -781,13 +844,13 @@
             <button class="storage-btn primary" id="toggle-add-btn"><i class="fas fa-plus"></i> ${t('addButton')}</button>
           </div>
         </div>
-        <div id="add-form" class="storage-add-form">
-          <div class="storage-add-form-row">
-            <input type="url" id="new-url" placeholder="${t('addLinkPlaceholder')}" autocomplete="off" class="storage-url-input">
+        <div id="add-form" class="storage-add-form" style="display:none;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <input type="url" id="new-url" placeholder="${t('addLinkPlaceholder')}" autocomplete="off" class="storage-url-input" style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-family); font-size:14px; min-width:150px;">
             <button class="storage-btn primary" id="confirm-add"><i class="fas fa-plus"></i> ${t('addButton')}</button>
           </div>
-          <div class="storage-drop-zone" id="drop-zone">
-            <i class="fas fa-file-upload"></i>
+          <div style="margin-top:12px;border:2px dashed var(--border);border-radius:16px;padding:20px;text-align:center;color:var(--text-secondary);" id="drop-zone">
+            <i class="fas fa-file-upload" style="font-size:32px;display:block;margin-bottom:8px;"></i>
             <p>${t('dropZoneText')}</p>
             <input type="file" id="file-input" accept=".ini,.starver" multiple style="display:none;">
             <button class="storage-btn" id="file-select-btn"><i class="fas fa-folder-open"></i> ${t('selectFiles')}</button>
@@ -804,7 +867,7 @@
       if (h2) {
         const statusSpan = document.createElement('span');
         statusSpan.id = 'modal-status-mini';
-        statusSpan.className = 'modal-status-mini';
+        statusSpan.style.cssText = 'font-size:12px; color:var(--text-secondary); margin-left:16px; opacity:0.7; font-weight:normal;';
         statusSpan.textContent = 'Готово';
         statusElement = statusSpan;
         h2.parentNode.insertBefore(statusSpan, h2.nextSibling);
@@ -816,6 +879,71 @@
 
     setStatusCallback(updateStatus);
     window._StorageManager.setRefreshGridCallback(() => renderBookmarks(modal));
+
+    if (!document.getElementById('storage-ui-styles')) {
+      const style = document.createElement('style');
+      style.id = 'storage-ui-styles';
+      style.textContent = `
+        .storage-modal-container{display:flex;flex-direction:column;gap:20px}
+        .storage-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px}
+        .storage-controls{display:flex;gap:15px;flex-wrap:wrap}
+        .storage-sort,.storage-categories{display:flex;background:var(--bg-primary);border-radius:40px;padding:4px;border:1px solid var(--border)}
+        .sort-btn,.cat-btn{background:0;border:0;color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
+        .sort-btn.active,.cat-btn.active{background:var(--accent);color:#fff}
+        .storage-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+        .storage-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
+        .storage-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+        .storage-btn:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.2)}
+        .bookmarks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+        .storage-add-form{background:var(--bg-inner-gradient);padding:16px;border-radius:20px;border:1px solid var(--border)}
+        .storage-search{padding:6px 14px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;width:160px}
+        .storage-search:focus{border-color:var(--accent);outline:none}
+        .storage-url-input{flex:1;padding:8px 16px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;min-width:150px}
+        .storage-url-input:focus{border-color:var(--accent);outline:none}
+        .bookmark-card-wrapper{position:relative;transition:transform 0.2s;height:100%}
+        .bookmark-card-wrapper:hover{transform:translateY(-4px)}
+        .bookmark-delete-btn{opacity:0;transition:opacity 0.2s;position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:28px;height:28px;color:#f44336;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;z-index:5}
+        .bookmark-card-wrapper:hover .bookmark-delete-btn{opacity:1}
+        .bookmark-card{background:var(--bg-inner-gradient);border-radius:20px;border:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;height:100%}
+        .bookmark-media{position:relative;padding-bottom:56.25%;background:var(--bg-primary);border-bottom:1px solid var(--border);flex-shrink:0;overflow:hidden}
+        .bookmark-media img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+        .bookmark-media iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none;border-radius:12px 12px 0 0}
+        .play-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);border-radius:50%;width:60px;height:60px;display:flex;align-items:center;justify-content:center;color:white;font-size:30px;pointer-events:none}
+        .bookmark-icon{display:flex;align-items:center;justify-content:center;font-size:48px;padding:20px 0;background:var(--bg-primary);border-bottom:1px solid var(--border);height:100%}
+        .bookmark-content{padding:12px;flex:1;display:flex;flex-direction:column}
+        .bookmark-content h4{margin:0 0 4px;font-size:16px;color:var(--text-primary);word-break:break-word}
+        .bookmark-content .button.small{padding:4px 12px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:30px;cursor:pointer;font-family:var(--font-family);transition:0.2s}
+        .bookmark-content .button.small:hover{background:var(--accent-light);transform:translateY(-2px)}
+        #modal-status-mini { font-size:12px; color:var(--text-secondary); margin-left:16px; opacity:0.7; font-weight:normal; }
+        .record-btn-mini {
+          background: rgba(0,0,0,0.6);
+          border: none;
+          border-radius: 50%;
+          width: 28px;
+          height: 28px;
+          color: #fff;
+          font-size: 14px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          opacity: 0.5;
+          transition: opacity 0.2s, transform 0.2s;
+          z-index: 10;
+          position: absolute;
+          bottom: 8px;
+          right: 8px;
+        }
+        .record-btn-mini:hover {
+          opacity: 1;
+          transform: scale(1.1);
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Добавляем групповые кнопки
+    addBatchActions(modal);
 
     renderBookmarks(modal);
 
@@ -839,7 +967,7 @@
     const searchInput = modal.querySelector('#search-input');
     searchInput.addEventListener('input', () => renderBookmarks(modal));
 
-    // Добавление закладки
+    // Добавление закладки (с умным определением типа)
     const addForm = modal.querySelector('#add-form');
     const toggleAddBtn = modal.querySelector('#toggle-add-btn');
     let formVisible = false;
@@ -855,6 +983,7 @@
       const url = urlInput.value.trim();
       if (!url) { showToast(t('enterText'), 'error'); return; }
       try {
+        // Используем умное определение
         const meta = await detectLinkType(url);
         await addBookmark({
           url: meta.cleanedUrl || url,
@@ -892,6 +1021,7 @@
 
     // Пароль
     modal.querySelector('#password-btn').addEventListener('click', async () => {
+      const t = (key) => window.I18n?.translate(key) || key;
       const newPass = prompt('Введите новый пароль для хранилища (оставьте пустым, чтобы отключить):\n\nВНИМАНИЕ: пароль становится обязательным для доступа, даже при наличии логина и токена.');
       if (newPass === null) return;
       try {
@@ -902,8 +1032,9 @@
       }
     });
 
-    // Экспорт/импорт
+    // Экспорт/импорт (зашифрованный)
     modal.querySelector('#export-btn').addEventListener('click', async () => {
+      const t = (key) => window.I18n?.translate(key) || key;
       const password = prompt('Введите пароль для шифрования экспортируемого файла (минимум 4 символа):');
       if (!password || password.length < 4) {
         showToast('Пароль должен быть не менее 4 символов', 'error');
@@ -924,6 +1055,7 @@
     });
 
     modal.querySelector('#import-btn').addEventListener('click', () => {
+      const t = (key) => window.I18n?.translate(key) || key;
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.neonbk';
@@ -947,9 +1079,6 @@
       };
       input.click();
     });
-
-    // Добавляем групповые кнопки
-    addBatchActions(modal);
 
     const closeWithCleanup = () => {
       statusElement = null;
@@ -986,6 +1115,7 @@
         bookmarkElements.set(id, newWrapper);
       }
     },
+    // Экспортируем вспомогательные функции для использования в менеджере
     getVideoDownloadUrl,
     recordVideoFromIframe,
     detectLinkType,

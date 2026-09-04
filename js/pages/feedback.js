@@ -9,7 +9,6 @@
   const { loadIssues, loadReactions, addReaction, removeReaction } = window.GithubAPI || {};
   const { getCurrentUser, isAdmin } = window.GithubAuth || {};
   const { showToast } = window.UIUtils || {};
-  const { createCard } = window.CardRenderer || {};
 
   if (!window.GithubCore || !window.GithubAPI || !window.GithubAuth || !window.UIUtils) {
     console.error('[feedback.js] Missing dependencies');
@@ -25,11 +24,6 @@
       );
     });
     return;
-  }
-
-  // Загружаем CardRenderer если его нет
-  if (!window.CardRenderer) {
-    loadModule('js/features/card-renderer.js').catch(() => {});
   }
 
   const ITEMS_PER_PAGE = 10, MAX_DISPLAY = 30, CACHE_TTL = 10 * 60 * 1000;
@@ -225,48 +219,9 @@
     }
     const fragment = document.createDocumentFragment();
     pageItems.forEach(issue => {
-      // Используем CardRenderer для создания карточки
-      const card = createCard({
-        type: 'post',
-        id: issue.number,
-        title: issue.title,
-        body: issue.body,
-        author: issue.user.login,
-        date: new Date(issue.created_at),
-        game: currentGame,
-        labels: issue.labels.map(l => l.name),
-        thumbnail: null, // можно будет добавить позже
-        // Переопределяем onClick, чтобы открыть модалку через UIFeedback
-        onClick: async (e) => {
-          if (e.target.closest('button')) return;
-          if (!window.UIFeedback) {
-            try { await loadModule('js/features/ui-feedback.js'); } catch {}
-          }
-          if (window.UIFeedback) {
-            // Проверяем доступ к приватному посту
-            const labels = issue.labels.map(l => l.name);
-            if (labels.includes('private')) {
-              const allowed = extractAllowed(issue.body);
-              if (!allowed || !allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-                showToast(t('noAccess'), 'error');
-                return;
-              }
-            }
-            window.UIFeedback.openFullModal({
-              id: issue.number,
-              title: issue.title,
-              body: issue.body,
-              author: issue.user.login,
-              date: new Date(issue.created_at),
-              game: currentGame,
-              labels: labels
-            });
-          } else {
-            showToast(t('viewerNotAvailable'), 'error');
-          }
-        }
-      });
-      fragment.appendChild(card);
+      if (!grid.querySelector(`[data-issue-number="${issue.number}"]`)) {
+        fragment.appendChild(createCard(issue));
+      }
     });
     grid.appendChild(fragment);
     hasMore = filtered.length > start + ITEMS_PER_PAGE;
@@ -320,6 +275,7 @@
     headerElement = header;
     const titleWrap = createElement('div', '', { display: 'flex', alignItems: 'center', gap: '8px' });
     const h2 = createElement('h2', '', { margin: '0' });
+    // Добавляем иконку перед заголовком
     const icon = createElement('i', 'fas fa-comment-dots', { fontSize: '24px', color: 'var(--accent)' });
     h2.prepend(icon);
     const titleSpan = createElement('span');
@@ -402,6 +358,54 @@
     if (sentinel) observer.observe(sentinel);
 
     await loadGameIssues(true);
+  }
+
+  function createCard(issue) {
+    const type = issue.labels.find(l=>l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
+    const icon = type === 'idea' ? '💡' : type === 'bug' ? '🐛' : '⭐';
+    let summary = extractSummary(issue.body) || (issue.body||'').substring(0,120)+'…';
+    const allowed = extractAllowed(issue.body);
+    if (issue.labels.some(l=>l.name==='private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
+      try { summary = extractSummary(decryptPrivateBody(issue.body, allowed)) || ''; } catch {}
+    }
+    const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
+    card.dataset.issueNumber = issue.number;
+    const inner = createElement('div', 'project-card');
+    const imgW = createElement('div', 'image-wrapper', { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', fontSize: '48px' });
+    imgW.textContent = icon;
+    const title = createElement('h3');
+    title.textContent = issue.title.length > 70 ? issue.title.slice(0,70)+'…' : issue.title;
+    const preview = createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+    preview.textContent = summary.replace(/\n/g,' ');
+    const footer = createElement('div', '', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginTop: 'auto', paddingTop: '10px' });
+    footer.innerHTML = `<span><i class="fas fa-user"></i> ${escapeHtml(issue.user.login)}</span><span><i class="fas fa-calendar-alt"></i> ${new Date(issue.created_at).toLocaleDateString()}</span><span><i class="fas fa-comment"></i> ${issue.comments}</span>`;
+    inner.append(imgW, title, preview, footer);
+    card.appendChild(inner);
+    card.addEventListener('click', async e => {
+      if (e.target.closest('button')) return;
+      if (!window.UIFeedback) {
+        try {
+          await loadModule('js/features/ui-feedback.js');
+        } catch (err) {
+          showToast(t('viewerNotAvailable'), 'error');
+          return;
+        }
+      }
+      if (!window.UIFeedback) {
+        showToast(t('viewerNotAvailable'), 'error');
+        return;
+      }
+      window.UIFeedback.openFullModal({
+        id: issue.number,
+        title: issue.title,
+        body: issue.body,
+        author: issue.user.login,
+        date: new Date(issue.created_at),
+        game: currentGame,
+        labels: issue.labels.map(l=>l.name)
+      });
+    });
+    return card;
   }
 
   async function openPostFromUrl(id) {

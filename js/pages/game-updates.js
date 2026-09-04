@@ -1,15 +1,10 @@
-// js/pages/game-updates.js – использует общий кэш и CardRenderer, с локализацией, обновление кнопки при смене языка
+// js/pages/game-updates.js – использует общий кэш и DocumentFragment, с локализацией, обновление кнопки при смене языка
 // При смене языка не перезагружает данные, только обновляет тексты через data-lang
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractAllowed, extractSummary, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
   const { showToast } = window.UIUtils;
-  const { createCard } = window.CardRenderer || {};
-
-  if (!window.CardRenderer) {
-    loadModule('js/features/card-renderer.js').catch(() => {});
-  }
 
   let currentAbort = null, currentGame = null;
   const UPDATES_CACHE_TTL = 15 * 60 * 1000;
@@ -33,19 +28,9 @@
       const newPost = { number: issue.number, title: issue.title, body: issue.body, date: new Date(issue.created_at), author: issue.user.login, game: currentGame, labels: issue.labels.map(l=>l.name) };
       let grid = cont.querySelector('.projects-grid');
       if (!grid) { grid = createElement('div', 'projects-grid'); cont.innerHTML = ''; cont.appendChild(grid); }
-      const card = createCard({
-        type: 'update',
-        id: newPost.number,
-        title: newPost.title,
-        body: newPost.body,
-        author: newPost.author,
-        date: newPost.date,
-        game: newPost.game,
-        labels: newPost.labels,
-        isUpdate: true,
-        thumbnail: null, // можно вытащить из body
-      });
-      grid.insertBefore(card, grid.firstChild);
+      const fragment = document.createDocumentFragment();
+      fragment.appendChild(createUpdateCard(newPost));
+      grid.insertBefore(fragment, grid.firstChild);
     });
     window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
     window.addEventListener('github-logout', () => { if (currentGame) refreshGameUpdates(currentGame); });
@@ -73,6 +58,7 @@
 
   async function loadGameUpdates(container, game) {
     const t = window.I18n?.translate || (k => k);
+    // Используем data-lang для сообщения загрузки
     container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="loading">${t('loading')}</p></div>`;
     if (currentAbort) {
       currentAbort.controller.abort();
@@ -108,29 +94,14 @@
       });
       posts.sort((a, b) => b.date - a.date);
       if (posts.length === 0) {
+        // Используем data-lang для автоматического обновления при смене языка
         container.innerHTML = '<p class="text-secondary" data-lang="noUpdates"></p>';
         return;
       }
       container.innerHTML = '';
       const grid = createElement('div', 'projects-grid');
       const fragment = document.createDocumentFragment();
-      posts.forEach(p => {
-        // Используем CardRenderer
-        const card = createCard({
-          type: 'update',
-          id: p.number,
-          title: p.title,
-          body: p.body,
-          author: p.author,
-          date: p.date,
-          game: p.game,
-          labels: p.labels,
-          isUpdate: true,
-          thumbnail: null,
-          // Можно попытаться извлечь первое изображение из body
-        });
-        fragment.appendChild(card);
-      });
+      posts.forEach(p => fragment.appendChild(createUpdateCard(p)));
       grid.appendChild(fragment);
       container.appendChild(grid);
 
@@ -149,13 +120,45 @@
           btn.addEventListener('click', async () => { if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js'); window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update'); });
           header.appendChild(btn);
         } else {
+          // Обновляем текст
           existing.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
         }
       } else if (existing) existing.remove();
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error('Update load error:', err);
+      // Используем data-lang для ошибки
       container.innerHTML = `<p class="error-message" data-lang="updatesLoadError"></p>`;
     } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
+  }
+
+  function createUpdateCard(post) {
+    let previewBody = post.body;
+    const allowed = extractAllowed(post.body);
+    const currentUser = getCurrentUser();
+    if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
+      try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
+    }
+    const card = createElement('div', 'project-card-link no-tilt tilt-card', { cursor: 'pointer' });
+    const inner = createElement('div', 'project-card');
+    const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
+    const imgW = createElement('div', 'image-wrapper');
+    const img = createElement('img', 'project-image', {}, { src: imgMatch?.[1] || 'images/default-news.webp', alt: post.title, loading: 'lazy' });
+    img.onerror = () => img.src = 'images/default-news.webp';
+    imgW.appendChild(img);
+    const title = createElement('h3');
+    title.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
+    const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
+    meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
+    const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
+    const preview = createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
+    preview.textContent = summary;
+    inner.append(imgW, title, meta, preview);
+    card.appendChild(inner);
+    card.addEventListener('click', async () => {
+      if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
+      window.UIFeedback.openFullModal({ type: 'update', id: post.number, title: post.title, body: post.body, author: post.author, date: post.date, game: post.game, labels: post.labels });
+    });
+    return card;
   }
 })();

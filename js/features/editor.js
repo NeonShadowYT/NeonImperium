@@ -161,13 +161,23 @@
             { name: 'Postimages', url: 'https://postimages.org/', description: 'До 32 МБ' },
             { name: 'ImgBB', url: 'https://imgbb.com/', description: 'До 32 МБ' }
         ];
-        const container = createElement('div', 'image-services-menu');
+        const container = createElement('div', 'image-services-menu', { position: 'relative', display: 'inline-block' });
         const mainBtn = createElement('button', 'image-services-btn', {}, { type: 'button' });
         mainBtn.innerHTML = '<i class="fas fa-images"></i> Хостинги';
-        const dropdown = createElement('div', 'preview-dropdown');
+        const dropdown = createElement('div', 'preview-dropdown', {
+            position: 'absolute', top: '100%', right: '0', zIndex: '1000', minWidth: '280px',
+            background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px',
+            padding: '5px 0', boxShadow: 'var(--shadow)', display: 'none'
+        });
         services.forEach(s => {
-            const item = createElement('button', 'image-services-item', {}, { type: 'button' });
+            const item = createElement('button', '', {
+                whiteSpace: 'normal', lineHeight: '1.4', padding: '10px 16px', width: '100%',
+                textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--text-secondary)',
+                cursor: 'pointer', fontFamily: "'Russo One', sans-serif", fontSize: '13px'
+            }, { type: 'button' });
             item.innerHTML = `<strong>${s.name}</strong><br><small>${s.description}</small>`;
+            item.addEventListener('mouseenter', () => { item.style.background = 'var(--bg-inner-gradient)'; item.style.color = 'var(--text-primary)'; });
+            item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; item.style.color = 'var(--text-secondary)'; });
             item.addEventListener('click', (e) => { e.stopPropagation(); window.open(s.url, '_blank'); dropdown.style.display = 'none'; });
             dropdown.appendChild(item);
         });
@@ -182,7 +192,10 @@
     }
 
     function createEditorToolbar(textarea) {
-        const toolbar = createElement('div', 'editor-toolbar');
+        const toolbar = createElement('div', 'editor-toolbar', {
+            display: 'flex', gap: '5px', marginBottom: '10px', flexWrap: 'wrap',
+            padding: '8px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border)'
+        });
         const groups = {
             'Форматирование': ['bold', 'italic', 'strikethrough'],
             'Заголовки': ['h1', 'h2', 'h3'],
@@ -195,11 +208,17 @@
             'Доп.': ['hr']
         };
         for (const [groupName, keys] of Object.entries(groups)) {
-            const group = createElement('div', 'editor-btn-group');
+            const group = createElement('div', 'editor-btn-group', {
+                display: 'flex', gap: '3px', flexWrap: 'wrap', padding: '0 5px', borderRight: '1px solid var(--border)'
+            });
             keys.forEach(key => {
                 const tpl = TEMPLATES[key];
                 if (!tpl) return;
-                const btn = createElement('button', 'editor-btn', {}, { type: 'button', title: tpl.name });
+                const btn = createElement('button', 'editor-btn', {
+                    background: 'transparent', border: 'none', color: 'var(--text-secondary)',
+                    padding: '6px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '14px',
+                    transition: 'all 0.2s', fontFamily: "'Russo One', sans-serif"
+                }, { type: 'button', title: tpl.name });
                 btn.innerHTML = tpl.icon.startsWith('fa') ? `<i class="${tpl.icon}"></i>` : tpl.icon;
                 btn.addEventListener('click', (e) => { e.preventDefault(); tpl.action(textarea); });
                 group.appendChild(btn);

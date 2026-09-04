@@ -1,5 +1,6 @@
 // js/features/rate-limits.js – с локализацией, обновление при смене языка
 // Добавлено шифрование истории и кеша через xorEncrypt/xorDecrypt
+// Теперь история записывается при любом успешном действии, очистка кеша защищена
 (function() {
   const { escapeHtml, xorEncrypt, xorDecrypt } = window.Utils || {};
   const { getCurrentUser } = window.GithubAuth || {};
@@ -20,6 +21,7 @@
   const HISTORY_SIZE = 100;
   const QUEUE_CACHE_TTL = 60000;
 
+  // Соль для шифрования истории и кеша
   const ENCRYPTION_SALT = 'neon-rate-limits-salt-2024';
 
   let db = null;
@@ -394,16 +396,18 @@
     return [];
   }
 
-  // ---- Очистка кеша ----
+  // ---- Очистка кеша (защищённая) ----
   async function clearAllCacheInternal() {
     const cacheNames = await caches.keys();
     for (const name of cacheNames) {
       await caches.delete(name);
     }
+    // Защищённые ключи, которые НЕ удаляем
     const exclude = [
       'rate_limits', 'rate_history', 'license_agreed_v1', 'license_version',
       'license_agreed_timestamp', 'preferredLanguage', 'github_token',
       'github_token_local', 'remember_me', 'last_cache_clear',
+      // Ключи хранилища закладок (чтобы не потерять ID Gist)
       'storage_gist_'
     ];
     for (const key of Object.keys(localStorage)) {
@@ -419,9 +423,10 @@
     }
     if (window._cacheMap) window._cacheMap.clear();
     queueCache = null;
+    // Лимиты и история не удаляются
   }
 
-  // ---- Очистка устаревшего кеша ----
+  // ---- Очистка устаревшего кеша (stale) ----
   function clearStaleCache() {
     const now = Date.now();
     const ttl = window.GithubCore?.CONFIG?.CACHE_TTL || 600000;
@@ -502,6 +507,7 @@
       if (e.target === modal) newCloseWithClean();
     });
 
+    // обновление при смене языка
     const langHandler = () => {
       if (!activeRatePanel || activeRatePanel.modal !== modal) return;
       const t = window.I18n?.translate || (k => k);
@@ -544,7 +550,47 @@
     const hours = Math.floor(msToMidnight / 3600000);
     const minutes = Math.floor((msToMidnight % 3600000) / 60000);
 
-    return `
+    const style = `
+    <style>
+      .rate-panel{display:flex;flex-direction:column;gap:20px}
+      .rate-summary{display:flex;justify-content:space-between;align-items:center;background:var(--bg-inner-gradient);padding:12px 20px;border-radius:16px;border:1px solid var(--border);flex-wrap:wrap;gap:8px}
+      .rate-timer{font-size:14px;color:var(--text-secondary)}
+      .rate-timer strong{color:var(--accent)}
+      .rate-total{font-size:14px;color:var(--text-secondary)}
+      .rate-limits-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+      .rate-limit-item{background:var(--bg-card);border-radius:12px;padding:12px 16px;border:1px solid var(--border)}
+      .rate-label{font-size:13px;color:var(--text-secondary);display:block;margin-bottom:6px}
+      .rate-bar{height:8px;background:var(--bg-primary);border-radius:10px;overflow:hidden;margin:6px 0}
+      .rate-fill{height:100%;border-radius:10px;transition:width 0.4s ease}
+      .rate-count{font-size:12px;color:var(--text-secondary);display:flex;justify-content:space-between}
+      .rate-count .used{color:var(--text-secondary)}
+      .rate-count .rem{font-weight:bold}
+      .rate-info{font-size:13px;color:var(--text-secondary);background:var(--bg-inner-gradient);padding:10px 16px;border-radius:12px;border-left:3px solid var(--accent)}
+      .rate-tabs{display:flex;gap:8px;border-bottom:1px solid var(--border);padding-bottom:8px;flex-wrap:wrap}
+      .rate-tab{background:transparent;border:none;color:var(--text-secondary);padding:6px 14px;border-radius:20px;cursor:pointer;font-family:var(--font-family);transition:0.2s;display:flex;align-items:center;gap:6px}
+      .rate-tab.active{background:var(--accent);color:#fff}
+      .rate-tab-content{margin-top:8px}
+      .rate-history-list,.rate-queue-list,.rate-cache-actions{max-height:300px;overflow-y:auto}
+      .rate-history-item,.rate-queue-item{display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border);font-size:13px;align-items:center}
+      .rate-history-item.completed .rate-status{color:#4caf50}
+      .rate-history-item.failed .rate-status{color:#f44336}
+      .rate-action{color:var(--text-primary)}
+      .rate-time{color:var(--text-secondary);font-size:12px}
+      .cache-buttons{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+      .cache-buttons button{background:var(--bg-inner-gradient);border:1px solid var(--border);color:var(--text-secondary);padding:6px 14px;border-radius:30px;cursor:pointer;font-family:var(--font-family);transition:0.2s;display:flex;align-items:center;gap:6px}
+      .cache-buttons button:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+      .cache-key-item{display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid var(--border);font-size:12px;align-items:center}
+      .cache-key-item button{background:transparent;border:none;color:var(--text-secondary);cursor:pointer;font-size:14px}
+      .cache-key-item button:hover{color:#f44336}
+      .queue-cancel-btn{background:transparent;border:none;color:#f44336;cursor:pointer;font-size:14px}
+      .queue-cancel-btn:hover{color:#d32f2f}
+      .empty-queue{color:var(--text-secondary);text-align:center;padding:20px}
+      .cache-description{font-size:13px;color:var(--text-secondary);background:var(--bg-inner-gradient);padding:8px 16px;border-radius:12px;margin-bottom:10px}
+    </style>`;
+
+    const cacheKeys = getCacheKeys();
+
+    return style + `
     <div class="rate-panel">
       <div class="rate-summary">
         <div class="rate-timer"><i class="fas fa-clock"></i> ${t('refreshIn')} <strong>${hours}ч ${minutes}м</strong></div>
@@ -582,15 +628,23 @@
         <div id="rate-history" style="display:none;" class="rate-history-list"></div>
         <div id="rate-cache" style="display:none;" class="rate-cache-actions">
           <div class="cache-description">
-            <i class="fas fa-info-circle"></i> ${t('cacheDescription')}
+            <i class="fas fa-info-circle"></i> ${t('cacheDescription') || 'Здесь хранятся временные данные: ответы GitHub API, превью изображений, результаты парсинга видео. Очистка не влияет на ваши закладки, лимиты и историю действий.'}
           </div>
           <p><i class="fas fa-broom"></i> ${t('clearStaleCache')}:</p>
-          <div class="cache-keys-list"></div>
+          <div class="cache-keys-list">
+            ${cacheKeys.length === 0 ? `<p class="empty-queue">${t('noBookmarks')}</p>` :
+              cacheKeys.map(key => `
+                <div class="cache-key-item">
+                  <span>${escapeHtml(key)}</span>
+                  <button class="cache-delete-btn" data-key="${escapeHtml(key)}"><i class="fas fa-times"></i></button>
+                </div>
+              `).join('')}
+          </div>
           <div class="cache-buttons">
             <button id="clear-stale-cache"><i class="fas fa-broom"></i> ${t('clearStaleCache')}</button>
             <button id="clear-all-cache"><i class="fas fa-trash-alt"></i> ${t('clearAllCache')}</button>
           </div>
-          <p style="font-size:12px; color:var(--text-secondary);">${t('cacheNote')}</p>
+          <p style="font-size:12px; color:var(--text-secondary);">${t('cacheNote') || '* Лимиты, история, лицензия и токены НЕ удаляются.'}</p>
         </div>
       </div>
     </div>
@@ -604,7 +658,11 @@
         tab.classList.add('active');
         const target = tab.dataset.tab;
         modal.querySelectorAll('.rate-tab-content > div').forEach(div => div.style.display = 'none');
-        const map = { 'queue': 'rate-queue', 'history': 'rate-history', 'cache': 'rate-cache' };
+        const map = {
+          'queue': 'rate-queue',
+          'history': 'rate-history',
+          'cache': 'rate-cache'
+        };
         const el = modal.querySelector('#' + map[target]);
         if (el) el.style.display = '';
         if (target === 'queue') loadQueueItems(modal, t);
@@ -762,6 +820,7 @@
   function addIndicator(parent, action, label) {
     const wrapper = document.createElement('span');
     wrapper.className = 'rate-indicator-wrapper';
+    wrapper.style.cssText = 'font-size: 12px; color: var(--text-secondary); margin-left: 8px;';
     const text = document.createElement('span');
     text.textContent = label + ' ';
     wrapper.appendChild(text);
@@ -889,7 +948,7 @@
     updateIndicators,
     getPendingActions,
     getHistory,
-    addHistory,
+    addHistory,          // <-- добавлен экспорт
     LIMITS,
     actionLabels,
     clearAllCache: clearAllCacheInternal,
