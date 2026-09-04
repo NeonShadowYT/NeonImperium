@@ -1,9 +1,7 @@
 // js/features/storage/ui.js
 // UI-рендеринг закладок, модалка, статус, обработка файлов
-// Оптимизировано: добавление/удаление без полной перерисовки, кеширование downloadUrl с TTL
-// Добавлено: групповые операции, запись видео через MediaRecorder, парсинг HTML, офлайн-кеширование
-// Исправлено: клик по видео открывает модальный плеер, кнопка записи минималистична
-// Добавлена прокси-загрузка видео через allorigins.win
+// Оптимизировано: видео-закладки теперь показывают превью, плеер загружается по клику
+// Добавлена поддержка кеширования downloadUrl с TTL, групповые операции, запись видео через MediaRecorder
 
 (function() {
   const { escapeHtml, formatDate, loadModule, createElement, debounce } = window.GithubCore || {};
@@ -238,19 +236,15 @@
       const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
       if (response.ok) {
         const html = await response.text();
-        // Ищем ссылку на видео в HTML
         const doc = new DOMParser().parseFromString(html, 'text/html');
-        // Ищем video тег с src
         const videoEl = doc.querySelector('video[src]');
         if (videoEl && videoEl.src) {
           return videoEl.src;
         }
-        // Ищем source
         const source = doc.querySelector('source[src]');
         if (source && source.src) {
           return source.src;
         }
-        // Ищем meta og:video
         const meta = doc.querySelector('meta[property="og:video"]');
         if (meta && meta.content) {
           return meta.content;
@@ -285,14 +279,11 @@
   // ---- Прямое извлечение видео через MediaRecorder (запись экрана/потока) ----
   async function recordVideoFromIframe(iframeElement, duration = 10000) {
     try {
-      // Получаем поток из iframe (только если это видео-элемент внутри)
       const videoEl = iframeElement.contentDocument?.querySelector('video');
       if (!videoEl) {
-        // Если не удалось, пробуем захватить экран (пользователь должен разрешить)
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         return await recordStream(stream, duration);
       }
-      // Если нашли video-элемент, используем его поток
       const stream = videoEl.captureStream ? videoEl.captureStream() : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       return await recordStream(stream, duration);
     } catch (err) {
@@ -317,23 +308,19 @@
   // ---- Парсинг HTML для извлечения ссылки на видео (для сайтов без oembed) ----
   async function parseVideoFromHtml(url) {
     try {
-      // Используем прокси для обхода CORS (публичный)
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
       const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
       if (!response.ok) return null;
       const html = await response.text();
-      // Ищем видео-элементы
       const doc = new DOMParser().parseFromString(html, 'text/html');
       const videoEl = doc.querySelector('video');
       if (videoEl && videoEl.src) {
         return videoEl.src;
       }
-      // Ищем ссылки на видео в атрибутах source
       const sources = doc.querySelectorAll('source[src]');
       for (const src of sources) {
         if (src.src.startsWith('http')) return src.src;
       }
-      // Ищем ссылки в meta
       const metaOgVideo = doc.querySelector('meta[property="og:video"]');
       if (metaOgVideo) return metaOgVideo.content;
       return null;
@@ -346,11 +333,9 @@
   // ---- Умное определение типа ссылки (по содержимому) ----
   async function detectLinkType(url) {
     try {
-      // Сначала пробуем oembed
       const meta = await fetchMetadata(url);
       if (meta.type === 'video' || meta.type === 'link') return meta;
 
-      // Если не удалось, пробуем парсинг HTML
       const videoUrl = await parseVideoFromHtml(url);
       if (videoUrl) {
         return {
@@ -363,7 +348,6 @@
         };
       }
 
-      // Иначе считаем ссылкой
       return {
         title: meta.title || url,
         thumbnail: null,
@@ -382,7 +366,6 @@
     const t = window.I18n?.translate || (k => k);
     let embedUrl = bm.embedUrl;
     if (embedUrl && embedUrl.includes('youtube')) {
-        // Добавляем origin, если его нет
         if (!embedUrl.includes('origin=')) {
             const separator = embedUrl.includes('?') ? '&' : '?';
             embedUrl += `${separator}origin=${encodeURIComponent(location.origin)}`;
@@ -401,7 +384,6 @@
       </div>
     `;
     const { modal, closeModal } = createModal(bm.title, html, { size: 'full' });
-    // Обработчик скачивания
     const downloadBtn = modal.querySelector('#video-download-btn');
     if (downloadBtn) {
       downloadBtn.addEventListener('click', async () => {
@@ -417,7 +399,6 @@
         }
       });
     }
-    // Обработчик записи
     const recordBtn = modal.querySelector('#video-record-btn');
     if (recordBtn) {
       recordBtn.addEventListener('click', async () => {
@@ -438,6 +419,93 @@
     return { modal, closeModal };
   }
 
+  // ---- Загрузка плеера в карточку по клику (аналог новостей) ----
+  function loadVideoPlayerInCard(mediaContainer, bm) {
+    // Если уже есть iframe, ничего не делаем
+    if (mediaContainer.querySelector('iframe')) return;
+
+    let embedUrl = bm.embedUrl;
+    if (!embedUrl) {
+      // Пытаемся сгенерировать из url
+      if (bm.url) {
+        const parsed = window.YoutubeLoader?.parseYouTubeUrl?.(bm.url);
+        if (parsed) embedUrl = parsed.embedUrl;
+        else {
+          // Простейший fallback
+          const match = bm.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+          if (match) {
+            embedUrl = `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+          }
+        }
+      }
+    }
+    if (!embedUrl) {
+      showToast('Не удалось определить ссылку для плеера', 'error');
+      return;
+    }
+
+    // Очищаем контейнер и вставляем iframe
+    mediaContainer.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.src = embedUrl;
+    iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;border-radius:12px;';
+    iframe.setAttribute('allowfullscreen', 'true');
+    iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
+    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+    // Добавляем кнопку записи (мини)
+    const recordBtn = document.createElement('button');
+    recordBtn.className = 'record-btn-mini';
+    recordBtn.innerHTML = '⏺';
+    recordBtn.style.cssText = `
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      background: rgba(0,0,0,0.6);
+      border: none;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.5;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 10;
+    `;
+    recordBtn.addEventListener('mouseenter', () => {
+      recordBtn.style.opacity = '1';
+      recordBtn.style.transform = 'scale(1.1)';
+    });
+    recordBtn.addEventListener('mouseleave', () => {
+      recordBtn.style.opacity = '0.5';
+      recordBtn.style.transform = 'scale(1)';
+    });
+    recordBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        const blob = await recordVideoFromIframe(iframe, 10000);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${bm.title || 'video'}.webm`;
+        a.click();
+        showToast('Запись сохранена', 'success');
+      } catch (err) {
+        showToast('Ошибка записи: ' + err.message, 'error');
+      }
+    });
+    mediaContainer.appendChild(iframe);
+    mediaContainer.appendChild(recordBtn);
+    mediaContainer.style.position = 'relative';
+    mediaContainer.style.paddingBottom = '56.25%';
+    mediaContainer.style.background = '#000';
+    // Убираем оверлей, если был
+    const overlay = mediaContainer.querySelector('.play-overlay');
+    if (overlay) overlay.remove();
+  }
+
   // ---- Создание DOM-элемента карточки (с учётом кеширования) ----
   function createBookmarkCardElement(bm, modal) {
     const t = (key) => window.I18n?.translate(key) || key;
@@ -451,37 +519,66 @@
     const media = document.createElement('div');
     media.className = 'bookmark-media';
 
-    const isVideo = bm.type === 'video' && bm.embedUrl;
+    const isVideo = bm.type === 'video' && (bm.embedUrl || bm.url);
     const isPost = bm.type === 'post';
     const isSave = bm.type === 'save';
     const isLink = bm.type === 'link';
 
     // Превью
     if (isVideo) {
-      // Показываем iframe
-      const iframe = document.createElement('iframe');
-      let src = bm.embedUrl;
-      if (!src.includes('autoplay')) {
-        src += (src.includes('?') ? '&' : '?') + 'autoplay=0';
-      }
-      if (src.includes('youtube')) {
-        src += '&controls=1&showinfo=0&iv_load_policy=3&rel=0';
-      }
-      iframe.src = src;
-      iframe.style.width = '100%';
-      iframe.style.height = '100%';
-      iframe.style.border = 'none';
-      iframe.setAttribute('allowfullscreen', 'true');
-      iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
-      media.appendChild(iframe);
-      // Добавляем кнопку записи (минималистичная, справа снизу)
-      const recordBtn = document.createElement('button');
-      recordBtn.className = 'record-btn-mini';
-      recordBtn.innerHTML = '⏺';
-      recordBtn.style.cssText = `
+      // Показываем превью (картинку) и оверлей с кнопкой воспроизведения
+      const img = document.createElement('img');
+      img.src = bm.thumbnail || 'images/default-news.webp';
+      img.alt = bm.title;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+      img.onerror = () => { img.src = 'images/default-news.webp'; };
+      media.appendChild(img);
+
+      // Оверлей с кнопкой "play"
+      const overlay = document.createElement('div');
+      overlay.className = 'play-overlay';
+      overlay.innerHTML = '<i class="fas fa-play" style="font-size:30px;color:#fff;"></i>';
+      overlay.style.cssText = `
         position: absolute;
-        bottom: 8px;
-        right: 8px;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0,0,0,0.3);
+        pointer-events: none;
+        transition: background 0.3s;
+        border-radius: 12px;
+      `;
+      media.appendChild(overlay);
+      // При наведении на карточку затемняем оверлей
+      card.addEventListener('mouseenter', () => {
+        overlay.style.background = 'rgba(0,0,0,0.5)';
+      });
+      card.addEventListener('mouseleave', () => {
+        overlay.style.background = 'rgba(0,0,0,0.3)';
+      });
+
+      // Клик на карточку - загружаем плеер
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.bookmark-delete-btn') || e.target.closest('.download-btn') || e.target.closest('.open-modal-btn')) return;
+        // Если уже есть iframe, ничего не делаем (или можно открыть модалку)
+        if (media.querySelector('iframe')) {
+          // Можно открыть модалку при повторном клике
+          openVideoModal(bm);
+          return;
+        }
+        loadVideoPlayerInCard(media, bm);
+      });
+
+      // Добавляем кнопку "открыть в плеере" (модалка)
+      const openModalBtn = document.createElement('button');
+      openModalBtn.className = 'open-modal-btn';
+      openModalBtn.innerHTML = '<i class="fas fa-expand"></i>';
+      openModalBtn.style.cssText = `
+        position: absolute;
+        top: 8px;
+        left: 8px;
         background: rgba(0,0,0,0.6);
         border: none;
         border-radius: 50%;
@@ -494,31 +591,17 @@
         align-items: center;
         justify-content: center;
         opacity: 0.5;
-        transition: opacity 0.2s, transform 0.2s;
+        transition: opacity 0.2s;
         z-index: 10;
       `;
-      recordBtn.addEventListener('mouseenter', () => {
-        recordBtn.style.opacity = '1';
-        recordBtn.style.transform = 'scale(1.1)';
-      });
-      recordBtn.addEventListener('mouseleave', () => {
-        recordBtn.style.opacity = '0.5';
-        recordBtn.style.transform = 'scale(1)';
-      });
-      recordBtn.addEventListener('click', async (e) => {
+      openModalBtn.addEventListener('mouseenter', () => { openModalBtn.style.opacity = '1'; });
+      openModalBtn.addEventListener('mouseleave', () => { openModalBtn.style.opacity = '0.5'; });
+      openModalBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        try {
-          const blob = await recordVideoFromIframe(iframe, 10000);
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = `${bm.title || 'video'}.webm`;
-          a.click();
-          showToast('Запись сохранена', 'success');
-        } catch (err) {
-          showToast('Ошибка записи: ' + err.message, 'error');
-        }
+        openVideoModal(bm);
       });
-      media.appendChild(recordBtn);
+      media.appendChild(openModalBtn);
+
     } else if (bm.thumbnail) {
       const img = document.createElement('img');
       img.src = bm.thumbnail;
@@ -553,97 +636,75 @@
     meta.textContent = `${bm.type.charAt(0).toUpperCase()+bm.type.slice(1)} · ${formatDate(bm.added)}`;
     content.appendChild(meta);
 
-    // Кнопка скачивания
+    // Кнопка скачивания (только для видео)
     const downloadContainer = document.createElement('div');
     downloadContainer.style.cssText = 'margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;';
-    const downloadBtn = document.createElement('button');
-    downloadBtn.className = 'button small';
-    downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
-    downloadBtn.style.cssText = 'background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;font-family:var(--font-family);transition:0.2s;';
-    downloadBtn.addEventListener('mouseenter', () => { downloadBtn.style.transform = 'scale(1.05)'; });
-    downloadBtn.addEventListener('mouseleave', () => { downloadBtn.style.transform = 'scale(1)'; });
-    downloadContainer.appendChild(downloadBtn);
+    if (isVideo) {
+      const downloadBtn = document.createElement('button');
+      downloadBtn.className = 'button small download-btn';
+      downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
+      downloadBtn.style.cssText = 'background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;font-family:var(--font-family);transition:0.2s;';
+      downloadBtn.addEventListener('mouseenter', () => { downloadBtn.style.transform = 'scale(1.05)'; });
+      downloadBtn.addEventListener('mouseleave', () => { downloadBtn.style.transform = 'scale(1)'; });
 
-    const hasValidDownload = bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires;
-
-    if (hasValidDownload) {
-      downloadContainer.style.display = 'flex';
-      downloadBtn.onclick = (e) => {
-        e.stopPropagation();
-        const a = document.createElement('a');
-        a.href = bm.downloadUrl;
-        a.download = bm.title + '.mp4';
-        a.target = '_blank';
-        a.click();
-      };
-    } else if (isVideo) {
-      downloadContainer.style.display = 'none';
-      const fetchDownload = async (e) => {
-        e.stopPropagation();
-        if (downloadBtn.disabled) return;
-        downloadBtn.disabled = true;
-        downloadBtn.textContent = '⏳ ...';
-        try {
-          const url = await ensureDownloadUrl(bm);
-          if (url) {
-            downloadContainer.style.display = 'flex';
-            downloadBtn.onclick = (ev) => {
-              ev.stopPropagation();
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = bm.title + '.mp4';
-              a.target = '_blank';
-              a.click();
-            };
-            downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
-            showToast('Ссылка получена', 'success');
-          } else {
-            showToast('Не удалось получить ссылку', 'error');
+      const hasValidDownload = bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires;
+      if (hasValidDownload) {
+        downloadBtn.onclick = (e) => {
+          e.stopPropagation();
+          const a = document.createElement('a');
+          a.href = bm.downloadUrl;
+          a.download = bm.title + '.mp4';
+          a.target = '_blank';
+          a.click();
+        };
+      } else {
+        downloadBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (downloadBtn.disabled) return;
+          downloadBtn.disabled = true;
+          downloadBtn.textContent = '⏳ ...';
+          try {
+            const url = await ensureDownloadUrl(bm);
+            if (url) {
+              downloadBtn.onclick = (ev) => {
+                ev.stopPropagation();
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = bm.title + '.mp4';
+                a.target = '_blank';
+                a.click();
+              };
+              downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
+              showToast('Ссылка получена', 'success');
+            } else {
+              showToast('Не удалось получить ссылку', 'error');
+              downloadBtn.textContent = '❌ Ошибка';
+              setTimeout(() => {
+                downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
+                downloadBtn.disabled = false;
+              }, 3000);
+            }
+          } catch (err) {
+            showToast('Ошибка: ' + err.message, 'error');
             downloadBtn.textContent = '❌ Ошибка';
             setTimeout(() => {
               downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
               downloadBtn.disabled = false;
-              downloadContainer.style.display = 'none';
             }, 3000);
           }
-        } catch (err) {
-          showToast('Ошибка: ' + err.message, 'error');
-          downloadBtn.textContent = '❌ Ошибка';
-          setTimeout(() => {
-            downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
-            downloadBtn.disabled = false;
-            downloadContainer.style.display = 'none';
-          }, 3000);
-        }
-      };
-      downloadBtn.addEventListener('click', fetchDownload);
-    } else {
-      downloadContainer.style.display = 'none';
+        };
+      }
+      downloadContainer.appendChild(downloadBtn);
     }
-    content.appendChild(downloadContainer);
 
-    card.appendChild(content);
-
-    // Клик по карточке
-    card.addEventListener('click', async (e) => {
-      if (e.target.closest('button')) return;
-
-      if (isVideo && bm.embedUrl) {
+    // Для сохранений – кнопка скачивания файла
+    if (isSave && bm.saveData) {
+      const saveDownloadBtn = document.createElement('button');
+      saveDownloadBtn.className = 'button small';
+      saveDownloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
+      saveDownloadBtn.style.cssText = 'background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;font-family:var(--font-family);transition:0.2s;';
+      saveDownloadBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        openVideoModal(bm);
-        return;
-      }
-
-      if (isPost && bm.postData && bm.postData.id) {
-        if (window.UIFeedback) {
-          window.UIFeedback.openFullModal(bm.postData);
-        } else {
-          showToast(t('viewerNotAvailable'), 'error');
-        }
-        return;
-      }
-
-      if (isSave && bm.saveData) {
         try {
           const binary = atob(bm.saveData.content);
           const bytes = new Uint8Array(binary.length);
@@ -657,13 +718,52 @@
         } catch (err) {
           showToast('Ошибка скачивания', 'error');
         }
-        return;
-      }
+      });
+      downloadContainer.appendChild(saveDownloadBtn);
+    }
 
-      if (bm.url) {
-        window.open(bm.url, '_blank');
-      }
-    });
+    if (downloadContainer.children.length > 0) {
+      content.appendChild(downloadContainer);
+    }
+
+    card.appendChild(content);
+
+    // Обработка клика на карточку (для постов и ссылок) – уже обработано для видео
+    if (!isVideo) {
+      card.addEventListener('click', async (e) => {
+        if (e.target.closest('button')) return;
+
+        if (isPost && bm.postData && bm.postData.id) {
+          if (window.UIFeedback) {
+            window.UIFeedback.openFullModal(bm.postData);
+          } else {
+            showToast(t('viewerNotAvailable'), 'error');
+          }
+          return;
+        }
+
+        if (isSave && bm.saveData) {
+          try {
+            const binary = atob(bm.saveData.content);
+            const bytes = new Uint8Array(binary.length);
+            for (let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = bm.saveData.fileName || 'save.dat';
+            a.click();
+            URL.revokeObjectURL(a.href);
+          } catch (err) {
+            showToast('Ошибка скачивания', 'error');
+          }
+          return;
+        }
+
+        if (bm.url) {
+          window.open(bm.url, '_blank');
+        }
+      });
+    }
 
     // Кнопка удаления
     const del = document.createElement('button');
@@ -782,7 +882,6 @@
     const container = modal.querySelector('.storage-actions');
     if (!container) return;
 
-    // Кнопка "Обновить видео"
     const refreshBtn = document.createElement('button');
     refreshBtn.className = 'storage-btn';
     refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> ' + (t('refreshVideos') || 'Обновить видео');
@@ -908,7 +1007,7 @@
         .bookmark-media{position:relative;padding-bottom:56.25%;background:var(--bg-primary);border-bottom:1px solid var(--border);flex-shrink:0;overflow:hidden}
         .bookmark-media img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
         .bookmark-media iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none;border-radius:12px 12px 0 0}
-        .play-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);border-radius:50%;width:60px;height:60px;display:flex;align-items:center;justify-content:center;color:white;font-size:30px;pointer-events:none}
+        .play-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.3);border-radius:50%;width:60px;height:60px;display:flex;align-items:center;justify-content:center;color:white;font-size:30px;pointer-events:none;transition:background 0.3s}
         .bookmark-icon{display:flex;align-items:center;justify-content:center;font-size:48px;padding:20px 0;background:var(--bg-primary);border-bottom:1px solid var(--border);height:100%}
         .bookmark-content{padding:12px;flex:1;display:flex;flex-direction:column}
         .bookmark-content h4{margin:0 0 4px;font-size:16px;color:var(--text-primary);word-break:break-word}
@@ -938,11 +1037,30 @@
           opacity: 1;
           transform: scale(1.1);
         }
+        .open-modal-btn {
+          position: absolute;
+          top: 8px;
+          left: 8px;
+          background: rgba(0,0,0,0.6);
+          border: none;
+          border-radius: 50%;
+          width: 28px;
+          height: 28px;
+          color: #fff;
+          font-size: 14px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          opacity: 0.5;
+          transition: opacity 0.2s;
+          z-index: 10;
+        }
+        .open-modal-btn:hover { opacity: 1; }
       `;
       document.head.appendChild(style);
     }
 
-    // Добавляем групповые кнопки
     addBatchActions(modal);
 
     renderBookmarks(modal);
@@ -983,7 +1101,6 @@
       const url = urlInput.value.trim();
       if (!url) { showToast(t('enterText'), 'error'); return; }
       try {
-        // Используем умное определение
         const meta = await detectLinkType(url);
         await addBookmark({
           url: meta.cleanedUrl || url,
@@ -1115,12 +1232,12 @@
         bookmarkElements.set(id, newWrapper);
       }
     },
-    // Экспортируем вспомогательные функции для использования в менеджере
     getVideoDownloadUrl,
     recordVideoFromIframe,
     detectLinkType,
     parseVideoFromHtml,
-    openVideoModal
+    openVideoModal,
+    loadVideoPlayerInCard // экспортируем для возможного использования
   };
 
   window._StorageManager.setStatusCallback(updateStatus);

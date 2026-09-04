@@ -1413,3 +1413,39 @@
         box-shadow: none !important;
     }
 }
+
+/* Оптимизация производительности */
+.card,
+.project-card,
+.bookmark-card,
+.desc-block,
+.feature-item,
+.req-item,
+.consumption-card,
+.video-grid iframe,
+.lazy-yt {
+  will-change: transform;
+  contain: layout style paint;
+}
+
+/* Для элементов с анимацией наведения */
+.tilt-card,
+.project-card-link,
+.profile-card-link,
+.button,
+.download-button,
+.social-icon {
+  will-change: transform;
+}
+
+/* Для блоков с масками - ускоряем композитинг */
+.desc-block .desc-image {
+  will-change: transform;
+  contain: layout style paint;
+}
+
+/* Для плееров YouTube */
+.lazy-yt iframe,
+.bookmark-media iframe {
+  will-change: transform;
+}
