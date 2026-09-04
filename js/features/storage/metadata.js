@@ -1,6 +1,6 @@
 // js/features/storage/metadata.js
 // Извлечение метаданных из URL, парсинг видео, очистка URL от трекеров
-// Добавлена поддержка прокси allorigins.win для получения видео с сайтов без oembed
+// Добавлена поддержка множества резервных источников для превью и embedUrl
 
 (function() {
   const { showToast } = window.UIUtils || {};
@@ -13,7 +13,7 @@
   }
 
   /**
-   * Очищает URL от отслеживающих параметров (utm_*, ref, source, fbclid, mc_* и др.)
+   * Очищает URL от отслеживающих параметров
    * Сохраняет важные параметры для видео (v, t, list и т.п.)
    */
   function cleanUrl(url) {
@@ -37,9 +37,7 @@
         const params = new URLSearchParams(parsed.search);
         const toDelete = [];
         for (const key of params.keys()) {
-          if (!allowed.includes(key)) {
-            toDelete.push(key);
-          }
+          if (!allowed.includes(key)) toDelete.push(key);
         }
         for (const key of toDelete) {
           params.delete(key);
@@ -51,36 +49,17 @@
           parsed.search = params.toString();
         }
       }
-      if (parsed.hostname.includes('vimeo.com')) {
+      if (parsed.hostname.includes('vimeo.com') ||
+          parsed.hostname.includes('dailymotion.com') ||
+          parsed.hostname.includes('twitch.tv') ||
+          parsed.hostname.includes('rutube.ru') ||
+          parsed.hostname.includes('coub.com')) {
         if (parsed.search) {
           parsed.search = '';
           changed = true;
         }
       }
-      if (parsed.hostname.includes('dailymotion.com')) {
-        if (parsed.search) {
-          parsed.search = '';
-          changed = true;
-        }
-      }
-      if (parsed.hostname.includes('twitch.tv') || parsed.hostname.includes('clips.twitch.tv')) {
-        if (parsed.search) {
-          parsed.search = '';
-          changed = true;
-        }
-      }
-      if (parsed.hostname.includes('rutube.ru')) {
-        if (parsed.search) {
-          parsed.search = '';
-          changed = true;
-        }
-      }
-      if (parsed.hostname.includes('coub.com')) {
-        if (parsed.search) {
-          parsed.search = '';
-          changed = true;
-        }
-      }
+      // Специальный случай для view_video.php (общий)
       if (parsed.pathname.includes('view_video.php')) {
         const viewkey = parsed.searchParams.get('viewkey');
         if (viewkey) {
@@ -103,7 +82,7 @@
     let type = 'video';
     let videoData = null;
 
-    // YouTube (все вариации)
+    // YouTube
     let ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
     if (ytMatch) {
       const id = ytMatch[1];
@@ -178,7 +157,7 @@
       return { embedUrl, type, videoData };
     }
 
-    // view_video.php (специфичный для некоторых сайтов)
+    // view_video.php (общий случай)
     if (url.includes('view_video.php?viewkey=')) {
       const keyMatch = url.match(/viewkey=([^&]+)/);
       if (keyMatch) {
@@ -190,8 +169,7 @@
           `${baseUrl}video/${key}`,
           `${baseUrl}player.php?viewkey=${key}`
         ];
-        let foundEmbed = null;
-        foundEmbed = candidates[0];
+        let foundEmbed = candidates[0];
         embedUrl = foundEmbed;
         videoData = { service: 'custom', embedUrl };
         return { embedUrl, type, videoData };
@@ -201,51 +179,95 @@
     return null;
   }
 
-  // ---- основная функция fetchMetadata с прокси ----
+  /**
+   * Основная функция получения метаданных с множеством резервных способов
+   */
   async function fetchMetadata(url) {
     const cleanedUrl = cleanUrl(url);
     
-    // Сначала пробуем наши парсеры
+    // 1. Сначала пробуем наши парсеры для известных платформ
     const parsed = parseVideoUrl(cleanedUrl);
     if (parsed && parsed.embedUrl) {
       let title = cleanedUrl;
       let thumbnail = null;
-      // Пытаемся получить заголовок и превью через oembed
-      try {
-        const resp = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(cleanedUrl)}`, { signal: AbortSignal.timeout(3000) });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data && data.title) title = data.title;
-          if (data && data.thumbnail_url) thumbnail = data.thumbnail_url;
-        }
-      } catch (e) {}
-      // Если noembed не дал превью, пробуем iframely
-      if (!thumbnail) {
+      
+      // Пытаемся получить заголовок и превью через oEmbed-сервисы
+      const oembedServices = [
+        { url: 'https://noembed.com/embed', params: { url: cleanedUrl } },
+        { url: 'https://iframe.ly/api/oembed', params: { url: cleanedUrl } },
+        { url: 'https://api.microlink.io/', params: { url: cleanedUrl, data: 'title,image,embed' } }
+      ];
+
+      for (const service of oembedServices) {
         try {
-          const resp = await fetch(`https://iframe.ly/api/oembed?url=${encodeURIComponent(cleanedUrl)}`, { signal: AbortSignal.timeout(3000) });
+          const qs = new URLSearchParams(service.params).toString();
+          const resp = await fetch(`${service.url}?${qs}`, { signal: AbortSignal.timeout(3000) });
           if (resp.ok) {
             const data = await resp.json();
-            if (data && data.thumbnail_url) thumbnail = data.thumbnail_url;
-          }
-        } catch (e) {}
-      }
-      // Если всё равно нет превью, попробуем microlink
-      if (!thumbnail) {
-        try {
-          const resp = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(cleanedUrl)}&data.image`, { signal: AbortSignal.timeout(3000) });
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data && data.data && data.data.image && data.data.image.url) {
-              thumbnail = data.data.image.url;
+            if (data && data.title) {
+              title = data.title;
             }
+            // Для microlink структура отличается
+            if (data && data.data) {
+              if (data.data.title) title = data.data.title;
+              if (data.data.image && data.data.image.url) thumbnail = data.data.image.url;
+            } else {
+              if (data.thumbnail_url) thumbnail = data.thumbnail_url;
+              else if (data.thumbnail) thumbnail = data.thumbnail;
+            }
+            if (title && thumbnail) break;
           }
-        } catch (e) {}
+        } catch (e) {
+          // игнорируем ошибки, переходим к следующему
+        }
       }
-      // Для YouTube можно сгенерировать превью сами
-      if (!thumbnail && parsed.videoData && parsed.videoData.service === 'youtube' && parsed.videoData.id) {
-        thumbnail = `https://img.youtube.com/vi/${parsed.videoData.id}/mqdefault.jpg`;
+
+      // Если превью всё ещё нет, генерируем для известных платформ
+      if (!thumbnail && parsed.videoData) {
+        if (parsed.videoData.service === 'youtube' && parsed.videoData.id) {
+          thumbnail = `https://img.youtube.com/vi/${parsed.videoData.id}/mqdefault.jpg`;
+        } else if (parsed.videoData.service === 'vimeo' && parsed.videoData.id) {
+          // Vimeo можно получить через api
+          try {
+            const resp = await fetch(`https://vimeo.com/api/v2/video/${parsed.videoData.id}.json`, { signal: AbortSignal.timeout(3000) });
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data && data.length && data[0].thumbnail_large) {
+                thumbnail = data[0].thumbnail_large;
+              }
+            }
+          } catch (e) {}
+        } else if (parsed.videoData.service === 'dailymotion' && parsed.videoData.id) {
+          try {
+            const resp = await fetch(`https://api.dailymotion.com/video/${parsed.videoData.id}?fields=thumbnail_url`, { signal: AbortSignal.timeout(3000) });
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data && data.thumbnail_url) thumbnail = data.thumbnail_url;
+            }
+          } catch (e) {}
+        } else if (parsed.videoData.service === 'twitch_clip' && parsed.videoData.id) {
+          // Для клипов Twitch можно использовать стандартную заглушку
+          thumbnail = null;
+        } else if (parsed.videoData.service === 'rutube' && parsed.videoData.id) {
+          try {
+            const resp = await fetch(`https://rutube.ru/api/video/${parsed.videoData.id}/?format=json`, { signal: AbortSignal.timeout(3000) });
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data && data.thumbnail_url) thumbnail = data.thumbnail_url;
+            }
+          } catch (e) {}
+        } else if (parsed.videoData.service === 'coub' && parsed.videoData.id) {
+          try {
+            const resp = await fetch(`https://coub.com/api/v2/coubs/${parsed.videoData.id}`, { signal: AbortSignal.timeout(3000) });
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data && data.thumbnail_medium) thumbnail = data.thumbnail_medium;
+            }
+          } catch (e) {}
+        }
       }
-      // Если всё ещё нет превью, пробуем через прокси allorigins для парсинга HTML
+
+      // Если всё ещё нет превью, пробуем парсить страницу через прокси allorigins
       if (!thumbnail) {
         try {
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanedUrl)}`;
@@ -253,30 +275,35 @@
           if (proxyResp.ok) {
             const html = await proxyResp.text();
             const doc = new DOMParser().parseFromString(html, 'text/html');
-            // Ищем og:image
             const ogImage = doc.querySelector('meta[property="og:image"]');
             if (ogImage && ogImage.content) thumbnail = ogImage.content;
-            // Или thumbnail из microdata
             if (!thumbnail) {
               const img = doc.querySelector('img[itemprop="thumbnailUrl"]');
               if (img && img.src) thumbnail = img.src;
             }
+            if (!thumbnail) {
+              // Пробуем найти первую большую картинку
+              const imgEl = doc.querySelector('img[src]');
+              if (imgEl && imgEl.src && imgEl.width > 100) thumbnail = imgEl.src;
+            }
           }
         } catch (e) {
-          console.warn('Proxy fetch for thumbnail failed:', e);
+          // игнорируем
         }
       }
+
+      // Если всё равно нет превью – оставляем null, в карточке будет заглушка
       return {
-        title: title,
-        thumbnail: thumbnail,
+        title: title || cleanedUrl,
+        thumbnail: thumbnail || null,
         embedUrl: parsed.embedUrl,
-        type: parsed.type,
-        videoData: parsed.videoData,
+        type: parsed.type || 'video',
+        videoData: parsed.videoData || null,
         cleanedUrl: cleanedUrl
       };
     }
 
-    // Стандартные OEmbed-провайдеры (fallback)
+    // 2. Если не удалось распарсить как видео – пробуем стандартные oEmbed как для ссылки
     try {
       const resp1 = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(cleanedUrl)}`, { signal: AbortSignal.timeout(5000) });
       if (resp1.ok) {
@@ -329,14 +356,13 @@
       }
     } catch (e) {}
 
-    // Если ничего не найдено, пробуем прокси allorigins для получения HTML и поиска видео
+    // 3. Если ничего не найдено, пробуем прокси allorigins для поиска видео в HTML
     try {
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanedUrl)}`;
       const proxyResp = await fetch(proxyUrl, { signal: AbortSignal.timeout(5000) });
       if (proxyResp.ok) {
         const html = await proxyResp.text();
         const doc = new DOMParser().parseFromString(html, 'text/html');
-        // Ищем video
         const videoEl = doc.querySelector('video[src]');
         if (videoEl && videoEl.src) {
           return {
@@ -348,7 +374,6 @@
             cleanedUrl: cleanedUrl
           };
         }
-        // Ищем source
         const source = doc.querySelector('source[src]');
         if (source && source.src) {
           return {
@@ -360,7 +385,6 @@
             cleanedUrl: cleanedUrl
           };
         }
-        // Ищем og:video
         const ogVideo = doc.querySelector('meta[property="og:video"]');
         if (ogVideo && ogVideo.content) {
           return {
@@ -375,7 +399,7 @@
       }
     } catch (e) {}
 
-    // Если ничего не найдено, возвращаем как ссылку с очищенным URL
+    // 4. Всё else – возвращаем как ссылку с очищенным URL
     return { title: cleanedUrl, thumbnail: null, embedUrl: null, type: 'link', videoData: null, cleanedUrl: cleanedUrl };
   }
 

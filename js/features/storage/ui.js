@@ -1,10 +1,11 @@
 // js/features/storage/ui.js
 // UI-рендеринг закладок, модалка, статус, обработка файлов
-// Оптимизировано: видео-закладки теперь показывают превью, плеер загружается по клику
+// Оптимизировано: видео-закладки показывают превью, плеер загружается по клику
 // Добавлена поддержка кеширования downloadUrl с TTL, групповые операции, запись видео через MediaRecorder
+// Расширено: множество резервных способов для получения превью и скачивания, улучшенное кеширование
 
 (function() {
-  const { escapeHtml, formatDate, loadModule, createElement, debounce } = window.GithubCore || {};
+  const { escapeHtml, formatDate, loadModule, createElement, debounce, cacheGet, cacheSet } = window.GithubCore || {};
   const { getCurrentUser, hasScope } = window.GithubAuth || {};
   const { showToast, createModal } = window.UIUtils || {};
   const { fetchMetadata } = window._StorageMetadata || {};
@@ -29,7 +30,9 @@
   let statusElement = null;
   const bookmarkElements = new Map();
 
-  const DOWNLOAD_URL_TTL = 24 * 60 * 60 * 1000;
+  const DOWNLOAD_URL_TTL = 24 * 60 * 60 * 1000; // 24 часа
+  const CACHE_KEY_PREFIX = 'video_download_';
+  const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 часов
 
   function updateStatus(text, type = 'info') {
     if (statusElement) {
@@ -45,27 +48,35 @@
     return title.slice(0, maxLength) + '…';
   }
 
-  // ---- Расширенное получение ссылки на скачивание с кешированием + прокси ----
-  async function getVideoDownloadUrl(url, forceRefresh = false) {
-    if (!url) return null;
+  // ---- Кеширование ссылок на скачивание ----
+  function getCachedDownloadUrl(url) {
+    const key = CACHE_KEY_PREFIX + url;
+    const cached = cacheGet(key, CACHE_TTL);
+    return cached || null;
+  }
 
+  function setCachedDownloadUrl(url, downloadUrl) {
+    const key = CACHE_KEY_PREFIX + url;
+    cacheSet(key, downloadUrl);
+  }
+
+  // ---- Расширенное получение ссылки на скачивание с кешированием ----
+  async function getVideoDownloadUrl(videoUrl, forceRefresh = false) {
+    if (!videoUrl) return null;
+
+    // Проверяем кеш
+    if (!forceRefresh) {
+      const cached = getCachedDownloadUrl(videoUrl);
+      if (cached) return cached;
+    }
+
+    // Список API, которые реально работают с CORS
     const apis = [
-      // 1. Cobalt
+      // 1. Invidious (для YouTube)
       {
-        url: 'https://api.cobalt.tools/api/json',
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: (videoUrl) => JSON.stringify({ url: videoUrl, videoQuality: '720', audioFormat: 'best' })
-      },
-      // 2. VideoFetcher
-      {
-        url: 'https://api.videofetcher.net/parse',
-        method: 'GET',
-        params: (videoUrl) => ({ url: videoUrl })
-      },
-      // 3. Invidious
-      {
-        url: (videoUrl) => {
+        name: 'Invidious',
+        test: (url) => url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/),
+        buildUrl: (videoUrl) => {
           const match = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
           if (match) {
             return `https://invidious.private.coffee/api/v1/videos/${match[1]}`;
@@ -81,9 +92,11 @@
           return null;
         }
       },
-      // 4. Piped
+      // 2. Piped (для YouTube)
       {
-        url: (videoUrl) => {
+        name: 'Piped',
+        test: (url) => url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/),
+        buildUrl: (videoUrl) => {
           const match = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
           if (match) {
             return `https://pipedapi.kavin.rocks/streams/${match[1]}`;
@@ -99,9 +112,10 @@
           return null;
         }
       },
-      // 5. yt-dlp-web
+      // 3. YT-DLP Web (универсальный)
       {
-        url: 'https://yt-dlp-web.herokuapp.com/api/info',
+        name: 'YT-DLP-Web',
+        buildUrl: () => 'https://yt-dlp-web.herokuapp.com/api/info',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: (videoUrl) => JSON.stringify({ url: videoUrl }),
@@ -114,31 +128,11 @@
           return null;
         }
       },
-      // 6. savefrom.net (неофициальный)
+      // 4. loader.to (YouTube)
       {
-        url: 'https://savefrom.net/',
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: (videoUrl) => `url=${encodeURIComponent(videoUrl)}`,
-        parser: (html) => {
-          const match = html.match(/<a[^>]+href="([^"]+)"[^>]*class="[^"]*download[^"]*"/i);
-          return match ? match[1] : null;
-        }
-      },
-      // 7. y2mate.com
-      {
-        url: 'https://www.y2mate.com/mates/analyzeAjax',
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: (videoUrl) => `url=${encodeURIComponent(videoUrl)}&type=YouTube`,
-        parser: (data) => {
-          if (data && data.downloadUrl) return data.downloadUrl;
-          return null;
-        }
-      },
-      // 8. loader.to
-      {
-        url: (videoUrl) => {
+        name: 'Loader.to',
+        test: (url) => url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/),
+        buildUrl: (videoUrl) => {
           const match = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
           if (match) {
             return `https://loader.to/api/?link=${encodeURIComponent(videoUrl)}&mode=video`;
@@ -153,9 +147,11 @@
           } catch { return null; }
         }
       },
-      // 9. ssyoutube.com (через api)
+      // 5. ssyoutube.com (YouTube)
       {
-        url: (videoUrl) => {
+        name: 'SSYouTube',
+        test: (url) => url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/),
+        buildUrl: (videoUrl) => {
           const match = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
           if (match) {
             return `https://ssyoutube.com/api/convert?url=${encodeURIComponent(videoUrl)}`;
@@ -169,6 +165,70 @@
             return json.downloadUrl || null;
           } catch { return null; }
         }
+      },
+      // 6. Y2Mate (YouTube)
+      {
+        name: 'Y2Mate',
+        test: (url) => url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/),
+        buildUrl: () => 'https://www.y2mate.com/mates/analyzeAjax',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: (videoUrl) => `url=${encodeURIComponent(videoUrl)}&type=YouTube`,
+        parser: (data) => {
+          if (data && data.downloadUrl) return data.downloadUrl;
+          return null;
+        }
+      },
+      // 7. Vimeo (через oEmbed)
+      {
+        name: 'Vimeo',
+        test: (url) => url.match(/vimeo\.com\/(\d+)/),
+        buildUrl: (videoUrl) => {
+          const match = videoUrl.match(/vimeo\.com\/(\d+)/);
+          if (match) {
+            return `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(videoUrl)}`;
+          }
+          return null;
+        },
+        method: 'GET',
+        parser: (data) => {
+          if (data && data.html) {
+            const match = data.html.match(/src="([^"]+)"/);
+            if (match) {
+              // Возвращаем URL плеера, но для скачивания нужен прямой доступ – не реализовано, но можно вернуть null
+              return null;
+            }
+          }
+          return null;
+        }
+      },
+      // 8. Универсальный прокси-парсер через allorigins (работает для любых сайтов)
+      {
+        name: 'ProxyParser',
+        buildUrl: (videoUrl) => `https://api.allorigins.win/raw?url=${encodeURIComponent(videoUrl)}`,
+        method: 'GET',
+        parser: async (data) => {
+          // data – это HTML строка
+          const doc = new DOMParser().parseFromString(data, 'text/html');
+          // Ищем прямые ссылки на видео
+          const videoEl = doc.querySelector('video[src]');
+          if (videoEl && videoEl.src) return videoEl.src;
+          const source = doc.querySelector('source[src]');
+          if (source && source.src) return source.src;
+          // Ищем data-video атрибуты
+          const dataVideo = doc.querySelector('[data-video]');
+          if (dataVideo && dataVideo.dataset.video) return dataVideo.dataset.video;
+          // Ищем og:video
+          const ogVideo = doc.querySelector('meta[property="og:video"]');
+          if (ogVideo && ogVideo.content) return ogVideo.content;
+          // Ищем iframe с youtube/vimeo
+          const iframe = doc.querySelector('iframe[src*="youtube.com"], iframe[src*="vimeo.com"]');
+          if (iframe && iframe.src) {
+            // Возвращаем src as embed, но не для скачивания
+            return null;
+          }
+          return null;
+        }
       }
     ];
 
@@ -176,29 +236,28 @@
     for (const api of apis) {
       try {
         let requestUrl;
-        if (typeof api.url === 'function') {
-          requestUrl = api.url(url);
+        if (typeof api.buildUrl === 'function') {
+          requestUrl = api.buildUrl(videoUrl);
           if (!requestUrl) continue;
         } else {
-          requestUrl = api.url;
+          requestUrl = api.buildUrl;
         }
 
+        // Если есть тест, проверяем, подходит ли API для этого видео
+        if (api.test && !api.test(videoUrl)) continue;
+
         let response;
-        let bodyData;
         if (api.method === 'POST') {
-          bodyData = typeof api.body === 'function' ? api.body(url) : api.body;
+          const bodyData = typeof api.body === 'function' ? api.body(videoUrl) : api.body;
           response = await fetch(requestUrl, {
             method: 'POST',
             headers: api.headers || {},
             body: bodyData,
-            signal: AbortSignal.timeout(10000)
+            signal: AbortSignal.timeout(12000)
           });
         } else {
-          const params = typeof api.params === 'function' ? api.params(url) : {};
-          const query = new URLSearchParams(params).toString();
-          const fullUrl = query ? `${requestUrl}?${query}` : requestUrl;
-          response = await fetch(fullUrl, {
-            signal: AbortSignal.timeout(10000)
+          response = await fetch(requestUrl, {
+            signal: AbortSignal.timeout(12000)
           });
         }
 
@@ -214,7 +273,12 @@
 
         let downloadUrl = null;
         if (api.parser) {
-          downloadUrl = api.parser(data);
+          // Если parser асинхронный, ждём
+          if (api.parser.constructor && api.parser.constructor.name === 'AsyncFunction') {
+            downloadUrl = await api.parser(data);
+          } else {
+            downloadUrl = api.parser(data);
+          }
         } else {
           if (data && typeof data === 'object') {
             downloadUrl = data.url || data.downloadUrl || data.download_url || data.link || data.download;
@@ -222,52 +286,42 @@
         }
 
         if (downloadUrl && downloadUrl.startsWith('http')) {
+          // Сохраняем в кеш
+          setCachedDownloadUrl(videoUrl, downloadUrl);
           return downloadUrl;
         }
       } catch (e) {
-        console.warn('[Storage] API error:', e);
+        console.warn('[Storage] API error (' + (api.name || 'unknown') + '):', e);
         continue;
       }
     }
 
-    // Если ничего не получилось, пробуем прокси через allorigins для парсинга HTML
-    try {
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
-      if (response.ok) {
-        const html = await response.text();
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const videoEl = doc.querySelector('video[src]');
-        if (videoEl && videoEl.src) {
-          return videoEl.src;
-        }
-        const source = doc.querySelector('source[src]');
-        if (source && source.src) {
-          return source.src;
-        }
-        const meta = doc.querySelector('meta[property="og:video"]');
-        if (meta && meta.content) {
-          return meta.content;
-        }
-      }
-    } catch (e) {
-      console.warn('[Storage] Proxy fallback failed:', e);
-    }
-
+    // Если ничего не найдено, возвращаем null (кеш не сохраняем)
     return null;
   }
 
-  // ---- Проверка и обновление downloadUrl в закладке ----
+  // ---- Проверка и обновление downloadUrl в закладке (с кешированием) ----
   async function ensureDownloadUrl(bm) {
     if (!bm || bm.type !== 'video' || !bm.url) return null;
+    // Если есть действующая ссылка, возвращаем её
     if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) {
       return bm.downloadUrl;
     }
+    // Пробуем получить из кеша
+    const cached = getCachedDownloadUrl(bm.url);
+    if (cached) {
+      // Обновим закладку
+      const expires = Date.now() + DOWNLOAD_URL_TTL;
+      await updateBookmark(bm.id, { downloadUrl: cached, downloadUrlExpires: expires });
+      return cached;
+    }
+    // Получаем новую ссылку
     try {
       const url = await getVideoDownloadUrl(bm.url);
       if (url) {
         const expires = Date.now() + DOWNLOAD_URL_TTL;
         await updateBookmark(bm.id, { downloadUrl: url, downloadUrlExpires: expires });
+        setCachedDownloadUrl(bm.url, url);
         return url;
       }
     } catch (e) {
@@ -313,16 +367,19 @@
       if (!response.ok) return null;
       const html = await response.text();
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      const videoEl = doc.querySelector('video');
-      if (videoEl && videoEl.src) {
-        return videoEl.src;
-      }
+      const videoEl = doc.querySelector('video[src]');
+      if (videoEl && videoEl.src) return videoEl.src;
       const sources = doc.querySelectorAll('source[src]');
       for (const src of sources) {
-        if (src.src.startsWith('http')) return src.src;
+        if (src.src && src.src.startsWith('http')) return src.src;
       }
       const metaOgVideo = doc.querySelector('meta[property="og:video"]');
       if (metaOgVideo) return metaOgVideo.content;
+      const iframe = doc.querySelector('iframe[src*="youtube.com"], iframe[src*="vimeo.com"]');
+      if (iframe && iframe.src) {
+        // Не скачиваем, но можно использовать для плеера
+        return null;
+      }
       return null;
     } catch (e) {
       console.warn('HTML parse failed:', e);
@@ -421,17 +478,14 @@
 
   // ---- Загрузка плеера в карточку по клику (аналог новостей) ----
   function loadVideoPlayerInCard(mediaContainer, bm) {
-    // Если уже есть iframe, ничего не делаем
     if (mediaContainer.querySelector('iframe')) return;
 
     let embedUrl = bm.embedUrl;
     if (!embedUrl) {
-      // Пытаемся сгенерировать из url
       if (bm.url) {
         const parsed = window.YoutubeLoader?.parseYouTubeUrl?.(bm.url);
         if (parsed) embedUrl = parsed.embedUrl;
         else {
-          // Простейший fallback
           const match = bm.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
           if (match) {
             embedUrl = `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
@@ -444,7 +498,6 @@
       return;
     }
 
-    // Очищаем контейнер и вставляем iframe
     mediaContainer.innerHTML = '';
     const iframe = document.createElement('iframe');
     iframe.src = embedUrl;
@@ -452,7 +505,6 @@
     iframe.setAttribute('allowfullscreen', 'true');
     iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
     iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-    // Добавляем кнопку записи (мини)
     const recordBtn = document.createElement('button');
     recordBtn.className = 'record-btn-mini';
     recordBtn.innerHTML = '⏺';
@@ -501,7 +553,6 @@
     mediaContainer.style.position = 'relative';
     mediaContainer.style.paddingBottom = '56.25%';
     mediaContainer.style.background = '#000';
-    // Убираем оверлей, если был
     const overlay = mediaContainer.querySelector('.play-overlay');
     if (overlay) overlay.remove();
   }
@@ -524,9 +575,7 @@
     const isSave = bm.type === 'save';
     const isLink = bm.type === 'link';
 
-    // Превью
     if (isVideo) {
-      // Показываем превью (картинку) и оверлей с кнопкой воспроизведения
       const img = document.createElement('img');
       img.src = bm.thumbnail || 'images/default-news.webp';
       img.alt = bm.title;
@@ -534,7 +583,6 @@
       img.onerror = () => { img.src = 'images/default-news.webp'; };
       media.appendChild(img);
 
-      // Оверлей с кнопкой "play"
       const overlay = document.createElement('div');
       overlay.className = 'play-overlay';
       overlay.innerHTML = '<i class="fas fa-play" style="font-size:30px;color:#fff;"></i>';
@@ -551,7 +599,6 @@
         border-radius: 12px;
       `;
       media.appendChild(overlay);
-      // При наведении на карточку затемняем оверлей
       card.addEventListener('mouseenter', () => {
         overlay.style.background = 'rgba(0,0,0,0.5)';
       });
@@ -559,19 +606,15 @@
         overlay.style.background = 'rgba(0,0,0,0.3)';
       });
 
-      // Клик на карточку - загружаем плеер
       card.addEventListener('click', (e) => {
         if (e.target.closest('.bookmark-delete-btn') || e.target.closest('.download-btn') || e.target.closest('.open-modal-btn')) return;
-        // Если уже есть iframe, ничего не делаем (или можно открыть модалку)
         if (media.querySelector('iframe')) {
-          // Можно открыть модалку при повторном клике
           openVideoModal(bm);
           return;
         }
         loadVideoPlayerInCard(media, bm);
       });
 
-      // Добавляем кнопку "открыть в плеере" (модалка)
       const openModalBtn = document.createElement('button');
       openModalBtn.className = 'open-modal-btn';
       openModalBtn.innerHTML = '<i class="fas fa-expand"></i>';
@@ -636,7 +679,6 @@
     meta.textContent = `${bm.type.charAt(0).toUpperCase()+bm.type.slice(1)} · ${formatDate(bm.added)}`;
     content.appendChild(meta);
 
-    // Кнопка скачивания (только для видео)
     const downloadContainer = document.createElement('div');
     downloadContainer.style.cssText = 'margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;';
     if (isVideo) {
@@ -697,7 +739,6 @@
       downloadContainer.appendChild(downloadBtn);
     }
 
-    // Для сохранений – кнопка скачивания файла
     if (isSave && bm.saveData) {
       const saveDownloadBtn = document.createElement('button');
       saveDownloadBtn.className = 'button small';
@@ -728,7 +769,6 @@
 
     card.appendChild(content);
 
-    // Обработка клика на карточку (для постов и ссылок) – уже обработано для видео
     if (!isVideo) {
       card.addEventListener('click', async (e) => {
         if (e.target.closest('button')) return;
@@ -765,7 +805,6 @@
       });
     }
 
-    // Кнопка удаления
     const del = document.createElement('button');
     del.className = 'bookmark-delete-btn';
     del.innerHTML = '<i class="fas fa-trash-alt"></i>';
@@ -1085,7 +1124,6 @@
     const searchInput = modal.querySelector('#search-input');
     searchInput.addEventListener('input', () => renderBookmarks(modal));
 
-    // Добавление закладки (с умным определением типа)
     const addForm = modal.querySelector('#add-form');
     const toggleAddBtn = modal.querySelector('#toggle-add-btn');
     let formVisible = false;
@@ -1117,7 +1155,6 @@
       }
     });
 
-    // Drag-and-drop файлов
     const dropZone = modal.querySelector('#drop-zone');
     const fileInput = modal.querySelector('#file-input');
     const fileSelectBtn = modal.querySelector('#file-select-btn');
@@ -1136,7 +1173,6 @@
       if (files.length) await processFiles(files, modal);
     });
 
-    // Пароль
     modal.querySelector('#password-btn').addEventListener('click', async () => {
       const t = (key) => window.I18n?.translate(key) || key;
       const newPass = prompt('Введите новый пароль для хранилища (оставьте пустым, чтобы отключить):\n\nВНИМАНИЕ: пароль становится обязательным для доступа, даже при наличии логина и токена.');
@@ -1149,7 +1185,6 @@
       }
     });
 
-    // Экспорт/импорт (зашифрованный)
     modal.querySelector('#export-btn').addEventListener('click', async () => {
       const t = (key) => window.I18n?.translate(key) || key;
       const password = prompt('Введите пароль для шифрования экспортируемого файла (минимум 4 символа):');
@@ -1237,7 +1272,7 @@
     detectLinkType,
     parseVideoFromHtml,
     openVideoModal,
-    loadVideoPlayerInCard // экспортируем для возможного использования
+    loadVideoPlayerInCard
   };
 
   window._StorageManager.setStatusCallback(updateStatus);
