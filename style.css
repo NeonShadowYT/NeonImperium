@@ -1090,7 +1090,6 @@
         outline: none !important;
         -webkit-tap-highlight-color: transparent !important;
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
-        -moz-outline-radius: 0 !important;
         box-shadow: none !important;
     }
 }
@@ -1293,7 +1292,6 @@
         outline: none !important;
         -webkit-tap-highlight-color: transparent !important;
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
-        -moz-outline-radius: 0 !important;
         box-shadow: none !important;
     }
 }
@@ -1412,7 +1410,6 @@
         outline: none !important;
         -webkit-tap-highlight-color: transparent !important;
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
-        -moz-outline-radius: 0 !important;
         box-shadow: none !important;
     }
 }

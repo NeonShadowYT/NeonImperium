@@ -9,16 +9,14 @@
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const { showToast } = window.UIUtils;
 
-    // ---------- Конфигурация ----------
     const CACHE_KEY = 'news_feed_data_v2';
-    const CACHE_TTL = 5 * 60 * 1000;           // 5 минут
+    const CACHE_TTL = 5 * 60 * 1000;
     const STALE_WHILE_REVALIDATE = true;
     const SOURCE_TIMEOUT = 10000;
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 1000;
     const MAX_DISPLAY_ITEMS = 6;
 
-    // ---------- Внутреннее состояние ----------
     let currentItems = [];
     let currentUser = null;
     let isLoading = false;
@@ -26,16 +24,13 @@
     let container = null;
     let scheduledRefresh = null;
 
-    // ---------- Вспомогательные функции ----------
     const t = (key) => window.I18n?.translate(key) || key;
 
     function normalizeItem(item) {
         let date = item.date;
         if (!(date instanceof Date)) {
             date = new Date(date);
-            if (isNaN(date.getTime())) {
-                date = new Date();
-            }
+            if (isNaN(date.getTime())) date = new Date();
         }
         return {
             type: item.type || 'post',
@@ -57,28 +52,22 @@
         return items.map(item => normalizeItem(item));
     }
 
-    // ---------- Парсинг YouTube (дублируем из common-init, но можно использовать глобальную, если есть) ----------
+    // ---- Используем общий парсер из YoutubeLoader ----
     function parseYouTubeUrl(url) {
+        if (window.YoutubeLoader) {
+            const result = window.YoutubeLoader.parseYouTubeUrl(url);
+            return result ? result.embedUrl : null;
+        }
+        // fallback (на случай, если модуль не загружен)
         try {
             const parsed = new URL(url);
-            const isYoutube = parsed.hostname.includes('youtube.com') || parsed.hostname.includes('youtu.be');
-            if (!isYoutube) return null;
-
             let videoId = null;
-            let playlistId = null;
-            let start = null;
-
             if (parsed.hostname.includes('youtu.be')) {
-                const pathParts = parsed.pathname.split('/').filter(p => p);
-                if (pathParts.length > 0) videoId = pathParts[0];
+                const parts = parsed.pathname.split('/').filter(p => p);
+                if (parts.length) videoId = parts[0];
             }
-
             const params = new URLSearchParams(parsed.search);
             if (params.has('v')) videoId = params.get('v');
-            if (params.has('list')) playlistId = params.get('list');
-            if (params.has('t')) start = params.get('t');
-            else if (params.has('start')) start = params.get('start');
-
             if (!videoId && parsed.pathname.includes('/embed/')) {
                 const parts = parsed.pathname.split('/embed/');
                 if (parts.length > 1) {
@@ -93,45 +82,17 @@
                     if (idPart && idPart !== 'videoseries') videoId = idPart;
                 }
             }
-
-            if (!videoId && playlistId) {
-                let embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${playlistId}`;
-                if (start) embedUrl += `&start=${start}`;
-                embedUrl += `&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
-                return { embedUrl, videoId: null, playlistId, start };
-            }
-
             if (videoId) {
-                let embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}`;
-                const queryParams = new URLSearchParams();
-                queryParams.set('rel', '0');
-                queryParams.set('modestbranding', '1');
-                queryParams.set('playsinline', '1');
-                queryParams.set('origin', location.origin);
-                if (playlistId) queryParams.set('list', playlistId);
-                if (start) queryParams.set('start', start);
-                const qs = queryParams.toString();
-                if (qs) embedUrl += '?' + qs;
-                return { embedUrl, videoId, playlistId, start };
+                return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
             }
-
-            if (parsed.pathname.includes('/playlist')) {
-                const listParam = params.get('list');
-                if (listParam) {
-                    let embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${listParam}`;
-                    if (start) embedUrl += `&start=${start}`;
-                    embedUrl += `&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
-                    return { embedUrl, videoId: null, playlistId: listParam, start };
-                }
+            const list = params.get('list');
+            if (list) {
+                return `https://www.youtube-nocookie.com/embed/videoseries?list=${list}&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
             }
-
             return null;
-        } catch (e) {
-            return null;
-        }
+        } catch (e) { return null; }
     }
 
-    // ---------- Загрузка источников с повторами ----------
     async function fetchWithRetry(fn, context, retries = MAX_RETRIES) {
         let lastError;
         for (let attempt = 0; attempt <= retries; attempt++) {
@@ -148,7 +109,6 @@
         throw lastError;
     }
 
-    // ---------- Загрузка постов (GitHub Issues) ----------
     async function loadPosts(signal) {
         if (window.RateLimits && !window.RateLimits.checkLimit('posts')) {
             console.warn('[NewsFeed] Лимит постов исчерпан, пропускаем запрос');
@@ -209,7 +169,6 @@
         }
     }
 
-    // ---------- Загрузка видео (YouTube через RSS) ----------
     async function loadVideos(signal) {
         const YT_CHANNELS = [
             { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
@@ -238,9 +197,7 @@
                     const items = data.items.slice(0, 3).map(item => {
                         const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
                         if (!vid) return null;
-                        // Используем парсер для получения embed-ссылки с origin
-                        const parsed = parseYouTubeUrl(item.link);
-                        const embedUrl = parsed ? parsed.embedUrl : null;
+                        const embedUrl = parseYouTubeUrl(item.link);
                         return normalizeItem({
                             type: 'video',
                             id: vid,
@@ -269,7 +226,6 @@
         }
     }
 
-    // ---------- Загрузка стримов Twitch ----------
     async function loadTwitchStreams(signal) {
         const TWITCH_CHANNELS = ['sk0l3ra1', 'neoncyndows'];
         const streams = [];
@@ -318,7 +274,6 @@
         }
     }
 
-    // ---------- Основная функция fetchNewsFeed ----------
     async function fetchNewsFeed({ signal, forceRefresh = false, maxAge = CACHE_TTL } = {}) {
         const cached = cacheGet(CACHE_KEY, maxAge);
         if (cached && !forceRefresh) {
@@ -403,7 +358,6 @@
         }
     }
 
-    // ---------- Фоновое обновление ----------
     let backgroundRefreshScheduled = false;
     function scheduleBackgroundRefresh() {
         if (backgroundRefreshScheduled) return;
@@ -432,7 +386,6 @@
         }, 1000);
     }
 
-    // ---------- Рендеринг ----------
     function renderSkeleton(count = 6) {
         const grid = createElement('div', 'projects-grid skeleton-grid');
         for (let i = 0; i < count; i++) {
@@ -635,7 +588,6 @@
                     labels: item.labels
                 });
             } else {
-                // Видео или стрим – открываем плеер прямо в карточке
                 const iframe = createElement('iframe', '', {
                     position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
                     border: 'none', borderRadius: '12px'
@@ -643,9 +595,7 @@
                 let embedUrl = item.embedUrl;
                 if (!embedUrl) {
                     if (item.type === 'video' && item.id) {
-                        // Пробуем парсер
-                        const parsed = parseYouTubeUrl(`https://youtu.be/${item.id}`);
-                        embedUrl = parsed ? parsed.embedUrl : `https://www.youtube-nocookie.com/embed/${item.id}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+                        embedUrl = parseYouTubeUrl(`https://youtu.be/${item.id}`);
                     } else if (item.type === 'twitch' && item.id) {
                         embedUrl = `https://player.twitch.tv/?channel=${item.id}&parent=${location.hostname}&autoplay=false`;
                     }
@@ -666,7 +616,6 @@
         return cardWrapper;
     }
 
-    // ---------- Публичный API ----------
     async function initNewsFeed() {
         if (container) return;
         container = document.getElementById('news-feed');
