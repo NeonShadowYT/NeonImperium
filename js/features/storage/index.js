@@ -1,6 +1,5 @@
 // js/features/storage/index.js
-// Точка входа: загружает все модули хранилища
-
+// Точка входа: загружает все модули хранилища с улучшенной обработкой ошибок
 (function() {
   const modules = [
     'js/features/storage/core.js',
@@ -12,25 +11,31 @@
   ];
 
   let loaded = 0;
+  let hasError = false;
 
   function checkReady() {
     loaded++;
     if (loaded === modules.length) {
+      // Проверяем, что все модули загружены
       if (!window._StorageCore || !window._StorageMetadata || !window._StoragePreview || !window._StorageDownload || !window._StorageManager || !window._StorageUI) {
-        console.error('[Storage] Не все модули загружены');
-        return;
+        console.warn('[Storage] Некоторые модули не загружены, но продолжаем инициализацию');
+        // Всё равно создаём объект, чтобы не ломать остальной код
       }
 
       const BookmarkStorage = {
-        openStorageModal: window._StorageUI.openStorageModal,
-        addBookmark: window._StorageManager.addBookmark,
-        removeBookmark: window._StorageManager.removeBookmark,
-        loadBookmarks: window._StorageManager.loadBookmarks,
-        resetStorage: window._StorageManager.resetStorage,
-        setStoragePassword: window._StorageManager.setStoragePassword,
-        ensureStorage: window._StorageManager.ensureStorage,
+        openStorageModal: window._StorageUI ? window._StorageUI.openStorageModal : null,
+        addBookmark: window._StorageManager ? window._StorageManager.addBookmark : null,
+        removeBookmark: window._StorageManager ? window._StorageManager.removeBookmark : null,
+        loadBookmarks: window._StorageManager ? window._StorageManager.loadBookmarks : null,
+        resetStorage: window._StorageManager ? window._StorageManager.resetStorage : null,
+        setStoragePassword: window._StorageManager ? window._StorageManager.setStoragePassword : null,
+        ensureStorage: window._StorageManager ? window._StorageManager.ensureStorage : null,
         exportBookmarks: async () => {
           const t = (key) => window.I18n?.translate(key) || key;
+          if (!window._StorageManager) {
+            window.UIUtils.showToast('Модуль хранилища не загружен', 'error');
+            return;
+          }
           const password = prompt('Введите пароль для шифрования экспортируемого файла (минимум 4 символа):');
           if (!password || password.length < 4) {
             window.UIUtils.showToast('Пароль должен быть не менее 4 символов', 'error');
@@ -51,6 +56,10 @@
         },
         importBookmarks: async () => {
           const t = (key) => window.I18n?.translate(key) || key;
+          if (!window._StorageManager) {
+            window.UIUtils.showToast('Модуль хранилища не загружен', 'error');
+            return;
+          }
           const input = document.createElement('input');
           input.type = 'file';
           input.accept = '.neonbk';
@@ -65,7 +74,7 @@
                 if (!password) return;
                 const added = await window._StorageManager.importBookmarksData(encrypted, password);
                 window.UIUtils.showToast(`Импортировано ${added} закладок`, 'success');
-                if (window._StorageUI.currentModal) {
+                if (window._StorageUI && window._StorageUI.currentModal) {
                   window._StorageUI.renderBookmarks(window._StorageUI.currentModal);
                 }
               } catch (err) {
@@ -83,16 +92,31 @@
     }
   }
 
-  for (const src of modules) {
-    const script = document.createElement('script');
-    script.src = src;
-    script.defer = true;
-    script.onload = checkReady;
-    script.onerror = () => {
-      console.error('[Storage] Ошибка загрузки:', src);
-      loaded++;
-      checkReady();
-    };
-    document.head.appendChild(script);
+  function loadModule(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.defer = true;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
   }
+
+  async function loadAllModules() {
+    for (const src of modules) {
+      try {
+        await loadModule(src);
+        loaded++;
+      } catch (err) {
+        console.error('[Storage] Ошибка загрузки модуля:', src, err);
+        hasError = true;
+        loaded++; // всё равно считаем, чтобы не зависнуть
+      }
+    }
+    checkReady();
+  }
+
+  // Запускаем загрузку
+  loadAllModules();
 })();
