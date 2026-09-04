@@ -1,9 +1,6 @@
 // js/features/storage/manager.js
 // Управление состоянием хранилища: загрузка, сохранение, добавление, удаление, экспорт/импорт
-// Оптимизировано: поиск существующего Gist при потере ID, приоритет пароля,
-// цикл ввода пароля (до 3 попыток), отказоустойчивость.
-// Хеш токена не хранится в Gist – только в sessionStorage для проверки изменений.
-// saveData (бинарники) не шифруются.
+// Исправлено: надёжное получение токена из sessionStorage, улучшенная обработка ошибок
 
 (function() {
   const {
@@ -33,7 +30,35 @@
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils || {};
   const { debounce, performAction } = window.GithubCore || {};
 
-  // ---- состояние ----
+  // ---- Надёжное получение токена ----
+  function getAuthToken() {
+    // Сначала пробуем через GithubAuth
+    if (window.GithubAuth && typeof window.GithubAuth.getToken === 'function') {
+      const token = window.GithubAuth.getToken();
+      if (token) return token;
+    }
+    // Fallback: читаем из sessionStorage напрямую
+    return sessionStorage.getItem('github_token') || null;
+  }
+
+  function getCurrentUserLogin() {
+    if (window.GithubAuth && typeof window.GithubAuth.getCurrentUser === 'function') {
+      return window.GithubAuth.getCurrentUser();
+    }
+    // Fallback: читаем из sessionStorage
+    try {
+      const userData = JSON.parse(sessionStorage.getItem('github_user') || 'null');
+      return userData?.login || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function isAdminUser() {
+    const user = getCurrentUserLogin();
+    return user && window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(user);
+  }
+
   let currentUser = null;
   let currentToken = null;
   let gistId = null;
@@ -52,7 +77,6 @@
   let statusCallback = null;
   let backgroundUpdateTimer = null;
 
-  // ---- локальный хеш токена (не хранится в Gist) ----
   const TOKEN_HASH_KEY = 'storage_token_hash';
 
   function getStoredTokenHash() {
@@ -71,9 +95,8 @@
     if (statusCallback) statusCallback(text, type);
   }
 
-  // ---- кеширование Gist в localStorage ----
   function getGistCacheKey() {
-    const user = getCurrentUser();
+    const user = getCurrentUserLogin();
     return `storage_gist_${user}`;
   }
 
@@ -109,8 +132,9 @@
     } catch (e) {}
   }
 
-  // ---- поиск существующего Gist'а по имени файла ----
+  // ---- Поиск существующего Gist'а по имени файла (с авторизацией) ----
   async function findExistingGist(user, token) {
+    if (!user || !token) return null;
     try {
       const url = `https://api.github.com/gists?per_page=100`;
       const headers = {
@@ -138,10 +162,10 @@
     }
   }
 
-  // ---- загрузка / создание хранилища с кешированием и поиском ----
+  // ---- Загрузка или создание хранилища ----
   async function loadOrCreateStorage(forceRefresh = false) {
-    const user = getCurrentUser();
-    const token = getToken();
+    const user = getCurrentUserLogin();
+    const token = getAuthToken();
     if (!user || !token) throw new Error('not_logged_in');
 
     currentUser = user;
@@ -226,9 +250,7 @@
       gistData = await gistFetch(gistId);
     }
 
-    // Если Gist не найден (404) или gistId отсутствует – создаём новый
     if (!gistData) {
-      // Перед созданием нового проверяем ещё раз (на случай, если Gist появился)
       if (!gistId) {
         const foundId = await findExistingGist(user, token);
         if (foundId) {
@@ -271,30 +293,25 @@
     return { bookmarks, lastUpdated };
   }
 
-  // ---- обработка payload (общая логика) ----
+  // ---- Обработка payload (общая логика) ----
   async function processGistPayload(payload, user, token) {
     const remoteUpdated = payload.lastUpdated || 0;
     let masterKeyArray = null;
     const hasPasswordBlock = !!payload.masterKeyEncrypted?.byPassword;
     hasPassword = hasPasswordBlock;
 
-    // ---------- 1. Если есть byPassword – приоритет пароля ----------
     if (hasPasswordBlock) {
-      // Попытка взять пароль из кеша (sessionStorage)
       let cachedPassword = sessionStorage.getItem(PASSWORD_CACHE_KEY);
       if (cachedPassword) {
         try {
           const keyPassword = await deriveKeyFromString(cachedPassword);
           masterKeyArray = await decryptData(payload.masterKeyEncrypted.byPassword, keyPassword);
-          // успешно, возвращаем результат
           return buildResult(masterKeyArray, payload, remoteUpdated);
         } catch (e) {
-          // кеш невалиден, удаляем и запрашиваем заново
           sessionStorage.removeItem(PASSWORD_CACHE_KEY);
         }
       }
 
-      // Цикл ввода пароля (до 3 попыток)
       const MAX_ATTEMPTS = 3;
       let attempts = 0;
       let password = null;
@@ -318,7 +335,6 @@
         try {
           const keyPassword = await deriveKeyFromString(password);
           masterKeyArray = await decryptData(payload.masterKeyEncrypted.byPassword, keyPassword);
-          // Успех – сохраняем пароль в кеш
           sessionStorage.setItem(PASSWORD_CACHE_KEY, password);
           break;
         } catch (e) {
@@ -331,12 +347,9 @@
         }
       }
 
-      // Если пароль не получен (отказ или ошибка)
       if (!masterKeyArray) {
-        // Предлагаем сброс с предупреждением
         const shouldReset = await confirmResetStorage();
         if (shouldReset) {
-          // Сбрасываем и создаём новое хранилище без пароля (с токеном)
           await resetStorage(true);
           const newStorage = await createNewStorage(user, token);
           return {
@@ -345,7 +358,6 @@
             lastUpdated: newStorage.lastUpdated
           };
         } else {
-          // Пользователь отказался от сброса – бросаем исключение, чтобы не создавать новый Gist
           throw new Error('Доступ к хранилищу отклонён. Невозможно загрузить данные.');
         }
       }
@@ -353,10 +365,8 @@
       return buildResult(masterKeyArray, payload, remoteUpdated);
     }
 
-    // ---------- 2. Нет пароля – используем byToken (byLogin удалён) ----------
     const encryptedByToken = payload.masterKeyEncrypted?.byToken;
     if (!encryptedByToken) {
-      // Если нет ни пароля, ни токена – хранилище повреждено, предлагаем сброс
       const shouldReset = await confirmResetStorage();
       if (shouldReset) {
         await resetStorage(true);
@@ -371,15 +381,12 @@
       }
     }
 
-    // Пытаемся расшифровать текущим токеном
     try {
       const keyToken = await deriveKeyFromString(token);
       masterKeyArray = await decryptData(encryptedByToken, keyToken);
-      // Проверяем, изменился ли токен (по локальному хешу)
       const currentTokenHash = await hashString(token);
       const storedHash = getStoredTokenHash();
       if (!storedHash || storedHash !== currentTokenHash) {
-        // Токен изменился или хеш отсутствует – обновляем шифрование в фоне
         const masterKeyCrypto = await crypto.subtle.importKey(
           'raw',
           new Uint8Array(masterKeyArray),
@@ -387,19 +394,16 @@
           true,
           ['encrypt', 'decrypt']
         );
-        // Обновляем byToken в Gist и сохраняем новый хеш
         await updateMasterKeyEncryption(masterKeyCrypto, user, token, null);
         setStoredTokenHash(currentTokenHash);
         console.log('[Storage] Шифрование обновлено новым токеном');
       } else {
-        // Токен не изменился – просто сохраняем хеш, если его ещё нет (на случай первого входа)
         if (!storedHash) {
           setStoredTokenHash(currentTokenHash);
         }
       }
       return buildResult(masterKeyArray, payload, remoteUpdated);
     } catch (e) {
-      // Токен не подошёл – запрашиваем старый токен
       showToast('Текущий токен не подходит для расшифровки. Введите старый токен.', 'warning');
 
       const MAX_ATTEMPTS = 3;
@@ -425,7 +429,6 @@
         try {
           const keyOld = await deriveKeyFromString(oldToken);
           masterKeyArray = await decryptData(encryptedByToken, keyOld);
-          // Успех – обновляем шифрование на новый токен
           const masterKeyCrypto = await crypto.subtle.importKey(
             'raw',
             new Uint8Array(masterKeyArray),
@@ -449,7 +452,6 @@
       }
 
       if (!masterKeyArray) {
-        // Не удалось ввести старый токен – предлагаем сброс
         const shouldReset = await confirmResetStorage();
         if (shouldReset) {
           await resetStorage(true);
@@ -468,7 +470,6 @@
     }
   }
 
-  // Вспомогательная функция для сборки результата
   async function buildResult(masterKeyArray, payload, remoteUpdated) {
     const masterKeyCrypto = await crypto.subtle.importKey(
       'raw',
@@ -497,7 +498,6 @@
     };
   }
 
-  // ---- создание нового хранилища (без пароля, только byToken) ----
   async function createNewStorage(user, token) {
     const newMasterKey = await crypto.subtle.generateKey(
       { name: 'AES-GCM', length: 256 },
@@ -520,7 +520,6 @@
       publicBookmarks: [],
       encryptedBookmarks: null,
       lastUpdated: Date.now()
-      // lastLogin и lastTokenHash НЕ сохраняем в Gist
     };
 
     const content = JSON.stringify(payload);
@@ -529,7 +528,6 @@
     localStorage.setItem(STORAGE_KEY_PREFIX + user, JSON.stringify({ gistId }));
     saveGistToCache(payload);
 
-    // Сохраняем хеш токена локально
     const tokenHash = await hashString(token);
     setStoredTokenHash(tokenHash);
 
@@ -544,8 +542,6 @@
     return { masterKey: newMasterKey, bookmarks: [], lastUpdated };
   }
 
-  // ---- обновление зашифрованных блоков мастер-ключа (без изменения закладок) ----
-  // password = null означает отключить пароль, если передана строка – установить пароль
   async function updateMasterKeyEncryption(masterKeyCrypto, login, token, password = null) {
     const exported = await crypto.subtle.exportKey('raw', masterKeyCrypto);
     const masterKeyArray = Array.from(new Uint8Array(exported));
@@ -557,14 +553,12 @@
     let payload = JSON.parse(file.content);
 
     if (password === null) {
-      // Удаляем byPassword, добавляем byToken
       const keyToken = await deriveKeyFromString(token);
       const encryptedByToken = await encryptData(masterKeyArray, keyToken);
       payload.masterKeyEncrypted.byToken = encryptedByToken;
       payload.masterKeyEncrypted.byPassword = null;
       hasPassword = false;
     } else {
-      // Устанавливаем пароль – удаляем byToken, оставляем только byPassword
       const keyPassword = await deriveKeyFromString(password);
       const encryptedByPassword = await encryptData(masterKeyArray, keyPassword);
       payload.masterKeyEncrypted.byPassword = encryptedByPassword;
@@ -579,7 +573,6 @@
     saveGistToCache(payload);
   }
 
-  // ---- слияние публичных и приватных частей ----
   function mergeBookmarksByType(publicBm, privateBm) {
     const privateMap = new Map();
     privateBm.forEach(p => privateMap.set(p.id, p));
@@ -601,7 +594,6 @@
     return merged;
   }
 
-  // ---- разделение на публичные и приватные ----
   function splitBookmarks(bmArray) {
     const publicList = [];
     const privateList = [];
@@ -630,7 +622,6 @@
     return { publicList, privateList };
   }
 
-  // ---- сохранение с разделением ----
   async function saveBookmarksToGist() {
     if (!masterKey || !gistId) return;
     if (isSaving) return;
@@ -665,7 +656,6 @@
       payload.encryptedBookmarks = encryptedPrivate;
       payload.lastUpdated = Date.now();
 
-      // Если есть пароль, убедимся, что byToken удалён, а byPassword актуален
       if (hasPassword) {
         if (!payload.masterKeyEncrypted?.byPassword) {
           const password = sessionStorage.getItem(PASSWORD_CACHE_KEY);
@@ -684,8 +674,8 @@
         if (!payload.masterKeyEncrypted?.byToken) {
           const exported = await crypto.subtle.exportKey('raw', masterKey);
           const masterKeyArray = Array.from(new Uint8Array(exported));
-          const user = getCurrentUser();
-          const token = getToken();
+          const user = getCurrentUserLogin();
+          const token = getAuthToken();
           if (user && token) {
             const keyToken = await deriveKeyFromString(token);
             payload.masterKeyEncrypted.byToken = await encryptData(masterKeyArray, keyToken);
@@ -695,8 +685,6 @@
           delete payload.masterKeyEncrypted.byPassword;
         }
       }
-
-      // Никаких lastLogin и lastTokenHash не записываем
 
       const content = JSON.stringify(payload);
       await gistUpdate(gistId, content);
@@ -747,7 +735,6 @@
     saveDebounced();
   }
 
-  // ---- обновление существующей закладки ----
   async function updateBookmark(id, updates) {
     await ensureStorage();
     const idx = bookmarks.findIndex(b => b.id === id);
@@ -765,7 +752,6 @@
     return bookmarks[idx];
   }
 
-  // ---- групповые операции ----
   async function batchUpdateVideoLinks() {
     await ensureStorage();
     const videoBookmarks = bookmarks.filter(b => b.type === 'video' && b.url);
@@ -797,7 +783,6 @@
     return { updated, failed, total: videoBookmarks.length };
   }
 
-  // ---- фоновое обновление (раз в сутки) ----
   function startBackgroundUpdate() {
     if (backgroundUpdateTimer) return;
     backgroundUpdateTimer = setInterval(async () => {
@@ -820,12 +805,10 @@
     }
   }
 
-  // ---- экспорт всех закладок (без шифрования) ----
   function exportAllBookmarks() {
     return bookmarks.slice();
   }
 
-  // ---- импорт закладок (добавление с проверкой дубликатов) ----
   async function importBookmarksBatch(bookmarksArray) {
     await ensureStorage();
     let added = 0;
@@ -861,7 +844,6 @@
     return { added, skipped };
   }
 
-  // ---- публичные API ----
   async function ensureStorage(forceRefresh = false) {
     if (isInitialized && !forceRefresh) return { bookmarks };
     try {
@@ -874,7 +856,6 @@
     }
   }
 
-  // ---- addBookmark с передачей модалки для UI ----
   async function addBookmark(bookmarkData) {
     await ensureStorage();
     const t = (key) => window.I18n?.translate(key) || key;
@@ -932,7 +913,6 @@
     triggerSave();
     showToast(t('bookmarkAdded'), 'success');
 
-    // Добавляем карточку в UI, если модалка открыта
     const modal = window._StorageUI?.currentModal;
     if (window._StorageUI && window._StorageUI.addBookmarkCard && modal) {
       window._StorageUI.addBookmarkCard(newBookmark, modal);
@@ -962,7 +942,7 @@
 
   async function resetStorage(silent = false) {
     if (gistId) {
-      const token = getToken();
+      const token = getAuthToken();
       if (token) {
         await fetch(`https://api.github.com/gists/${gistId}`, {
           method: 'DELETE',
@@ -970,7 +950,7 @@
         }).catch(() => {});
       }
     }
-    const user = getCurrentUser();
+    const user = getCurrentUserLogin();
     if (user) {
       localStorage.removeItem(STORAGE_KEY_PREFIX + user);
       clearGistCache();
@@ -993,8 +973,8 @@
   async function setStoragePassword(newPassword) {
     await ensureStorage();
     if (!masterKey) throw new Error('Storage not initialized');
-    const user = getCurrentUser();
-    const token = getToken();
+    const user = getCurrentUserLogin();
+    const token = getAuthToken();
     if (!user || !token) throw new Error('not_logged_in');
 
     const gist = await gistFetch(gistId);
@@ -1053,7 +1033,7 @@
     if (!password || password.length < 4) {
       throw new Error('Пароль должен быть не менее 4 символов');
     }
-    const token = getToken();
+    const token = getAuthToken();
     if (password === token) {
       throw new Error('Пароль не должен совпадать с токеном GitHub');
     }
@@ -1096,7 +1076,7 @@
     statusCallback = cb;
   }
 
-  // ---- экспорт ----
+  // ---- Экспорт публичного API ----
   window._StorageManager = {
     getState: () => ({
       bookmarks,
