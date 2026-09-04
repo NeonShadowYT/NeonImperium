@@ -9,33 +9,7 @@
   const { loadIssues, loadReactions, addReaction, removeReaction } = window.GithubAPI || {};
   const { getCurrentUser, isAdmin } = window.GithubAuth || {};
   const { showToast } = window.UIUtils || {};
-  // CardRenderer будет загружен динамически, используем функцию-прокси
-  let cardRendererReady = false;
-  let cardRendererPromise = null;
-
-  function ensureCardRenderer() {
-    if (cardRendererReady && window.CardRenderer) return Promise.resolve(window.CardRenderer);
-    if (cardRendererPromise) return cardRendererPromise;
-    cardRendererPromise = new Promise((resolve, reject) => {
-      if (window.CardRenderer) {
-        cardRendererReady = true;
-        resolve(window.CardRenderer);
-        return;
-      }
-      loadModule('js/features/card-renderer.js')
-        .then(() => {
-          // Проверяем ещё раз
-          if (window.CardRenderer) {
-            cardRendererReady = true;
-            resolve(window.CardRenderer);
-          } else {
-            reject(new Error('CardRenderer not available after load'));
-          }
-        })
-        .catch(reject);
-    });
-    return cardRendererPromise;
-  }
+  const { createCard } = window.CardRenderer || {};
 
   if (!window.GithubCore || !window.GithubAPI || !window.GithubAuth || !window.UIUtils) {
     console.error('[feedback.js] Missing dependencies');
@@ -51,6 +25,11 @@
       );
     });
     return;
+  }
+
+  // Загружаем CardRenderer если его нет
+  if (!window.CardRenderer) {
+    loadModule('js/features/card-renderer.js').catch(() => {});
   }
 
   const ITEMS_PER_PAGE = 10, MAX_DISPLAY = 30, CACHE_TTL = 10 * 60 * 1000;
@@ -130,6 +109,7 @@
       filterAndDisplay(true);
     });
 
+    // При смене языка обновляем только тексты, не перерисовывая интерфейс
     window.addEventListener('languageChanged', () => {
       updateTextsOnly();
     });
@@ -141,6 +121,7 @@
     if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
   }
 
+  // Функция обновления текстов без перерисовки
   function updateTextsOnly() {
     const t = window.I18n?.translate || (k => k);
     if (headerElement) {
@@ -204,7 +185,7 @@
         }
       }
       allIssues = deduplicateByNumber(issues);
-      await filterAndDisplay(reset);
+      filterAndDisplay(reset);
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error('[feedback.js] loadGameIssues error:', err);
@@ -217,7 +198,7 @@
     }
   }
 
-  async function filterAndDisplay(reset) {
+  function filterAndDisplay(reset) {
     if (!grid) return;
     let filtered = allIssues.filter(i => i.state === 'open').filter(i => {
       const labels = i.labels.map(l=>l.name);
@@ -242,28 +223,10 @@
       hasMore = false;
       return;
     }
-
-    // Убедимся, что CardRenderer загружен
-    let renderer;
-    try {
-      renderer = await ensureCardRenderer();
-    } catch (e) {
-      console.warn('[feedback.js] CardRenderer not available:', e);
-      // fallback – показываем простые карточки
-      const fragment = document.createDocumentFragment();
-      pageItems.forEach(issue => {
-        const card = createFallbackCard(issue);
-        fragment.appendChild(card);
-      });
-      grid.appendChild(fragment);
-      hasMore = filtered.length > start + ITEMS_PER_PAGE;
-      if (!hasMore && sentinel) sentinel.style.display = 'none';
-      return;
-    }
-
     const fragment = document.createDocumentFragment();
     pageItems.forEach(issue => {
-      const card = renderer.createCard({
+      // Используем CardRenderer для создания карточки
+      const card = createCard({
         type: 'post',
         id: issue.number,
         title: issue.title,
@@ -272,13 +235,15 @@
         date: new Date(issue.created_at),
         game: currentGame,
         labels: issue.labels.map(l => l.name),
-        thumbnail: null,
+        thumbnail: null, // можно будет добавить позже
+        // Переопределяем onClick, чтобы открыть модалку через UIFeedback
         onClick: async (e) => {
           if (e.target.closest('button')) return;
           if (!window.UIFeedback) {
             try { await loadModule('js/features/ui-feedback.js'); } catch {}
           }
           if (window.UIFeedback) {
+            // Проверяем доступ к приватному посту
             const labels = issue.labels.map(l => l.name);
             if (labels.includes('private')) {
               const allowed = extractAllowed(issue.body);
@@ -306,37 +271,6 @@
     grid.appendChild(fragment);
     hasMore = filtered.length > start + ITEMS_PER_PAGE;
     if (!hasMore && sentinel) sentinel.style.display = 'none';
-  }
-
-  // Fallback-карточка, если CardRenderer не загрузился
-  function createFallbackCard(issue) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'project-card-link no-tilt tilt-card';
-    wrapper.style.cursor = 'pointer';
-    const card = document.createElement('div');
-    card.className = 'project-card';
-    const title = document.createElement('h3');
-    title.textContent = issue.title;
-    const meta = document.createElement('p');
-    meta.className = 'text-secondary';
-    meta.textContent = issue.user.login + ' · ' + new Date(issue.created_at).toLocaleDateString();
-    card.appendChild(title);
-    card.appendChild(meta);
-    wrapper.appendChild(card);
-    wrapper.addEventListener('click', () => {
-      if (window.UIFeedback) {
-        window.UIFeedback.openFullModal({
-          id: issue.number,
-          title: issue.title,
-          body: issue.body,
-          author: issue.user.login,
-          date: new Date(issue.created_at),
-          game: currentGame,
-          labels: issue.labels.map(l=>l.name)
-        });
-      }
-    });
-    return wrapper;
   }
 
   function checkAuthAndRender() {
