@@ -1,6 +1,5 @@
 // js/features/storage/ui.js
 // UI-рендеринг закладок — использует preview.js и download.js для получения данных
-
 (function() {
   const { escapeHtml, formatDate, loadModule, createElement, debounce } = window.GithubCore || {};
   const { getCurrentUser, hasScope } = window.GithubAuth || {};
@@ -135,7 +134,6 @@
     const isSave = bm.type === 'save';
 
     if (isVideo) {
-      // Превью
       const img = document.createElement('img');
       img.src = bm.thumbnail || 'images/default-news.webp';
       img.alt = bm.title;
@@ -143,7 +141,6 @@
       img.onerror = () => { img.src = 'images/default-news.webp'; };
       media.appendChild(img);
 
-      // Оверлей с кнопкой play
       const overlay = document.createElement('div');
       overlay.className = 'play-overlay';
       overlay.innerHTML = '<i class="fas fa-play" style="font-size:30px;color:#fff;"></i>';
@@ -205,7 +202,6 @@
     meta.textContent = `${bm.type.charAt(0).toUpperCase()+bm.type.slice(1)} · ${formatDate(bm.added)}`;
     content.appendChild(meta);
 
-    // Кнопка скачивания (только для видео)
     const downloadContainer = document.createElement('div');
     downloadContainer.style.cssText = 'margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;';
     if (isVideo) {
@@ -294,7 +290,6 @@
 
     card.appendChild(content);
 
-    // Обработка клика на карточку (для постов и ссылок)
     if (!isVideo) {
       card.addEventListener('click', async (e) => {
         if (e.target.closest('button')) return;
@@ -345,6 +340,26 @@
     return wrapper;
   }
 
+  // ---- Добавление карточки в сетку ----
+  function addBookmarkCard(bm, modal) {
+    const grid = modal?.querySelector('#bookmarks-grid');
+    if (!grid) return;
+    const existing = grid.querySelector(`.bookmark-card-wrapper[data-id="${bm.id}"]`);
+    if (existing) existing.remove();
+    const wrapper = createBookmarkCardElement(bm, modal);
+    grid.prepend(wrapper);
+    bookmarkElements.set(bm.id, wrapper);
+  }
+
+  // ---- Удаление карточки из сетки ----
+  function removeBookmarkCard(id, modal) {
+    const grid = modal?.querySelector('#bookmarks-grid');
+    if (!grid) return;
+    const el = grid.querySelector(`.bookmark-card-wrapper[data-id="${id}"]`);
+    if (el) el.remove();
+    bookmarkElements.delete(id);
+  }
+
   // ---- Рендеринг закладок ----
   function renderBookmarks(modal) {
     const grid = modal?.querySelector('#bookmarks-grid');
@@ -385,7 +400,6 @@
         for (const bm of videoWithoutPreview) {
           const updated = await ensurePreview(bm);
           if (updated && updated.thumbnail) {
-            // Обновляем карточку
             const wrapper = grid.querySelector(`.bookmark-card-wrapper[data-id="${bm.id}"]`);
             if (wrapper) {
               const newWrapper = createBookmarkCardElement(updated, modal);
@@ -545,7 +559,6 @@
     setStatusCallback(updateStatus);
     window._StorageManager.setRefreshGridCallback(() => renderBookmarks(modal));
 
-    // Стили
     if (!document.getElementById('storage-ui-styles')) {
       const style = document.createElement('style');
       style.id = 'storage-ui-styles';
@@ -588,7 +601,6 @@
     addBatchActions(modal);
     renderBookmarks(modal);
 
-    // Обработчики сортировки/фильтрации
     modal.querySelectorAll('.sort-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         modal.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
@@ -608,7 +620,6 @@
     const searchInput = modal.querySelector('#search-input');
     searchInput.addEventListener('input', () => renderBookmarks(modal));
 
-    // Добавление закладки
     const addForm = modal.querySelector('#add-form');
     const toggleAddBtn = modal.querySelector('#toggle-add-btn');
     let formVisible = false;
@@ -640,7 +651,6 @@
       }
     });
 
-    // Drag-and-drop файлов
     const dropZone = modal.querySelector('#drop-zone');
     const fileInput = modal.querySelector('#file-input');
     const fileSelectBtn = modal.querySelector('#file-select-btn');
@@ -659,7 +669,6 @@
       if (files.length) await processFiles(files, modal);
     });
 
-    // Пароль
     modal.querySelector('#password-btn').addEventListener('click', async () => {
       const newPass = prompt('Введите новый пароль для хранилища (оставьте пустым, чтобы отключить):\n\nВНИМАНИЕ: пароль становится обязательным для доступа, даже при наличии логина и токена.');
       if (newPass === null) return;
@@ -671,7 +680,6 @@
       }
     });
 
-    // Экспорт/импорт
     modal.querySelector('#export-btn').addEventListener('click', async () => {
       const password = prompt('Введите пароль для шифрования экспортируемого файла (минимум 4 символа):');
       if (!password || password.length < 4) {

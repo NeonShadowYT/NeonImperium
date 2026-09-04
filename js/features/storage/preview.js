@@ -1,6 +1,7 @@
 // js/features/storage/preview.js
 // Модуль для получения превью видео с различных сервисов
-// Использует: noembed, iframely, openunfurl, microlink, YouTube oEmbed, YouTube CDN, allorigins
+// Использует: noembed, iframely, openunfurl, microlink, YouTube oEmbed, Vimeo oEmbed,
+// Dailymotion oEmbed, Twitch oEmbed, LinkPreview, URLPreview, LinkPeek, Apify, allorigins
 
 (function() {
   const { cacheGet, cacheSet } = window.GithubCore || {};
@@ -27,15 +28,13 @@
   async function fetchVideoPreview(url, forceRefresh = false) {
     if (!url) return null;
 
-    // Проверяем кеш
     if (!forceRefresh) {
       const cached = getCachedPreview(url);
       if (cached) return cached;
     }
 
-    // Список сервисов в порядке приоритета
     const services = [
-      // 1. YouTube oEmbed (официальный, без ключа)
+      // 1. YouTube oEmbed
       {
         name: 'YouTube oEmbed',
         test: (u) => u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/),
@@ -43,7 +42,6 @@
           const match = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
           if (!match) return null;
           const id = match[1];
-          // Пробуем oEmbed
           const resp = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`, {
             signal: AbortSignal.timeout(5000)
           });
@@ -56,7 +54,6 @@
               type: 'video'
             };
           }
-          // Fallback: просто превью по ID
           return {
             title: null,
             thumbnail: `https://img.youtube.com/vi/${id}/mqdefault.jpg`,
@@ -129,7 +126,7 @@
         }
       },
 
-      // 5. noembed.com (универсальный, без ключа)
+      // 5. Noembed
       {
         name: 'Noembed',
         fetch: async (videoUrl) => {
@@ -151,7 +148,7 @@
         }
       },
 
-      // 6. iframe.ly (поддерживает 1800+ доменов)
+      // 6. Iframely
       {
         name: 'Iframely',
         fetch: async (videoUrl) => {
@@ -173,7 +170,7 @@
         }
       },
 
-      // 7. openunfurl (zero-signup link-unfurl)
+      // 7. OpenUnfurl
       {
         name: 'OpenUnfurl',
         fetch: async (videoUrl) => {
@@ -195,7 +192,7 @@
         }
       },
 
-      // 8. microlink.io
+      // 8. Microlink
       {
         name: 'Microlink',
         fetch: async (videoUrl) => {
@@ -217,7 +214,95 @@
         }
       },
 
-      // 9. allorigins.win (прокси для парсинга HTML — запасной вариант)
+      // 9. LinkPreview API (бесплатно до 20 000 запросов)
+      {
+        name: 'LinkPreview',
+        fetch: async (videoUrl) => {
+          const resp = await fetch(`https://api.linkpreview.net?q=${encodeURIComponent(videoUrl)}`, {
+            signal: AbortSignal.timeout(5000)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.title) {
+              return {
+                title: data.title || null,
+                thumbnail: data.image || null,
+                embedUrl: null,
+                type: 'link'
+              };
+            }
+          }
+          return null;
+        }
+      },
+
+      // 10. URLPreview
+      {
+        name: 'URLPreview',
+        fetch: async (videoUrl) => {
+          const resp = await fetch(`https://urlpreview.io/api/?url=${encodeURIComponent(videoUrl)}`, {
+            signal: AbortSignal.timeout(5000)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.title) {
+              return {
+                title: data.title || null,
+                thumbnail: data.image || null,
+                embedUrl: null,
+                type: 'link'
+              };
+            }
+          }
+          return null;
+        }
+      },
+
+      // 11. LinkPeek (100 запросов/день бесплатно)
+      {
+        name: 'LinkPeek',
+        fetch: async (videoUrl) => {
+          const resp = await fetch(`https://linkpeek.com/api?url=${encodeURIComponent(videoUrl)}`, {
+            signal: AbortSignal.timeout(5000)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.title) {
+              return {
+                title: data.title || null,
+                thumbnail: data.image || null,
+                embedUrl: null,
+                type: 'link'
+              };
+            }
+          }
+          return null;
+        }
+      },
+
+      // 12. Apify Open Graph Extractor
+      {
+        name: 'Apify',
+        fetch: async (videoUrl) => {
+          const resp = await fetch(`https://api.apify.com/v2/key-value-stores/TpQz6oQ5tzcW4izvU/records/LATEST?url=${encodeURIComponent(videoUrl)}`, {
+            signal: AbortSignal.timeout(5000)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.ogTitle) {
+              return {
+                title: data.ogTitle || null,
+                thumbnail: data.ogImage || null,
+                embedUrl: null,
+                type: 'link'
+              };
+            }
+          }
+          return null;
+        }
+      },
+
+      // 13. allorigins.win (прокси для парсинга HTML — запасной вариант)
       {
         name: 'AllOrigins',
         fetch: async (videoUrl) => {
@@ -228,20 +313,16 @@
             const doc = new DOMParser().parseFromString(html, 'text/html');
             const title = doc.querySelector('title')?.textContent || null;
             let thumbnail = null;
-            // Ищем og:image
             const ogImage = doc.querySelector('meta[property="og:image"]');
             if (ogImage) thumbnail = ogImage.content;
-            // Или twitter:image
             if (!thumbnail) {
               const twImage = doc.querySelector('meta[name="twitter:image"]');
               if (twImage) thumbnail = twImage.content;
             }
-            // Или первую большую картинку
             if (!thumbnail) {
               const img = doc.querySelector('img[src]');
               if (img && img.src && img.width > 100) thumbnail = img.src;
             }
-            // Ищем видео
             let embedUrl = null;
             const videoEl = doc.querySelector('video[src]');
             if (videoEl) embedUrl = videoEl.src;
@@ -263,15 +344,11 @@
       }
     ];
 
-    // Пробуем все сервисы
     for (const service of services) {
       try {
-        // Если есть тест и он не проходит — пропускаем
         if (service.test && !service.test(url)) continue;
-
         const result = await service.fetch(url);
         if (result && (result.title || result.thumbnail || result.embedUrl)) {
-          // Сохраняем в кеш
           setCachedPreview(url, result);
           return result;
         }
@@ -281,11 +358,9 @@
       }
     }
 
-    // Если ничего не найдено — возвращаем null
     return null;
   }
 
-  // ---- Экспорт ----
   window._StoragePreview = {
     fetchVideoPreview,
     getCachedPreview,

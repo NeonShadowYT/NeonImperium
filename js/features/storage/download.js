@@ -1,6 +1,7 @@
 // js/features/storage/download.js
 // Модуль для получения ссылок на скачивание видео
-// Использует: Invidious, Piped, loader.to, ssyoutube, y2mate, allorigins
+// Использует: Invidious, Piped, loader.to, ssyoutube, y2mate,
+// AllMedia Downloader, TikWM, AIO Downloader, allorigins
 
 (function() {
   const { cacheGet, cacheSet } = window.GithubCore || {};
@@ -135,7 +136,58 @@
         }
       },
 
-      // 6. allorigins.win (прокси для парсинга HTML — запасной)
+      // 6. AllMedia Downloader (YouTube, Instagram, TikTok, X и другие)
+      {
+        name: 'AllMedia',
+        fetch: async (videoUrl) => {
+          const resp = await fetch(`https://api.allmedia.download/api?url=${encodeURIComponent(videoUrl)}`, {
+            signal: AbortSignal.timeout(10000)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.downloadUrl) return data.downloadUrl;
+            if (data && data.video && data.video.url) return data.video.url;
+            return null;
+          }
+          return null;
+        }
+      },
+
+      // 7. TikWM API (TikTok)
+      {
+        name: 'TikWM',
+        test: (u) => u.match(/tiktok\.com\/(@\w+\/video\/\d+|v\/\d+)/),
+        fetch: async (videoUrl) => {
+          const resp = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(videoUrl)}`, {
+            signal: AbortSignal.timeout(10000)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.data && data.data.play) return data.data.play;
+            return null;
+          }
+          return null;
+        }
+      },
+
+      // 8. AIO Downloader (YouTube, Instagram, TikTok, Pinterest, X)
+      {
+        name: 'AIODownloader',
+        fetch: async (videoUrl) => {
+          const resp = await fetch(`https://api.aio-downloader.com/api?url=${encodeURIComponent(videoUrl)}`, {
+            signal: AbortSignal.timeout(10000)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.downloadUrl) return data.downloadUrl;
+            if (data && data.video && data.video.url) return data.video.url;
+            return null;
+          }
+          return null;
+        }
+      },
+
+      // 9. allorigins.win (прокси для парсинга HTML — запасной)
       {
         name: 'AllOrigins',
         fetch: async (videoUrl) => {
@@ -144,7 +196,6 @@
           if (resp.ok) {
             const html = await resp.text();
             const doc = new DOMParser().parseFromString(html, 'text/html');
-            // Ищем прямые ссылки на видео
             const videoEl = doc.querySelector('video[src]');
             if (videoEl && videoEl.src) return videoEl.src;
             const source = doc.querySelector('source[src]');
