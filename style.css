@@ -9,6 +9,7 @@
 @import url('css/responsive.css');
 @import url('css/feedback.css');
 @import url('css/animations.css');
+@import url('css/components.css'); /* новый импорт */
 
 /* ========== Глобальные дополнительные стили ========== */
 
@@ -33,19 +34,14 @@
     border: 1px solid rgba(255,255,255,0.2);
     font-family: var(--font-family);
 }
-
 .donate-button-fixed i { font-size: 18px; }
-
 .donate-button-fixed:hover {
     background: var(--accent-light);
     transform: scale(1.03);
     box-shadow: 0 10px 22px rgba(0,0,0,0.6);
 }
-
 .donate-button-fixed:active { transform: scale(0.98); }
-
 .donate-button-fixed.error-bounce { animation: bounceUp 0.4s ease; }
-
 @keyframes bounceUp {
     0% { transform: translateY(0); }
     30% { transform: translateY(-15px); }
@@ -69,9 +65,7 @@
     transition: opacity 1.5s ease-in-out;
     opacity: 0;
 }
-.download-card .bg-gif-layer.active {
-    opacity: 1;
-}
+.download-card .bg-gif-layer.active { opacity: 1; }
 .download-card .bg-gif-layer video,
 .download-card .bg-gif-layer img {
     width: 100%;
@@ -89,10 +83,7 @@
     z-index: 1;
     pointer-events: none;
 }
-.download-card > * {
-    position: relative;
-    z-index: 2;
-}
+.download-card > * { position: relative; z-index: 2; }
 
 /* ========== Компактная секция скачивания ========== */
 .download-sections {
@@ -130,59 +121,6 @@
     font-size: 12px;
     min-width: auto;
 }
-.github-block {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-}
-.platform-selector {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-}
-.platform-btn {
-    background: var(--glass-bg);
-    backdrop-filter: blur(4px);
-    border: 1px solid var(--glass-border);
-    color: var(--text-secondary);
-    padding: 4px 12px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-family: var(--font-family);
-    transition: 0.2s;
-    font-size: 12px;
-}
-.platform-btn.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-    box-shadow: 0 0 16px rgba(61,158,179,0.2);
-}
-.version-row {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-}
-.version-select {
-    padding: 4px 8px;
-    border-radius: 14px;
-    background: var(--bg-card);
-    border: 1px solid var(--glass-border);
-    color: var(--text-primary);
-    font-family: var(--font-family);
-    font-size: 12px;
-    min-width: 180px;
-    text-align: center;
-}
-.version-date {
-    font-size: 11px;
-    color: var(--text-secondary);
-    margin: 0;
-}
-#whats-new-btn { margin-top: 4px; }
-#github-download-btn.disabled { opacity: 0.5; pointer-events: none; }
 .download-license {
     font-size: 11px;
     color: var(--text-secondary);
@@ -232,9 +170,7 @@
     color: var(--accent);
     margin-bottom: 20px;
 }
-.req-label i {
-    font-size: 28px;
-}
+.req-label i { font-size: 28px; }
 .req-specs {
     display: flex;
     flex-direction: column;
@@ -264,7 +200,6 @@
     color: var(--accent-light);
     margin-left: 8px;
 }
-
 .consumption-card {
     background: linear-gradient(145deg, #252540, #1a1a2e);
     border-radius: 24px;
@@ -296,1123 +231,73 @@
     color: var(--text-primary);
     width: 40%;
 }
-.consumption-table tr:last-child td {
-    border-bottom: none;
-}
+.consumption-table tr:last-child td { border-bottom: none; }
 
-/* Иконка Telegram справа от версии в шапке */
-.game-header .version-row {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-/* Убираем лишнее затенение шапки */
-.header-overlay {
-    background-color: rgba(0,0,0,0.3) !important;
-    backdrop-filter: blur(2px);
-}
-
-/* ========== Улучшения страницы лицензии ========== */
-.license-hero {
-    background: linear-gradient(135deg, rgba(30,30,48,0.95), rgba(20,20,35,0.98));
-    border-bottom: 1px solid var(--border);
-    text-align: center;
-    padding: 48px 24px;
-    margin-bottom: 32px;
-    border-radius: 24px;
-    backdrop-filter: blur(8px);
-}
-.license-section-card {
-    transition: transform 0.2s, box-shadow 0.2s;
-    background: var(--glass-bg);
-    backdrop-filter: blur(8px);
-    border-radius: 24px;
-    border: 1px solid var(--glass-border);
-    padding: 28px;
-    margin-bottom: 28px;
-    box-shadow: var(--shadow);
-}
-.license-section-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-hover);
-    border-color: var(--accent);
-}
-.license-section-card h2 {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 26px;
-    margin-bottom: 20px;
-    color: var(--accent);
-    border-left: 4px solid var(--accent);
-    padding-left: 16px;
-}
-.license-section-card h2 i {
-    font-size: 28px;
-}
-.license-badge {
-    background: var(--glass-bg);
-    border-radius: 60px;
-    padding: 4px 12px;
-    font-size: 13px;
-    color: var(--text-secondary);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-.license-quick {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 24px;
-    margin: 32px 0;
-}
-.license-card {
-    background: var(--glass-bg);
-    backdrop-filter: blur(4px);
-    border-radius: 20px;
-    padding: 24px;
-    border: 1px solid var(--glass-border);
-    transition: transform 0.2s;
-}
-.license-card:hover {
-    transform: translateY(-5px);
-    border-color: var(--accent);
-    box-shadow: var(--shadow-hover);
-}
-.license-card h3 {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 22px;
-    margin-bottom: 16px;
-    color: var(--accent);
-}
-.license-card ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-.license-card li {
-    padding: 8px 0 8px 28px;
-    position: relative;
-    line-height: 1.4;
-    color: var(--text-secondary);
-}
-.license-card li i {
-    position: absolute;
-    left: 0;
-    top: 10px;
-}
-.license-card.allowed li i { color: #4caf50; }
-.license-card.forbidden li i { color: #f44336; }
-.license-card.obligation li i { color: #ff9800; }
-.contact-card {
-    background: linear-gradient(145deg, #2a2a40, #1e1e30);
-    border-radius: 20px;
-    padding: 28px;
-    text-align: center;
-    border: 1px solid rgba(61,158,179,0.3);
-    margin-bottom: 28px;
-}
-.telegram-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-    background: #0088cc;
-    color: white;
-    padding: 12px 28px;
-    border-radius: 60px;
-    font-size: 18px;
-    margin-top: 16px;
-    transition: transform 0.2s, box-shadow 0.2s;
-    text-decoration: none;
-}
-.telegram-link:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 20px rgba(0,136,204,0.3);
-    color: white;
-}
-.consent-box {
-    background: var(--glass-bg);
-    backdrop-filter: blur(4px);
-    border-radius: 20px;
-    padding: 24px;
-    text-align: center;
-    border: 2px solid var(--accent);
-    margin: 32px 0 24px;
-}
-.consent-checkbox {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    margin: 20px 0;
-    font-size: 16px;
-    cursor: pointer;
-}
-.consent-checkbox input {
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-}
-.consent-btn {
-    background: var(--accent);
-    color: white;
-    border: none;
-    padding: 12px 32px;
-    border-radius: 40px;
-    font-size: 18px;
-    font-family: 'Russo One', sans-serif;
-    cursor: pointer;
-    transition: 0.2s;
-}
-.consent-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(61,158,179,0.4);
-}
-.consent-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-.accepted-message {
-    background: rgba(76,175,80,0.15);
-    border: 1px solid #4caf50;
-    border-radius: 16px;
-    padding: 20px;
-    margin: 20px 0;
-    color: #4caf50;
-}
-.warning-banner {
-    background: rgba(244,67,54,0.15);
-    border-left: 4px solid #f44336;
-    padding: 16px 24px;
-    border-radius: 16px;
-    margin-bottom: 28px;
-}
-.small-note {
-    font-size: 13px;
-    color: var(--text-secondary);
-    text-align: center;
-    margin-top: 24px;
-}
+/* ========== Исправления для мобильных ========== */
 @media (max-width: 700px) {
-    .license-quick { grid-template-columns: 1fr; gap: 16px; }
-    .license-section-card h2 { font-size: 22px; }
-}
-
-/* ========== Дополнительные адаптивные правки ========== */
-@media (max-width: 700px) {
-    .editor-split {
-        flex-direction: column;
-    }
-    .editor-split-left textarea {
-        min-height: 200px;
-    }
-    .modal-header-actions {
-        flex-wrap: wrap;
-        justify-content: flex-end;
-    }
-    .comment-form {
-        flex-wrap: wrap;
-    }
-    .comment-form .comment-input {
-        width: 100%;
-        margin-bottom: 8px;
-    }
-    .comment-form .button-group {
-        width: 100%;
-        justify-content: flex-end;
-    }
+    .editor-split { flex-direction: column; }
+    .editor-split-left textarea { min-height: 200px; }
+    .modal-header-actions { flex-wrap: wrap; justify-content: flex-end; margin-top: 8px; }
+    .comment-form { flex-wrap: wrap; }
+    .comment-form .comment-input-field { width: 100%; margin-bottom: 8px; }
+    .comment-form .button-group { width: 100%; justify-content: flex-end; }
     .download-subsection .store-buttons,
     .download-subsection .cloud-buttons {
         flex-direction: column;
         align-items: stretch;
     }
-    .download-subsection .download-button {
-        width: 100%;
-        justify-content: center;
-    }
-    .github-block .platform-selector {
-        flex-wrap: wrap;
-    }
-    .github-block .version-select {
-        width: 100%;
-    }
+    .download-subsection .download-button { width: 100%; justify-content: center; }
+    .github-block .platform-selector { flex-wrap: wrap; }
+    .github-block .version-select { width: 100%; }
 }
 
-@media (max-width: 480px) {
-    .modal-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    .modal-header-actions {
-        margin-left: 0;
-        margin-top: 8px;
-        width: 100%;
-        justify-content: space-between;
-    }
-    .modal-close {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-    }
+/* ===== Удаление жёлтых квадратов на мобильных ===== */
+*,
+*:focus,
+*:active,
+*:focus-visible,
+a,
+a:focus,
+a:active,
+a:focus-visible,
+button,
+button:focus,
+button:active,
+button:focus-visible,
+input,
+input:focus,
+input:active,
+input:focus-visible,
+textarea,
+textarea:focus,
+textarea:active,
+textarea:focus-visible,
+[tabindex]:focus,
+[tabindex]:active,
+[tabindex]:focus-visible {
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+    -moz-outline-radius: 0 !important;
+    box-shadow: none !important;
 }
 
-/* Дополнительные адаптивные улучшения */
-@media (max-width: 700px) {
-    .feature-item .feature-banner {
-        height: 100px;
-    }
-    .editor-split {
-        flex-direction: column;
-    }
-    .editor-split-left textarea {
-        min-height: 200px;
-    }
-    .modal-header-actions {
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        margin-top: 8px;
-    }
-    .comment-form {
-        flex-wrap: wrap;
-    }
-    .comment-form .comment-input {
-        width: 100%;
-        margin-bottom: 8px;
-    }
-    .comment-form .button-group {
-        width: 100%;
-        justify-content: flex-end;
-    }
-    .download-subsection .store-buttons,
-    .download-subsection .cloud-buttons {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .download-subsection .download-button {
-        width: 100%;
-        justify-content: center;
-    }
-    .github-block .platform-selector {
-        flex-wrap: wrap;
-    }
-    .github-block .version-select {
-        width: 100%;
-    }
+/* ===== Оптимизация производительности ===== */
+.tilt-card,
+.project-card,
+.game-icon,
+.project-card .image-wrapper img,
+.social-icon,
+.download-button,
+.button,
+.profile-card,
+.feature-item,
+.req-item,
+.consumption-card {
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
-
-@media (max-width: 480px) {
-    .modal-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    .modal-header-actions {
-        margin-left: 0;
-        width: 100%;
-        justify-content: space-between;
-    }
-    .modal-close {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-    }
-    .feature-item .feature-banner {
-        height: 80px;
-    }
-}
-
-/* Стили для модалки лимитов */
-.limits-modal .modal-content-full {
-    max-width: 800px;
-}
-.limits-modal .modal-body {
-    padding: 20px;
-}
-.limits-modal .rate-indicator {
-    font-weight: bold;
-    color: var(--accent);
-}
-.limits-modal .rate-timer {
-    font-weight: bold;
-    color: var(--accent-light);
-    font-family: monospace;
-    font-size: 14px;
-}
-
-/* ========== Панель лимитов ========== */
-.rate-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-.rate-summary {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--glass-bg);
-    backdrop-filter: blur(4px);
-    padding: 12px 20px;
-    border-radius: 16px;
-    border: 1px solid var(--glass-border);
-}
-.rate-timer {
-    font-size: 14px;
-    color: var(--text-secondary);
-}
-.rate-timer strong {
-    color: var(--accent);
-}
-.rate-total {
-    font-size: 14px;
-    color: var(--text-secondary);
-}
-.rate-limits-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-.rate-limit-item {
-    background: var(--glass-bg);
-    backdrop-filter: blur(4px);
-    border-radius: 12px;
-    padding: 12px 16px;
-    border: 1px solid var(--glass-border);
-}
-.rate-label {
-    font-size: 13px;
-    color: var(--text-secondary);
-    display: block;
-    margin-bottom: 6px;
-}
-.rate-bar {
-    height: 6px;
-    background: rgba(0,0,0,0.3);
-    border-radius: 10px;
-    overflow: hidden;
-    margin: 6px 0;
-}
-.rate-fill {
-    height: 100%;
-    border-radius: 10px;
-    transition: width 0.3s;
-}
-.rate-count {
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-.rate-info {
-    font-size: 13px;
-    color: var(--text-secondary);
-    background: var(--glass-bg);
-    padding: 10px 16px;
-    border-radius: 12px;
-    border-left: 3px solid var(--accent);
-}
-.rate-tabs {
-    display: flex;
-    gap: 8px;
-    border-bottom: 1px solid var(--glass-border);
-    padding-bottom: 8px;
-}
-.rate-tab {
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    padding: 6px 14px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-family: var(--font-family);
-    transition: 0.2s;
-}
-.rate-tab.active {
-    background: var(--accent);
-    color: white;
-    box-shadow: 0 0 20px rgba(61,158,179,0.2);
-}
-.rate-tab-content {
-    margin-top: 8px;
-}
-.rate-history-list, .rate-queue-list, .rate-cache-actions {
-    max-height: 300px;
-    overflow-y: auto;
-}
-.rate-history-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 6px 12px;
-    border-bottom: 1px solid var(--glass-border);
-    font-size: 13px;
-}
-.rate-history-item.completed .rate-status {
-    color: #4caf50;
-}
-.rate-history-item.failed .rate-status {
-    color: #f44336;
-}
-.rate-action {
-    color: var(--text-primary);
-}
-.rate-time {
-    color: var(--text-secondary);
-    font-size: 12px;
-}
-.cache-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin: 12px 0;
-}
-.cache-buttons button {
-    background: var(--glass-bg);
-    backdrop-filter: blur(4px);
-    border: 1px solid var(--glass-border);
-    color: var(--text-secondary);
-    padding: 6px 14px;
-    border-radius: 30px;
-    cursor: pointer;
-    font-family: var(--font-family);
-    transition: 0.2s;
-}
-.cache-buttons button:hover {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
-    box-shadow: 0 0 20px rgba(61,158,179,0.1);
-}
-#clear-all-cache {
-    background: #f44336;
-    color: white;
-    border-color: #f44336;
-}
-#clear-all-cache:hover {
-    background: #d32f2f;
-}
-@media (max-width: 600px) {
-    .rate-limits-grid {
-        grid-template-columns: 1fr;
-    }
-    .rate-summary {
-        flex-direction: column;
-        gap: 8px;
-    }
-}
-
-/* ============================================================
-   АНИМИРОВАННЫЙ ГРАДИЕНТ ДЛЯ ОПИСАНИЯ STARVE NEON
-   ============================================================ */
-
-/* Определяем пары цветов для каждого блока (основной и насыщенный оттенок) */
-.block-accent1 { --color1: #ff6b6b; --color2: #e63946; }
-.block-accent2 { --color1: #ffd93d; --color2: #f4a236; }
-.block-accent3 { --color1: #ff8c00; --color2: #e67e22; }
-.block-accent4 { --color1: #9b59b6; --color2: #8e44ad; }
-.block-accent5 { --color1: #6bcbff; --color2: #3498db; }
-.block-accent6 { --color1: #39ff14; --color2: #2ecc71; }
-
-/* Основной стиль для текста заголовков – fallback и градиент для поддерживающих браузеров */
-.desc-text h3 span[data-lang] {
-    font-weight: bold;
-    /* fallback для старых браузеров */
-    color: var(--color1);
-    background: none;
-    animation: none;
-}
-
-/* Для браузеров с поддержкой background-clip: text включаем градиент */
-@supports (background-clip: text) or (-webkit-background-clip: text) {
-    .desc-text h3 span[data-lang] {
-        background-image: linear-gradient(135deg, var(--color1), var(--color2), var(--color1));
-        background-size: 200% 200%;
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-        animation: gradientMove 5s ease-in-out infinite alternate;
-    }
-}
-
-/* Эмодзи остаются обычного цвета */
-.desc-text h3 .emoji {
-    color: var(--text-primary);
-    background: none;
-    -webkit-background-clip: unset;
-    background-clip: unset;
-}
-
-@keyframes gradientMove {
-    0% { background-position: 0% 50%; }
-    100% { background-position: 100% 50%; }
-}
-
-/* Боковые линии цитат – через псевдоэлемент, наследует цвета от блока */
-.quote {
-    position: relative;
-    border-left: none !important;
-    padding: 12px 16px 12px 20px;
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-    background: var(--glass-bg);
-    backdrop-filter: blur(4px);
-    margin: 12px 0;
-}
-
-.quote::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: linear-gradient(to bottom, var(--color1), var(--color2), var(--color1));
-    background-size: 100% 200%;
-    animation: gradientMoveVertical 5s ease-in-out infinite alternate;
-}
-
-@keyframes gradientMoveVertical {
-    0% { background-position: 0% 0%; }
-    100% { background-position: 0% 100%; }
-}
-
-/* Блок "Следи за разработкой" – белый градиент */
-.block-follow {
-    --color1: #ffffff;
-    --color2: #c8c8d8;
-}
-
-.block-follow .desc-text h3 span[data-lang] {
-    font-weight: bold;
-    color: var(--text-primary);
-    background: none;
-}
-
-@supports (background-clip: text) or (-webkit-background-clip: text) {
-    .block-follow .desc-text h3 span[data-lang] {
-        background-image: linear-gradient(135deg, var(--color1), var(--color2), var(--color1));
-        background-size: 200% 200%;
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-        animation: gradientMove 5s ease-in-out infinite alternate;
-    }
-}
-
-.block-follow .desc-text h3 .emoji {
-    color: var(--text-primary);
-    background: none;
-    -webkit-background-clip: unset;
-    background-clip: unset;
-}
-
-/* ========== ПРАВКИ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ (ВКЛЮЧАЯ ГОРИЗОНТАЛЬНУЮ ОРИЕНТАЦИЮ) ========== */
-
-/* 1. Отключаем анимации и тяжёлые эффекты для touch-устройств (через класс .is-mobile) */
-.is-mobile {
-    /* Все анимации отключаем, а opacity и transform сбрасываем в 1 и none */
-    .card, .project-card-link, .feature-item, .req-item, .consumption-card, .video-grid iframe,
-    .project-card-link:hover .project-card,
-    .project-card .image-wrapper img,
-    .game-icon,
-    .profile-card-link,
-    .button,
-    .download-button,
-    .social-icon,
-    .tilt-card,
-    .desc-text h3 span[data-lang],
-    .quote::before,
-    .block-follow .desc-text h3 span[data-lang] {
-        animation: none !important;
-        transition: none !important;
-        transform: none !important;
-        background-position: initial !important;
-        opacity: 1 !important;
-    }
-    /* Отключаем градиентный фон у текста и задаём статичный цвет */
-    .desc-text h3 span[data-lang] {
-        background: none !important;
-        -webkit-background-clip: unset !important;
-        background-clip: unset !important;
-        color: var(--color1) !important;
-    }
-    .block-follow .desc-text h3 span[data-lang] {
-        color: var(--text-primary) !important;
-        background: none !important;
-        -webkit-background-clip: unset !important;
-        background-clip: unset !important;
-    }
-    .quote::before {
-        display: none !important;
-    }
-    /* Цитата получает статичную цветную границу */
-    .quote {
-        border-left: 4px solid var(--color1) !important;
-        padding-left: 12px !important;
-        background: rgba(0,0,0,0.2) !important;
-    }
-    /* Убираем наклоны и поднятия */
-    .tilt-card:hover {
-        transform: none !important;
-    }
-    .project-card-link:hover {
-        transform: none !important;
-    }
-    .project-card-link:hover .project-card {
-        transform: none !important;
-        box-shadow: var(--shadow) !important;
-    }
-    /* Убираем мерцание */
-    .req-item::before {
-        animation: none !important;
-    }
-    .game-header::before {
-        opacity: 0.3;
-    }
-    /* Убираем рябь и сложные фоны */
-    body {
-        background-image: radial-gradient(circle at 30% 10%, rgba(61,158,179,0.03) 0%, transparent 60%);
-    }
-    .modal-content-full::before {
-        animation: none !important;
-    }
-
-    /* Скелетон – тоже должен быть видимым */
-    .skeleton-image,
-    .skeleton-title,
-    .skeleton-text {
-        animation: none !important;
-        background: var(--bg-card) !important;
-        opacity: 1 !important;
-    }
-
-    /* ---------- ОПИСАНИЕ STARVE NEON: ОСТАВЛЯЕМ КАК НА ПК (с масками и размытием) ---------- */
-    /* НЕ переопределяем .desc-block, .desc-text, .desc-image – они остаются как на ПК */
-    /* Это обеспечит плавное затухание гифок */
-
-    /* ---------- БЛОК СКАЧИВАНИЯ: ПОКАЗЫВАЕМ ГИФКИ (НО ОНИ СТАТИЧНЫ, РОТАЦИЯ ОТКЛЮЧЕНА В JS) ---------- */
-    .download-card {
-        background: transparent !important;
-    }
-    .download-card .bg-gif-layer,
-    .download-card .bg-gif-mask {
-        display: block !important;
-    }
-    .download-subsection {
-        background: rgba(0,0,0,0.3) !important;
-        backdrop-filter: blur(4px) !important;
-        -webkit-backdrop-filter: blur(4px) !important;
-    }
-
-    /* ---------- ШАПКА: закругление оставляем, затенение убираем ---------- */
-    .game-header {
-        border-radius: 20px !important;
-        overflow: hidden !important;
-    }
-    .game-header .header-overlay {
-        background: transparent !important;
-        backdrop-filter: none !important;
-        padding: 20px 16px !important;
-    }
-    .game-header .header-content {
-        background: rgba(0,0,0,0.3) !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-        border-radius: 16px !important;
-        padding: 12px 20px !important;
-        box-shadow: none !important;
-        border: none !important;
-    }
-    .game-header .header-content .game-title {
-        text-shadow: 0 2px 8px rgba(0,0,0,0.6) !important;
-    }
-    .game-icon-circle {
-        width: 64px !important;
-        height: 64px !important;
-    }
-    .game-icon {
-        max-width: 56px !important;
-        max-height: 56px !important;
-    }
-    .header-text .game-title {
-        font-size: 26px !important;
-    }
-
-    /* Отключаем backdrop-filter у некоторых карточек для производительности, но НЕ у .desc-block и .desc-text */
-    .card,
-    .project-card,
-    .profile-card,
-    .feature-item,
-    .req-item,
-    .consumption-card,
-    .modal-content,
-    .modal-content-full,
-    .license-hero,
-    .license-section-card,
-    .license-card,
-    .contact-card,
-    .consent-box,
-    .feedback-item,
-    .comment,
-    .rate-panel .rate-summary,
-    .rate-panel .rate-limit-item,
-    .rate-panel .rate-info,
-    .rate-panel .rate-tab-content .rate-history-item,
-    .rate-panel .rate-tab-content .rate-queue-item {
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-    }
-
-    /* Удаление жёлтых квадратов на мобильных */
-    *,
-    *:focus,
-    *:active,
-    *:focus-visible,
-    a,
-    a:focus,
-    a:active,
-    a:focus-visible,
-    button,
-    button:focus,
-    button:active,
-    button:focus-visible,
-    input,
-    input:focus,
-    input:active,
-    input:focus-visible,
-    textarea,
-    textarea:focus,
-    textarea:active,
-    textarea:focus-visible,
-    [tabindex]:focus,
-    [tabindex]:active,
-    [tabindex]:focus-visible {
-        outline: none !important;
-        -webkit-tap-highlight-color: transparent !important;
-        -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
-        -moz-outline-radius: 0 !important;
-        box-shadow: none !important;
-    }
-}
-
-/* 2. Отключаем анимации для пользователей, предпочитающих reduced motion */
-@media (prefers-reduced-motion: reduce) {
-    /* Все анимации отключаем, а opacity и transform сбрасываем в 1 и none */
-    .card, .project-card-link, .feature-item, .req-item, .consumption-card, .video-grid iframe,
-    .project-card-link:hover .project-card,
-    .project-card .image-wrapper img,
-    .game-icon,
-    .profile-card-link,
-    .button,
-    .download-button,
-    .social-icon,
-    .tilt-card,
-    .desc-text h3 span[data-lang],
-    .quote::before,
-    .block-follow .desc-text h3 span[data-lang] {
-        animation: none !important;
-        transition: none !important;
-        transform: none !important;
-        background-position: initial !important;
-        opacity: 1 !important;
-    }
-    /* Отключаем градиентный фон у текста и задаём статичный цвет */
-    .desc-text h3 span[data-lang] {
-        background: none !important;
-        -webkit-background-clip: unset !important;
-        background-clip: unset !important;
-        color: var(--color1) !important;
-    }
-    .block-follow .desc-text h3 span[data-lang] {
-        color: var(--text-primary) !important;
-        background: none !important;
-        -webkit-background-clip: unset !important;
-        background-clip: unset !important;
-    }
-    .quote::before {
-        display: none !important;
-    }
-    /* Цитата получает статичную цветную границу */
-    .quote {
-        border-left: 4px solid var(--color1) !important;
-        padding-left: 12px !important;
-        background: rgba(0,0,0,0.2) !important;
-    }
-    /* Убираем наклоны и поднятия */
-    .tilt-card:hover {
-        transform: none !important;
-    }
-    .project-card-link:hover {
-        transform: none !important;
-    }
-    .project-card-link:hover .project-card {
-        transform: none !important;
-        box-shadow: var(--shadow) !important;
-    }
-    /* Убираем мерцание */
-    .req-item::before {
-        animation: none !important;
-    }
-    .game-header::before {
-        opacity: 0.3;
-    }
-    /* Убираем рябь и сложные фоны */
-    body {
-        background-image: radial-gradient(circle at 30% 10%, rgba(61,158,179,0.03) 0%, transparent 60%);
-    }
-    .modal-content-full::before {
-        animation: none !important;
-    }
-
-    /* Скелетон – тоже должен быть видимым */
-    .skeleton-image,
-    .skeleton-title,
-    .skeleton-text {
-        animation: none !important;
-        background: var(--bg-card) !important;
-        opacity: 1 !important;
-    }
-
-    /* ---------- ОПИСАНИЕ STARVE NEON: ОСТАВЛЯЕМ КАК НА ПК (с масками и размытием) ---------- */
-    .desc-block {
-        background: var(--glass-bg) !important;
-        backdrop-filter: blur(4px) !important;
-        -webkit-backdrop-filter: blur(4px) !important;
-    }
-    .desc-text {
-        background: var(--glass-bg) !important;
-        backdrop-filter: blur(4px) !important;
-        -webkit-backdrop-filter: blur(4px) !important;
-    }
-    .desc-block .desc-image {
-        mask-image: none !important;
-        -webkit-mask-image: none !important;
-        opacity: 1 !important;
-    }
-    .desc-block:hover .desc-text {
-        background: var(--glass-bg) !important;
-    }
-
-    /* ---------- БЛОК СКАЧИВАНИЯ: ПОКАЗЫВАЕМ ГИФКИ (НО ОНИ СТАТИЧНЫ, РОТАЦИЯ ОТКЛЮЧЕНА В JS) ---------- */
-    .download-card {
-        background: transparent !important;
-    }
-    .download-card .bg-gif-layer,
-    .download-card .bg-gif-mask {
-        display: block !important;
-    }
-    .download-subsection {
-        background: rgba(0,0,0,0.3) !important;
-        backdrop-filter: blur(4px) !important;
-        -webkit-backdrop-filter: blur(4px) !important;
-    }
-
-    /* ---------- ШАПКА: закругление оставляем, затенение убираем ---------- */
-    .game-header {
-        border-radius: 20px !important;
-        overflow: hidden !important;
-    }
-    .game-header .header-overlay {
-        background: transparent !important;
-        backdrop-filter: none !important;
-        padding: 20px 16px !important;
-    }
-    .game-header .header-content {
-        background: rgba(0,0,0,0.3) !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-        border-radius: 16px !important;
-        padding: 12px 20px !important;
-        box-shadow: none !important;
-        border: none !important;
-    }
-    .game-header .header-content .game-title {
-        text-shadow: 0 2px 8px rgba(0,0,0,0.6) !important;
-    }
-    .game-icon-circle {
-        width: 64px !important;
-        height: 64px !important;
-    }
-    .game-icon {
-        max-width: 56px !important;
-        max-height: 56px !important;
-    }
-    .header-text .game-title {
-        font-size: 26px !important;
-    }
-
-    /* Отключаем backdrop-filter у некоторых карточек для производительности, но НЕ у .desc-block и .desc-text */
-    .card,
-    .project-card,
-    .profile-card,
-    .feature-item,
-    .req-item,
-    .consumption-card,
-    .modal-content,
-    .modal-content-full,
-    .license-hero,
-    .license-section-card,
-    .license-card,
-    .contact-card,
-    .consent-box,
-    .feedback-item,
-    .comment,
-    .rate-panel .rate-summary,
-    .rate-panel .rate-limit-item,
-    .rate-panel .rate-info,
-    .rate-panel .rate-tab-content .rate-history-item,
-    .rate-panel .rate-tab-content .rate-queue-item {
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-    }
-
-    /* Удаление жёлтых квадратов на мобильных */
-    *,
-    *:focus,
-    *:active,
-    *:focus-visible,
-    a,
-    a:focus,
-    a:active,
-    a:focus-visible,
-    button,
-    button:focus,
-    button:active,
-    button:focus-visible,
-    input,
-    input:focus,
-    input:active,
-    input:focus-visible,
-    textarea,
-    textarea:focus,
-    textarea:active,
-    textarea:focus-visible,
-    [tabindex]:focus,
-    [tabindex]:active,
-    [tabindex]:focus-visible {
-        outline: none !important;
-        -webkit-tap-highlight-color: transparent !important;
-        -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
-        -moz-outline-radius: 0 !important;
-        box-shadow: none !important;
-    }
-}
-
-/* Трейлер – растягивается на всю высоту карточки */
-.trailer-card {
-    display: flex;
-    flex-direction: column;
-}
-.trailer-card .lazy-yt {
-    flex: 1;
-    aspect-ratio: auto;
-    width: 100%;
-    height: 100%;
-    min-height: 200px;
-    position: relative;
-    border-radius: 12px;
-    overflow: hidden;
-}
-.trailer-card .lazy-yt iframe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: none;
-    border-radius: 12px;
-}
-
-/* Выпадающий список для языка – стили (используется в JS) */
-.lang-dropdown {
-    position: relative;
-    display: inline-block;
-}
-.lang-dropdown-btn {
-    background: transparent;
-    border: 1px solid var(--accent);
-    color: var(--text-secondary);
-    padding: 6px 12px;
-    border-radius: var(--radius-pill);
-    cursor: pointer;
-    font-size: 14px;
-    font-family: var(--font-family);
-    transition: all var(--transition);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-.lang-dropdown-btn:hover {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(61,158,179,0.3);
-}
-.lang-dropdown-menu {
-    position: absolute;
-    top: calc(100% + 4px);
-    right: 0;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    padding: 4px 0;
-    min-width: 100px;
-    box-shadow: var(--shadow);
-    display: none;
-    z-index: 1000;
-}
-.lang-dropdown-menu.open {
-    display: block;
-}
-.lang-dropdown-item {
-    padding: 8px 16px;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: background var(--transition);
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.lang-dropdown-item:hover {
-    background: rgba(61,158,179,0.12);
-    color: var(--text-primary);
-}
-.lang-dropdown-item.active {
-    background: var(--accent);
-    color: white;
-}
-
-/* ===== Удаление жёлтых квадратов на мобильных через медиа-запрос (доп. страховка) ===== */
-@media (pointer: coarse) {
-    *,
-    *:focus,
-    *:active,
-    *:focus-visible,
-    a,
-    a:focus,
-    a:active,
-    a:focus-visible,
-    button,
-    button:focus,
-    button:active,
-    button:focus-visible,
-    input,
-    input:focus,
-    input:active,
-    input:focus-visible,
-    textarea,
-    textarea:focus,
-    textarea:active,
-    textarea:focus-visible,
-    [tabindex]:focus,
-    [tabindex]:active,
-    [tabindex]:focus-visible {
-        outline: none !important;
-        -webkit-tap-highlight-color: transparent !important;
-        -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
-        -moz-outline-radius: 0 !important;
-        box-shadow: none !important;
-    }
-}
+html { scroll-behavior: smooth; }
+.project-card-link { transition: transform 0.2s cubic-bezier(0.2, 0.9, 0.4, 1); }
+.project-card-link:hover { transform: translateY(-5px); }

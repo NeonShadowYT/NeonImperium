@@ -1,5 +1,4 @@
-// js/platform.js – улучшенная сортировка и стилизованные метки для выбора версий, с локализацией, обновление при смене языка
-// При смене языка не перезагружает данные, только обновляет тексты через обработчик
+// js/platform.js – улучшенная сортировка и стилизованные метки для выбора версий, с локализацией
 (function () {
     const GH_OWNER = 'NeonShadowYT';
     const GH_REPO = 'NeonImperium';
@@ -202,7 +201,6 @@
         githubContainer = document.getElementById('github-block-container');
         if (!githubContainer) return;
 
-        // Добавляем data-lang для сообщения загрузки
         githubContainer.innerHTML = `
             <h3><i class="fab fa-github"></i> GitHub</h3>
             <div class="github-block">
@@ -317,7 +315,7 @@
             }
             const t = window.I18n?.translate || (k => k);
             versionDateEl.textContent = `${t('updateFrom')} ${displayDate}`;
-            versionDateEl.removeAttribute('data-lang'); // убираем data-lang, т.к. текст динамический
+            versionDateEl.removeAttribute('data-lang');
 
             const asset = findAsset(release, currentPlatform);
             if (asset) {
@@ -385,19 +383,16 @@
             if (!platformInitialized || !githubContainer) return;
             const t = window.I18n?.translate || (k => k);
 
-            // Обновляем кнопку скачивания
             const downloadBtn = githubContainer.querySelector('#github-download-btn');
             if (downloadBtn) {
                 downloadBtn.innerHTML = `<i class="fab fa-github"></i> ${t('downloadBtn')}`;
             }
 
-            // Обновляем кнопку "Что нового?"
             const whatsNewBtn = githubContainer.querySelector('#whats-new-btn');
             if (whatsNewBtn) {
                 whatsNewBtn.innerHTML = `<i class="fas fa-newspaper"></i> ${t('whatsNew')}`;
             }
 
-            // Обновляем дату версии, если есть выбранная версия
             const versionDateEl = githubContainer.querySelector('#version-date');
             if (versionDateEl) {
                 const selected = versionSelect.value;
@@ -417,7 +412,6 @@
                         versionDateEl.removeAttribute('data-lang');
                     }
                 } else {
-                    // Если нет выбранной версии, проверяем, есть ли вообще версии
                     const hasOptions = versionSelect.options.length > 0;
                     if (!hasOptions) {
                         versionDateEl.textContent = t('noVersions');
@@ -428,6 +422,5 @@
         });
     }
 
-    // Экспортируем функцию инициализации
     window.initPlatform = initPlatform;
 })();

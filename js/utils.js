@@ -251,6 +251,130 @@
         return key;
     }
 
+    // ----- УНИВЕРСАЛЬНЫЙ ПАРСЕР YOUTUBE ССЫЛОК (добавлен) -----
+    function parseYouTubeUrl(url) {
+        try {
+            const parsed = new URL(url);
+            const isYoutube = parsed.hostname.includes('youtube.com') || parsed.hostname.includes('youtu.be') || parsed.hostname.includes('youtube-nocookie.com');
+            if (!isYoutube) return null;
+
+            let videoId = null;
+            let playlistId = null;
+            let start = null;
+
+            // 1. Если ссылка уже embed – используем её как есть, добавив параметры
+            if (parsed.pathname.includes('/embed/')) {
+                // Извлекаем videoId из embed
+                const parts = parsed.pathname.split('/embed/');
+                if (parts.length > 1) {
+                    const idPart = parts[1].split('?')[0];
+                    if (idPart && idPart !== 'videoseries') {
+                        videoId = idPart;
+                    } else {
+                        // Может быть плейлист через /embed/videoseries?list=...
+                        const params = new URLSearchParams(parsed.search);
+                        const list = params.get('list');
+                        if (list) {
+                            playlistId = list;
+                        }
+                    }
+                }
+                // Если есть videoId или playlistId, формируем embedUrl с параметрами
+                if (videoId || playlistId) {
+                    let embedUrl = `https://www.youtube-nocookie.com/embed/${videoId || 'videoseries'}`;
+                    const queryParams = new URLSearchParams();
+                    queryParams.set('rel', '0');
+                    queryParams.set('modestbranding', '1');
+                    queryParams.set('playsinline', '1');
+                    queryParams.set('origin', location.origin);
+                    if (playlistId) queryParams.set('list', playlistId);
+                    if (start) queryParams.set('start', start);
+                    // Добавляем все параметры из исходного URL, кроме тех, что уже есть
+                    for (const [key, val] of parsed.searchParams) {
+                        if (!queryParams.has(key) && key !== 'si') { // игнорируем si
+                            queryParams.set(key, val);
+                        }
+                    }
+                    const qs = queryParams.toString();
+                    if (qs) embedUrl += '?' + qs;
+                    return { embedUrl, videoId, playlistId, start };
+                }
+                // Если не удалось распознать, возвращаем исходную ссылку с добавлением origin
+                let embedUrl = url;
+                if (!embedUrl.includes('origin=')) {
+                    const separator = embedUrl.includes('?') ? '&' : '?';
+                    embedUrl += `${separator}origin=${encodeURIComponent(location.origin)}`;
+                }
+                return { embedUrl, videoId: null, playlistId: null, start: null };
+            }
+
+            // 2. Обработка youtu.be и обычных watch
+            if (parsed.hostname.includes('youtu.be')) {
+                const pathParts = parsed.pathname.split('/').filter(p => p);
+                if (pathParts.length > 0) {
+                    videoId = pathParts[0];
+                }
+            }
+
+            const params = new URLSearchParams(parsed.search);
+            if (params.has('v')) {
+                videoId = params.get('v');
+            }
+            if (params.has('list')) {
+                playlistId = params.get('list');
+            }
+            if (params.has('t')) {
+                start = params.get('t');
+            } else if (params.has('start')) {
+                start = params.get('start');
+            }
+
+            // 3. Если нет videoId, но есть playlistId – используем плейлист
+            if (!videoId && playlistId) {
+                let embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${playlistId}`;
+                if (start) embedUrl += `&start=${start}`;
+                embedUrl += `&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+                return { embedUrl, videoId: null, playlistId, start };
+            }
+
+            // 4. Если есть videoId – формируем embed с ним и возможно list
+            if (videoId) {
+                let embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}`;
+                const queryParams = new URLSearchParams();
+                queryParams.set('rel', '0');
+                queryParams.set('modestbranding', '1');
+                queryParams.set('playsinline', '1');
+                queryParams.set('origin', location.origin);
+                if (playlistId) queryParams.set('list', playlistId);
+                if (start) queryParams.set('start', start);
+                // Добавляем остальные параметры из исходного URL, кроме уже добавленных
+                for (const [key, val] of parsed.searchParams) {
+                    if (!queryParams.has(key) && key !== 'v' && key !== 'list' && key !== 't' && key !== 'start') {
+                        queryParams.set(key, val);
+                    }
+                }
+                const qs = queryParams.toString();
+                if (qs) embedUrl += '?' + qs;
+                return { embedUrl, videoId, playlistId, start };
+            }
+
+            // 5. Если ничего не найдено – пытаемся использовать как есть (возможно, просто ссылка на плейлист без v)
+            if (parsed.pathname.includes('/playlist')) {
+                const listParam = params.get('list');
+                if (listParam) {
+                    let embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${listParam}`;
+                    if (start) embedUrl += `&start=${start}`;
+                    embedUrl += `&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+                    return { embedUrl, videoId: null, playlistId: listParam, start };
+                }
+            }
+
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
     window.Utils = {
         escapeHtml, stripHtml, createElement, formatDate,
         cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
@@ -261,6 +385,7 @@
         containsGitHubToken,
         xorEncrypt,
         xorDecrypt,
-        generateRandomKey
+        generateRandomKey,
+        parseYouTubeUrl   // новая функция
     };
 })();

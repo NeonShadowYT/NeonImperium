@@ -8,11 +8,11 @@
 
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const { showToast } = window.UIUtils;
+    const { createCard } = window.CardRenderer || {};
 
     // ---------- Конфигурация ----------
     const CACHE_KEY = 'news_feed_data_v2';
-    const CACHE_TTL = 5 * 60 * 1000;           // 5 минут
-    const STALE_WHILE_REVALIDATE = true;
+    const CACHE_TTL = 5 * 60 * 1000;
     const SOURCE_TIMEOUT = 10000;
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 1000;
@@ -57,80 +57,6 @@
         return items.map(item => normalizeItem(item));
     }
 
-    // ---------- Парсинг YouTube (дублируем из common-init, но можно использовать глобальную, если есть) ----------
-    function parseYouTubeUrl(url) {
-        try {
-            const parsed = new URL(url);
-            const isYoutube = parsed.hostname.includes('youtube.com') || parsed.hostname.includes('youtu.be');
-            if (!isYoutube) return null;
-
-            let videoId = null;
-            let playlistId = null;
-            let start = null;
-
-            if (parsed.hostname.includes('youtu.be')) {
-                const pathParts = parsed.pathname.split('/').filter(p => p);
-                if (pathParts.length > 0) videoId = pathParts[0];
-            }
-
-            const params = new URLSearchParams(parsed.search);
-            if (params.has('v')) videoId = params.get('v');
-            if (params.has('list')) playlistId = params.get('list');
-            if (params.has('t')) start = params.get('t');
-            else if (params.has('start')) start = params.get('start');
-
-            if (!videoId && parsed.pathname.includes('/embed/')) {
-                const parts = parsed.pathname.split('/embed/');
-                if (parts.length > 1) {
-                    const idPart = parts[1].split('?')[0];
-                    if (idPart && idPart !== 'videoseries') videoId = idPart;
-                }
-            }
-            if (!videoId && parsed.pathname.includes('/watch/')) {
-                const parts = parsed.pathname.split('/watch/');
-                if (parts.length > 1) {
-                    const idPart = parts[1].split('?')[0];
-                    if (idPart && idPart !== 'videoseries') videoId = idPart;
-                }
-            }
-
-            if (!videoId && playlistId) {
-                let embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${playlistId}`;
-                if (start) embedUrl += `&start=${start}`;
-                embedUrl += `&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
-                return { embedUrl, videoId: null, playlistId, start };
-            }
-
-            if (videoId) {
-                let embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}`;
-                const queryParams = new URLSearchParams();
-                queryParams.set('rel', '0');
-                queryParams.set('modestbranding', '1');
-                queryParams.set('playsinline', '1');
-                queryParams.set('origin', location.origin);
-                if (playlistId) queryParams.set('list', playlistId);
-                if (start) queryParams.set('start', start);
-                const qs = queryParams.toString();
-                if (qs) embedUrl += '?' + qs;
-                return { embedUrl, videoId, playlistId, start };
-            }
-
-            if (parsed.pathname.includes('/playlist')) {
-                const listParam = params.get('list');
-                if (listParam) {
-                    let embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${listParam}`;
-                    if (start) embedUrl += `&start=${start}`;
-                    embedUrl += `&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
-                    return { embedUrl, videoId: null, playlistId: listParam, start };
-                }
-            }
-
-            return null;
-        } catch (e) {
-            return null;
-        }
-    }
-
     // ---------- Загрузка источников с повторами ----------
     async function fetchWithRetry(fn, context, retries = MAX_RETRIES) {
         let lastError;
@@ -157,7 +83,6 @@
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
-        const combinedSignal = signal ? new AbortController() : null;
         if (signal) {
             signal.addEventListener('abort', () => controller.abort());
         }
@@ -221,7 +146,6 @@
         const all = [];
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
-        const combinedSignal = signal ? new AbortController() : null;
         if (signal) {
             signal.addEventListener('abort', () => controller.abort());
         }
@@ -238,8 +162,7 @@
                     const items = data.items.slice(0, 3).map(item => {
                         const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
                         if (!vid) return null;
-                        // Используем парсер для получения embed-ссылки с origin
-                        const parsed = parseYouTubeUrl(item.link);
+                        const parsed = window.Utils.parseYouTubeUrl(item.link);
                         const embedUrl = parsed ? parsed.embedUrl : null;
                         return normalizeItem({
                             type: 'video',
@@ -354,7 +277,6 @@
             abortController.abort();
         }
         abortController = new AbortController();
-        const combinedSignal = signal ? new AbortController() : null;
         if (signal) {
             signal.addEventListener('abort', () => abortController.abort());
         }
@@ -457,7 +379,7 @@
 
         let header = container.parentNode?.querySelector('.news-header');
         if (!header) {
-            header = createElement('div', 'news-header', {
+            header = createElement('div', 'news-header flex flex-center gap-8', {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -511,8 +433,35 @@
         const fragment = document.createDocumentFragment();
 
         displayItems.forEach(item => {
-            const card = createNewsCard(item);
-            fragment.appendChild(card);
+            // Используем CardRenderer если доступен, иначе создаём вручную
+            if (window.CardRenderer && typeof window.CardRenderer.createCard === 'function') {
+                const card = window.CardRenderer.createCard({
+                    type: item.type === 'twitch' ? 'video' : item.type,
+                    id: item.id,
+                    title: item.title,
+                    body: item.body,
+                    author: item.author,
+                    date: item.date,
+                    thumbnail: item.thumbnail,
+                    embedUrl: item.embedUrl,
+                    game: item.game,
+                    labels: item.labels,
+                    isUpdate: false,
+                    extraData: { videoData: item.videoData, twitchData: item.twitchData }
+                });
+                fragment.appendChild(card);
+            } else {
+                // fallback
+                const cardWrapper = createElement('div', 'project-card-link');
+                const card = createElement('div', 'project-card');
+                card.innerHTML = `
+                    <div class="image-wrapper"><img src="${item.thumbnail || 'images/default-news.webp'}" alt="${item.title}" loading="lazy"></div>
+                    <h3>${item.title}</h3>
+                    <p class="text-secondary">${item.author}</p>
+                `;
+                cardWrapper.appendChild(card);
+                fragment.appendChild(cardWrapper);
+            }
         });
 
         grid.appendChild(fragment);
@@ -523,147 +472,6 @@
             const key = el.getAttribute('data-lang');
             if (key) el.textContent = t(key);
         });
-    }
-
-    function createNewsCard(item) {
-        const cardWrapper = createElement('div', 'project-card-link card-interactive');
-
-        const card = createElement('div', 'project-card');
-        const imgWrapper = createElement('div', 'image-wrapper');
-        const img = createElement('img', 'project-image', {}, {
-            src: item.thumbnail || 'images/default-news.webp',
-            alt: item.title,
-            loading: 'lazy'
-        });
-        img.onerror = () => img.src = 'images/default-news.webp';
-        imgWrapper.appendChild(img);
-        card.appendChild(imgWrapper);
-
-        const title = createElement('h3');
-        title.textContent = item.title.length > 70 ? item.title.slice(0, 70) + '…' : item.title;
-        card.appendChild(title);
-
-        const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
-        const dateStr = item.date.toLocaleDateString();
-        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(item.author)} · <i class="fas fa-calendar-alt"></i> ${dateStr}`;
-        if (item.type === 'twitch' && item.twitchData) {
-            meta.innerHTML += ` · 🎮 ${escapeHtml(item.twitchData.game)}`;
-        }
-        card.appendChild(meta);
-
-        if (item.type === 'post' && item.body) {
-            const summary = window.GithubCore.extractSummary(item.body) || item.body.replace(/\n/g, ' ').substring(0, 120) + '…';
-            const preview = createElement('p', 'text-secondary', {
-                fontSize: '13px',
-                overflow: 'hidden',
-                display: '-webkit-box',
-                WebkitLineClamp: '2',
-                WebkitBoxOrient: 'vertical'
-            });
-            preview.textContent = summary;
-            card.appendChild(preview);
-        }
-
-        const currentUser = getCurrentUser();
-        if (currentUser && hasScope('gist')) {
-            const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: t('addToFavorites') });
-            favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
-            favBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (!window.BookmarkStorage) {
-                    try {
-                        if (window.loadStorageModules) {
-                            await window.loadStorageModules();
-                        } else {
-                            const modules = [
-                                'js/features/storage/core.js',
-                                'js/features/storage/metadata.js',
-                                'js/features/storage/manager.js',
-                                'js/features/storage/ui.js',
-                                'js/features/storage/index.js'
-                            ];
-                            for (const src of modules) {
-                                await window.Utils.loadModule(src);
-                            }
-                        }
-                    } catch (err) {
-                        showToast(t('loadModulesError'), 'error');
-                        return;
-                    }
-                }
-                if (!window.BookmarkStorage) {
-                    showToast(t('loadModulesError'), 'error');
-                    return;
-                }
-                const bookmark = {
-                    url: item.type === 'post' ? `${location.origin}${location.pathname}?post=${item.id}` :
-                          item.type === 'video' ? `https://youtu.be/${item.id}` :
-                          `https://twitch.tv/${item.id}`,
-                    title: item.title,
-                    type: item.type === 'post' ? 'post' : 'video',
-                    thumbnail: item.thumbnail || 'images/default-news.webp',
-                    author: item.author,
-                    date: item.date,
-                    postData: item.type === 'post' ? { id: item.id, title: item.title, body: item.body, author: item.author, date: item.date.toISOString(), labels: item.labels, game: item.game } : undefined,
-                    videoData: item.type === 'video' ? { id: item.id, service: 'youtube' } : undefined,
-                    twitchData: item.type === 'twitch' ? { channel: item.id } : undefined
-                };
-                window.BookmarkStorage.addBookmark(bookmark)
-                    .then(() => showToast(t('addToFavorites'), 'success'))
-                    .catch(err => { if (err.message !== 'duplicate') showToast(t('loadError') + ': ' + err.message, 'error'); });
-            });
-            card.appendChild(favBtn);
-        }
-
-        cardWrapper.appendChild(card);
-
-        cardWrapper.addEventListener('click', (e) => {
-            if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
-            if (item.type === 'post') {
-                if (!window.UIFeedback) {
-                    loadModule('js/features/ui-feedback.js').catch(() => {});
-                    return;
-                }
-                window.UIFeedback.openFullModal({
-                    type: 'post',
-                    id: item.id,
-                    title: item.title,
-                    body: item.body,
-                    author: item.author,
-                    date: item.date,
-                    game: item.game,
-                    labels: item.labels
-                });
-            } else {
-                // Видео или стрим – открываем плеер прямо в карточке
-                const iframe = createElement('iframe', '', {
-                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-                    border: 'none', borderRadius: '12px'
-                });
-                let embedUrl = item.embedUrl;
-                if (!embedUrl) {
-                    if (item.type === 'video' && item.id) {
-                        // Пробуем парсер
-                        const parsed = parseYouTubeUrl(`https://youtu.be/${item.id}`);
-                        embedUrl = parsed ? parsed.embedUrl : `https://www.youtube-nocookie.com/embed/${item.id}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
-                    } else if (item.type === 'twitch' && item.id) {
-                        embedUrl = `https://player.twitch.tv/?channel=${item.id}&parent=${location.hostname}&autoplay=false`;
-                    }
-                }
-                iframe.src = embedUrl;
-                iframe.setAttribute('allowfullscreen', 'true');
-                iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
-                iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-                const imgWrapper = card.querySelector('.image-wrapper');
-                if (imgWrapper) {
-                    imgWrapper.innerHTML = '';
-                    imgWrapper.style.background = '#000';
-                    imgWrapper.appendChild(iframe);
-                }
-            }
-        });
-
-        return cardWrapper;
     }
 
     // ---------- Публичный API ----------

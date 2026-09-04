@@ -92,23 +92,11 @@
     });
 
     container.innerHTML = '';
-    const btnsDiv = createElement('div', 'reactions-buttons', { display: 'flex', gap: '6px', flexWrap: 'wrap' });
+    const btnsDiv = createElement('div', 'reactions-buttons flex gap-8', { flexWrap: 'wrap' });
 
     const heartCount = counts.get('heart') || 0;
     const isHeartActive = userReactions.has('heart');
-    const heartBtn = createElement('button', 'reaction-button', {
-      display: 'inline-flex', alignItems: 'center', gap: '4px',
-      padding: '4px 10px',
-      borderRadius: '30px',
-      fontSize: '13px',
-      cursor: isHeartActive ? 'default' : 'pointer',
-      border: '1px solid var(--border)',
-      background: isHeartActive ? 'var(--accent)' : 'var(--bg-primary)',
-      color: isHeartActive ? '#fff' : 'var(--text-secondary)',
-      transition: 'background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s',
-      opacity: isHeartActive ? '1' : '0.8',
-      pointerEvents: isHeartActive ? 'none' : 'auto'
-    }, { type: 'button', disabled: isHeartActive });
+    const heartBtn = createElement('button', 'reaction-button' + (isHeartActive ? ' active' : ''), {}, { type: 'button', disabled: isHeartActive });
     heartBtn.innerHTML = `<span class="reaction-emoji">❤️</span><span class="reaction-count">${heartCount || ''}</span>`;
 
     if (!isHeartActive) {
@@ -128,9 +116,7 @@
             showToast(t('heartAdded'), 'success');
           }
           heartBtn.disabled = true;
-          heartBtn.style.pointerEvents = 'none';
-          heartBtn.style.background = 'var(--accent)';
-          heartBtn.style.color = '#fff';
+          heartBtn.classList.add('active');
           const countSpan = heartBtn.querySelector('.reaction-count');
           if (countSpan) {
             const current = parseInt(countSpan.textContent) || 0;
@@ -142,9 +128,7 @@
         } catch (err) {
           showToast(t('loadError') + ': ' + err.message, 'error');
           heartBtn.disabled = false;
-          heartBtn.style.pointerEvents = 'auto';
-          heartBtn.style.background = 'var(--bg-primary)';
-          heartBtn.style.color = 'var(--text-secondary)';
+          heartBtn.classList.remove('active');
         }
       });
     } else {
@@ -153,16 +137,11 @@
     btnsDiv.appendChild(heartBtn);
 
     const eyesCount = counts.get('eyes') || 0;
-    const hasEyes = userReactions.has('eyes');
-    const eyesSpan = createElement('span', 'reaction-static', {
-      display: 'inline-flex', alignItems: 'center', gap: '4px',
-      padding: '4px 10px', background: 'var(--bg-primary)', border: '1px solid var(--border)',
-      borderRadius: '30px', fontSize: '13px', color: 'var(--text-secondary)'
-    });
+    const eyesSpan = createElement('span', 'reaction-static reaction-button', { background: 'var(--bg-primary)' });
     eyesSpan.innerHTML = `<span class="reaction-emoji">👀</span><span class="reaction-count">${eyesCount || ''}</span>`;
     btnsDiv.appendChild(eyesSpan);
 
-    if (currentUser && !hasEyes) {
+    if (currentUser && !userReactions.has('eyes')) {
       const eyesKey = `eyes_${issueNumber}`;
       if (!sessionStorage.getItem(eyesKey)) {
         sessionStorage.setItem(eyesKey, '1');
@@ -270,16 +249,16 @@
     const currentUser = getCurrentUser();
     const fragment = document.createDocumentFragment();
     for (const c of comments) {
-      const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px', position: 'relative' });
+      const commentDiv = createElement('div', 'comment', { marginBottom: '8px' });
       commentDiv.dataset.id = c.id;
-      const header = createElement('div', 'comment-meta', { display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' });
+      const header = createElement('div', 'comment-meta');
       header.innerHTML = `<span class="comment-author">${escapeHtml(c.user.login)}</span><span>${new Date(c.created_at).toLocaleString()}</span>`;
-      const body = createElement('div', 'comment-body', { marginTop: '4px' });
+      const body = createElement('div', 'comment-body');
       renderMarkdownWithEditor(c.body, body);
       commentDiv.appendChild(header);
       commentDiv.appendChild(body);
       if (currentUser === c.user.login || isAdmin()) {
-        const actions = createElement('div', 'comment-actions', { position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', opacity: '0', transition: 'opacity 0.2s' });
+        const actions = createElement('div', 'comment-actions');
         const editBtn = createElement('button', '', {}, { title: t('edit') });
         editBtn.innerHTML = '<i class="fas fa-pen"></i>';
         editBtn.addEventListener('click', (e) => { e.stopPropagation(); editCommentWithEditor(c.id, c.body, () => { /* обновить после редактирования */ }); });
@@ -289,8 +268,6 @@
         actions.appendChild(editBtn);
         actions.appendChild(delBtn);
         commentDiv.appendChild(actions);
-        commentDiv.addEventListener('mouseenter', () => actions.style.opacity = '1');
-        commentDiv.addEventListener('mouseleave', () => actions.style.opacity = '0');
       }
       fragment.appendChild(commentDiv);
     }
@@ -331,7 +308,7 @@
         showToast(t('commentQueued'), 'info');
         const container = document.getElementById('modal-comments-list');
         if (container) {
-          const commentDiv = createElement('div', 'comment', { marginBottom: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '16px', opacity: '0.6' });
+          const commentDiv = createElement('div', 'comment', { opacity: '0.6' });
           commentDiv.innerHTML = `
             <div class="comment-meta"><span class="comment-author">${escapeHtml(currentUser)}</span><span>сейчас</span></div>
             <div class="comment-body">${escapeHtml(body)} <span style="font-size:11px; color:var(--text-secondary);">(ожидает синхронизации)</span></div>
@@ -366,15 +343,12 @@
     }
   }
 
-  // ----- ОБНОВЛЁННАЯ ФУНКЦИЯ addToBookmarks с динамической загрузкой хранилища -----
   async function addToBookmarks(postData) {
     if (!window.BookmarkStorage) {
       try {
-        // Используем глобальную функцию загрузки хранилища
         if (window.loadStorageModules) {
           await window.loadStorageModules();
         } else {
-          // fallback: загружаем по одному
           const modules = [
             'js/features/storage/core.js',
             'js/features/storage/metadata.js',
@@ -435,7 +409,7 @@
 
   // ---- открытие полной модалки (пост) ----
 
-  let activeFullModal = null; // ссылка на текущую модалку
+  let activeFullModal = null;
 
   async function openFullModal(item) {
     const { id, title, body, author, date, game, labels, type } = item;
@@ -468,13 +442,11 @@
       <div class="comments-section">
         <h3>${t('comments') || 'Комментарии'}</h3>
         <div id="modal-comments-list" class="comments-list"></div>
-        ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px; align-items:center; flex-wrap:wrap;">
-          <input type="text" id="new-comment-input" placeholder="${t('enterText')}" class="comment-input-field" style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:150px;">
+        ${currentUser ? `<div class="comment-form">
+          <input type="text" id="new-comment-input" placeholder="${t('enterText')}" class="comment-input-field">
           <button id="submit-comment-btn" class="button small">${t('send')}</button>
-          <span style="font-size:12px; color:var(--text-secondary); margin-left:4px;" id="comment-counter">0/400</span>
-          <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
-            ${t('postsRemaining')}: <span class="rate-indicator" data-action="comments">${window.RateLimits ? window.RateLimits.getRemaining('comments') : '?'}</span>
-          </span>
+          <span class="comment-counter" id="comment-counter">0/400</span>
+          <span class="rate-indicator-wrapper">${t('postsRemaining')}: <span class="rate-indicator" data-action="comments">${window.RateLimits ? window.RateLimits.getRemaining('comments') : '?'}</span></span>
         </div>` : `<p class="text-secondary">${t('loginToComment')}</p>`}
       </div>
     `;
@@ -507,7 +479,7 @@
 
     const headerDiv = modal.querySelector('.modal-header');
     if (headerDiv) {
-      const actionsDiv = createElement('div', 'modal-header-actions', { display: 'flex', gap: '8px', marginLeft: 'auto', marginRight: '8px' });
+      const actionsDiv = createElement('div', 'modal-header-actions');
       if (canBookmark) {
         const bookmarkBtn = createElement('button', 'action-btn', {}, { title: t('bookmark') });
         bookmarkBtn.innerHTML = '<i class="fas fa-bookmark"></i>';
@@ -652,76 +624,36 @@
     activeEditorModal = { modal, closeModal, mode, context, existingId };
 
     const container = modal.querySelector('.editor-container');
-    container.style.display = 'flex';
-    container.style.flexDirection = 'column';
-    container.style.gap = '12px';
 
-    const titleRow = createElement('div', 'editor-title-row', {
-      display: 'flex',
-      gap: '12px',
-      alignItems: 'center',
-      flexWrap: 'wrap'
-    });
-    const titleInput = createElement('input', 'editor-title-input', {
-      flex: '1',
-      padding: '10px 16px',
-      borderRadius: '40px',
-      background: 'var(--bg-primary)',
-      border: '1px solid var(--border)',
-      color: 'var(--text-primary)',
-      fontFamily: 'var(--font-family)',
-      minWidth: '150px'
-    });
+    // Заголовок
+    const titleRow = createElement('div', 'editor-title-row');
+    const titleInput = createElement('input', 'editor-title-input', { flex: '1' });
     titleInput.type = 'text';
     titleInput.placeholder = t('title');
     titleInput.value = currentTitle;
-    const titleCounter = createElement('span', 'title-counter', {
-      fontSize: '12px',
-      color: 'var(--text-secondary)',
-      marginLeft: '4px'
-    });
+    const titleCounter = createElement('span', 'title-counter', { fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '4px' });
     titleCounter.textContent = `${currentTitle.length}/100`;
     titleRow.appendChild(titleInput);
     titleRow.appendChild(titleCounter);
     container.appendChild(titleRow);
 
-    const accessRow = createElement('div', 'access-row', {
-      display: 'flex',
-      gap: '12px',
-      alignItems: 'center',
-      flexWrap: 'wrap',
-      marginBottom: '4px'
-    });
-    const accessSwitch = createElement('div', 'access-switch', {
-      display: 'inline-flex',
-      background: 'var(--bg-primary)',
-      borderRadius: '40px',
-      border: '1px solid var(--border)',
-      padding: '4px'
-    });
-    const publicBtn = createElement('button', 'access-switch-btn active', {});
+    // Доступ
+    const accessRow = createElement('div', 'access-row');
+    const accessSwitch = createElement('div', 'access-switch');
+    const publicBtn = createElement('button', 'access-switch-btn active');
     publicBtn.textContent = t('public');
-    const privateBtn = createElement('button', 'access-switch-btn', {});
+    const privateBtn = createElement('button', 'access-switch-btn');
     privateBtn.textContent = t('private');
     accessSwitch.appendChild(publicBtn);
     accessSwitch.appendChild(privateBtn);
-    const allowedInput = createElement('input', 'allowed-users-input', {
-      display: 'none',
-      flex: '1',
-      padding: '8px 16px',
-      borderRadius: '40px',
-      background: 'var(--bg-primary)',
-      border: '1px solid var(--border)',
-      color: 'var(--text-primary)',
-      fontFamily: 'var(--font-family)',
-      minWidth: '150px'
-    });
+    const allowedInput = createElement('input', 'allowed-users-input');
     allowedInput.placeholder = t('loginsComma');
     allowedInput.value = allowedUsers;
     accessRow.appendChild(accessSwitch);
     accessRow.appendChild(allowedInput);
     container.appendChild(accessRow);
 
+    // Редактор
     const textarea = createElement('textarea', 'editor-textarea', {
       width: '100%',
       height: '100%',
@@ -747,32 +679,10 @@
     });
     await renderMarkdownWithEditor(currentBody, preview);
 
-    const splitContainer = createElement('div', 'editor-split', {
-      display: 'flex',
-      gap: '16px',
-      alignItems: 'stretch',
-      flex: '1',
-      minHeight: '300px',
-      marginTop: '4px'
-    });
-    const leftCol = createElement('div', 'editor-split-left', {
-      flex: '1',
-      display: 'flex',
-      flexDirection: 'column',
-      borderRadius: '16px',
-      border: '1px solid var(--border)',
-      background: 'var(--bg-primary)',
-      overflow: 'hidden'
-    });
+    const splitContainer = createElement('div', 'editor-split');
+    const leftCol = createElement('div', 'editor-split-left');
     leftCol.appendChild(textarea);
-    const rightCol = createElement('div', 'editor-split-right', {
-      flex: '1',
-      borderRadius: '16px',
-      border: '1px solid var(--border)',
-      background: 'var(--bg-primary)',
-      overflow: 'auto',
-      padding: '0'
-    });
+    const rightCol = createElement('div', 'editor-split-right');
     rightCol.appendChild(preview);
     splitContainer.appendChild(leftCol);
     splitContainer.appendChild(rightCol);
@@ -795,28 +705,11 @@
     }
     container.appendChild(splitContainer);
 
-    const submitRow = createElement('div', 'submit-row', {
-      display: 'flex',
-      gap: '12px',
-      alignItems: 'center',
-      flexWrap: 'wrap',
-      marginTop: '8px'
-    });
-    const submitBtn = createElement('button', 'button wide', {
-      background: 'var(--accent)',
-      color: '#fff',
-      padding: '10px 30px',
-      borderRadius: '40px',
-      border: 'none',
-      cursor: 'pointer',
-      fontFamily: 'var(--font-family)'
-    });
+    // Кнопка отправки
+    const submitRow = createElement('div', 'submit-row');
+    const submitBtn = createElement('button', 'button wide');
     submitBtn.textContent = mode === 'edit' ? t('update') : t('publish');
-    const rateIndicator = createElement('span', 'rate-indicator-wrapper', {
-      fontSize: '12px',
-      color: 'var(--text-secondary)',
-      marginLeft: '8px'
-    });
+    const rateIndicator = createElement('span', 'rate-indicator-wrapper');
     rateIndicator.innerHTML = `${t('postsRemaining')}: <span class="rate-indicator" data-action="posts">${window.RateLimits ? window.RateLimits.getRemaining('posts') : '?'}</span>`;
     submitRow.appendChild(submitBtn);
     submitRow.appendChild(rateIndicator);
