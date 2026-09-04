@@ -1,5 +1,6 @@
 // js/features/storage/ui.js
 // UI-рендеринг закладок — использует preview.js и download.js для получения данных
+// Добавлена принудительная загрузка модулей перед использованием
 (function() {
   const { escapeHtml, formatDate, loadModule, createElement, debounce } = window.GithubCore || {};
   const { getCurrentUser, hasScope } = window.GithubAuth || {};
@@ -20,10 +21,65 @@
     batchUpdateVideoLinks,
     setStatusCallback,
     refreshGridCallback
-  } = window._StorageManager;
+  } = window._StorageManager || {};
 
-  const { fetchVideoPreview } = window._StoragePreview || {};
-  const { fetchVideoDownloadUrl } = window._StorageDownload || {};
+  // Локальные ссылки на модули, которые будут загружены позже
+  let _fetchVideoPreview = null;
+  let _fetchVideoDownloadUrl = null;
+
+  // Функция для принудительной загрузки модулей preview и download
+  async function ensurePreviewModules() {
+    if (_fetchVideoPreview && _fetchVideoDownloadUrl) return;
+
+    // Если модули уже есть в window, используем их
+    if (window._StoragePreview && typeof window._StoragePreview.fetchVideoPreview === 'function') {
+      _fetchVideoPreview = window._StoragePreview.fetchVideoPreview;
+    }
+    if (window._StorageDownload && typeof window._StorageDownload.fetchVideoDownloadUrl === 'function') {
+      _fetchVideoDownloadUrl = window._StorageDownload.fetchVideoDownloadUrl;
+    }
+
+    if (_fetchVideoPreview && _fetchVideoDownloadUrl) return;
+
+    // Если нет — пытаемся загрузить через глобальную функцию ожидания
+    if (window._StorageEnsure) {
+      await window._StorageEnsure();
+      // После ожидания модули должны появиться
+      if (window._StoragePreview && typeof window._StoragePreview.fetchVideoPreview === 'function') {
+        _fetchVideoPreview = window._StoragePreview.fetchVideoPreview;
+      }
+      if (window._StorageDownload && typeof window._StorageDownload.fetchVideoDownloadUrl === 'function') {
+        _fetchVideoDownloadUrl = window._StorageDownload.fetchVideoDownloadUrl;
+      }
+      if (_fetchVideoPreview && _fetchVideoDownloadUrl) return;
+    }
+
+    // Загружаем напрямую, если всё ещё не загружены
+    const loadModules = async () => {
+      if (!window._StoragePreview) {
+        await new Promise((resolve) => {
+          const script = document.createElement('script');
+          script.src = 'js/features/storage/preview.js';
+          script.defer = true;
+          script.onload = resolve;
+          document.head.appendChild(script);
+        });
+      }
+      if (!window._StorageDownload) {
+        await new Promise((resolve) => {
+          const script = document.createElement('script');
+          script.src = 'js/features/storage/download.js';
+          script.defer = true;
+          script.onload = resolve;
+          document.head.appendChild(script);
+        });
+      }
+      _fetchVideoPreview = window._StoragePreview?.fetchVideoPreview || null;
+      _fetchVideoDownloadUrl = window._StorageDownload?.fetchVideoDownloadUrl || null;
+    };
+
+    await loadModules();
+  }
 
   let statusElement = null;
   const bookmarkElements = new Map();
@@ -42,13 +98,19 @@
     return title.slice(0, maxLength) + '…';
   }
 
+  // ---- Проверка и обновление downloadUrl в закладке ----
   async function ensureDownloadUrl(bm) {
+    await ensurePreviewModules();
+    if (!_fetchVideoDownloadUrl) {
+      console.warn('[StorageUI] fetchVideoDownloadUrl не доступна');
+      return null;
+    }
     if (!bm || bm.type !== 'video' || !bm.url) return null;
     if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) {
       return bm.downloadUrl;
     }
     try {
-      const url = await fetchVideoDownloadUrl(bm.url);
+      const url = await _fetchVideoDownloadUrl(bm.url);
       if (url) {
         const expires = Date.now() + 24 * 60 * 60 * 1000;
         await updateBookmark(bm.id, { downloadUrl: url, downloadUrlExpires: expires });
@@ -60,11 +122,17 @@
     return null;
   }
 
+  // ---- Проверка и обновление превью в закладке ----
   async function ensurePreview(bm) {
+    await ensurePreviewModules();
+    if (!_fetchVideoPreview) {
+      console.warn('[StorageUI] fetchVideoPreview не доступна');
+      return bm;
+    }
     if (!bm || bm.type !== 'video' || !bm.url) return null;
     if (bm.thumbnail && bm.embedUrl) return bm;
     try {
-      const preview = await fetchVideoPreview(bm.url);
+      const preview = await _fetchVideoPreview(bm.url);
       if (preview && (preview.thumbnail || preview.embedUrl)) {
         const updates = {};
         if (preview.thumbnail && !bm.thumbnail) updates.thumbnail = preview.thumbnail;
@@ -81,8 +149,10 @@
     return bm;
   }
 
+  // ---- Загрузка плеера в карточку по клику ----
   function loadVideoPlayerInCard(mediaContainer, bm) {
     if (mediaContainer.querySelector('iframe')) return;
+
     let embedUrl = bm.embedUrl;
     if (!embedUrl) {
       if (bm.url) {
@@ -96,6 +166,7 @@
       showToast('Не удалось определить ссылку для плеера', 'error');
       return;
     }
+
     mediaContainer.innerHTML = '';
     const iframe = document.createElement('iframe');
     iframe.src = embedUrl;
@@ -111,6 +182,7 @@
     if (overlay) overlay.remove();
   }
 
+  // ---- Создание DOM-элемента карточки ----
   function createBookmarkCardElement(bm, modal) {
     const t = (key) => window.I18n?.translate(key) || key;
     const wrapper = document.createElement('div');
@@ -287,6 +359,7 @@
     if (!isVideo) {
       card.addEventListener('click', async (e) => {
         if (e.target.closest('button')) return;
+
         if (isPost && bm.postData && bm.postData.id) {
           if (window.UIFeedback) {
             window.UIFeedback.openFullModal(bm.postData);
@@ -295,6 +368,7 @@
           }
           return;
         }
+
         if (isSave && bm.saveData) {
           try {
             const binary = atob(bm.saveData.content);
@@ -311,6 +385,7 @@
           }
           return;
         }
+
         if (bm.url) {
           window.open(bm.url, '_blank');
         }
@@ -331,6 +406,7 @@
     return wrapper;
   }
 
+  // ---- Добавление карточки в сетку ----
   function addBookmarkCard(bm, modal) {
     const grid = modal?.querySelector('#bookmarks-grid');
     if (!grid) return;
@@ -341,6 +417,7 @@
     bookmarkElements.set(bm.id, wrapper);
   }
 
+  // ---- Удаление карточки из сетки ----
   function removeBookmarkCard(id, modal) {
     const grid = modal?.querySelector('#bookmarks-grid');
     if (!grid) return;
@@ -349,6 +426,7 @@
     bookmarkElements.delete(id);
   }
 
+  // ---- Рендеринг закладок ----
   function renderBookmarks(modal) {
     const grid = modal?.querySelector('#bookmarks-grid');
     if (!grid) return;
@@ -381,6 +459,7 @@
     });
     grid.appendChild(fragment);
 
+    // Фоновое обновление превью для видео без превью
     const videoWithoutPreview = filtered.filter(b => b.type === 'video' && !b.thumbnail);
     if (videoWithoutPreview.length > 0) {
       setTimeout(async () => {
@@ -399,6 +478,7 @@
     }
   }
 
+  // ---- Обработка файлов ----
   async function processFiles(files, modal) {
     const t = (key) => window.I18n?.translate(key) || key;
     for (const file of files) {
@@ -442,6 +522,7 @@
     return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
   }
 
+  // ---- Групповые действия ----
   function addBatchActions(modal) {
     const t = (key) => window.I18n?.translate(key) || key;
     const container = modal.querySelector('.storage-actions');
@@ -468,7 +549,11 @@
     container.appendChild(refreshBtn);
   }
 
+  // ---- Модалка хранилища ----
   async function openStorageModal(gameContext = null) {
+    // Перед открытием убеждаемся, что модули загружены
+    await ensurePreviewModules();
+
     const t = (key) => window.I18n?.translate(key) || key;
     const user = getCurrentUser();
     if (!user) { showToast(t('loginToGitHub'), 'error'); return; }
@@ -616,10 +701,15 @@
     const urlInput = modal.querySelector('#new-url');
     const confirmAdd = modal.querySelector('#confirm-add');
     confirmAdd.addEventListener('click', async () => {
+      await ensurePreviewModules();
       const url = urlInput.value.trim();
       if (!url) { showToast(t('enterText'), 'error'); return; }
       try {
-        const preview = await fetchVideoPreview(url);
+        if (!_fetchVideoPreview) {
+          showToast('Модуль превью не загружен', 'error');
+          return;
+        }
+        const preview = await _fetchVideoPreview(url);
         await addBookmark({
           url: url,
           title: preview?.title || url,
