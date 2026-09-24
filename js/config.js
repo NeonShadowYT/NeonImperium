@@ -40,11 +40,11 @@
 
     // ---- Имена кэшей Service Worker ----
     SW_CACHE_NAMES: {
-      STATIC: 'static-v8',
-      DYNAMIC: 'dynamic-v8',
-      IMAGES: 'images-v8',
-      API: 'github-api-v8',
-      RSS: 'rss-v2'
+      STATIC: 'static-v9',
+      DYNAMIC: 'dynamic-v9',
+      IMAGES: 'images-v9',
+      API: 'github-api-v9',
+      RSS: 'rss-v3'
     },
 
     // ---- TTL для SW-кэшей (мс) ----
@@ -57,8 +57,6 @@
 
   // ---- Определение мобильного устройства ----
   // Выполняем здесь, чтобы window.isMobile был доступен ДО common-init.js.
-  // Например, background-gifs.js загружается раньше common-init.js и уже читает
-  // window.isMobile (в initDownloadBackground и initDescriptionVideos).
   const _isMobile = (() => {
     try {
       const hasTouch = window.matchMedia('(pointer: coarse)').matches ||

@@ -1,5 +1,6 @@
-// js/pages/news-feed.js – единый менеджер новостей с кешированием, скелетоном и отказоустойчивостью
+// js/pages/news-feed.js – единый менеджер новостей с кешированием, скелетоном и отказоустойчивостью.
 // cacheGet/cacheSet теперь асинхронные (шифрование через CacheCrypto).
+// Видео и стримы больше НЕ встраиваются: клик открывает YouTube/Twitch в новой вкладке.
 (function() {
     const {
         cacheGet, cacheSet, cacheRemoveByPrefix,
@@ -12,7 +13,6 @@
 
     const CACHE_KEY = 'news_feed_data_v2';
     const CACHE_TTL = 5 * 60 * 1000;
-    const STALE_WHILE_REVALIDATE = true;
     const SOURCE_TIMEOUT = 10000;
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 1000;
@@ -23,7 +23,6 @@
     let isLoading = false;
     let abortController = null;
     let container = null;
-    let scheduledRefresh = null;
 
     const t = (key) => window.I18n?.translate(key) || key;
 
@@ -40,7 +39,6 @@
             author: item.author || 'Unknown',
             date: date,
             thumbnail: item.thumbnail || null,
-            embedUrl: item.embedUrl || null,
             body: item.body || null,
             labels: item.labels || [],
             game: item.game || null,
@@ -53,43 +51,24 @@
         return items.map(item => normalizeItem(item));
     }
 
-    function parseYouTubeUrl(url) {
-        if (window.YoutubeLoader) {
-            const result = window.YoutubeLoader.parseYouTubeUrl(url);
-            return result ? result.embedUrl : null;
+    /** Формирует ссылку «посмотреть» для элемента. */
+    function buildWatchUrl(item) {
+        if (item.type === 'video') {
+            return `https://www.youtube.com/watch?v=${item.id}`;
         }
-        try {
-            const parsed = new URL(url);
-            let videoId = null;
-            if (parsed.hostname.includes('youtu.be')) {
-                const parts = parsed.pathname.split('/').filter(p => p);
-                if (parts.length) videoId = parts[0];
-            }
-            const params = new URLSearchParams(parsed.search);
-            if (params.has('v')) videoId = params.get('v');
-            if (!videoId && parsed.pathname.includes('/embed/')) {
-                const parts = parsed.pathname.split('/embed/');
-                if (parts.length > 1) {
-                    const idPart = parts[1].split('?')[0];
-                    if (idPart && idPart !== 'videoseries') videoId = idPart;
-                }
-            }
-            if (!videoId && parsed.pathname.includes('/watch/')) {
-                const parts = parsed.pathname.split('/watch/');
-                if (parts.length > 1) {
-                    const idPart = parts[1].split('?')[0];
-                    if (idPart && idPart !== 'videoseries') videoId = idPart;
-                }
-            }
-            if (videoId) {
-                return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
-            }
-            const list = params.get('list');
-            if (list) {
-                return `https://www.youtube-nocookie.com/embed/videoseries?list=${list}&rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
-            }
-            return null;
-        } catch (e) { return null; }
+        if (item.type === 'twitch') {
+            return `https://www.twitch.tv/${item.id}`;
+        }
+        if (item.type === 'post') {
+            return `${location.origin}${location.pathname}?post=${item.id}`;
+        }
+        return '#';
+    }
+
+    /** Открывает ссылку «посмотреть» в новой вкладке. */
+    function openExternal(url) {
+        if (!url || url === '#') return;
+        window.open(url, '_blank', 'noopener,noreferrer');
     }
 
     async function fetchWithRetry(fn, context, retries = MAX_RETRIES) {
@@ -116,7 +95,6 @@
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
-        const combinedSignal = signal ? new AbortController() : null;
         if (signal) {
             signal.addEventListener('abort', () => controller.abort());
         }
@@ -172,7 +150,6 @@
         const all = [];
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
-        const combinedSignal = signal ? new AbortController() : null;
         if (signal) {
             signal.addEventListener('abort', () => controller.abort());
         }
@@ -189,7 +166,6 @@
                     const items = data.items.slice(0, 3).map(item => {
                         const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
                         if (!vid) return null;
-                        const embedUrl = parseYouTubeUrl(item.link);
                         return normalizeItem({
                             type: 'video',
                             id: vid,
@@ -197,7 +173,6 @@
                             author: ch.name,
                             date: new Date(item.pubDate),
                             thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
-                            embedUrl: embedUrl || `https://www.youtube-nocookie.com/embed/${vid}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`,
                             videoData: { service: 'youtube', id: vid }
                         });
                     }).filter(v => v);
@@ -247,7 +222,6 @@
                         author: channel,
                         date: new Date(),
                         thumbnail: `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`,
-                        embedUrl: `https://player.twitch.tv/?channel=${channel}&parent=${location.hostname}&autoplay=false`,
                         twitchData: { channel, game, viewers }
                     }));
                 } catch (e) {
@@ -271,9 +245,6 @@
         if (cached && !forceRefresh) {
             const items = normalizeItems(cached.items || []);
             console.log(`[NewsFeed] Загрузка из кеша: ${items.length} элементов`);
-            if (navigator.onLine) {
-                scheduleBackgroundRefresh();
-            }
             return { items, fromCache: true, isStale: false };
         }
 
@@ -301,7 +272,6 @@
             abortController.abort();
         }
         abortController = new AbortController();
-        const combinedSignal = signal ? new AbortController() : null;
         if (signal) {
             signal.addEventListener('abort', () => abortController.abort());
         }
@@ -315,12 +285,10 @@
             const results = await Promise.allSettled([postsPromise, videosPromise, twitchPromise]);
 
             let allItems = [];
-            let errorCount = 0;
             results.forEach((result, index) => {
                 if (result.status === 'fulfilled') {
                     allItems = allItems.concat(result.value);
                 } else {
-                    errorCount++;
                     const source = ['посты', 'видео', 'стримы'][index];
                     console.warn(`[NewsFeed] Не удалось загрузить ${source}:`, result.reason);
                 }
@@ -331,7 +299,7 @@
 
             await cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
 
-            console.log(`[NewsFeed] Загружено: ${limited.length} элементов (посты: ${results[0].status === 'fulfilled' ? results[0].value.length : 0}, видео: ${results[1].status === 'fulfilled' ? results[1].value.length : 0}, стримы: ${results[2].status === 'fulfilled' ? results[2].value.length : 0})`);
+            console.log(`[NewsFeed] Загружено: ${limited.length} элементов`);
 
             currentItems = limited;
             return { items: limited, fromCache: false, isStale: false };
@@ -348,34 +316,6 @@
             isLoading = false;
             abortController = null;
         }
-    }
-
-    let backgroundRefreshScheduled = false;
-    function scheduleBackgroundRefresh() {
-        if (backgroundRefreshScheduled) return;
-        backgroundRefreshScheduled = true;
-        setTimeout(async () => {
-            try {
-                if (!navigator.onLine) return;
-                const lastUpdate = await cacheGet(CACHE_KEY + '_last_update', Infinity);
-                if (lastUpdate && Date.now() - lastUpdate < CACHE_TTL / 2) {
-                    backgroundRefreshScheduled = false;
-                    return;
-                }
-                console.log('[NewsFeed] Фоновое обновление...');
-                const result = await fetchNewsFeed({ forceRefresh: true });
-                if (result && result.items.length > 0) {
-                    if (container) {
-                        renderNewsFeed(result.items);
-                    }
-                    await cacheSet(CACHE_KEY + '_last_update', Date.now());
-                }
-            } catch (e) {
-                console.warn('[NewsFeed] Фоновое обновление не удалось:', e);
-            } finally {
-                backgroundRefreshScheduled = false;
-            }
-        }, 1000);
     }
 
     function renderSkeleton(count = 6) {
@@ -544,9 +484,7 @@
                     return;
                 }
                 const bookmark = {
-                    url: item.type === 'post' ? `${location.origin}${location.pathname}?post=${item.id}` :
-                          item.type === 'video' ? `https://youtu.be/${item.id}` :
-                          `https://twitch.tv/${item.id}`,
+                    url: buildWatchUrl(item),
                     title: item.title,
                     type: item.type === 'post' ? 'post' : 'video',
                     thumbnail: item.thumbnail || 'images/default-news.webp',
@@ -565,8 +503,10 @@
 
         cardWrapper.appendChild(card);
 
+        // Клик: пост → модалка, видео/стрим → открытие на внешнем сайте
         cardWrapper.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
+
             if (item.type === 'post') {
                 if (!window.UIFeedback) {
                     loadModule('js/features/ui-feedback.js').catch(() => {});
@@ -583,28 +523,8 @@
                     labels: item.labels
                 });
             } else {
-                const iframe = createElement('iframe', '', {
-                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-                    border: 'none', borderRadius: '12px'
-                });
-                let embedUrl = item.embedUrl;
-                if (!embedUrl) {
-                    if (item.type === 'video' && item.id) {
-                        embedUrl = parseYouTubeUrl(`https://youtu.be/${item.id}`);
-                    } else if (item.type === 'twitch' && item.id) {
-                        embedUrl = `https://player.twitch.tv/?channel=${item.id}&parent=${location.hostname}&autoplay=false`;
-                    }
-                }
-                iframe.src = embedUrl;
-                iframe.setAttribute('allowfullscreen', 'true');
-                iframe.allow = 'autoplay; encrypted-media; gyroscope; picture-in-picture';
-                iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-                const imgWrapper = card.querySelector('.image-wrapper');
-                if (imgWrapper) {
-                    imgWrapper.innerHTML = '';
-                    imgWrapper.style.background = '#000';
-                    imgWrapper.appendChild(iframe);
-                }
+                // Видео/стрим: открываем в новой вкладке — никаких iframe, никаких cookies.
+                openExternal(buildWatchUrl(item));
             }
         });
 

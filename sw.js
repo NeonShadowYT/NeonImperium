@@ -6,11 +6,11 @@ importScripts('js/config.js');
 const NC = (typeof self !== 'undefined' && self.NeonConfig) || {};
 
 const SW_CACHE_NAMES = NC.SW_CACHE_NAMES || {
-  STATIC: 'static-v8',
-  DYNAMIC: 'dynamic-v8',
-  IMAGES: 'images-v8',
-  API: 'github-api-v8',
-  RSS: 'rss-v2'
+  STATIC: 'static-v9',
+  DYNAMIC: 'dynamic-v9',
+  IMAGES: 'images-v9',
+  API: 'github-api-v9',
+  RSS: 'rss-v3'
 };
 
 const SW_CACHE_MAX_AGE = NC.SW_CACHE_MAX_AGE || {
@@ -39,7 +39,6 @@ const PRECACHE_URLS = [
   'js/features/editor.js',
   'js/features/dialog.js',
   'js/features/rate-limits.js',
-  'js/features/youtube-loader.js',
   'js/features/storage/core.js',
   'js/features/storage/metadata.js',
   'js/features/storage/preview.js',
@@ -170,9 +169,7 @@ self.addEventListener('fetch', event => {
 
   if (event.request.method === 'GET' && (
       url.pathname.match(/\.(css|js|woff2?|ttf)$/) ||
-      url.origin.includes('cdnjs.cloudflare.com') ||
-      url.origin.includes('fonts.googleapis.com') ||
-      url.origin.includes('fonts.gstatic.com')
+      url.origin.includes('cdnjs.cloudflare.com')
   )) {
     event.respondWith((async () => {
       const cache = await caches.open(STATIC_CACHE);

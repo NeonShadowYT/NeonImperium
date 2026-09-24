@@ -30,7 +30,7 @@
 
   function addPreconnects() {
     // Google Fonts удалены — шрифт Russo One подключён локально из css/typography.css
-    // (fonts/RussoOne.woff2). Оставляем только реально используемые источники.
+    // (fonts/RussoOne.woff2). YouTube preconnect не нужен — видео теперь не встраиваются.
     const links = [
       'https://api.github.com',
       'https://api.rss2json.com',
@@ -180,28 +180,6 @@
       console.warn('[common-init] CacheCrypto не загружен! Кэш будет храниться без шифрования. ' +
         'Убедитесь, что js/core/cache-crypto.js подключён ДО js/utils.js.');
     }
-  }
-
-  function loadYoutubeLoaderAndInit() {
-    if (window.YoutubeLoader) {
-      window.YoutubeLoader.initLazyYT();
-      return Promise.resolve();
-    }
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'js/features/youtube-loader.js';
-      script.defer = true;
-      script.onload = () => {
-        if (window.YoutubeLoader) {
-          window.YoutubeLoader.initLazyYT();
-          resolve();
-        } else {
-          reject(new Error('YoutubeLoader not defined after load'));
-        }
-      };
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
   }
 
   function loadDustParticles() {
@@ -475,7 +453,6 @@
     loadPageScripts();
     ensureMarked().then(() => {});
     ensureDOMPurify().then(() => {});
-    loadYoutubeLoaderAndInit().catch(err => console.warn('YouTube loader init error:', err));
     loadDustParticles();
     registerServiceWorker();
     initDownloadConsent();

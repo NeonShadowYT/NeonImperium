@@ -18,9 +18,8 @@
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="preconnect" href="https://www.youtube.com">
-    <link rel="preconnect" href="https://i.ytimg.com">
     <link rel="preconnect" href="https://img.youtube.com">
+    <link rel="preconnect" href="https://i.ytimg.com">
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/typography.css">
@@ -53,23 +52,6 @@
     <script src="js/common-init.js" defer></script>
     <script src="js/dust-particles.js" defer></script>
     <style>
-        .lazy-yt {
-            position: relative;
-            width: 100%;
-            padding-bottom: 56.25%;
-            background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-        }
-        .lazy-yt iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-        }
         body { margin:0; background:#0f0f1a; font-family: 'Russo One', sans-serif; }
         .nav-bar { background:#1e1e30; border-radius:40px; padding:6px 20px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
         .page { max-width:1200px; margin:0 auto; width:100%; }
@@ -109,7 +91,14 @@
                         <i class="fas fa-film" aria-hidden="true"></i>
                         <span data-lang="trailerTitle">Трейлер</span>
                     </h2>
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/scqYneefAds" title="Трейлер ГК Адвенчур"></div>
+                    <a class="video-preview"
+                       href="https://youtu.be/scqYneefAds"
+                       target="_blank"
+                       rel="noopener"
+                       aria-label="Смотреть трейлер ГК Адвенчур на YouTube">
+                        <img src="https://img.youtube.com/vi/scqYneefAds/mqdefault.jpg" alt="Превью трейлера ГК Адвенчур" loading="lazy">
+                        <span class="video-preview__play" aria-hidden="true"><i class="fas fa-play"></i></span>
+                    </a>
                 </section>
 
                 <section class="card developer-card" aria-label="Разработчик">
@@ -166,8 +155,22 @@
                 </h2>
                 <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
                 <div class="video-grid">
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/scqYneefAds" title="Видео ГК Адвенчур"></div>
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/koe3h-kXr3k" title="Видео ГК Адвенчур"></div>
+                    <a class="video-preview"
+                       href="https://youtu.be/scqYneefAds"
+                       target="_blank"
+                       rel="noopener"
+                       aria-label="Смотреть видео ГК Адвенчур на YouTube">
+                        <img src="https://img.youtube.com/vi/scqYneefAds/mqdefault.jpg" alt="Превью видео ГК Адвенчур" loading="lazy">
+                        <span class="video-preview__play" aria-hidden="true"><i class="fas fa-play"></i></span>
+                    </a>
+                    <a class="video-preview"
+                       href="https://youtu.be/koe3h-kXr3k"
+                       target="_blank"
+                       rel="noopener"
+                       aria-label="Смотреть видео ГК Адвенчур на YouTube">
+                        <img src="https://img.youtube.com/vi/koe3h-kXr3k/mqdefault.jpg" alt="Превью видео ГК Адвенчур" loading="lazy">
+                        <span class="video-preview__play" aria-hidden="true"><i class="fas fa-play"></i></span>
+                    </a>
                 </div>
             </section>
 
