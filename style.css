@@ -15,7 +15,8 @@
 */
 
 /* ============================================================
-   ВИДЕО-ПРЕВЬЮ (замена встраиваемых плееров)
+   ВИДЕО-ПРЕВЬЮ — карточка-ссылка на внешнюю платформу
+   (замена встраиваемых iframe-плееров)
    ============================================================ */
 
 .video-preview {
@@ -23,17 +24,25 @@
     position: relative;
     width: 100%;
     aspect-ratio: 16 / 9;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     overflow: hidden;
-    background: #000;
+    background: var(--bg-card);
     text-decoration: none;
     color: inherit;
-    transition: transform var(--transition), box-shadow var(--transition);
+    transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
     cursor: pointer;
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow);
+    isolation: isolate;
 }
 .video-preview:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 28px rgba(61,158,179,0.2);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-hover), 0 0 30px rgba(61,158,179,0.2);
+    border-color: var(--accent);
+}
+.video-preview:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 .video-preview img {
     position: absolute;
@@ -42,73 +51,165 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 0.3s;
+    transition: transform 0.4s ease;
+    z-index: 0;
 }
 .video-preview:hover img {
-    transform: scale(1.04);
+    transform: scale(1.06);
 }
+
+/* Затемняющий градиент снизу — для читаемости бейджа и заголовка */
 .video-preview::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%);
+    background: linear-gradient(180deg,
+        rgba(15,15,26,0.0) 0%,
+        rgba(15,15,26,0.08) 40%,
+        rgba(15,15,26,0.75) 100%);
     pointer-events: none;
+    z-index: 1;
 }
+
+/* Бейдж платформы (верхний левый угол) */
+.video-preview__badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: var(--radius-pill);
+    background: rgba(15, 15, 26, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #fff;
+    font-size: 12px;
+    z-index: 3;
+    border: 1px solid rgba(61, 158, 179, 0.3);
+    font-family: var(--font-family);
+    letter-spacing: 0.3px;
+    line-height: 1;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+}
+.video-preview__badge i {
+    font-size: 13px;
+    line-height: 1;
+}
+.video-preview__badge--youtube i {
+    color: #ff0033;
+}
+.video-preview__badge--twitch i {
+    color: #9146FF;
+}
+.video-preview__badge--playlist i {
+    color: var(--accent-light);
+}
+
+/* Кнопка Play (по центру карточки) */
 .video-preview__play {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.95);
-    color: #f00;
+    width: 68px;
+    height: 48px;
+    border-radius: 14px;
+    background: rgba(15, 15, 26, 0.78);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 26px;
+    font-size: 18px;
+    color: #fff;
     z-index: 2;
-    transition: transform 0.2s, background 0.2s;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
     pointer-events: none;
-}
-.video-preview__play i {
-    margin-left: 4px;
+    transition: transform 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding-left: 4px;
 }
 .video-preview:hover .video-preview__play {
-    transform: translate(-50%, -50%) scale(1.08);
-    background: #fff;
+    background: #ff0033;
+    border-color: #ff0033;
+    transform: translate(-50%, -50%) scale(1.1);
+    box-shadow: 0 8px 28px rgba(255,0,51,0.5);
+}
+.video-preview--twitch:hover .video-preview__play {
+    background: #9146FF;
+    border-color: #9146FF;
+    box-shadow: 0 8px 28px rgba(145,70,255,0.5);
+}
+.video-preview--playlist:hover .video-preview__play {
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 8px 28px rgba(61,158,179,0.5);
 }
 
-/* Плейлисты — фон-градиент + иконка списка */
-.video-preview--playlist {
-    background: linear-gradient(135deg, #2a2a40, #1e1e30);
-}
-.video-preview--playlist .video-preview__play {
-    color: var(--accent);
-    background: rgba(255,255,255,0.95);
-}
-.video-preview--playlist .video-preview__play i {
-    margin-left: 0;
+/* Заголовок внизу карточки */
+.video-preview__title {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 14px 16px;
+    color: #fff;
+    font-size: 14px;
+    font-family: var(--font-family);
+    z-index: 2;
+    pointer-events: none;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.85);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
 
-/* Трейлер — растягивается на всю высоту карточки */
+/* Трейлер — 16:9, без растягивания на всю высоту карточки */
 .trailer-card {
     display: flex;
     flex-direction: column;
 }
 .trailer-card .video-preview {
-    flex: 1;
-    aspect-ratio: auto;
     width: 100%;
-    height: 100%;
-    min-height: 200px;
+    /* aspect-ratio: 16 / 9 наследуется из базового класса */
 }
 
 /* В сетке видео */
 .video-grid .video-preview {
     width: 100%;
+}
+
+/* В small-projects-container */
+.small-projects-container .video-preview {
+    width: 100%;
+    align-self: start;
+}
+
+@media (max-width: 600px) {
+    .video-preview__badge {
+        top: 8px;
+        left: 8px;
+        padding: 4px 10px;
+        font-size: 11px;
+    }
+    .video-preview__badge i {
+        font-size: 12px;
+    }
+    .video-preview__play {
+        width: 56px;
+        height: 40px;
+        font-size: 15px;
+        border-radius: 12px;
+    }
+    .video-preview__title {
+        padding: 10px 12px;
+        font-size: 12px;
+    }
 }
 
 /* ========== Кнопка доната ========== */
@@ -936,6 +1037,8 @@
     & .tilt-card,
     & .video-preview,
     & .video-preview img,
+    & .video-preview__badge,
+    & .video-preview__title,
     & .desc-text h3 span[data-lang],
     & .quote::before,
     & .block-follow .desc-text h3 span[data-lang] {
@@ -944,6 +1047,11 @@
         transform: none !important;
         background-position: initial !important;
         opacity: 1 !important;
+    }
+    /* Кнопка Play сохраняет центровочный transform — не трогаем */
+    & .video-preview__play {
+        animation: none !important;
+        transition: none !important;
     }
     & .desc-text h3 span[data-lang] {
         background: none !important;
@@ -1089,6 +1197,8 @@
     .tilt-card,
     .video-preview,
     .video-preview img,
+    .video-preview__badge,
+    .video-preview__title,
     .desc-text h3 span[data-lang],
     .quote::before,
     .block-follow .desc-text h3 span[data-lang] {
@@ -1097,6 +1207,10 @@
         transform: none !important;
         background-position: initial !important;
         opacity: 1 !important;
+    }
+    .video-preview__play {
+        animation: none !important;
+        transition: none !important;
     }
     .desc-text h3 span[data-lang] {
         background: none !important;
