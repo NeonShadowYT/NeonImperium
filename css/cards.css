@@ -231,8 +231,8 @@
 
 .req-item {
     flex: 1 1 200px;
+    /* backdrop-filter убран — не обязателен, снижает нагрузку на GPU */
     background: var(--glass-bg);
-    backdrop-filter: blur(6px);
     padding: 20px;
     border-radius: var(--radius-md);
     border: 1px solid var(--glass-border);
@@ -408,8 +408,8 @@
 
 /* Элемент особенностей (исправлено: изображение на всю ширину без рамки) */
 .feature-item {
+    /* backdrop-filter убран — не обязателен, снижает нагрузку на GPU */
     background: var(--glass-bg);
-    backdrop-filter: blur(4px);
     border-radius: var(--radius-md);
     padding: 20px;
     border: 1px solid var(--glass-border);

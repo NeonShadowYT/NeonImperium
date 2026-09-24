@@ -17,16 +17,28 @@
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="preconnect" href="https://www.youtube.com">
     <link rel="preconnect" href="https://i.ytimg.com">
     <link rel="preconnect" href="https://img.youtube.com">
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/typography.css">
+    <link rel="stylesheet" href="css/buttons.css">
+    <link rel="stylesheet" href="css/navigation.css">
+    <link rel="stylesheet" href="css/cards.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="css/feedback.css">
+    <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="style.css">
     <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'"><noscript>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js" integrity="sha384-3HPB1XT51W3gGRxAmZ+qbZwRpRlFQL632y8x+adAqCr4Wp3TaWwCLSTAJJKbyWEK" crossorigin="anonymous" defer></script>
+    <script src="js/config.js" defer></script>
+    <script src="js/core/cache-crypto.js" defer></script>
     <script src="js/utils.js" defer></script>
+    <script src="js/features/dialog.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/github-client.js" defer></script>
     <script src="js/features/ui-utils.js" defer></script>
@@ -66,67 +78,67 @@
 </head>
 <body>
     <div class="page">
-        <nav class="nav-bar">
+        <nav class="nav-bar" role="navigation" aria-label="Основная навигация">
             <div class="nav-links">
                 <a href="index.html" class="nav-link active" data-lang="navHome">Neon Imperium</a>
                 <a href="starve-neon.html" class="nav-link" data-lang="navStarve">Starve Neon</a>
                 <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
                 <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
             </div>
-            <div class="lang-switcher"></div>
+            <div class="lang-switcher" aria-label="Переключатель языка"></div>
         </nav>
 
         <header class="card header-card game-header" style="background-image: url('images/neon-imperium-header.webp');">
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
-                        <img src="images/logo-neon-imperium.webp" alt="Neon Imperium Logo" class="game-icon" width="80" height="80">
+                        <img src="images/logo-neon-imperium.webp" alt="Логотип Neon Imperium" class="game-icon" width="80" height="80">
                     </div>
                     <h1 class="game-title" data-lang="siteTitle">Neon Imperium</h1>
                     <div class="social-icons">
-                        <a href="https://discord.com/invite/9gv5sRhk9R" target="_blank" class="social-icon" aria-label="Discord">
-                            <i class="fab fa-discord"></i>
+                        <a href="https://discord.com/invite/9gv5sRhk9R" target="_blank" rel="noopener" class="social-icon" aria-label="Присоединиться к Discord">
+                            <i class="fab fa-discord" aria-hidden="true"></i>
                         </a>
-                        <a href="https://t.me/voididea" target="_blank" class="social-icon" aria-label="Telegram">
-                            <i class="fab fa-telegram"></i>
+                        <a href="https://t.me/voididea" target="_blank" rel="noopener" class="social-icon" aria-label="Перейти в Telegram">
+                            <i class="fab fa-telegram" aria-hidden="true"></i>
                         </a>
                     </div>
                 </div>
             </div>
         </header>
 
-        <main>
+        <main role="main">
             <section class="card">
                 <h2>
-                    <i class="fas fa-rocket"></i>
+                    <i class="fas fa-rocket" aria-hidden="true"></i>
                     <span data-lang="mainProjectsTitle">Главные проекты</span>
                 </h2>
                 <p class="text-secondary" data-lang="mainProjectsDesc">Игры с приоритетом разработки</p>
                 <div class="projects-grid">
-                    <a href="starve-neon.html" class="project-card-link">
+                    <a href="starve-neon.html" class="project-card-link" aria-label="Starve Neon — подробнее">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
-                                <img src="images/starve-neon-preview2.webp" alt="Starve Neon" class="project-image" width="300" height="180" loading="lazy">
+                                <img src="images/starve-neon-preview2.webp" alt="Обложка игры Starve Neon" class="project-image" width="300" height="180" loading="lazy">
                             </div>
                             <h3>Starve Neon</h3>
                             <p data-lang="starveDesc">Выживание в брутальном мире с прокачкой и генетикой.</p>
                             <span class="button" data-lang="detailsBtn">Подробнее</span>
                         </div>
                     </a>
-                    <a href="alpha-01.html" class="project-card-link">
+                    <a href="alpha-01.html" class="project-card-link" aria-label="Alpha 01 — подробнее">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
-                                <img src="images/alpha-01-header.webp" alt="Alpha 01" class="project-image" width="300" height="180" loading="lazy">
+                                <img src="images/alpha-01-header.webp" alt="Обложка игры Alpha 01" class="project-image" width="300" height="180" loading="lazy">
                             </div>
                             <h3>Alpha 01</h3>
                             <p data-lang="alphaDesc">Top-down шутер, где вы робот, помогающий солдатам.</p>
                             <span class="button" data-lang="detailsBtn">Подробнее</span>
                         </div>
                     </a>
-                    <a href="gc-adven.html" class="project-card-link">
+                    <a href="gc-adven.html" class="project-card-link" aria-label="ГК Адвенчур — подробнее">
                         <div class="project-card tilt-card">
                             <div class="image-wrapper">
-                                <img src="images/gc-adven-header.webp" alt="ГК Адвенчур" class="project-image" width="300" height="180" loading="lazy">
+                                <img src="images/gc-adven-header.webp" alt="Обложка игры ГК Адвенчур" class="project-image" width="300" height="180" loading="lazy">
                             </div>
                             <h3>ГК Адвенчур</h3>
                             <p data-lang="gcDesc">Просто приключение ГКТМО.</p>
@@ -138,34 +150,34 @@
 
             <section class="card">
                 <h2>
-                    <i class="fas fa-flask"></i>
+                    <i class="fas fa-flask" aria-hidden="true"></i>
                     <span data-lang="smallProjectsTitle">Небольшие проекты</span>
                 </h2>
                 <p class="text-secondary" data-lang="smallProjectsDesc">Игры созданные по рофлу</p>
                 <div class="small-projects-container">
                     <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/Ckjgf8Jza5w" title="YouTube video"></div>
-                    <a href="https://disk.yandex.ru/d/kV-dcNQvZg1Y_g" target="_blank" class="project-card-link">
+                    <a href="https://disk.yandex.ru/d/kV-dcNQvZg1Y_g" target="_blank" rel="noopener" class="project-card-link" aria-label="Скачать ПНСД 1">
                         <div class="project-card tilt-card square-card">
                             <div class="image-wrapper">
-                                <img src="images/project-pnsd1.webp" alt="ПНСД 1" class="project-image" loading="lazy">
+                                <img src="images/project-pnsd1.webp" alt="Обложка игры ПНСД 1" class="project-image" loading="lazy">
                             </div>
                             <h3>ПНСД 1</h3>
                             <span class="button" data-lang="downloadBtn">Скачать</span>
                         </div>
                     </a>
-                    <a href="https://disk.yandex.ru/d/J3f2JxRbzAIwxQ" target="_blank" class="project-card-link">
+                    <a href="https://disk.yandex.ru/d/J3f2JxRbzAIwxQ" target="_blank" rel="noopener" class="project-card-link" aria-label="Скачать ПНСД 2">
                         <div class="project-card tilt-card square-card">
                             <div class="image-wrapper">
-                                <img src="images/project-pnsd2.webp" alt="ПНСД 2" class="project-image" loading="lazy">
+                                <img src="images/project-pnsd2.webp" alt="Обложка игры ПНСД 2" class="project-image" loading="lazy">
                             </div>
                             <h3>ПНСД 2</h3>
                             <span class="button" data-lang="downloadBtn">Скачать</span>
                         </div>
                     </a>
-                    <a href="javascript:void(0)" class="project-card-link disabled">
+                    <a href="javascript:void(0)" class="project-card-link disabled" aria-label="ПНСД 3 — скоро">
                         <div class="project-card tilt-card square-card">
                             <div class="image-wrapper">
-                                <img src="images/project-pnsd3.webp" alt="ПНСД 3" class="project-image" loading="lazy">
+                                <img src="images/project-pnsd3.webp" alt="Обложка игры ПНСД 3" class="project-image" loading="lazy">
                             </div>
                             <h3>ПНСД 3</h3>
                             <span class="button disabled" data-lang="comingSoon">Скоро</span>
@@ -174,35 +186,35 @@
                 </div>
             </section>
 
-            <section class="card" id="news-section">
+            <section class="card" id="news-section" aria-label="Лента новостей">
                 <div id="news-feed" class="video-grid">
                     <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
-                        <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);"></i>
+                        <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);" aria-hidden="true"></i>
                         <p style="margin-top: 10px;" data-lang="newsLoading">Загрузка новостей...</p>
                     </div>
                 </div>
             </section>
 
             <div class="row">
-                <section class="card half">
+                <section class="card half" aria-label="Разработчики">
                     <h2>
-                        <i class="fas fa-code"></i>
+                        <i class="fas fa-code" aria-hidden="true"></i>
                         <span data-lang="developersTitle">Разработчики</span>
                     </h2>
                     <p class="text-secondary" data-lang="developersDesc">Работаем в свободное время</p>
                     <div class="profile-cards">
-                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" rel="noopener" class="profile-card-link" aria-label="YouTube-канал Neon Shadow">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.webp" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-neon-shadow.webp" alt="Аватар Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
                         </a>
-                        <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@Gc567" target="_blank" rel="noopener" class="profile-card-link" aria-label="YouTube-канал Golden Creeper">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-golden-creeper.webp" alt="Аватар Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
@@ -210,57 +222,57 @@
                     </div>
                 </section>
 
-                <section class="card half">
+                <section class="card half" aria-label="Ютуберы">
                     <h2>
-                        <i class="fas fa-play-circle"></i>
+                        <i class="fas fa-play-circle" aria-hidden="true"></i>
                         <span data-lang="youtubersTitle">Ютуберы</span>
                     </h2>
                     <p class="text-secondary" data-lang="youtubersDesc">Собираем комьюнити</p>
                     <div class="profile-cards">
-                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" rel="noopener" class="profile-card-link" aria-label="YouTube-канал Neon Shadow">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.webp" alt="Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-neon-shadow.webp" alt="Аватар Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
                         </a>
-                        <a href="https://www.youtube.com/@Gc567" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@Gc567" target="_blank" rel="noopener" class="profile-card-link" aria-label="YouTube-канал Golden Creeper">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-golden-creeper.webp" alt="Аватар Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
                         </a>
-                        <a href="https://www.youtube.com/@werewolf-play" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@werewolf-play" target="_blank" rel="noopener" class="profile-card-link" aria-label="YouTube-канал Оборотень">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-werewolf.webp" alt="Оборотень" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-werewolf.webp" alt="Аватар Оборотень" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Оборотень</span>
                             </div>
                         </a>
-                        <a href="https://www.youtube.com/@mitmiplayyt" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@mitmiplayyt" target="_blank" rel="noopener" class="profile-card-link" aria-label="YouTube-канал Mitmi">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-mitmi.webp" alt="Mitmi" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-mitmi.webp" alt="Аватар Mitmi" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Mitmi</span>
                             </div>
                         </a>
-                        <a href="https://www.youtube.com/@stasyimpro6287" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@stasyimpro6287" target="_blank" rel="noopener" class="profile-card-link" aria-label="YouTube-канал Stasy">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-stasy.webp" alt="Stasy" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-stasy.webp" alt="Аватар Stasy" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">Stasy</span>
                             </div>
                         </a>
-                        <a href="https://www.youtube.com/@ggelita5951" target="_blank" class="profile-card-link">
+                        <a href="https://www.youtube.com/@ggelita5951" target="_blank" rel="noopener" class="profile-card-link" aria-label="YouTube-канал GGelita">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-ggelita.webp" alt="GGelita" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-ggelita.webp" alt="Аватар GGelita" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                                 </div>
                                 <span class="profile-name">GGelita</span>
                             </div>

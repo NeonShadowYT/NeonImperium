@@ -17,16 +17,28 @@
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="preconnect" href="https://www.youtube.com">
     <link rel="preconnect" href="https://i.ytimg.com">
     <link rel="preconnect" href="https://img.youtube.com">
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/typography.css">
+    <link rel="stylesheet" href="css/buttons.css">
+    <link rel="stylesheet" href="css/navigation.css">
+    <link rel="stylesheet" href="css/cards.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="css/feedback.css">
+    <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="style.css">
     <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'"><noscript>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js" integrity="sha384-3HPB1XT51W3gGRxAmZ+qbZwRpRlFQL632y8x+adAqCr4Wp3TaWwCLSTAJJKbyWEK" crossorigin="anonymous" defer></script>
+    <script src="js/config.js" defer></script>
+    <script src="js/core/cache-crypto.js" defer></script>
     <script src="js/utils.js" defer></script>
+    <script src="js/features/dialog.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/github-client.js" defer></script>
     <script src="js/features/ui-utils.js" defer></script>
@@ -93,6 +105,7 @@
             pointer-events: none;
             z-index: 1;
             overflow: hidden;
+            background: linear-gradient(135deg, #1a1a2e 0%, #252540 100%);
         }
 
         .desc-image video,
@@ -101,6 +114,11 @@
             height: 100%;
             object-fit: cover;
             display: block;
+        }
+
+        /* Poster остаётся видимым, пока видео не загружено */
+        .desc-image video[data-src]:not([src]) {
+            background: #1a1a2e;
         }
 
         .image-right .desc-image {
@@ -297,29 +315,29 @@
 </head>
 <body>
     <div class="page">
-        <nav class="nav-bar">
+        <nav class="nav-bar" role="navigation" aria-label="Основная навигация">
             <div class="nav-links">
                 <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
                 <a href="starve-neon.html" class="nav-link active" data-lang="navStarve">Starve Neon</a>
                 <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
                 <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
             </div>
-            <div class="lang-switcher"></div>
+            <div class="lang-switcher" aria-label="Переключатель языка"></div>
         </nav>
 
         <header class="card header-card game-header" style="background-image: url('images/starve-neon-preview.webp');">
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
-                        <img src="images/starve-neon-icon.webp" alt="Starve Neon Icon" class="game-icon" width="80" height="80">
+                        <img src="images/starve-neon-icon.webp" alt="Иконка Starve Neon" class="game-icon" width="80" height="80">
                     </div>
                     <div class="header-text">
                         <h1 class="game-title">Starve Neon</h1>
                         <div class="version-row">
                             <span class="version-badge" data-version-role="version" data-version-game="starve-neon">Загрузка...</span>
                             <div class="social-icons small">
-                                <a href="https://t.me/voididea" target="_blank" class="social-icon" aria-label="Telegram">
-                                    <i class="fab fa-telegram"></i>
+                                <a href="https://t.me/voididea" target="_blank" rel="noopener" class="social-icon" aria-label="Перейти в Telegram">
+                                    <i class="fab fa-telegram" aria-hidden="true"></i>
                                 </a>
                             </div>
                         </div>
@@ -328,60 +346,60 @@
             </div>
         </header>
 
-        <main>
+        <main role="main">
             <div class="row">
-                <section class="card trailer-card">
+                <section class="card trailer-card" aria-label="Трейлер">
                     <h2>
-                        <i class="fas fa-film"></i>
+                        <i class="fas fa-film" aria-hidden="true"></i>
                         <span data-lang="trailerTitle">Трейлер</span>
                     </h2>
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/eAUn6Solqbg?si=L7zUsV1M4aePPgp6"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/eAUn6Solqbg?si=L7zUsV1M4aePPgp6" title="Трейлер Starve Neon"></div>
                 </section>
 
-                <section class="card developer-card">
+                <section class="card developer-card" aria-label="Разработчик">
                     <h2>
-                        <i class="fas fa-user-astronaut"></i>
+                        <i class="fas fa-user-astronaut" aria-hidden="true"></i>
                         <span data-lang="developerTitle">Разработчик</span>
                     </h2>
                     <div class="developer-info">
                         <div class="avatar-wrapper large">
-                            <img src="images/avatar-neon-shadow.webp" alt="Neon Shadow" class="avatar" width="100" height="100" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                            <img src="images/avatar-neon-shadow.webp" alt="Аватар Neon Shadow" class="avatar" width="100" height="100" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                         </div>
                         <div class="developer-details">
                             <h3>Neon Shadow</h3>
                             <div class="developer-actions">
-                                <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" class="button small"><i class="fab fa-youtube"></i> YouTube</a>
-                                <a href="https://www.twitch.tv/neoncyndows" target="_blank" class="button small"><i class="fab fa-twitch"></i> Twitch</a>
-                                <a href="https://t.me/NeonCyndows" target="_blank" class="button small"><i class="fab fa-telegram"></i> Telegram</a>
-                                <a href="https://discord.com/users/857872869949177896" target="_blank" class="button small"><i class="fab fa-discord"></i> Discord</a>
+                                <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" rel="noopener" class="button small" aria-label="YouTube-канал Neon Shadow"><i class="fab fa-youtube" aria-hidden="true"></i> YouTube</a>
+                                <a href="https://www.twitch.tv/neoncyndows" target="_blank" rel="noopener" class="button small" aria-label="Twitch-канал Neon Shadow"><i class="fab fa-twitch" aria-hidden="true"></i> Twitch</a>
+                                <a href="https://t.me/NeonCyndows" target="_blank" rel="noopener" class="button small" aria-label="Telegram Neon Shadow"><i class="fab fa-telegram" aria-hidden="true"></i> Telegram</a>
+                                <a href="https://discord.com/users/857872869949177896" target="_blank" rel="noopener" class="button small" aria-label="Discord Neon Shadow"><i class="fab fa-discord" aria-hidden="true"></i> Discord</a>
                             </div>
                         </div>
                     </div>
                 </section>
             </div>
 
-            <section class="card download-card" id="download-section">
+            <section class="card download-card" id="download-section" aria-label="Скачать Starve Neon">
                 <div class="download-sections">
                     <div class="download-subsection">
-                        <h3><i class="fas fa-store"></i> <span data-lang="storeTitle">Площадки</span></h3>
+                        <h3><i class="fas fa-store" aria-hidden="true"></i> <span data-lang="storeTitle">Площадки</span></h3>
                         <div class="store-buttons">
-                            <a href="https://gamejolt.com/games/Starve-Neon/797491" target="_blank" class="download-button gamejolt">GameJolt</a>
-                            <a href="https://neon-imperium.itch.io/starve-neon" target="_blank" class="download-button itch">Itch.io</a>
-                            <a href="https://t.me/voididea" target="_blank" class="download-button telegram"><i class="fab fa-telegram"></i> Telegram</a>
+                            <a href="https://gamejolt.com/games/Starve-Neon/797491" target="_blank" rel="noopener" class="download-button gamejolt" aria-label="Скачать Starve Neon с GameJolt">GameJolt</a>
+                            <a href="https://neon-imperium.itch.io/starve-neon" target="_blank" rel="noopener" class="download-button itch" aria-label="Скачать Starve Neon с Itch.io">Itch.io</a>
+                            <a href="https://t.me/voididea" target="_blank" rel="noopener" class="download-button telegram" aria-label="Скачать Starve Neon из Telegram"><i class="fab fa-telegram" aria-hidden="true"></i> Telegram</a>
                         </div>
                     </div>
                     <div class="download-subsection">
-                        <h3><i class="fas fa-cloud"></i> <span data-lang="cloudTitle">Хранилища</span></h3>
+                        <h3><i class="fas fa-cloud" aria-hidden="true"></i> <span data-lang="cloudTitle">Хранилища</span></h3>
                         <div class="cloud-buttons">
-                            <a href="https://disk.yandex.ru/d/xx3iUMWhh0HRgA" target="_blank" class="download-button yandex" data-platform="Windows"><i class="fab fa-yandex"></i> Yandex</a>
-                            <a href="https://disk.yandex.ru/d/exGuuim7NjPFww" target="_blank" class="download-button yandex" data-platform="Android"><i class="fab fa-yandex"></i> Yandex</a>
-                            <a href="https://drive.google.com/file/d/1S0DE2mjGXr8eryQTfwz0jjjNCqvJVf-N/view?usp=sharing" target="_blank" class="download-button google" data-platform="Windows"><i class="fab fa-google"></i> Google</a>
-                            <a href="https://drive.google.com/file/d/1NeeQ8uysJIfbEaDQgk7Ts5Y9By7_jzmF/view?usp=sharing" target="_blank" class="download-button google" data-platform="Android"><i class="fab fa-google"></i> Google</a>
+                            <a href="https://disk.yandex.ru/d/xx3iUMWhh0HRgA" target="_blank" rel="noopener" class="download-button yandex" data-platform="Windows" aria-label="Скачать Starve Neon для Windows с Яндекс.Диска"><i class="fab fa-yandex" aria-hidden="true"></i> Yandex</a>
+                            <a href="https://disk.yandex.ru/d/exGuuim7NjPFww" target="_blank" rel="noopener" class="download-button yandex" data-platform="Android" aria-label="Скачать Starve Neon для Android с Яндекс.Диска"><i class="fab fa-yandex" aria-hidden="true"></i> Yandex</a>
+                            <a href="https://drive.google.com/file/d/1S0DE2mjGXr8eryQTfwz0jjjNCqvJVf-N/view?usp=sharing" target="_blank" rel="noopener" class="download-button google" data-platform="Windows" aria-label="Скачать Starve Neon для Windows с Google Drive"><i class="fab fa-google" aria-hidden="true"></i> Google</a>
+                            <a href="https://drive.google.com/file/d/1NeeQ8uysJIfbEaDQgk7Ts5Y9By7_jzmF/view?usp=sharing" target="_blank" rel="noopener" class="download-button google" data-platform="Android" aria-label="Скачать Starve Neon для Android с Google Drive"><i class="fab fa-google" aria-hidden="true"></i> Google</a>
                         </div>
                     </div>
                     <div class="download-subsection" id="github-block-container">
-                        <h3><i class="fab fa-github"></i> GitHub</h3>
-                        <p class="text-secondary"><i class="fas fa-circle-notch fa-spin"></i> Загрузка версий...</p>
+                        <h3><i class="fab fa-github" aria-hidden="true"></i> GitHub</h3>
+                        <p class="text-secondary"><i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> Загрузка версий...</p>
                     </div>
                     <div class="download-license">
                         <span data-lang="licenseAccept">Скачивая игру, вы принимаете</span>
@@ -390,22 +408,20 @@
                 </div>
             </section>
 
-            <section class="card">
+            <section class="card" aria-label="Описание Starve Neon">
                 <h2>
-                    <i class="fas fa-align-left"></i>
+                    <i class="fas fa-align-left" aria-hidden="true"></i>
                     <span data-lang="descriptionTitle">Описание</span>
                 </h2>
 
                 <div class="starve-description">
                     <div class="desc-block block-accent1 image-right">
                         <div class="desc-image">
-                            <video autoplay muted loop playsinline>
-                                <source src="images/banner-world.webm" type="video/webm">
-                            </video>
+                            <video muted loop playsinline preload="none" aria-hidden="true" data-src="images/banner-world.webm" poster="images/starve-neon-preview.webp"></video>
                         </div>
                         <div class="desc-text">
                             <h3>
-                                <span class="emoji">⚔️</span>
+                                <span class="emoji" aria-hidden="true">⚔️</span>
                                 <span data-lang="starveDetailedTitle">ОЧНУЛСЯ В ОБЛОМКАХ</span>
                             </h3>
                             <p data-lang="starveDetailedDesc1">Без памяти, без вещей, без союзников.</p>
@@ -417,7 +433,7 @@
                     <div class="desc-block block-accent2 no-image">
                         <div class="desc-text">
                             <h3>
-                                <span class="emoji">☠️</span>
+                                <span class="emoji" aria-hidden="true">☠️</span>
                                 <span data-lang="starveDeathTitle">СМЕРТЬ - ТУТОРИАЛ</span>
                             </h3>
                             <p data-lang="starveDeathDesc">Взял снаряжение в вылазку - будь готов его потерять.</p>
@@ -427,13 +443,11 @@
 
                     <div class="desc-block block-accent3 image-left">
                         <div class="desc-image">
-                            <video autoplay muted loop playsinline>
-                                <source src="images/banner-development.webm" type="video/webm">
-                            </video>
+                            <video muted loop playsinline preload="none" aria-hidden="true" data-src="images/banner-development.webm" poster="images/starve-neon-preview.webp"></video>
                         </div>
                         <div class="desc-text">
                             <h3>
-                                <span class="emoji">🔥</span>
+                                <span class="emoji" aria-hidden="true">🔥</span>
                                 <span data-lang="starveRiskTitle">ПРОГРЕССИЯ ЧЕРЕЗ РИСК</span>
                             </h3>
                             <p data-lang="starveRiskDesc">Туториал ведёт новичков за руку, но уже через 10 минут ты решаешь: бежать за золотом через медведей или вернуться на базу.</p>
@@ -443,13 +457,11 @@
 
                     <div class="desc-block block-accent4 image-right">
                         <div class="desc-image">
-                            <video autoplay muted loop playsinline>
-                                <source src="images/banner-interface.webm" type="video/webm">
-                            </video>
+                            <video muted loop playsinline preload="none" aria-hidden="true" data-src="images/banner-interface.webm" poster="images/starve-neon-preview.webp"></video>
                         </div>
                         <div class="desc-text">
                             <h3>
-                                <span class="emoji">🧬</span>
+                                <span class="emoji" aria-hidden="true">🧬</span>
                                 <span data-lang="starveGeneticsTitle">ТВОЙ БИЛД</span>
                             </h3>
                             <div class="quote" data-lang="starveGeneticsQuote"><strong>Каждый бафф тянет за собой дебафф.</strong> Имба без последствий не бывает.</div>
@@ -459,13 +471,11 @@
 
                     <div class="desc-block block-accent5 image-left">
                         <div class="desc-image">
-                            <video autoplay muted loop playsinline>
-                                <source src="images/banner-allies.webm" type="video/webm">
-                            </video>
+                            <video muted loop playsinline preload="none" aria-hidden="true" data-src="images/banner-allies.webm" poster="images/starve-neon-preview.webp"></video>
                         </div>
                         <div class="desc-text">
                             <h3>
-                                <span class="emoji">🌍</span>
+                                <span class="emoji" aria-hidden="true">🌍</span>
                                 <span data-lang="starveWorldTitle">МИР НЕ ЖДЁТ ТЕБЯ</span>
                             </h3>
                             <p data-lang="starveWorldDesc">Каждый биом - своя температура, свои ресурсы, свои твари. Без шкур медведя замёрзнешь в горе. Без льда сгоришь в вулкане.</p>
@@ -475,13 +485,11 @@
 
                     <div class="desc-block block-accent1 image-right">
                         <div class="desc-image">
-                            <video autoplay muted loop playsinline>
-                                <source src="images/banner-building.webm" type="video/webm">
-                            </video>
+                            <video muted loop playsinline preload="none" aria-hidden="true" data-src="images/banner-building.webm" poster="images/starve-neon-preview.webp"></video>
                         </div>
                         <div class="desc-text">
                             <h3>
-                                <span class="emoji">🏰</span>
+                                <span class="emoji" aria-hidden="true">🏰</span>
                                 <span data-lang="starveIslandTitle">ТВОЙ ОСТРОВ - ТВОЯ КРЕПОСТЬ</span>
                             </h3>
                             <p data-lang="starveIslandDesc">Строй стены, ставь верстаки, укрепляй фундамент. Как в Rust.</p>
@@ -493,7 +501,7 @@
                     <div class="desc-block block-accent2 no-image">
                         <div class="desc-text">
                             <h3>
-                                <span class="emoji">🤝</span>
+                                <span class="emoji" aria-hidden="true">🤝</span>
                                 <span data-lang="starveFactionsTitle">ФРАКЦИИ</span>
                             </h3>
                             <p data-lang="starveFactionsDesc">Люди-крабы-пираты, оборотни в пещерах из костей, древние стражи пустыни, самурайши у вулкана. С ними можно торговать, дружить, воевать.</p>
@@ -503,13 +511,11 @@
 
                     <div class="desc-block block-accent6 image-left">
                         <div class="desc-image">
-                            <video autoplay muted loop playsinline>
-                                <source src="images/banner-status.webm" type="video/webm">
-                            </video>
+                            <video muted loop playsinline preload="none" aria-hidden="true" data-src="images/banner-status.webm" poster="images/starve-neon-preview.webp"></video>
                         </div>
                         <div class="desc-text">
                             <h3>
-                                <span class="emoji">⚡</span>
+                                <span class="emoji" aria-hidden="true">⚡</span>
                                 <span data-lang="starvePlayTitle">ИГРАЙ КАК ХОЧЕШЬ</span>
                             </h3>
                             <p data-lang="starvePlayDesc1">ПК и телефон - в одном лобби. Без скидок на FPS. <strong>Без доната и рекламы.</strong> Всё за игру. Пасс без дедлайнов - играй в своём темпе.</p>
@@ -521,38 +527,38 @@
                     <div class="desc-block no-image block-follow" style="text-align: center; border-left: none;">
                         <div class="desc-text" style="background: var(--glass-bg); backdrop-filter: blur(4px);">
                             <h3>
-                                <span class="emoji">📸</span>
+                                <span class="emoji" aria-hidden="true">📸</span>
                                 <span data-lang="starveFollow">СЛЕДИ ЗА РАЗРАБОТКОЙ</span>
                             </h3>
                             <p data-lang="starveFeedback">Твой отзыв меняет игру. Присоединяйся к сообществу и влияй на развитие.</p>
                             <div class="social-links">
                                 <div class="social-row">
-                                    <a target="_blank" href="https://www.youtube.com/@NeonShadow-neon">
+                                    <a target="_blank" rel="noopener" href="https://www.youtube.com/@NeonShadow-neon" aria-label="YouTube-канал Neon Shadow">
                                         <img alt="YouTube" src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white">
                                     </a>
-                                    <a target="_blank" href="https://www.twitch.tv/neoncyndows">
+                                    <a target="_blank" rel="noopener" href="https://www.twitch.tv/neoncyndows" aria-label="Twitch-канал Neon Shadow">
                                         <img alt="Twitch" src="https://img.shields.io/twitch/status/neoncyndows?style=for-the-badge&logo=twitch&logoColor=white&label=Twitch&labelColor=9146FF&color=282c34">
                                     </a>
-                                    <a target="_blank" href="https://discord.com/invite/9gv5sRhk9R">
+                                    <a target="_blank" rel="noopener" href="https://discord.com/invite/9gv5sRhk9R" aria-label="Discord-сервер Neon Imperium">
                                         <img alt="Discord" src="https://img.shields.io/discord/1033727594467704842?style=for-the-badge&logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=282c34">
                                     </a>
-                                    <a target="_blank" href="https://t.me/voididea">
+                                    <a target="_blank" rel="noopener" href="https://t.me/voididea" aria-label="Telegram-канал Neon Imperium">
                                         <img alt="Telegram" src="https://telegram-badge.vercel.app/api/telegram-badge?channelId=@voididea&style=for-the-badge&logo=telegram&logoColor=white&label=Telegram&labelColor=26A5E4&color=282c34">
                                     </a>
-                                    <a target="_blank" href="https://boosty.to/neoncyndows">
+                                    <a target="_blank" rel="noopener" href="https://boosty.to/neoncyndows" aria-label="Boosty Neon Shadow">
                                         <img alt="Boosty" src="https://img.shields.io/badge/Boosty-FF5E00?style=for-the-badge&logo=boosty&logoColor=white">
                                     </a>
                                 </div>
                                 <div class="social-row">
-                                    <a target="_blank" href="https://t.me/NeonCyndows">
+                                    <a target="_blank" rel="noopener" href="https://t.me/NeonCyndows" aria-label="Telegram-личка Neon Shadow">
                                         <img alt="Telegram DM" src="https://img.shields.io/badge/Telegram-Личка-26A5E4?style=for-the-badge&logo=telegram&logoColor=white">
                                     </a>
-                                    <a target="_blank" href="https://discord.com/users/857872869949177896">
+                                    <a target="_blank" rel="noopener" href="https://discord.com/users/857872869949177896" aria-label="Discord-личка Neon Shadow">
                                         <img alt="Discord DM" src="https://img.shields.io/badge/Discord-Личка-5865F2?style=for-the-badge&logo=discord&logoColor=white">
                                     </a>
                                 </div>
                                 <div class="social-row">
-                                    <a target="_blank" href="https://github.com/NeonShadowYT">
+                                    <a target="_blank" rel="noopener" href="https://github.com/NeonShadowYT" aria-label="GitHub Neon Shadow">
                                         <img title="GitHub" alt="GitHub" src="https://img.shields.io/badge/GitHub-2d2f48?style=for-the-badge&logo=github&logoColor=white">
                                     </a>
                                 </div>
@@ -564,46 +570,46 @@
                     </div>
             </section>
 
-            <section class="card">
+            <section class="card" aria-label="Системные требования">
                 <h2>
-                    <i class="fas fa-microchip"></i>
+                    <i class="fas fa-microchip" aria-hidden="true"></i>
                     <span data-lang="requirementsTitle">Системные требования</span>
                 </h2>
                 <p class="text-secondary" data-lang="requirementsNote">Примерные значения основанные на стандартных настройках для этих устройств</p>
                 <div class="requirements-grid">
                     <div class="req-item tilt-card">
                         <div class="req-label">
-                            <i class="fas fa-tachometer-alt"></i>
+                            <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
                             40-60 <span class="fps-badge">FPS</span>
                         </div>
                         <div class="req-specs">
-                            <div class="req-spec"><i class="fas fa-microchip"></i> <span data-lang="cpu60">Xeon-E2650 v2 3.00 GHz</span></div>
-                            <div class="req-spec"><i class="fas fa-tv"></i> <span data-lang="gpu60">GT 730 4GB</span></div>
+                            <div class="req-spec"><i class="fas fa-microchip" aria-hidden="true"></i> <span data-lang="cpu60">Xeon-E2650 v2 3.00 GHz</span></div>
+                            <div class="req-spec"><i class="fas fa-tv" aria-hidden="true"></i> <span data-lang="gpu60">GT 730 4GB</span></div>
                         </div>
                     </div>
                     <div class="req-item tilt-card">
                         <div class="req-label">
-                            <i class="fas fa-tachometer-alt"></i>
+                            <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
                             120-180 <span class="fps-badge">FPS</span>
                         </div>
                         <div class="req-specs">
-                            <div class="req-spec"><i class="fas fa-microchip"></i> <span data-lang="cpu180">AMD Athlon X4 840 3.10 GHz</span></div>
-                            <div class="req-spec"><i class="fas fa-tv"></i> <span data-lang="gpu180">GT 1030 2GB</span></div>
+                            <div class="req-spec"><i class="fas fa-microchip" aria-hidden="true"></i> <span data-lang="cpu180">AMD Athlon X4 840 3.10 GHz</span></div>
+                            <div class="req-spec"><i class="fas fa-tv" aria-hidden="true"></i> <span data-lang="gpu180">GT 1030 2GB</span></div>
                         </div>
                     </div>
                     <div class="req-item tilt-card">
                         <div class="req-label">
-                            <i class="fas fa-tachometer-alt"></i>
+                            <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
                             600-1000 <span class="fps-badge">FPS</span>
                         </div>
                         <div class="req-specs">
-                            <div class="req-spec"><i class="fas fa-microchip"></i> <span data-lang="cpu1000">AMD Ryzen 7 7435HS 4.00 GHz</span></div>
-                            <div class="req-spec"><i class="fas fa-tv"></i> <span data-lang="gpu1000">RTX 3050 4GB Laptop</span></div>
+                            <div class="req-spec"><i class="fas fa-microchip" aria-hidden="true"></i> <span data-lang="cpu1000">AMD Ryzen 7 7435HS 4.00 GHz</span></div>
+                            <div class="req-spec"><i class="fas fa-tv" aria-hidden="true"></i> <span data-lang="gpu1000">RTX 3050 4GB Laptop</span></div>
                         </div>
                     </div>
                 </div>
                 <div class="consumption-card tilt-card">
-                    <h3><i class="fas fa-chart-line"></i> <span data-lang="consumptionTitle">Потребление</span></h3>
+                    <h3><i class="fas fa-chart-line" aria-hidden="true"></i> <span data-lang="consumptionTitle">Потребление</span></h3>
                     <p class="text-secondary" data-lang="consumptionNote">Примерные значения</p>
                     <table class="consumption-table">
                         <tr><td data-lang="vram">Видеопамять</td><td data-lang="vramVal">512-1024 Мб</td></tr>
@@ -614,40 +620,46 @@
                 </div>
             </section>
 
-            <section class="card">
+            <section class="card" aria-label="Видео сообщества">
                 <h2>
-                    <i class="fas fa-video"></i>
+                    <i class="fas fa-video" aria-hidden="true"></i>
                     <span data-lang="videoTitle">Видео</span>
                 </h2>
                 <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
                 <div class="video-grid">
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX"></div>
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLKE0gB8r2LfIFUF9To0uvtPcGwrY95I34"></div>
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLEdyxawD7ICRGhMZ4460wapu4HV0E7lxn"></div>
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLWU6pprP3Hd8vtSsR4B90UBdc5llgqyel"></div>
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLjbbtkkybwidYmRENfKJem5KC3crUZ1IN"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLTwujAlgCk2O13MQktpU0tn_-9wuWFuGX" title="Видео сообщества Starve Neon"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLKE0gB8r2LfIFUF9To0uvtPcGwrY95I34" title="Видео сообщества Starve Neon"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLEdyxawD7ICRGhMZ4460wapu4HV0E7lxn" title="Видео сообщества Starve Neon"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLWU6pprP3Hd8vtSsR4B90UBdc5llgqyel" title="Видео сообщества Starve Neon"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLjbbtkkybwidYmRENfKJem5KC3crUZ1IN" title="Видео сообщества Starve Neon"></div>
                 </div>
             </section>
 
-            <section class="card" id="feedback-section" data-game="starve-neon">
+            <section class="card" id="feedback-section" data-game="starve-neon" aria-label="Идеи, баги и отзывы">
                 <div class="feedback-container">
                     <div class="loading-spinner">
-                        <i class="fas fa-circle-notch fa-spin"></i>
+                        <i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i>
                         <p data-lang="feedbackLoading">Загрузка обратной связи...</p>
                     </div>
                 </div>
             </section>
 
-            <section class="card">
+            <section class="card" aria-label="Обновления Starve Neon">
                 <div class="updates-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);"></i>
+                        <i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);" aria-hidden="true"></i>
                         <h2 style="margin:0;" data-lang="updatesTitle">Обновления</h2>
                     </div>
                 </div>
                 <div id="game-updates" data-game="starve-neon"></div>
             </section>
         </main>
+
+        <footer class="license-footer" role="contentinfo" style="margin-top: 24px;">
+            <p style="text-align:center; color: var(--text-secondary); font-size: 13px;">
+                &copy; 2024–2026 Neon Imperium
+            </p>
+        </footer>
     </div>
 </body>
 </html>

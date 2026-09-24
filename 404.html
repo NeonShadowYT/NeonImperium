@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="referrer" content="same-origin">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1e1e30">
     <title data-lang="notFoundTitle">Neon Imperium - 404</title>
@@ -14,13 +15,25 @@
     <meta property="og:url" content="https://neonshadowyt.github.io/NeonImperium/404.html">
     <meta property="og:type" content="website">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/typography.css">
+    <link rel="stylesheet" href="css/buttons.css">
+    <link rel="stylesheet" href="css/navigation.css">
+    <link rel="stylesheet" href="css/cards.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="css/feedback.css">
+    <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="style.css">
     <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'"><noscript>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js" integrity="sha384-3HPB1XT51W3gGRxAmZ+qbZwRpRlFQL632y8x+adAqCr4Wp3TaWwCLSTAJJKbyWEK" crossorigin="anonymous" defer></script>
+    <script src="js/config.js" defer></script>
+    <script src="js/core/cache-crypto.js" defer></script>
     <script src="js/utils.js" defer></script>
+    <script src="js/features/dialog.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/github-client.js" defer></script>
     <script src="js/features/ui-utils.js" defer></script>
@@ -117,51 +130,51 @@
 </head>
 <body>
     <div class="page">
-        <nav class="nav-bar">
+        <nav class="nav-bar" role="navigation" aria-label="Основная навигация">
             <div class="nav-links">
                 <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
                 <a href="starve-neon.html" class="nav-link" data-lang="navStarve">Starve Neon</a>
                 <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
                 <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
             </div>
-            <div class="lang-switcher"></div>
+            <div class="lang-switcher" aria-label="Переключатель языка"></div>
         </nav>
 
         <div class="page-404-wrapper">
-            <div class="bg-gif-layer" id="bgGifLayer">
-                <img src="https://img.itch.zone/aW1nLzIyNjAyNTM1LmdpZg==/original/HYXFD4.gif" alt="фон" loading="lazy">
+            <div class="bg-gif-layer" id="bgGifLayer" aria-hidden="true">
+                <img src="https://img.itch.zone/aW1nLzIyNjAyNTM1LmdpZg==/original/HYXFD4.gif" alt="" loading="lazy">
             </div>
-            <div class="bg-gif-mask"></div>
+            <div class="bg-gif-mask" aria-hidden="true"></div>
 
-            <main>
+            <main role="main">
                 <div class="card" style="text-align: center; padding: 50px 28px;">
                     <h1 data-lang="notFoundTitle" style="font-size: 72px; margin-bottom: 20px;">404</h1>
                     <p class="text-secondary" data-lang="notFoundDesc" style="font-size: 18px; margin-bottom: 30px;"></p>
-                    <a href="index.html" class="button wide" data-lang="backHome">Вернуться на главную</a>
+                    <a href="index.html" class="button wide" data-lang="backHome" aria-label="Вернуться на главную страницу">Вернуться на главную</a>
 
                     <div class="social-links-404">
-                        <a target="_blank" href="https://www.youtube.com/@NeonShadow-neon">
+                        <a target="_blank" rel="noopener" href="https://www.youtube.com/@NeonShadow-neon" aria-label="YouTube-канал Neon Shadow">
                             <img alt="YouTube" src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white">
                         </a>
-                        <a target="_blank" href="https://www.twitch.tv/neoncyndows">
+                        <a target="_blank" rel="noopener" href="https://www.twitch.tv/neoncyndows" aria-label="Twitch-канал Neon Shadow">
                             <img alt="Twitch" src="https://img.shields.io/twitch/status/neoncyndows?style=for-the-badge&logo=twitch&logoColor=white&label=Twitch&labelColor=9146FF&color=282c34">
                         </a>
-                        <a target="_blank" href="https://discord.com/invite/9gv5sRhk9R">
+                        <a target="_blank" rel="noopener" href="https://discord.com/invite/9gv5sRhk9R" aria-label="Discord-сервер Neon Imperium">
                             <img alt="Discord" src="https://img.shields.io/discord/1033727594467704842?style=for-the-badge&logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=282c34">
                         </a>
-                        <a target="_blank" href="https://t.me/voididea">
+                        <a target="_blank" rel="noopener" href="https://t.me/voididea" aria-label="Telegram-канал Neon Imperium">
                             <img alt="Telegram" src="https://telegram-badge.vercel.app/api/telegram-badge?channelId=@voididea&style=for-the-badge&logo=telegram&logoColor=white&label=Telegram&labelColor=26A5E4&color=282c34">
                         </a>
-                        <a target="_blank" href="https://boosty.to/neoncyndows">
+                        <a target="_blank" rel="noopener" href="https://boosty.to/neoncyndows" aria-label="Boosty Neon Shadow">
                             <img alt="Boosty" src="https://img.shields.io/badge/Boosty-FF5E00?style=for-the-badge&logo=boosty&logoColor=white">
                         </a>
-                        <a target="_blank" href="https://t.me/NeonCyndows">
+                        <a target="_blank" rel="noopener" href="https://t.me/NeonCyndows" aria-label="Telegram-личка Neon Shadow">
                             <img alt="Telegram DM" src="https://img.shields.io/badge/Telegram-Личка-26A5E4?style=for-the-badge&logo=telegram&logoColor=white">
                         </a>
-                        <a target="_blank" href="https://discord.com/users/857872869949177896">
+                        <a target="_blank" rel="noopener" href="https://discord.com/users/857872869949177896" aria-label="Discord-личка Neon Shadow">
                             <img alt="Discord DM" src="https://img.shields.io/badge/Discord-Личка-5865F2?style=for-the-badge&logo=discord&logoColor=white">
                         </a>
-                        <a target="_blank" href="https://github.com/NeonShadowYT">
+                        <a target="_blank" rel="noopener" href="https://github.com/NeonShadowYT" aria-label="GitHub Neon Shadow">
                             <img alt="GitHub" src="https://img.shields.io/badge/GitHub-2d2f48?style=for-the-badge&logo=github&logoColor=white">
                         </a>
                     </div>

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://neonshadowyt.github.io/NeonImperium/sitemap.xml

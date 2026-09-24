@@ -17,16 +17,28 @@
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="preconnect" href="https://www.youtube.com">
     <link rel="preconnect" href="https://i.ytimg.com">
     <link rel="preconnect" href="https://img.youtube.com">
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/typography.css">
+    <link rel="stylesheet" href="css/buttons.css">
+    <link rel="stylesheet" href="css/navigation.css">
+    <link rel="stylesheet" href="css/cards.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="css/feedback.css">
+    <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="style.css">
     <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'"><noscript>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js" integrity="sha384-3HPB1XT51W3gGRxAmZ+qbZwRpRlFQL632y8x+adAqCr4Wp3TaWwCLSTAJJKbyWEK" crossorigin="anonymous" defer></script>
+    <script src="js/config.js" defer></script>
+    <script src="js/core/cache-crypto.js" defer></script>
     <script src="js/utils.js" defer></script>
+    <script src="js/features/dialog.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/github-client.js" defer></script>
     <script src="js/features/ui-utils.js" defer></script>
@@ -66,21 +78,21 @@
 </head>
 <body>
     <div class="page">
-        <nav class="nav-bar">
+        <nav class="nav-bar" role="navigation" aria-label="Основная навигация">
             <div class="nav-links">
                 <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
                 <a href="starve-neon.html" class="nav-link" data-lang="navStarve">Starve Neon</a>
                 <a href="alpha-01.html" class="nav-link active" data-lang="navAlpha">Alpha 01</a>
                 <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
             </div>
-            <div class="lang-switcher"></div>
+            <div class="lang-switcher" aria-label="Переключатель языка"></div>
         </nav>
 
         <header class="card header-card game-header" style="background-image: url('images/alpha-01-header.webp');">
             <div class="header-overlay">
                 <div class="header-content">
                     <div class="game-icon-circle">
-                        <img src="images/alpha-01-icon.webp" alt="Alpha 01 Icon" class="game-icon" width="80" height="80">
+                        <img src="images/alpha-01-icon.webp" alt="Иконка Alpha 01" class="game-icon" width="80" height="80">
                     </div>
                     <div class="header-text">
                         <h1 class="game-title">Alpha 01</h1>
@@ -90,41 +102,41 @@
             </div>
         </header>
 
-        <main>
+        <main role="main">
             <div class="row">
-                <section class="card trailer-card">
+                <section class="card trailer-card" aria-label="Трейлер">
                     <h2>
-                        <i class="fas fa-film"></i>
+                        <i class="fas fa-film" aria-hidden="true"></i>
                         <span data-lang="trailerTitle">Трейлер</span>
                     </h2>
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLjbbtkkybwieyQQZPizxutdLUOHErKLcu"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLjbbtkkybwieyQQZPizxutdLUOHErKLcu" title="Трейлер Alpha 01"></div>
                 </section>
 
-                <section class="card developer-card">
+                <section class="card developer-card" aria-label="Разработчик">
                     <h2>
-                        <i class="fas fa-user-astronaut"></i>
+                        <i class="fas fa-user-astronaut" aria-hidden="true"></i>
                         <span data-lang="developerTitle">Разработчик</span>
                     </h2>
                     <div class="developer-info">
                         <div class="avatar-wrapper large">
-                            <img src="images/avatar-golden-creeper.webp" alt="Golden Creeper" class="avatar" width="100" height="100" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                            <img src="images/avatar-golden-creeper.webp" alt="Аватар Golden Creeper" class="avatar" width="100" height="100" loading="lazy" onerror="this.src='images/default-avatar.webp'">
                         </div>
                         <div class="developer-details">
                             <h3>Golden Creeper</h3>
                             <div class="developer-actions">
-                                <a href="https://www.youtube.com/@Gc567" target="_blank" class="button small"><i class="fab fa-youtube"></i> YouTube</a>
+                                <a href="https://www.youtube.com/@Gc567" target="_blank" rel="noopener" class="button small" aria-label="YouTube-канал Golden Creeper"><i class="fab fa-youtube" aria-hidden="true"></i> YouTube</a>
                             </div>
                         </div>
                     </div>
                 </section>
             </div>
 
-            <section class="card download-card">
+            <section class="card download-card" aria-label="Скачать Alpha 01">
                 <div class="download-header">
                     <h2 data-lang="downloadTitle">Скачать</h2>
                 </div>
                 <div class="download-buttons">
-                    <a href="https://gamejolt.com/games/alpha_01/797509" target="_blank" class="download-button gamejolt">GameJolt</a>
+                    <a href="https://gamejolt.com/games/alpha_01/797509" target="_blank" rel="noopener" class="download-button gamejolt" aria-label="Скачать Alpha 01 с GameJolt">GameJolt</a>
                 </div>
                 <p class="text-secondary small-note" data-lang="alphaDownloadNote">Версия 0.0.5.2 · Обновление от 21.01.2024</p>
                 <p style="font-size: 13px; color: var(--text-secondary); margin-top: 15px;">
@@ -133,57 +145,63 @@
                 </p>
             </section>
 
-            <section class="card">
+            <section class="card" aria-label="Описание Alpha 01">
                 <h2>
-                    <i class="fas fa-align-left"></i>
+                    <i class="fas fa-align-left" aria-hidden="true"></i>
                     <span data-lang="descriptionTitle">Описание</span>
                 </h2>
                 <div class="features-grid">
                     <div class="feature-item tilt-card">
-                        <span class="feature-icon">🤖</span>
+                        <span class="feature-icon" aria-hidden="true">🤖</span>
                         <h3 data-lang="alphaStoryTitle">Сюжет</h3>
                         <p data-lang="alphaStoryDesc">Alpha 01 это top-down шутер в котором вы: робот который должен помочь солдатам, но потом всё становится сложнее чем просто помощь...</p>
                     </div>
                     <div class="feature-item tilt-card">
-                        <span class="feature-icon">⚙️</span>
+                        <span class="feature-icon" aria-hidden="true">⚙️</span>
                         <h3 data-lang="alphaStatusTitle">Статус</h3>
                         <p data-lang="alphaStatusDesc">Игра находится в активной разработке. Текущая версия: 0.0.5.2</p>
                     </div>
                 </div>
             </section>
 
-            <section class="card">
+            <section class="card" aria-label="Видео сообщества">
                 <h2>
-                    <i class="fas fa-video"></i>
+                    <i class="fas fa-video" aria-hidden="true"></i>
                     <span data-lang="videoTitle">Видео</span>
                 </h2>
                 <p class="text-secondary" data-lang="videoDesc">Подборка контента от сообщества</p>
                 <div class="video-grid">
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLjbbtkkybwieyQQZPizxutdLUOHErKLcu"></div>
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLVUhLOOZt89xqlkJxSOFrD7trOMC0x4Ma"></div>
-                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/7jsqU_VfGZ0"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLjbbtkkybwieyQQZPizxutdLUOHErKLcu" title="Видео Alpha 01"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/videoseries?list=PLVUhLOOZt89xqlkJxSOFrD7trOMC0x4Ma" title="Видео Alpha 01"></div>
+                    <div class="lazy-yt" data-src="https://www.youtube-nocookie.com/embed/7jsqU_VfGZ0" title="Видео Alpha 01"></div>
                 </div>
             </section>
 
-            <section class="card" id="feedback-section" data-game="alpha-01">
+            <section class="card" id="feedback-section" data-game="alpha-01" aria-label="Идеи, баги и отзывы">
                 <div class="feedback-container">
                     <div class="loading-spinner">
-                        <i class="fas fa-circle-notch fa-spin"></i>
+                        <i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i>
                         <p data-lang="feedbackLoading">Загрузка обратной связи...</p>
                     </div>
                 </div>
             </section>
 
-            <section class="card">
+            <section class="card" aria-label="Обновления Alpha 01">
                 <div class="updates-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);"></i>
+                        <i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);" aria-hidden="true"></i>
                         <h2 style="margin:0;" data-lang="updatesTitle">Обновления</h2>
                     </div>
                 </div>
                 <div id="game-updates" data-game="alpha-01"></div>
             </section>
         </main>
+
+        <footer class="license-footer" role="contentinfo" style="margin-top: 24px;">
+            <p style="text-align:center; color: var(--text-secondary); font-size: 13px;">
+                &copy; 2024–2026 Neon Imperium
+            </p>
+        </footer>
     </div>
 </body>
 </html>

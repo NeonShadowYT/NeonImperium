@@ -1,11 +1,11 @@
 // js/github-client.js – универсальный клиент GitHub API с ретраями, кэшированием и аутентификацией
+// cacheGet/cacheSet теперь асинхронные (шифрование через CacheCrypto).
 (function() {
-    // Зависит от Utils (должен быть загружен ранее)
     const { cacheGet, cacheSet, cacheRemoveByPrefix, createAbortable, debounce } = window.Utils;
 
     const BASE_URL = 'https://api.github.com';
     const DEFAULT_RETRIES = 3;
-    const RETRY_DELAY = 1000; // начальная задержка, экспоненциальный рост
+    const RETRY_DELAY = 1000;
     const CONFIG = window.GithubCore?.CONFIG || { REPO_OWNER: 'NeonShadowYT', REPO_NAME: 'NeonImperium' };
 
     class GitHubClient {
@@ -15,24 +15,19 @@
 
         setToken(token) {
             this.token = token;
-            // Сбрасываем кеш для запросов к API, чтобы использовать новый токен
             window.GithubCore?.cacheRemoveByPrefix('gh_api_/repos/');
             console.log('[GitHubClient] Токен обновлён, кеш API очищен');
         }
 
         getToken() {
-            // Приоритет: переданный токен > sessionStorage > localStorage (для совместимости)
             if (this.token) return this.token;
             const sessionToken = sessionStorage.getItem('github_token');
             if (sessionToken) return sessionToken;
-            // Если ничего нет, пробуем взять из localStorage (но там может быть зашифрованный, мы его не используем)
-            // Для обратной совместимости с предыдущей версией, попробуем прочитать обычный токен
             const localToken = localStorage.getItem('github_token');
             if (localToken) return localToken;
             return null;
         }
 
-        // Универсальный метод запроса с ретраями
         async request(endpoint, options = {}, retries = DEFAULT_RETRIES) {
             const url = endpoint.startsWith('http') ? endpoint : `${BASE_URL}${endpoint}`;
             const token = this.getToken();
@@ -43,7 +38,6 @@
             if (token) {
                 headers['Authorization'] = `Bearer ${token}`;
             } else {
-                // Если токена нет, не делаем запрос, а кидаем ошибку
                 throw new Error('No GitHub token provided');
             }
 
@@ -58,13 +52,11 @@
                     });
                     clearTimeout(timeoutId);
 
-                    // Успех
                     if (response.ok) {
                         if (response.status === 204) return null;
                         return await response.json();
                     }
 
-                    // Ошибки, которые можно повторить
                     if (response.status >= 500 || response.status === 429) {
                         lastError = new Error(`HTTP ${response.status}`);
                         const delay = RETRY_DELAY * Math.pow(2, attempt);
@@ -72,7 +64,6 @@
                         continue;
                     }
 
-                    // Ошибки авторизации или клиентские – не повторяем
                     let errorMsg = `HTTP ${response.status}`;
                     try {
                         const errorData = await response.json();
@@ -93,32 +84,20 @@
             throw lastError || new Error('Request failed');
         }
 
-        // ----- Специализированные API -----
-        get issues() {
-            return new IssuesAPI(this);
-        }
-
-        get reactions() {
-            return new ReactionsAPI(this);
-        }
-
-        get comments() {
-            return new CommentsAPI(this);
-        }
+        get issues() { return new IssuesAPI(this); }
+        get reactions() { return new ReactionsAPI(this); }
+        get comments() { return new CommentsAPI(this); }
     }
 
     // ------ Issues API ------
     class IssuesAPI {
-        constructor(client) {
-            this.client = client;
-        }
+        constructor(client) { this.client = client; }
 
-        // Загрузка списка issues с кэшированием
         async load({ labels = '', state = 'open', per_page = 20, page = 1, signal } = {}) {
             const query = new URLSearchParams({ state, per_page, page, labels }).toString();
             const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?${query}`;
             const cacheKey = `gh_api_${url}`;
-            const cached = cacheGet(cacheKey);
+            const cached = await cacheGet(cacheKey);
             if (cached && !signal?.aborted) {
                 // Фоновое обновление
                 this.client.request(url, { signal: AbortSignal.timeout(5000) })
@@ -127,14 +106,14 @@
                 return cached;
             }
             const data = await this.client.request(url, { signal });
-            cacheSet(cacheKey, data);
+            await cacheSet(cacheKey, data);
             return data;
         }
 
         async loadOne(issueNumber, signal) {
             const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`;
             const cacheKey = `gh_api_${url}`;
-            const cached = cacheGet(cacheKey);
+            const cached = await cacheGet(cacheKey);
             if (cached && !signal?.aborted) {
                 this.client.request(url, { signal: AbortSignal.timeout(5000) })
                     .then(data => cacheSet(cacheKey, data))
@@ -142,7 +121,7 @@
                 return cached;
             }
             const data = await this.client.request(url, { signal });
-            cacheSet(cacheKey, data);
+            await cacheSet(cacheKey, data);
             return data;
         }
 
@@ -184,14 +163,12 @@
 
     // ------ Reactions API ------
     class ReactionsAPI {
-        constructor(client) {
-            this.client = client;
-        }
+        constructor(client) { this.client = client; }
 
         async load(issueNumber, signal) {
             const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
             const cacheKey = `gh_api_${url}`;
-            const cached = cacheGet(cacheKey);
+            const cached = await cacheGet(cacheKey);
             if (cached && !signal?.aborted) {
                 this.client.request(url, { signal: AbortSignal.timeout(5000) })
                     .then(data => cacheSet(cacheKey, data))
@@ -199,7 +176,7 @@
                 return cached;
             }
             const data = await this.client.request(url, { signal });
-            cacheSet(cacheKey, data);
+            await cacheSet(cacheKey, data);
             return data;
         }
 
@@ -226,14 +203,12 @@
 
     // ------ Comments API ------
     class CommentsAPI {
-        constructor(client) {
-            this.client = client;
-        }
+        constructor(client) { this.client = client; }
 
         async load(issueNumber, signal) {
             const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`;
             const cacheKey = `gh_api_${url}`;
-            const cached = cacheGet(cacheKey);
+            const cached = await cacheGet(cacheKey);
             if (cached && !signal?.aborted) {
                 this.client.request(url, { signal: AbortSignal.timeout(5000) })
                     .then(data => cacheSet(cacheKey, data))
@@ -241,7 +216,7 @@
                 return cached;
             }
             const data = await this.client.request(url, { signal });
-            cacheSet(cacheKey, data);
+            await cacheSet(cacheKey, data);
             return data;
         }
 
@@ -274,7 +249,6 @@
         }
     }
 
-    // Единый экземпляр клиента (ленивая инициализация)
     let clientInstance = null;
 
     function getClient() {
@@ -284,18 +258,15 @@
         return clientInstance;
     }
 
-    // Обновление токена (вызывается из github-auth.js)
     function updateToken(token) {
         const client = getClient();
         client.setToken(token);
     }
 
-    // Экспорт в глобальную область
     window.GitHubClient = GitHubClient;
     window.GitHubAPIClient = {
         getClient,
         updateToken,
-        // Для удобства – прямые методы
         request: (...args) => getClient().request(...args),
         issues: () => getClient().issues,
         reactions: () => getClient().reactions,

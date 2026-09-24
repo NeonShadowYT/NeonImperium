@@ -44,46 +44,52 @@ The site is fully integrated with the **GitHub API**, supports **offline mode**,
 ## 🔥 Key Features
 
 ### For Players
-- **Home page** – cards of all projects with descriptions and a "Details" button.
-- **Dedicated game pages** – trailers (YouTube playlists), descriptions, system requirements, community videos.
-- **Download** – links to GameJolt, Itch.io, Yandex.Disk, Google Drive, and **GitHub Releases** (auto‑fetch versions for Windows/Android).
-- **Language switching** – Russian and English, translations stored in JSON and loaded on the fly.
-- **Responsive design** – looks great on both mobile and desktop.
-- **3D effects** – card tilt and header parallax (desktop only).
+- **Home page** — cards of all projects with descriptions and a "Details" button.
+- **Dedicated game pages** — trailers (YouTube playlists), descriptions, system requirements, community videos.
+- **Download** — links to GameJolt, Itch.io, Yandex.Disk, Google Drive, and **GitHub Releases** (auto-fetch versions for Windows/Android).
+- **Language switching** — Russian and English, translations stored in JSON and loaded on the fly.
+- **Responsive design** — looks great on both mobile and desktop.
+- **3D effects** — card tilt and header parallax (desktop only).
+- **Lazy video descriptions** — WebM clips in the Starve Neon description start only when visible (not loaded at all on mobile).
 
 ### For the Community (requires a GitHub token)
-- **GitHub login** – classic token with `repo` and `gist` scopes.
-- **Feedback** – create ideas, bug reports, reviews directly via GitHub Issues.
-- **Reactions** – ❤️, 👀 and more on posts and comments.
-- **Comments** – edit, delete, Markdown support.
-- **News & updates** – published via Issues with labels `type:news` and `type:update`.
-- **Private posts** – visible only to specified users, body encrypted with XOR.
-- **Polls** – embedded directly into the post body via special syntax.
-- **Bookmark storage** – each user can save posts and videos to their private Gist.
-- **Admin panel** – add/edit/close posts, buttons "Add news" and "Add update".
+- **GitHub login** — classic token with `repo` and `gist` scopes.
+- **Feedback** — create ideas, bug reports, reviews directly via GitHub Issues.
+- **Reactions** — ❤️, 👀 and more on posts and comments.
+- **Comments** — edit, delete, Markdown support.
+- **News & updates** — published via Issues with labels `type:news` and `type:update`.
+- **Polls** — embedded directly into the post body via special syntax.
+- **Bookmark storage** — each user can save posts and videos to their private Gist (encrypted with AES-GCM on device).
+- **Admin panel** — add/edit/close posts, buttons "Add news" and "Add update".
 
 ### Technical Highlights
-- **Service Worker** – caches static assets, enables offline browsing.
-- **Background Sync** – reactions and comments are queued and sent when the network is back.
-- **Lazy loading videos** – YouTube players load only when visible.
-- **GIF/WebM banners** – background animations in feature cards (loaded via Intersection Observer).
-- **Live preview** – Markdown renders in real‑time when creating a post.
-- **Custom tags** – spoilers, tables, progress bars, colored text, Font Awesome icons.
+- **Service Worker** — caches static assets, enables offline browsing.
+- **Background Sync** — reactions and comments are queued and sent when the network is back.
+- **Lazy loading videos** — YouTube players load only when visible.
+- **GIF/WebM banners** — background animations in feature cards (loaded via Intersection Observer).
+- **Live preview** — Markdown renders in real-time when creating a post.
+- **Custom tags** — spoilers, tables, progress bars, colored text, Font Awesome icons.
+- **XSS protection** — all HTML from GitHub Issues is sanitized with DOMPurify.
+- **Cache encryption** — all temporary data in the browser is encrypted with AES-GCM 256.
+- **Custom dialogs** — instead of native `prompt()`/`confirm()`, styled modals with focus trap.
+- **Accessibility** — `:focus-visible`, ARIA attributes, keyboard support and `prefers-reduced-motion`.
 
 ## 🛠 Tech Stack
 
 | Category | Technologies |
 |----------|--------------|
 | Frontend | HTML5, CSS3 (Flexbox, Grid, CSS Variables), Vanilla JS (ES6+) |
-| PWA | Service Worker, manifest.json, stale‑while‑revalidate strategy |
+| PWA | Service Worker, manifest.json, stale-while-revalidate strategy |
 | API | GitHub REST API (Issues, Comments, Reactions, Gists, Releases, User) |
 | Authentication | Personal Access Token (classic) with `repo` and `gist` scopes |
-| Encryption | XOR with a key derived from `allowed` (light obfuscation) |
+| Encryption | AES-GCM 256 — for browser cache (`CacheCrypto`) and Gist bookmark storage |
+| Security | DOMPurify 3.0.9 (sanitizes HTML from GitHub Issues), SRI for CDN scripts |
 | Markdown | [`marked`](https://marked.js.org/) + custom extensions (spoilers, polls, progress) |
-| Fonts & Icons | Google Fonts (`Russo One`), Font Awesome 6 (Free CDN) |
-| Video | YouTube Embed API (lazy loading) |
+| Fonts & Icons | Local `Russo One` (`fonts/RussoOne.woff2`), Font Awesome 6 (Free CDN) |
+| Video | YouTube Embed API (lazy loading + IntersectionObserver) |
 | Animations | CSS `transform`, `transition`, `requestAnimationFrame` + throttle |
 | Storage | `sessionStorage`, `localStorage`, `IndexedDB` (sync queue) |
+| Accessibility | `:focus-visible`, ARIA labels, focus trap, `prefers-reduced-motion` |
 
 ## 📁 Project Structure
 
@@ -97,43 +103,63 @@ NeonImperium/
 ├── alpha-01.html           # Alpha 01 page
 ├── gc-adven.html           # GC Adven page
 ├── license.html            # License agreement
-├── 404.html                # Not found page
+├── 404.html                # Not found page (noindex)
 ├── manifest.json           # PWA manifest
 ├── sw.js                   # Service Worker (cache, background sync)
-├── style.css               # CSS entry point (imports modules)
+├── robots.txt              # SEO: crawler rules
+├── sitemap.xml             # SEO: sitemap
+├── style.css               # Global styles (no @import)
 ├── css/                    # Modular styles
 │   ├── variables.css       # CSS variables
-│   ├── base.css            # Reset & base
-│   ├── typography.css      # Fonts, headings
+│   ├── base.css            # Reset, base, focus-visible
+│   ├── typography.css      # Fonts (@font-face RussoOne), headings
 │   ├── buttons.css         # Buttons
 │   ├── navigation.css      # Navbar, profile
 │   ├── cards.css           # Cards
 │   ├── layout.css          # Grids
 │   ├── responsive.css      # Responsiveness
-│   └── feedback.css        # Feedback & modal styles
+│   ├── feedback.css        # Feedback & modal styles
+│   └── animations.css      # Appearance animations
+├── fonts/                  # Local fonts
+│   └── RussoOne.woff2
 ├── images/                 # Static: logos, avatars, banners, WebM
 ├── locales/                # Translations
 │   ├── ru.json             # Russian
 │   └── en.json             # English
 ├── js/                     # All logic
-│   ├── core/               # Core (GitHub, cache, encryption)
-│   │   ├── github-core.js  # Shared utilities
-│   │   ├── github-api.js   # REST API requests
-│   │   └── github-auth.js  # Login & token management
-│   ├── features/           # UI components
-│   │   ├── ui-utils.js     # Toasts, modals, drafts
-│   │   ├── ui-feedback.js  # Render posts, reactions, comments
-│   │   ├── editor.js       # Markdown editor toolbar
-│   │   ├── storage.js      # Bookmark storage on Gist
-│   │   └── background-gifs.js # Lazy‑load GIF/WebM
-│   ├── pages/              # Page‑specific scripts
-│   │   ├── news-feed.js    # News feed (YouTube + posts)
-│   │   ├── feedback.js     # Feedback
-│   │   └── game-updates.js # Game updates
+│   ├── config.js           # window.NeonConfig + isMobile (loaded first)
+│   ├── utils.js            # Utilities + async cacheGet/Set + sanitizeHtml
 │   ├── lang.js             # Localization core
 │   ├── effects.js          # 3D tilt & parallax
 │   ├── platform.js         # GitHub Releases + platform selection
-│   └── common-init.js      # Lazy YouTube, donate, SW
+│   ├── common-init.js      # Initialization, lazy loading
+│   ├── github-client.js    # GitHubClient class (issues/reactions/comments)
+│   ├── dust-particles.js   # Background particles (disabled on mobile)
+│   ├── core/               # Core
+│   │   ├── cache-crypto.js # AES-GCM cache encryption
+│   │   ├── github-core.js  # Shared utilities + CONFIG from NeonConfig
+│   │   ├── github-api.js   # Wrapper over GitHubClient
+│   │   └── github-auth.js  # Login & token management
+│   ├── features/           # UI components
+│   │   ├── dialog.js       # Custom modals (prompt/confirm/alert)
+│   │   ├── ui-utils.js     # Toasts, modals, drafts
+│   │   ├── ui-feedback.js  # Render posts, reactions, comments
+│   │   ├── editor.js       # Markdown editor toolbar
+│   │   ├── rate-limits.js  # Rate limits + action queue (IndexedDB)
+│   │   ├── youtube-loader.js # Lazy YouTube loader
+│   │   ├── background-gifs.js # Lazy GIF/WebM banners
+│   │   └── storage/        # Bookmark storage on Gist
+│   │       ├── core.js     # Encryption, Gist operations
+│   │       ├── metadata.js # Link metadata
+│   │       ├── preview.js  # Video previews
+│   │       ├── download.js # Video download URLs
+│   │       ├── manager.js  # State management
+│   │       ├── ui.js       # Storage modal
+│   │       └── index.js    # Lazy loader
+│   └── pages/              # Page-specific scripts
+│       ├── news-feed.js    # News feed (YouTube + posts)
+│       ├── feedback.js     # Feedback
+│       └── game-updates.js # Game updates
 └── README.md               # This file
 ```
 </details>
@@ -149,7 +175,6 @@ The site **does not need its own backend** – all data is stored in GitHub:
 | Feedback | Issues with labels `type:idea`, `type:bug`, `type:review` + `game:...` |
 | Comments | Comments on Issues |
 | Reactions | GitHub reactions (`+1`, `heart`, etc.) |
-| Private posts | Issue body encrypted with XOR, access via `allowed` |
 | Bookmarks | User's personal Gist (private) |
 
 ### Required scopes
@@ -164,7 +189,6 @@ Users from the `ALLOWED_AUTHORS` list in `github-core.js` (by default `NeonShado
 - “Add news” in the feed
 - “Add update” on the game page
 - Ability to edit and close any Issue
-- Access to all private posts
 
 ## 💬 Community Features
 
@@ -173,12 +197,6 @@ Users from the `ALLOWED_AUTHORS` list in `github-core.js` (by default `NeonShado
 - Users can create **ideas**, **bug reports**, and **reviews**.
 - The creation form supports **Markdown** with a visual editor and live preview.
 - Posts have **reactions** and **comments** (Markdown + editing support).
-
-### Private posts
-- When creating, you can choose “Private”.
-- Specify a comma‑separated list of GitHub logins.
-- The post body is encrypted (simple XOR, not cryptographically strong, but enough to hide from prying eyes).
-- Decrypted only for the author, admins, and specified users.
 
 ### Polls
 - Insert `<!-- poll: {"question":"...","options":["..."]} -->` into the Issue body.
@@ -198,6 +216,13 @@ Users from the `ALLOWED_AUTHORS` list in `github-core.js` (by default `NeonShado
 - “Hosting” button – quick access to Catbox, ImageBam, Postimages, ImgBB.
 - Split into input and live preview tabs.
 - Automatic draft saving in `sessionStorage`.
+- All dialogs (insert link, image, etc.) — custom modals.
+
+### Security & Privacy
+- XSS protection: all HTML from GitHub Issues is sanitized with DOMPurify
+- Cache encryption: all temporary data (API responses, previews, parsing) in the browser is encrypted with AES-GCM 256. The key is unique per session and stored in sessionStorage
+- SRI hashes for all CDN scripts (DOMPurify, marked)
+- No external trackers: Google Fonts removed, Russo One is served locally
 
 ## 📴 Offline & Background Sync
 

@@ -1,10 +1,10 @@
-// js/pages/feedback.js – обратная связь с performAction, улучшенная обработка ошибок, локализация через data-lang
-// При смене языка не перерисовывает интерфейс, только обновляет тексты
+// js/pages/feedback.js – обратная связь с performAction, улучшенная обработка ошибок
+// cacheGet/cacheSet теперь асинхронные (шифрование через CacheCrypto).
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber,
     createAbortable, loadModule, createElement, stripHtml,
-    extractSummary, extractAllowed, decryptPrivateBody, performAction
+    extractSummary, performAction
   } = window.GithubCore || {};
   const { loadIssues, loadReactions, addReaction, removeReaction } = window.GithubAPI || {};
   const { getCurrentUser, isAdmin } = window.GithubAuth || {};
@@ -33,7 +33,6 @@
   let loadRetries = 0;
   const MAX_RETRIES = 2;
 
-  // Ссылки на элементы, которые нужно обновлять при смене языка без перерисовки
   let headerElement, tabsContainer, descElement, loginPromptContainer;
 
   async function addReactionWithSync(issueNumber, content) {
@@ -103,7 +102,6 @@
       filterAndDisplay(true);
     });
 
-    // При смене языка обновляем только тексты, не перерисовывая интерфейс
     window.addEventListener('languageChanged', () => {
       updateTextsOnly();
     });
@@ -115,7 +113,6 @@
     if (postId) setTimeout(() => openPostFromUrl(postId), 1500);
   }
 
-  // Функция обновления текстов без перерисовки
   function updateTextsOnly() {
     const t = window.I18n?.translate || (k => k);
     if (headerElement) {
@@ -157,11 +154,11 @@
     const t = window.I18n?.translate || (k => k);
     try {
       const key = `game_issues_${currentGame}`;
-      let issues = cacheGet(key);
+      let issues = await cacheGet(key);
       if (!issues) {
         try {
           issues = await loadIssues({ labels: `game:${currentGame}`, state: 'open', per_page: 100, signal: controller.signal });
-          cacheSet(key, issues);
+          await cacheSet(key, issues);
           loadRetries = 0;
         } catch (err) {
           if (controller.signal.aborted) return;
@@ -194,13 +191,7 @@
 
   function filterAndDisplay(reset) {
     if (!grid) return;
-    let filtered = allIssues.filter(i => i.state === 'open').filter(i => {
-      const labels = i.labels.map(l=>l.name);
-      if (!labels.includes('private')) return true;
-      if (isAdmin()) return true;
-      const allowed = extractAllowed(i.body);
-      return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
-    });
+    let filtered = allIssues.filter(i => i.state === 'open');
     if (currentTab !== 'all') {
       filtered = filtered.filter(i => i.labels.some(l => l.name === `type:${currentTab}`));
     }
@@ -275,7 +266,6 @@
     headerElement = header;
     const titleWrap = createElement('div', '', { display: 'flex', alignItems: 'center', gap: '8px' });
     const h2 = createElement('h2', '', { margin: '0' });
-    // Добавляем иконку перед заголовком
     const icon = createElement('i', 'fas fa-comment-dots', { fontSize: '24px', color: 'var(--accent)' });
     h2.prepend(icon);
     const titleSpan = createElement('span');
@@ -364,10 +354,6 @@
     const type = issue.labels.find(l=>l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
     const icon = type === 'idea' ? '💡' : type === 'bug' ? '🐛' : '⭐';
     let summary = extractSummary(issue.body) || (issue.body||'').substring(0,120)+'…';
-    const allowed = extractAllowed(issue.body);
-    if (issue.labels.some(l=>l.name==='private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-      try { summary = extractSummary(decryptPrivateBody(issue.body, allowed)) || ''; } catch {}
-    }
     const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
     card.dataset.issueNumber = issue.number;
     const inner = createElement('div', 'project-card');
@@ -429,10 +415,6 @@
         labels: issue.labels.map(l=>l.name)
       };
       if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
-      if (!window.UIFeedback.canViewPost(issue.body, item.labels, currentUser)) {
-        showToast(t('noAccess'), 'error');
-        return;
-      }
       window.UIFeedback.openFullModal(item);
     } catch (err) {
       console.error('[feedback.js] openPostFromUrl error:', err);

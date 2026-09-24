@@ -1,4 +1,5 @@
 // js/features/storage/ui.js
+// UI хранилища. Все диалоги ввода/подтверждения — через window.Dialog.
 (function() {
   const { escapeHtml, formatDate, loadModule, createElement, debounce } = window.GithubCore || {};
   const { getCurrentUser, hasScope } = window.GithubAuth || {};
@@ -324,7 +325,14 @@
     del.innerHTML = '<i class="fas fa-trash-alt"></i>';
     del.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (confirm(t('deleteConfirm'))) {
+      const ok = await window.Dialog.showConfirm({
+        title: t('deleteConfirm') || 'Удалить закладку?',
+        message: t('deleteConfirm') || 'Удалить закладку?',
+        confirmText: 'Удалить',
+        cancelText: t('feedbackCancel') || 'Отмена',
+        danger: true
+      });
+      if (ok) {
         await _StorageManager.removeBookmark(bm.id);
       }
     });
@@ -478,8 +486,6 @@
     let failed = 0;
     for (const bm of videoBookmarks) {
       if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) {
-        // Ссылка ещё актуальна, можно пропустить или обновить принудительно
-        // Для обновления всех можно использовать forceRefresh: true
         continue;
       }
       try {
@@ -686,8 +692,14 @@
       if (files.length) await processFiles(files, modal);
     });
 
+    // ---- password ----
     modal.querySelector('#password-btn').addEventListener('click', async () => {
-      const newPass = prompt('Введите новый пароль для хранилища (оставьте пустым, чтобы отключить):\n\nВНИМАНИЕ: пароль становится обязательным для доступа, даже при наличии логина и токена.');
+      const newPass = await window.Dialog.showPrompt({
+        title: 'Пароль хранилища',
+        message: 'Введите новый пароль для хранилища (оставьте пустым, чтобы отключить):\n\nВНИМАНИЕ: пароль становится обязательным для доступа, даже при наличии логина и токена.',
+        placeholder: 'Новый пароль (или пусто)',
+        minLength: 0
+      });
       if (newPass === null) return;
       try {
         await _StorageManager.setStoragePassword(newPass || null);
@@ -697,10 +709,16 @@
       }
     });
 
+    // ---- export ----
     modal.querySelector('#export-btn').addEventListener('click', async () => {
-      const password = prompt('Введите пароль для шифрования экспортируемого файла (минимум 4 символа):');
+      const password = await window.Dialog.showPrompt({
+        title: 'Экспорт закладок',
+        message: 'Введите пароль для шифрования экспортируемого файла (минимум 4 символа):',
+        placeholder: 'Пароль',
+        minLength: 4
+      });
       if (!password || password.length < 4) {
-        showToast('Пароль должен быть не менее 4 символов', 'error');
+        if (password !== null) showToast('Пароль должен быть не менее 4 символов', 'error');
         return;
       }
       try {
@@ -717,6 +735,7 @@
       }
     });
 
+    // ---- import ----
     modal.querySelector('#import-btn').addEventListener('click', () => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -728,7 +747,12 @@
         reader.onload = async (ev) => {
           try {
             const encrypted = JSON.parse(ev.target.result);
-            const password = prompt('Введите пароль для расшифровки импортируемого файла:');
+            const password = await window.Dialog.showPrompt({
+              title: 'Импорт закладок',
+              message: 'Введите пароль для расшифровки импортируемого файла:',
+              placeholder: 'Пароль',
+              minLength: 1
+            });
             if (!password) return;
             const added = await _StorageManager.importBookmarksData(encrypted, password);
             showToast(`Импортировано ${added} закладок`, 'success');
@@ -753,7 +777,6 @@
     return { modal, closeModal: closeWithCleanup };
   }
 
-  // Экспорт
   window._StorageUI = {
     openStorageModal,
     renderBookmarks,

@@ -56,22 +56,49 @@
         };
     }
 
-    function insertLink(textarea) {
-        const url = prompt('Введите URL:', 'https://');
-        if (!url) return;
-        const text = prompt('Введите текст ссылки:', 'ссылка');
+    async function insertLink(textarea) {
+        const url = await window.Dialog.showPrompt({
+            title: 'Ссылка',
+            message: 'Введите URL:',
+            defaultValue: 'https://',
+            placeholder: 'https://example.com',
+            validate: (v) => v.trim().length > 0 || 'URL не может быть пустым'
+        });
+        if (url === null) return;
+        const text = await window.Dialog.showPrompt({
+            title: 'Ссылка',
+            message: 'Введите текст ссылки:',
+            defaultValue: 'ссылка'
+        });
+        if (text === null) return;
         insertAtCursor(textarea, `[${text || 'ссылка'}](${url})`);
     }
 
-    function insertImage(textarea) {
-        const url = prompt('Введите URL изображения:', 'https://');
-        if (!url) return;
-        const alt = prompt('Введите описание изображения:', 'image');
+    async function insertImage(textarea) {
+        const url = await window.Dialog.showPrompt({
+            title: 'Изображение',
+            message: 'Введите URL изображения:',
+            defaultValue: 'https://',
+            placeholder: 'https://example.com/image.png',
+            validate: (v) => v.trim().length > 0 || 'URL не может быть пустым'
+        });
+        if (url === null) return;
+        const alt = await window.Dialog.showPrompt({
+            title: 'Изображение',
+            message: 'Введите описание изображения:',
+            defaultValue: 'image'
+        });
+        if (alt === null) return;
         insertAtCursor(textarea, `![${alt || 'image'}](${url})`);
     }
 
-    function insertYouTube(textarea) {
-        const url = prompt('Введите ссылку на YouTube видео:', 'https://www.youtube-nocookie.com/...');
+    async function insertYouTube(textarea) {
+        const url = await window.Dialog.showPrompt({
+            title: 'YouTube',
+            message: 'Введите ссылку на YouTube видео:',
+            defaultValue: 'https://www.youtube.com/watch?v=',
+            placeholder: 'https://youtu.be/...'
+        });
         if (!url) return;
         let videoId = '';
         const patterns = [/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/, /youtube\.com\/embed\/([^&\n?#]+)/];
@@ -87,68 +114,143 @@
         }
     }
 
-    function insertSpoiler(textarea) {
-        const summary = prompt('Заголовок спойлера:', 'Спойлер');
+    async function insertSpoiler(textarea) {
+        const summary = await window.Dialog.showPrompt({
+            title: 'Спойлер',
+            message: 'Заголовок спойлера:',
+            defaultValue: 'Спойлер'
+        });
         if (summary === null) return;
-        const content = prompt('Содержимое спойлера:', '');
+        const content = await window.Dialog.showPrompt({
+            title: 'Спойлер',
+            message: 'Содержимое спойлера:',
+            multiline: true,
+            placeholder: '...'
+        });
+        if (content === null) return;
         insertAtCursor(textarea, `\n<details><summary>${escapeHtml(summary)}</summary>\n\n${escapeHtml(content) || '...'}\n\n</details>\n`);
     }
 
-    function insertTable(textarea) {
-        const rows = prompt('Количество строк:', '3');
-        const cols = prompt('Количество столбцов:', '2');
-        if (!rows || !cols) return;
+    async function insertTable(textarea) {
+        const rowsStr = await window.Dialog.showPrompt({
+            title: 'Таблица',
+            message: 'Количество строк:',
+            defaultValue: '3',
+            validate: (v) => /^\d+$/.test(v.trim()) && parseInt(v, 10) > 0 || 'Введите положительное число'
+        });
+        if (rowsStr === null) return;
+        const colsStr = await window.Dialog.showPrompt({
+            title: 'Таблица',
+            message: 'Количество столбцов:',
+            defaultValue: '2',
+            validate: (v) => /^\d+$/.test(v.trim()) && parseInt(v, 10) > 0 || 'Введите положительное число'
+        });
+        if (colsStr === null) return;
+        const rows = parseInt(rowsStr, 10);
+        const cols = parseInt(colsStr, 10);
         let table = '\n';
-        for (let i = 0; i < parseInt(cols); i++) table += `| Заголовок ${i+1} `;
+        for (let i = 0; i < cols; i++) table += `| Заголовок ${i+1} `;
         table += '|\n';
-        for (let i = 0; i < parseInt(cols); i++) table += '|-------------';
+        for (let i = 0; i < cols; i++) table += '|-------------';
         table += '|\n';
-        for (let r = 0; r < parseInt(rows); r++) {
-            for (let c = 0; c < parseInt(cols); c++) table += `| Ячейка ${r+1}-${c+1} `;
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) table += `| Ячейка ${r+1}-${c+1} `;
             table += '|\n';
         }
         insertAtCursor(textarea, table);
     }
 
-    function insertCodeBlock(textarea) {
-        const lang = prompt('Язык (например, javascript):', '');
-        const code = prompt('Введите код:', '');
+    async function insertCodeBlock(textarea) {
+        const lang = await window.Dialog.showPrompt({
+            title: 'Блок кода',
+            message: 'Язык (например, javascript):',
+            defaultValue: '',
+            placeholder: 'javascript'
+        });
+        if (lang === null) return;
+        const code = await window.Dialog.showPrompt({
+            title: 'Блок кода',
+            message: 'Введите код:',
+            multiline: true,
+            placeholder: '...'
+        });
         if (code === null) return;
         insertAtCursor(textarea, `\n\`\`\`${lang}\n${code}\n\`\`\`\n`);
     }
 
-    function insertProgressBar(textarea) {
-        const percent = prompt('Введите процент заполнения (0-100):', '50');
+    async function insertProgressBar(textarea) {
+        const percent = await window.Dialog.showPrompt({
+            title: 'Прогресс-бар',
+            message: 'Введите процент заполнения (0-100):',
+            defaultValue: '50',
+            validate: (v) => {
+                const n = parseInt(v, 10);
+                return (!isNaN(n) && n >= 0 && n <= 100) || 'Введите число от 0 до 100';
+            }
+        });
         if (percent === null) return;
         insertAtCursor(textarea, `\n<div class="progress-bar"><div style="width: ${percent}%; text-align: center; line-height: 24px;">${percent}%</div></div>\n`);
     }
 
-    function insertCard(textarea) {
-        const title = prompt('Заголовок карточки:', 'Карточка');
+    async function insertCard(textarea) {
+        const title = await window.Dialog.showPrompt({
+            title: 'Карточка',
+            message: 'Заголовок карточки:',
+            defaultValue: 'Карточка'
+        });
         if (title === null) return;
-        const content = prompt('Содержимое карточки:', '');
+        const content = await window.Dialog.showPrompt({
+            title: 'Карточка',
+            message: 'Содержимое карточки:',
+            multiline: true
+        });
+        if (content === null) return;
         insertAtCursor(textarea, `\n<div class="custom-card"><h4>${escapeHtml(title)}</h4><p>${escapeHtml(content) || ''}</p></div>\n`);
     }
 
-    function insertPoll(textarea) {
-        const question = prompt('Вопрос опроса:', 'Добавлять ли новую функцию?');
+    async function insertPoll(textarea) {
+        const question = await window.Dialog.showPrompt({
+            title: 'Опрос',
+            message: 'Вопрос опроса:',
+            defaultValue: 'Добавлять ли новую функцию?'
+        });
         if (question === null) return;
-        const optionsInput = prompt('Введите варианты через запятую (макс. 10):', 'Да, Нет, Возможно');
+        const optionsInput = await window.Dialog.showPrompt({
+            title: 'Опрос',
+            message: 'Введите варианты через запятую (макс. 10):',
+            defaultValue: 'Да, Нет, Возможно',
+            multiline: true
+        });
         if (!optionsInput) return;
         const options = optionsInput.split(',').map(s => s.trim()).filter(s => s);
         if (options.length === 0) return;
-        if (options.length > 10) { alert('Слишком много вариантов. Будет использовано только первые 10.'); options.splice(10); }
+        if (options.length > 10) {
+            await window.Dialog.showAlert({
+                title: 'Опрос',
+                message: 'Слишком много вариантов. Будет использовано только первые 10.',
+                type: 'info'
+            });
+            options.splice(10);
+        }
         insertAtCursor(textarea, `\n<!-- poll: ${JSON.stringify({ question, options })} -->\n`);
     }
 
-    function insertIcon(textarea) {
-        const icon = prompt('Введите название иконки Font Awesome (например, "fa-heart"):', 'fa-heart');
+    async function insertIcon(textarea) {
+        const icon = await window.Dialog.showPrompt({
+            title: 'Иконка',
+            message: 'Введите название иконки Font Awesome (например, "fa-heart"):',
+            defaultValue: 'fa-heart'
+        });
         if (!icon) return;
         insertAtCursor(textarea, `<i class="fas ${icon}"></i>`);
     }
 
-    function insertColor(textarea, styleProp) {
-        const color = prompt(`Введите цвет (например, red, #ff0000):`, 'red');
+    async function insertColor(textarea, styleProp) {
+        const color = await window.Dialog.showPrompt({
+            title: 'Цвет',
+            message: 'Введите цвет (например, red, #ff0000):',
+            defaultValue: 'red'
+        });
         if (!color) return;
         const selected = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
         insertAtCursor(textarea, selected ? `<span style="${styleProp}: ${color};">${escapeHtml(selected)}</span>` : `<span style="${styleProp}: ${color};">текст</span>`);
@@ -220,7 +322,14 @@
                     transition: 'all 0.2s', fontFamily: "'Russo One', sans-serif"
                 }, { type: 'button', title: tpl.name });
                 btn.innerHTML = tpl.icon.startsWith('fa') ? `<i class="${tpl.icon}"></i>` : tpl.icon;
-                btn.addEventListener('click', (e) => { e.preventDefault(); tpl.action(textarea); });
+                btn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    try {
+                        await tpl.action(textarea);
+                    } catch (err) {
+                        console.warn('[Editor] action error:', err);
+                    }
+                });
                 group.appendChild(btn);
             });
             toolbar.appendChild(group);

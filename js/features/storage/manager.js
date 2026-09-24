@@ -1,6 +1,7 @@
 // js/features/storage/manager.js
 // Управление состоянием хранилища: загрузка, сохранение, добавление, удаление, экспорт/импорт
-// Исправлено: надёжное получение токена из sessionStorage, улучшенная обработка ошибок
+// Ключ bookmarks_<user> теперь хранится через cacheSet/cacheGet (шифруется).
+// Gist-шифрование (AES-GCM в storage/core.js) не тронуто.
 
 (function() {
   const {
@@ -28,16 +29,14 @@
 
   const { getCurrentUser, getToken, hasScope } = window.GithubAuth || {};
   const { showToast, createModal, saveDraft, loadDraft, clearDraft } = window.UIUtils || {};
-  const { debounce, performAction } = window.GithubCore || {};
+  const { debounce, performAction, cacheGet, cacheSet, cacheRemove } = window.GithubCore || {};
 
   // ---- Надёжное получение токена ----
   function getAuthToken() {
-    // Сначала пробуем через GithubAuth
     if (window.GithubAuth && typeof window.GithubAuth.getToken === 'function') {
       const token = window.GithubAuth.getToken();
       if (token) return token;
     }
-    // Fallback: читаем из sessionStorage напрямую
     return sessionStorage.getItem('github_token') || null;
   }
 
@@ -45,7 +44,6 @@
     if (window.GithubAuth && typeof window.GithubAuth.getCurrentUser === 'function') {
       return window.GithubAuth.getCurrentUser();
     }
-    // Fallback: читаем из sessionStorage
     try {
       const userData = JSON.parse(sessionStorage.getItem('github_user') || 'null');
       return userData?.login || null;
@@ -132,7 +130,7 @@
     } catch (e) {}
   }
 
-  // ---- Поиск существующего Gist'а по имени файла (с авторизацией) ----
+  // ---- Поиск существующего Gist'а по имени файла ----
   async function findExistingGist(user, token) {
     if (!user || !token) return null;
     try {
@@ -222,22 +220,24 @@
       }
     }
 
-    // Пытаемся получить gistId из localStorage
-    let stored = localStorage.getItem(STORAGE_KEY_PREFIX + user);
-    if (stored) {
-      try {
-        gistId = JSON.parse(stored).gistId;
-      } catch (e) {}
+    // Пытаемся получить gistId из зашифрованного кэша
+    let stored = null;
+    try {
+      stored = await cacheGet(STORAGE_KEY_PREFIX + user);
+    } catch (e) {
+      stored = null;
+    }
+    if (stored && stored.gistId) {
+      gistId = stored.gistId;
     }
 
-    // Если gistId нет в localStorage – ищем среди всех Gist'ов пользователя
     if (!gistId) {
-      console.log('[Storage] gistId не найден в localStorage, выполняем поиск...');
+      console.log('[Storage] gistId не найден в кэше, выполняем поиск...');
       const foundId = await findExistingGist(user, token);
       if (foundId) {
         gistId = foundId;
-        localStorage.setItem(STORAGE_KEY_PREFIX + user, JSON.stringify({ gistId }));
-        console.log('[Storage] Найденный gistId сохранён в localStorage');
+        await cacheSet(STORAGE_KEY_PREFIX + user, { gistId });
+        console.log('[Storage] Найденный gistId сохранён в кэш');
       } else {
         console.log('[Storage] Существующий Gist не найден, будет создан новый.');
       }
@@ -255,7 +255,7 @@
         const foundId = await findExistingGist(user, token);
         if (foundId) {
           gistId = foundId;
-          localStorage.setItem(STORAGE_KEY_PREFIX + user, JSON.stringify({ gistId }));
+          await cacheSet(STORAGE_KEY_PREFIX + user, { gistId });
           gistData = await gistFetch(gistId);
         }
       }
@@ -293,7 +293,7 @@
     return { bookmarks, lastUpdated };
   }
 
-  // ---- Обработка payload (общая логика) ----
+  // ---- Обработка payload ----
   async function processGistPayload(payload, user, token) {
     const remoteUpdated = payload.lastUpdated || 0;
     let masterKeyArray = null;
@@ -525,7 +525,7 @@
     const content = JSON.stringify(payload);
     const newGistId = await gistCreate(content);
     gistId = newGistId;
-    localStorage.setItem(STORAGE_KEY_PREFIX + user, JSON.stringify({ gistId }));
+    await cacheSet(STORAGE_KEY_PREFIX + user, { gistId });
     saveGistToCache(payload);
 
     const tokenHash = await hashString(token);
@@ -952,7 +952,7 @@
     }
     const user = getCurrentUserLogin();
     if (user) {
-      localStorage.removeItem(STORAGE_KEY_PREFIX + user);
+      cacheRemove(STORAGE_KEY_PREFIX + user);
       clearGistCache();
     }
     gistId = null;

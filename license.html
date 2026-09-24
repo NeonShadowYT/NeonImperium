@@ -16,15 +16,27 @@
     <meta property="og:type" content="website" />
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
 
+    <link rel="stylesheet" href="css/variables.css" />
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/typography.css" />
+    <link rel="stylesheet" href="css/buttons.css" />
+    <link rel="stylesheet" href="css/navigation.css" />
+    <link rel="stylesheet" href="css/cards.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/responsive.css" />
+    <link rel="stylesheet" href="css/feedback.css" />
+    <link rel="stylesheet" href="css/animations.css" />
     <link rel="stylesheet" href="style.css" />
     <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'" />
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" /></noscript>
 
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js" integrity="sha384-3HPB1XT51W3gGRxAmZ+qbZwRpRlFQL632y8x+adAqCr4Wp3TaWwCLSTAJJKbyWEK" crossorigin="anonymous" defer></script>
+    <script src="js/config.js" defer></script>
+    <script src="js/core/cache-crypto.js" defer></script>
     <script src="js/utils.js" defer></script>
+    <script src="js/features/dialog.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
     <script src="js/github-client.js" defer></script>
     <script src="js/features/ui-utils.js" defer></script>
@@ -299,132 +311,134 @@
     <div class="page">
 
         <!-- ====== NAV ====== -->
-        <nav class="nav-bar">
+        <nav class="nav-bar" role="navigation" aria-label="Основная навигация">
             <div class="nav-links">
                 <a href="index.html" class="nav-link" data-lang="navHome">Neon Imperium</a>
                 <a href="starve-neon.html" class="nav-link" data-lang="navStarve">Starve Neon</a>
                 <a href="alpha-01.html" class="nav-link" data-lang="navAlpha">Alpha 01</a>
                 <a href="gc-adven.html" class="nav-link" data-lang="navGc">ГК Адвенчур</a>
             </div>
-            <div class="lang-switcher"></div>
+            <div class="lang-switcher" aria-label="Переключатель языка"></div>
         </nav>
 
-        <!-- ====== HERO ====== -->
-        <div class="license-hero">
-            <h1>MIT License</h1>
-            <p class="sub">
-                <i class="fas fa-code" style="color: var(--accent); margin-right: 8px;"></i>
-                Neon Imperium — свободное программное обеспечение
-            </p>
-            <div class="badge">
-                <i class="fas fa-check-circle"></i> Open Source · Permissive · Free to use
-            </div>
-            <div style="margin-top: 20px;">
-                <a href="https://github.com/NeonShadowYT/NeonImperium" target="_blank" class="button" style="background: var(--bg-inner-gradient); border: 1px solid var(--border);">
-                    <i class="fab fa-github"></i> GitHub
-                </a>
-                <a href="index.html" class="button" style="background: var(--bg-inner-gradient); border: 1px solid var(--border); margin-left: 10px;">
-                    <i class="fas fa-arrow-left"></i> На главную
-                </a>
-            </div>
-        </div>
-
-        <!-- ====== SUMMARY GRID ====== -->
-        <div class="license-grid">
-
-            <!-- Permissions -->
-            <div class="license-summary-card permissions">
-                <div class="card-header">
-                    <i class="fas fa-check-circle"></i> Permissions
+        <main role="main">
+            <!-- ====== HERO ====== -->
+            <div class="license-hero">
+                <h1>MIT License</h1>
+                <p class="sub">
+                    <i class="fas fa-code" style="color: var(--accent); margin-right: 8px;" aria-hidden="true"></i>
+                    Neon Imperium — свободное программное обеспечение
+                </p>
+                <div class="badge">
+                    <i class="fas fa-check-circle" aria-hidden="true"></i> Open Source · Permissive · Free to use
                 </div>
-                <ul>
-                    <li><i class="fas fa-check"></i> Commercial use</li>
-                    <li><i class="fas fa-check"></i> Modification</li>
-                    <li><i class="fas fa-check"></i> Distribution</li>
-                    <li><i class="fas fa-check"></i> Private use</li>
-                </ul>
-            </div>
-
-            <!-- Limitations -->
-            <div class="license-summary-card limitations">
-                <div class="card-header">
-                    <i class="fas fa-times-circle"></i> Limitations
+                <div style="margin-top: 20px;">
+                    <a href="https://github.com/NeonShadowYT/NeonImperium" target="_blank" rel="noopener" class="button" style="background: var(--bg-inner-gradient); border: 1px solid var(--border);" aria-label="Открыть репозиторий Neon Imperium на GitHub">
+                        <i class="fab fa-github" aria-hidden="true"></i> GitHub
+                    </a>
+                    <a href="index.html" class="button" style="background: var(--bg-inner-gradient); border: 1px solid var(--border); margin-left: 10px;" aria-label="Вернуться на главную">
+                        <i class="fas fa-arrow-left" aria-hidden="true"></i> На главную
+                    </a>
                 </div>
-                <ul>
-                    <li><i class="fas fa-times"></i> Liability</li>
-                    <li><i class="fas fa-times"></i> Warranty</li>
-                </ul>
             </div>
 
-            <!-- Conditions -->
-            <div class="license-summary-card conditions">
-                <div class="card-header">
-                    <i class="fas fa-exclamation-triangle"></i> Conditions
+            <!-- ====== SUMMARY GRID ====== -->
+            <div class="license-grid">
+
+                <!-- Permissions -->
+                <div class="license-summary-card permissions">
+                    <div class="card-header">
+                        <i class="fas fa-check-circle" aria-hidden="true"></i> Permissions
+                    </div>
+                    <ul>
+                        <li><i class="fas fa-check" aria-hidden="true"></i> Commercial use</li>
+                        <li><i class="fas fa-check" aria-hidden="true"></i> Modification</li>
+                        <li><i class="fas fa-check" aria-hidden="true"></i> Distribution</li>
+                        <li><i class="fas fa-check" aria-hidden="true"></i> Private use</li>
+                    </ul>
                 </div>
-                <ul>
-                    <li><i class="fas fa-arrow-right"></i> License &amp; copyright notice</li>
-                </ul>
+
+                <!-- Limitations -->
+                <div class="license-summary-card limitations">
+                    <div class="card-header">
+                        <i class="fas fa-times-circle" aria-hidden="true"></i> Limitations
+                    </div>
+                    <ul>
+                        <li><i class="fas fa-times" aria-hidden="true"></i> Liability</li>
+                        <li><i class="fas fa-times" aria-hidden="true"></i> Warranty</li>
+                    </ul>
+                </div>
+
+                <!-- Conditions -->
+                <div class="license-summary-card conditions">
+                    <div class="card-header">
+                        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Conditions
+                    </div>
+                    <ul>
+                        <li><i class="fas fa-arrow-right" aria-hidden="true"></i> License &amp; copyright notice</li>
+                    </ul>
+                </div>
+
             </div>
 
-        </div>
+            <!-- ====== FULL LICENSE TEXT ====== -->
+            <div class="license-full">
+                <h2 style="color: var(--accent); font-size: 24px; margin: 0 0 4px;">
+                    <i class="fas fa-file-contract" style="margin-right: 10px;" aria-hidden="true"></i>
+                    MIT License
+                </h2>
+                <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 16px;">
+                    Copyright &copy; 2025 Neon Shadow
+                </p>
 
-        <!-- ====== FULL LICENSE TEXT ====== -->
-        <div class="license-full">
-            <h2 style="color: var(--accent); font-size: 24px; margin: 0 0 4px;">
-                <i class="fas fa-file-contract" style="margin-right: 10px;"></i>
-                MIT License
-            </h2>
-            <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 16px;">
-                Copyright &copy; 2025 Neon Shadow
-            </p>
+                <div class="license-text">
+                    <span class="copyright">MIT License</span>
 
-            <div class="license-text">
-                <span class="copyright">MIT License</span>
+                    Copyright (c) 2025 Neon Shadow
 
-                Copyright (c) 2025 Neon Shadow
+                    Permission is hereby granted, free of charge, to any person obtaining a copy
+                    of this software and associated documentation files (the "Software"), to deal
+                    in the Software without restriction, including without limitation the rights
+                    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+                    copies of the Software, and to permit persons to whom the Software is
+                    furnished to do so, subject to the following conditions:
 
-                Permission is hereby granted, free of charge, to any person obtaining a copy
-                of this software and associated documentation files (the "Software"), to deal
-                in the Software without restriction, including without limitation the rights
-                to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-                copies of the Software, and to permit persons to whom the Software is
-                furnished to do so, subject to the following conditions:
+                    The above copyright notice and this permission notice shall be included in all
+                    copies or substantial portions of the Software.
 
-                The above copyright notice and this permission notice shall be included in all
-                copies or substantial portions of the Software.
+                    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+                    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+                    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+                    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+                    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+                    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+                    SOFTWARE.
+                </div>
 
-                THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-                IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-                FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-                AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-                LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-                OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-                SOFTWARE.
+                <div style="margin-top: 20px; display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;">
+                    <a href="https://choosealicense.com/licenses/mit/" target="_blank" rel="noopener" class="button small" style="background: var(--bg-inner-gradient); border: 1px solid var(--border);" aria-label="Что такое MIT (внешний ресурс)">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i> Что такое MIT?
+                    </a>
+                    <a href="https://github.com/NeonShadowYT/NeonImperium/blob/main/LICENSE" target="_blank" rel="noopener" class="button small" style="background: var(--bg-inner-gradient); border: 1px solid var(--border);" aria-label="Открыть LICENSE на GitHub">
+                        <i class="fab fa-github" aria-hidden="true"></i> LICENSE на GitHub
+                    </a>
+                </div>
             </div>
 
-            <div style="margin-top: 20px; display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;">
-                <a href="https://choosealicense.com/licenses/mit/" target="_blank" class="button small" style="background: var(--bg-inner-gradient); border: 1px solid var(--border);">
-                    <i class="fas fa-info-circle"></i> Что такое MIT?
-                </a>
-                <a href="https://github.com/NeonShadowYT/NeonImperium/blob/main/LICENSE" target="_blank" class="button small" style="background: var(--bg-inner-gradient); border: 1px solid var(--border);">
-                    <i class="fab fa-github"></i> LICENSE на GitHub
-                </a>
-            </div>
-        </div>
-
-        <!-- ====== FOOTER ====== -->
-        <div class="license-footer">
-            <p>
-                &copy; 2024–2026 Neon Imperium &middot;
-                <a href="https://github.com/NeonShadowYT/NeonImperium" target="_blank">GitHub</a> &middot;
-                <a href="https://t.me/NeonCyndows" target="_blank">Telegram</a>
-            </p>
-            <p style="font-size: 12px; color: var(--text-secondary);">
-                <i class="fas fa-balance-scale"></i>
-                Исходный код распространяется под лицензией MIT.
-                Ассеты (изображения, звуки, модели) могут иметь отдельные ограничения.
-            </p>
-        </div>
+            <!-- ====== FOOTER ====== -->
+            <footer class="license-footer" role="contentinfo">
+                <p>
+                    &copy; 2024–2026 Neon Imperium &middot;
+                    <a href="https://github.com/NeonShadowYT/NeonImperium" target="_blank" rel="noopener">GitHub</a> &middot;
+                    <a href="https://t.me/NeonCyndows" target="_blank" rel="noopener">Telegram</a>
+                </p>
+                <p style="font-size: 12px; color: var(--text-secondary);">
+                    <i class="fas fa-balance-scale" aria-hidden="true"></i>
+                    Исходный код распространяется под лицензией MIT.
+                    Ассеты (изображения, звуки, модели) могут иметь отдельные ограничения.
+                </p>
+            </footer>
+        </main>
 
     </div>
 </body>

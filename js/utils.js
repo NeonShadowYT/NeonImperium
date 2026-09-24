@@ -1,9 +1,13 @@
 // js/utils.js – централизованные утилиты для всего сайта
+// Кэш шифруется через CacheCrypto (AES-GCM), кроме исключённых ключей.
+// cacheGet/cacheSet — асинхронные.
 (function() {
-    const CONFIG = window.GithubCore?.CONFIG || {
-        CACHE_TTL: 10 * 60 * 1000,
-        REPO_OWNER: 'NeonShadowYT',
-        REPO_NAME: 'NeonImperium'
+    // ---- Источник конфигурации: window.NeonConfig (js/config.js) с fallback на дефолты ----
+    const NC = (typeof window !== 'undefined' && window.NeonConfig) || {};
+    const CONFIG = {
+        CACHE_TTL: NC.CACHE_TTL || 10 * 60 * 1000,
+        REPO_OWNER: NC.REPO_OWNER || 'NeonShadowYT',
+        REPO_NAME: NC.REPO_NAME || 'NeonImperium'
     };
 
     function escapeHtml(text) {
@@ -35,31 +39,79 @@
         });
     }
 
-    function cacheGet(key, ttl = CONFIG.CACHE_TTL) {
+    // ---- Асинхронный кэш с шифрованием ----
+
+    /**
+     * Читает значение из кэша. Если ключ не в исключениях — расшифровывает.
+     * При ошибке расшифровки удаляет повреждённый ключ и возвращает null.
+     */
+    async function cacheGet(key, ttl = CONFIG.CACHE_TTL) {
+        const isExcluded = window.CacheCrypto?.isExcludedKey(key) ?? true;
+
         const session = sessionStorage.getItem(key);
         const sessionTime = sessionStorage.getItem(`${key}_time`);
         if (session && sessionTime && (Date.now() - parseInt(sessionTime) < ttl)) {
-            return JSON.parse(session);
+            if (isExcluded) {
+                try { return JSON.parse(session); } catch { return null; }
+            }
+            const decrypted = await window.CacheCrypto.decryptCacheValue(session);
+            if (decrypted === null) {
+                sessionStorage.removeItem(key);
+                sessionStorage.removeItem(`${key}_time`);
+                return null;
+            }
+            try { return JSON.parse(decrypted); } catch { return null; }
         }
+
         try {
             const local = localStorage.getItem(key);
             const localTime = localStorage.getItem(`${key}_time`);
             if (local && localTime && (Date.now() - parseInt(localTime) < ttl)) {
                 sessionStorage.setItem(key, local);
                 sessionStorage.setItem(`${key}_time`, localTime);
-                return JSON.parse(local);
+                if (isExcluded) {
+                    try { return JSON.parse(local); } catch { return null; }
+                }
+                const decrypted = await window.CacheCrypto.decryptCacheValue(local);
+                if (decrypted === null) {
+                    localStorage.removeItem(key);
+                    localStorage.removeItem(`${key}_time`);
+                    return null;
+                }
+                try { return JSON.parse(decrypted); } catch { return null; }
             }
         } catch {}
+
         return null;
     }
 
-    function cacheSet(key, data) {
+    /**
+     * Записывает значение в кэш. Если ключ не в исключениях — шифрует.
+     */
+    async function cacheSet(key, data) {
         const str = JSON.stringify(data);
-        sessionStorage.setItem(key, str);
-        sessionStorage.setItem(`${key}_time`, Date.now().toString());
+        const isExcluded = window.CacheCrypto?.isExcludedKey(key) ?? true;
+
+        let storedValue;
+        if (isExcluded) {
+            storedValue = str;
+        } else if (window.CacheCrypto) {
+            try {
+                storedValue = await window.CacheCrypto.encryptCacheValue(str);
+            } catch (e) {
+                console.warn('[cacheSet] Ошибка шифрования, сохраняем как есть:', e);
+                storedValue = str;
+            }
+        } else {
+            storedValue = str;
+        }
+
+        const now = Date.now().toString();
+        sessionStorage.setItem(key, storedValue);
+        sessionStorage.setItem(`${key}_time`, now);
         try {
-            localStorage.setItem(key, str);
-            localStorage.setItem(`${key}_time`, Date.now().toString());
+            localStorage.setItem(key, storedValue);
+            localStorage.setItem(`${key}_time`, now);
         } catch {}
     }
 
@@ -119,19 +171,39 @@
         };
     }
 
+    /**
+     * Санитайзит HTML с помощью DOMPurify.
+     */
+    function sanitizeHtml(html) {
+        if (!html) return '';
+        if (typeof window.DOMPurify === 'undefined' || typeof window.DOMPurify.sanitize !== 'function') {
+            console.warn('[sanitizeHtml] DOMPurify не загружен. HTML будет отброшен.');
+            return '';
+        }
+        return window.DOMPurify.sanitize(html, {
+            ADD_ATTR: ['target'],
+            FORBID_TAGS: ['style'],
+            FORBID_ATTR: ['onerror', 'onload', 'onclick']
+        });
+    }
+
     function renderMarkdown(text) {
         if (!text) return '';
+        let rawHtml;
         if (window.marked) {
             if (typeof marked.setOptions === 'function') {
                 marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
             }
             if (typeof marked.parse === 'function') {
-                return marked.parse(text);
+                rawHtml = marked.parse(text);
             } else if (typeof marked === 'function') {
-                return marked(text);
+                rawHtml = marked(text);
             }
         }
-        return text.replace(/\n/g, '<br>');
+        if (rawHtml === undefined) {
+            rawHtml = text.replace(/\n/g, '<br>');
+        }
+        return sanitizeHtml(rawHtml);
     }
 
     function createAbortable(timeout = 20000) {
@@ -153,54 +225,27 @@
         });
     }
 
-    /**
-     * Очищает текст от Markdown-разметки, HTML-тегов, ссылок и изображений,
-     * оставляя только "содержательный" текст для подсчёта символов.
-     * @param {string} text - Исходный текст (Markdown/HTML)
-     * @returns {string} Очищенный текст без разметки
-     */
     function stripMarkdownAndHtml(text) {
         if (!text) return '';
         let cleaned = text;
 
-        // Убираем HTML-теги (включая их содержимое для блоков, но оставляем текст внутри)
-        // Сначала заменяем <details>...</details> на пустую строку, чтобы убрать спойлеры целиком
         cleaned = cleaned.replace(/<details[\s\S]*?<\/details>/gi, '');
-        // Убираем все остальные HTML-теги, оставляя только текст
         cleaned = cleaned.replace(/<[^>]*>/g, ' ');
-
-        // Удаляем Markdown-ссылки [текст](url) – оставляем только текст
         cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
-        // Удаляем изображения ![](url) – полностью убираем
         cleaned = cleaned.replace(/!\[[^\]]*\]\([^)]+\)/g, '');
-        // Удаляем YouTube-вставки <div class="youtube-embed">...</div>
         cleaned = cleaned.replace(/<div class="youtube-embed">[\s\S]*?<\/div>/gi, '');
-        // Удаляем оставшиеся ссылки типа https://
         cleaned = cleaned.replace(/\bhttps?:\/\/[^\s]+/g, '');
-        // Удаляем символы Markdown: #, *, _, ~, `, >, -, +, =, | и т.д.
         cleaned = cleaned.replace(/[#*_~`>\-+=|]/g, ' ');
-        // Удаляем множественные пробелы и переносы строк
         cleaned = cleaned.replace(/\s+/g, ' ').trim();
 
         return cleaned;
     }
 
-    /**
-     * Возвращает длину содержательного текста после удаления всей разметки.
-     * @param {string} text - Исходный текст (Markdown/HTML)
-     * @returns {number} Количество значимых символов
-     */
     function getPlainTextLength(text) {
         const plain = stripMarkdownAndHtml(text);
         return plain.length;
     }
 
-    /**
-     * Проверяет, содержит ли текст потенциальный GitHub-токен.
-     * Ищет паттерны: ghp_, github_pat_, gho_, ghu_, ghs_, gpl_, а также "github_token" в контексте.
-     * @param {string} text - Проверяемый текст
-     * @returns {boolean} true, если найден токен
-     */
     function containsGitHubToken(text) {
         if (!text) return false;
         const patterns = [
@@ -214,13 +259,11 @@
         for (const p of patterns) {
             if (p.test(text)) return true;
         }
-        // Дополнительно проверяем наличие строки "github_token" в кавычках или без
         if (/\bgithub_token\b/i.test(text)) return true;
         return false;
     }
 
-    // ----- НОВЫЕ ФУНКЦИИ ШИФРОВАНИЯ -----
-    // Простой XOR с ключом (для обфускации, не криптостойкий, но усложняет чтение)
+    // ----- XOR (оставлено для истории / обратной совместимости) -----
     function xorEncrypt(data, key) {
         let result = '';
         for (let i = 0; i < data.length; i++) {
@@ -261,6 +304,7 @@
         containsGitHubToken,
         xorEncrypt,
         xorDecrypt,
-        generateRandomKey
+        generateRandomKey,
+        sanitizeHtml
     };
 })();

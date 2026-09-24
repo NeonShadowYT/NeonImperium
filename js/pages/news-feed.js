@@ -1,9 +1,10 @@
 // js/pages/news-feed.js – единый менеджер новостей с кешированием, скелетоном и отказоустойчивостью
+// cacheGet/cacheSet теперь асинхронные (шифрование через CacheCrypto).
 (function() {
     const {
         cacheGet, cacheSet, cacheRemoveByPrefix,
         escapeHtml, createElement, debounce, loadModule,
-        createAbortable, CONFIG
+        createAbortable, CONFIG, sanitizeHtml
     } = window.GithubCore;
 
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
@@ -52,13 +53,11 @@
         return items.map(item => normalizeItem(item));
     }
 
-    // ---- Используем общий парсер из YoutubeLoader ----
     function parseYouTubeUrl(url) {
         if (window.YoutubeLoader) {
             const result = window.YoutubeLoader.parseYouTubeUrl(url);
             return result ? result.embedUrl : null;
         }
-        // fallback (на случай, если модуль не загружен)
         try {
             const parsed = new URL(url);
             let videoId = null;
@@ -140,15 +139,8 @@
             const all = window.GithubCore.deduplicateByNumber([...news, ...updates])
                 .filter(i => i.state === 'open' && CONFIG.ALLOWED_AUTHORS.includes(i.user.login));
 
-            const currentUser = getCurrentUser();
             return all.map(i => {
                 const labels = i.labels.map(l => l.name);
-                if (labels.includes('private')) {
-                    const allowed = window.GithubCore.extractAllowed(i.body);
-                    if (!allowed || !allowed.split(',').map(s => s.trim()).includes(currentUser)) {
-                        return null;
-                    }
-                }
                 return normalizeItem({
                     type: 'post',
                     number: i.number,
@@ -160,7 +152,7 @@
                     game: labels.find(l => l.startsWith('game:'))?.split(':')[1] || null,
                     thumbnail: null
                 });
-            }).filter(Boolean);
+            });
         } catch (err) {
             clearTimeout(timeoutId);
             if (err.name === 'AbortError') throw err;
@@ -275,7 +267,7 @@
     }
 
     async function fetchNewsFeed({ signal, forceRefresh = false, maxAge = CACHE_TTL } = {}) {
-        const cached = cacheGet(CACHE_KEY, maxAge);
+        const cached = await cacheGet(CACHE_KEY, maxAge);
         if (cached && !forceRefresh) {
             const items = normalizeItems(cached.items || []);
             console.log(`[NewsFeed] Загрузка из кеша: ${items.length} элементов`);
@@ -287,9 +279,9 @@
 
         if (isLoading) {
             return new Promise((resolve) => {
-                const check = () => {
+                const check = async () => {
                     if (!isLoading) {
-                        const fresh = cacheGet(CACHE_KEY, maxAge);
+                        const fresh = await cacheGet(CACHE_KEY, maxAge);
                         if (fresh) {
                             const items = normalizeItems(fresh.items || []);
                             resolve({ items, fromCache: true, isStale: false });
@@ -337,7 +329,7 @@
             allItems.sort((a, b) => b.date - a.date);
             const limited = allItems.slice(0, 20);
 
-            cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
+            await cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
 
             console.log(`[NewsFeed] Загружено: ${limited.length} элементов (посты: ${results[0].status === 'fulfilled' ? results[0].value.length : 0}, видео: ${results[1].status === 'fulfilled' ? results[1].value.length : 0}, стримы: ${results[2].status === 'fulfilled' ? results[2].value.length : 0})`);
 
@@ -345,7 +337,7 @@
             return { items: limited, fromCache: false, isStale: false };
         } catch (err) {
             console.error('[NewsFeed] Критическая ошибка загрузки:', err);
-            const stale = cacheGet(CACHE_KEY, Infinity);
+            const stale = await cacheGet(CACHE_KEY, Infinity);
             if (stale) {
                 const items = normalizeItems(stale.items || []);
                 console.warn('[NewsFeed] Возвращаем устаревший кеш');
@@ -365,7 +357,7 @@
         setTimeout(async () => {
             try {
                 if (!navigator.onLine) return;
-                const lastUpdate = cacheGet(CACHE_KEY + '_last_update', Infinity);
+                const lastUpdate = await cacheGet(CACHE_KEY + '_last_update', Infinity);
                 if (lastUpdate && Date.now() - lastUpdate < CACHE_TTL / 2) {
                     backgroundRefreshScheduled = false;
                     return;
@@ -376,7 +368,7 @@
                     if (container) {
                         renderNewsFeed(result.items);
                     }
-                    cacheSet(CACHE_KEY + '_last_update', Date.now());
+                    await cacheSet(CACHE_KEY + '_last_update', Date.now());
                 }
             } catch (e) {
                 console.warn('[NewsFeed] Фоновое обновление не удалось:', e);
@@ -390,14 +382,14 @@
         const grid = createElement('div', 'projects-grid skeleton-grid');
         for (let i = 0; i < count; i++) {
             const card = createElement('div', 'project-card-link skeleton-card', { animationDelay: `${i * 0.05}s` });
-            card.innerHTML = `
+            card.innerHTML = sanitizeHtml(`
                 <div class="project-card">
                     <div class="image-wrapper skeleton-image"></div>
                     <div class="skeleton-title"></div>
                     <div class="skeleton-text"></div>
                     <div class="skeleton-text short"></div>
                 </div>
-            `;
+            `);
             grid.appendChild(card);
         }
         return grid;
@@ -419,13 +411,13 @@
                 gap: '15px'
             });
             const titleDiv = createElement('div');
-            titleDiv.innerHTML = `
+            titleDiv.innerHTML = sanitizeHtml(`
                 <h2>
                     <i class="fas fa-newspaper" style="color: var(--accent); margin-right: 8px;"></i>
                     <span data-lang="newsTitle">${t('newsTitle')}</span>
                 </h2>
                 <p class="text-secondary" data-lang="newsDesc">${t('newsDesc')}</p>
-            `;
+            `);
             header.appendChild(titleDiv);
             container.parentNode.insertBefore(header, container);
         }
@@ -434,27 +426,27 @@
         if (isAdmin() && hasScope('repo')) {
             if (!existingBtn) {
                 const btn = createElement('button', 'button admin-news-btn');
-                btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
+                btn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addNews')}`);
                 btn.addEventListener('click', async () => {
                     if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
                     window.UIFeedback.openEditorModal('new', { game: null }, 'news');
                 });
                 header.appendChild(btn);
             } else {
-                existingBtn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
+                existingBtn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addNews')}`);
             }
         } else if (existingBtn) {
             existingBtn.remove();
         }
 
         if (displayItems.length === 0) {
-            container.innerHTML = `
+            container.innerHTML = sanitizeHtml(`
                 <div class="empty-state">
                     <i class="fas fa-newspaper"></i>
                     <p data-lang="newsNoItems">${t('newsNoItems')}</p>
                     <button class="button small" id="news-retry-btn"><i class="fas fa-sync"></i> ${t('newsRetryVideo')}</button>
                 </div>
-            `;
+            `);
             const retryBtn = container.querySelector('#news-retry-btn');
             if (retryBtn) retryBtn.addEventListener('click', () => refreshNewsFeed());
             return;
@@ -498,9 +490,9 @@
 
         const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
         const dateStr = item.date.toLocaleDateString();
-        meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(item.author)} · <i class="fas fa-calendar-alt"></i> ${dateStr}`;
+        meta.innerHTML = sanitizeHtml(`<i class="fas fa-user"></i> ${escapeHtml(item.author)} · <i class="fas fa-calendar-alt"></i> ${dateStr}`);
         if (item.type === 'twitch' && item.twitchData) {
-            meta.innerHTML += ` · 🎮 ${escapeHtml(item.twitchData.game)}`;
+            meta.innerHTML += sanitizeHtml(` · 🎮 ${escapeHtml(item.twitchData.game)}`);
         }
         card.appendChild(meta);
 
@@ -537,6 +529,9 @@
                             ];
                             for (const src of modules) {
                                 await window.Utils.loadModule(src);
+                            }
+                            if (typeof window._StorageEnsure === 'function') {
+                                await window._StorageEnsure();
                             }
                         }
                     } catch (err) {
@@ -638,13 +633,13 @@
             }
         } catch (err) {
             console.error('[NewsFeed] Ошибка инициализации:', err);
-            container.innerHTML = `
+            container.innerHTML = sanitizeHtml(`
                 <div class="empty-state">
                     <i class="fas fa-exclamation-triangle"></i>
                     <p>${t('dataLoadError')}</p>
                     <button class="button small" id="news-retry-btn"><i class="fas fa-sync"></i> ${t('newsRetryVideo')}</button>
                 </div>
-            `;
+            `);
             const retryBtn = container.querySelector('#news-retry-btn');
             if (retryBtn) retryBtn.addEventListener('click', () => refreshNewsFeed());
         }
@@ -658,14 +653,14 @@
                 const desc = header.querySelector('.text-secondary');
                 if (desc) desc.textContent = t('newsDesc');
                 const btn = header.querySelector('.admin-news-btn');
-                if (btn) btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addNews')}`;
+                if (btn) btn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addNews')}`);
             }
             container.querySelectorAll('[data-lang]').forEach(el => {
                 const key = el.getAttribute('data-lang');
                 if (key) el.textContent = t(key);
             });
             const retryBtn = container.querySelector('#news-retry-btn');
-            if (retryBtn) retryBtn.innerHTML = `<i class="fas fa-sync"></i> ${t('newsRetryVideo')}`;
+            if (retryBtn) retryBtn.innerHTML = sanitizeHtml(`<i class="fas fa-sync"></i> ${t('newsRetryVideo')}`);
         });
 
         window.addEventListener('github-login-success', () => {

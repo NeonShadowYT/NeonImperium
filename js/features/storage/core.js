@@ -1,5 +1,6 @@
 // js/features/storage/core.js
-// Ядро: шифрование, работа с Gist, хеши, константы, вспомогательные диалоги
+// Ядро: шифрование, работа с Gist, хеши, константы, вспомогательные диалоги.
+// promptPassword и confirmResetStorage используют кастомные диалоги (window.Dialog).
 
 (function() {
   const { getCurrentUser, getToken } = window.GithubAuth || {};
@@ -122,21 +123,42 @@
     return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  function promptPassword(message) {
-    return new Promise((resolve) => {
-      const input = prompt(message);
-      resolve(input);
+  /**
+   * Запрашивает пароль/токен у пользователя через кастомный диалог.
+   * Возвращает строку либо null, если пользователь отменил.
+   */
+  async function promptPassword(message) {
+    if (!window.Dialog || typeof window.Dialog.showPrompt !== 'function') {
+      console.warn('[Storage] Dialog недоступен, используем нативный prompt');
+      return window.prompt(message);
+    }
+    return await window.Dialog.showPrompt({
+      title: 'Введите данные',
+      message: message,
+      placeholder: 'Пароль',
+      minLength: 0
     });
   }
 
-  function confirmResetStorage() {
-    return new Promise((resolve) => {
-      const confirmed = confirm(
+  /**
+   * Спрашивает у пользователя, нужно ли пересоздать хранилище.
+   * Возвращает boolean.
+   */
+  async function confirmResetStorage() {
+    if (!window.Dialog || typeof window.Dialog.showConfirm !== 'function') {
+      console.warn('[Storage] Dialog недоступен, используем нативный confirm');
+      return window.confirm(
         'Не удалось расшифровать хранилище. Возможно, вы изменили логин, токен или не указали пароль.\n\n' +
         'Хотите пересоздать хранилище (все старые данные будут потеряны)?\n' +
         'Нажмите "Отмена", чтобы попробовать ввести пароль.'
       );
-      resolve(confirmed);
+    }
+    return await window.Dialog.showConfirm({
+      title: 'Пересоздать хранилище?',
+      message: 'Не удалось расшифровать хранилище. Возможно, вы изменили логин, токен или не указали пароль.\n\nХотите пересоздать хранилище (все старые данные будут потеряны)?\n\nНажмите "Отмена", чтобы попробовать ввести пароль ещё раз.',
+      confirmText: 'Пересоздать',
+      cancelText: 'Отмена',
+      danger: true
     });
   }
 

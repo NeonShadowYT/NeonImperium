@@ -1,5 +1,7 @@
 // js/core/github-auth.js – с локализацией, обновление меню при смене языка
 // Исправлено расположение элементов в модалке: ссылка и чекбокс слева, кнопки справа
+// Нативных prompt/confirm в этом файле нет — все диалоги через UI. Если
+// в будущем понадобится prompt/confirm, использовать window.Dialog.
 
 (function() {
   const { createElement, escapeHtml, cacheGet, cacheSet, cacheRemove, loadModule, xorEncrypt, xorDecrypt, generateRandomKey } = window.Utils;
@@ -511,7 +513,6 @@
     if (title) title.textContent = t('githubLoginTitle');
     const content = modal.querySelector('#why-need-content');
     if (content) content.innerHTML = t('loginDescription');
-    // Обновляем ссылку
     const tokenLink = modal.querySelector('a[href*="settings/tokens/new"] span[data-lang="createToken"]');
     if (tokenLink) tokenLink.textContent = t('createToken');
   }
@@ -683,15 +684,15 @@
               await window.loadStorageModules();
             } else {
               await window.Utils.loadModule('js/features/storage/index.js');
+              if (typeof window._StorageEnsure === 'function') {
+                await window._StorageEnsure();
+              }
             }
           } catch (e) {
             console.warn('Storage load error:', e);
             window.UIUtils?.showToast(t('loadModulesError'), 'error');
             return;
           }
-        }
-        if (!window.BookmarkStorage) {
-          await new Promise(r => setTimeout(r, 100));
         }
         if (window.BookmarkStorage && typeof window.BookmarkStorage.openStorageModal === 'function') {
           window.BookmarkStorage.openStorageModal();

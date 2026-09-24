@@ -1,6 +1,7 @@
 // js/features/rate-limits.js – с локализацией, обновление при смене языка
-// Добавлено шифрование истории и кеша через xorEncrypt/xorDecrypt
-// Теперь история записывается при любом успешном действии, очистка кеша защищена
+// Все confirm() заменены на кастомный Dialog.showConfirm.
+// Экспортирует window.RateLimits — единый API управления лимитами и очередью.
+// Ключи 'i18n_*' добавлены в исключения очистки кэша (совместимо с CacheCrypto).
 (function() {
   const { escapeHtml, xorEncrypt, xorDecrypt } = window.Utils || {};
   const { getCurrentUser } = window.GithubAuth || {};
@@ -21,7 +22,6 @@
   const HISTORY_SIZE = 100;
   const QUEUE_CACHE_TTL = 60000;
 
-  // Соль для шифрования истории и кеша
   const ENCRYPTION_SALT = 'neon-rate-limits-salt-2024';
 
   let db = null;
@@ -367,7 +367,6 @@
     }
   }
 
-  // ---- Шифрование истории ----
   function addHistory(action, data, status) {
     let history = [];
     try {
@@ -396,26 +395,30 @@
     return [];
   }
 
-  // ---- Очистка кеша (защищённая) ----
+  // ---- Очистка кэша ----
+  // Исключения включают i18n_ (переводы перезагрузятся сами, экономим сеть).
   async function clearAllCacheInternal() {
     const cacheNames = await caches.keys();
     for (const name of cacheNames) {
       await caches.delete(name);
     }
-    // Защищённые ключи, которые НЕ удаляем
     const exclude = [
       'rate_limits', 'rate_history', 'license_agreed_v1', 'license_version',
       'license_agreed_timestamp', 'preferredLanguage', 'github_token',
       'github_token_local', 'remember_me', 'last_cache_clear',
-      // Ключи хранилища закладок (чтобы не потерять ID Gist)
-      'storage_gist_'
+      'storage_gist_', 'cache_encryption_key', 'storage_token_hash', 'storage_password',
+      'i18n_'
     ];
     for (const key of Object.keys(localStorage)) {
       if (!exclude.some(ex => key.startsWith(ex))) {
         localStorage.removeItem(key);
       }
     }
-    const sessionExclude = ['preferredLanguage', 'github_token', 'encryption_key', 'github_user', 'github_scopes'];
+    const sessionExclude = [
+      'preferredLanguage', 'github_token', 'encryption_key',
+      'cache_encryption_key', 'github_user', 'github_scopes',
+      'storage_token_hash', 'storage_password', 'i18n_'
+    ];
     for (const key of Object.keys(sessionStorage)) {
       if (!sessionExclude.some(ex => key.startsWith(ex))) {
         sessionStorage.removeItem(key);
@@ -423,14 +426,16 @@
     }
     if (window._cacheMap) window._cacheMap.clear();
     queueCache = null;
-    // Лимиты и история не удаляются
   }
 
-  // ---- Очистка устаревшего кеша (stale) ----
   function clearStaleCache() {
     const now = Date.now();
-    const ttl = window.GithubCore?.CONFIG?.CACHE_TTL || 600000;
-    const excludedKeys = ['rate_limits', 'rate_history', 'license_', 'preferredLanguage', 'github_', 'remember_me', 'storage_gist_'];
+    const ttl = window.NeonConfig?.CACHE_TTL || window.GithubCore?.CONFIG?.CACHE_TTL || 600000;
+    const excludedKeys = [
+      'rate_limits', 'rate_history', 'license_', 'preferredLanguage', 'github_',
+      'remember_me', 'storage_gist_', 'cache_encryption_key', 'storage_token_hash',
+      'storage_password', 'i18n_'
+    ];
     for (let i = sessionStorage.length - 1; i >= 0; i--) {
       const key = sessionStorage.key(i);
       if (key && key.endsWith('_time')) {
@@ -507,7 +512,6 @@
       if (e.target === modal) newCloseWithClean();
     });
 
-    // обновление при смене языка
     const langHandler = () => {
       if (!activeRatePanel || activeRatePanel.modal !== modal) return;
       const t = window.I18n?.translate || (k => k);
@@ -676,8 +680,15 @@
       window.UIUtils?.showToast(t('staleCacheCleared'), 'success');
       refreshPanel();
     });
-    modal.querySelector('#clear-all-cache')?.addEventListener('click', () => {
-      if (confirm(t('clearCacheConfirm'))) {
+    modal.querySelector('#clear-all-cache')?.addEventListener('click', async () => {
+      const ok = await window.Dialog.showConfirm({
+        title: t('clearAllCache') || 'Очистить весь кеш',
+        message: t('clearCacheConfirm') || 'Очистить весь кеш (кроме лимитов)?',
+        confirmText: 'Очистить',
+        cancelText: t('feedbackCancel') || 'Отмена',
+        danger: true
+      });
+      if (ok) {
         clearAllCacheInternal();
         window.UIUtils?.showToast(t('cacheCleared'), 'success');
         refreshPanel();
@@ -685,9 +696,17 @@
     });
 
     modal.querySelectorAll('.cache-delete-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         const key = btn.dataset.key;
-        if (key && confirm(`Удалить ключ "${key}"?`)) {
+        if (!key) return;
+        const ok = await window.Dialog.showConfirm({
+          title: 'Удалить ключ',
+          message: `Удалить ключ "${key}"?`,
+          confirmText: 'Удалить',
+          cancelText: t('feedbackCancel') || 'Отмена',
+          danger: true
+        });
+        if (ok) {
           deleteCacheKey(key);
           window.UIUtils?.showToast(`Ключ "${key}" удален`, 'success');
           refreshPanel();
@@ -699,7 +718,15 @@
       const cancelBtn = e.target.closest('.queue-cancel-btn');
       if (cancelBtn) {
         const id = parseInt(cancelBtn.dataset.id, 10);
-        if (id && confirm(t('deleteConfirm'))) {
+        if (!id) return;
+        const ok = await window.Dialog.showConfirm({
+          title: t('deleteConfirm') || 'Удалить действие из очереди?',
+          message: t('deleteConfirm') || 'Удалить действие из очереди?',
+          confirmText: 'Удалить',
+          cancelText: t('feedbackCancel') || 'Отмена',
+          danger: true
+        });
+        if (ok) {
           await cancelAction(id);
           refreshPanel();
         }
@@ -758,9 +785,17 @@
       </div>
     `).join('');
     container.querySelectorAll('.cache-delete-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         const key = btn.dataset.key;
-        if (key && confirm(`Удалить ключ "${key}"?`)) {
+        if (!key) return;
+        const ok = await window.Dialog.showConfirm({
+          title: 'Удалить ключ',
+          message: `Удалить ключ "${key}"?`,
+          confirmText: 'Удалить',
+          cancelText: t('feedbackCancel') || 'Отмена',
+          danger: true
+        });
+        if (ok) {
           deleteCacheKey(key);
           window.UIUtils?.showToast(`Ключ "${key}" удален`, 'success');
           refreshPanel();
@@ -771,13 +806,24 @@
 
   function getCacheKeys() {
     const keys = new Set();
+    const sessionExclude = [
+      'preferredLanguage', 'github_token', 'encryption_',
+      'cache_encryption_key', 'github_user', 'github_scopes',
+      'storage_token_hash', 'storage_password', 'i18n_'
+    ];
     for (let i = 0; i < sessionStorage.length; i++) {
       const key = sessionStorage.key(i);
-      if (key && !key.startsWith('preferredLanguage') && !key.startsWith('github_') && !key.startsWith('encryption_')) {
+      if (key && !sessionExclude.some(ex => key.startsWith(ex))) {
         keys.add('session:' + key);
       }
     }
-    const exclude = ['rate_limits', 'rate_history', 'license_agreed_v1', 'license_version', 'license_agreed_timestamp', 'preferredLanguage', 'github_token', 'github_token_local', 'remember_me', 'last_cache_clear', 'storage_gist_'];
+    const exclude = [
+      'rate_limits', 'rate_history', 'license_agreed_v1', 'license_version',
+      'license_agreed_timestamp', 'preferredLanguage', 'github_token',
+      'github_token_local', 'remember_me', 'last_cache_clear',
+      'storage_gist_', 'cache_encryption_key', 'storage_token_hash',
+      'storage_password', 'i18n_'
+    ];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && !exclude.some(ex => key.startsWith(ex))) {
@@ -948,7 +994,7 @@
     updateIndicators,
     getPendingActions,
     getHistory,
-    addHistory,          // <-- добавлен экспорт
+    addHistory,
     LIMITS,
     actionLabels,
     clearAllCache: clearAllCacheInternal,

@@ -1,23 +1,56 @@
-// sw.js — Service Worker с кэшированием, background sync, офлайн-поддержкой и кэшированием изображений
-const STATIC_CACHE = 'static-v7';
-const DYNAMIC_CACHE = 'dynamic-v7';
-const IMAGES_CACHE = 'images-v7';
-const API_CACHE = 'github-api-v7';
-const RSS_CACHE = 'rss-v1';  // ДОБАВЛЕНО
-const SYNC_TAG = 'github-mutations';
-const API_CACHE_MAX_AGE = 5 * 60 * 1000; // 5 минут
-const IMAGES_CACHE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 дней
-const RSS_CACHE_MAX_AGE = 30 * 60 * 1000; // 30 минут
+// sw.js — Service Worker с кэшированием, background sync, офлайн-поддержкой и кэшированием изображений.
+// Конфигурация загружается из js/config.js через importScripts.
+importScripts('js/config.js');
+
+// ---- Читаем централизованную конфигурацию (с fallback на дефолты) ----
+const NC = (typeof self !== 'undefined' && self.NeonConfig) || {};
+
+const SW_CACHE_NAMES = NC.SW_CACHE_NAMES || {
+  STATIC: 'static-v8',
+  DYNAMIC: 'dynamic-v8',
+  IMAGES: 'images-v8',
+  API: 'github-api-v8',
+  RSS: 'rss-v2'
+};
+
+const SW_CACHE_MAX_AGE = NC.SW_CACHE_MAX_AGE || {
+  API: 5 * 60 * 1000,
+  IMAGES: 30 * 24 * 60 * 60 * 1000,
+  RSS: 30 * 60 * 1000
+};
+
+const STATIC_CACHE = SW_CACHE_NAMES.STATIC;
+const DYNAMIC_CACHE = SW_CACHE_NAMES.DYNAMIC;
+const IMAGES_CACHE = SW_CACHE_NAMES.IMAGES;
+const API_CACHE = SW_CACHE_NAMES.API;
+const RSS_CACHE = SW_CACHE_NAMES.RSS;
+const SYNC_TAG = NC.SYNC_TAG || 'github-queue-sync';
+const API_CACHE_MAX_AGE = SW_CACHE_MAX_AGE.API;
+const IMAGES_CACHE_MAX_AGE = SW_CACHE_MAX_AGE.IMAGES;
+const RSS_CACHE_MAX_AGE = SW_CACHE_MAX_AGE.RSS;
 
 const PRECACHE_URLS = [
   'style.css',
+  'js/config.js',
+  'js/core/cache-crypto.js',
   'js/utils.js', 'js/core/github-core.js', 'js/github-client.js',
   'js/core/github-api.js', 'js/core/github-auth.js',
   'js/features/ui-utils.js', 'js/features/ui-feedback.js',
-  'js/features/editor.js', 'js/features/storage.js',
+  'js/features/editor.js',
+  'js/features/dialog.js',
+  'js/features/rate-limits.js',
+  'js/features/youtube-loader.js',
+  'js/features/storage/core.js',
+  'js/features/storage/metadata.js',
+  'js/features/storage/preview.js',
+  'js/features/storage/download.js',
+  'js/features/storage/manager.js',
+  'js/features/storage/ui.js',
+  'js/features/storage/index.js',
   'js/lang.js', 'js/common-init.js', 'js/effects.js',
   'js/pages/news-feed.js', 'js/pages/feedback.js', 'js/pages/game-updates.js',
   'js/platform.js', 'js/features/background-gifs.js',
+  'js/dust-particles.js',
   'index.html', 'starve-neon.html', 'alpha-01.html',
   'gc-adven.html', 'license.html', '404.html',
   'images/default-news.webp', 'images/logo-neon-imperium.webp', 'images/default-avatar.webp'
@@ -26,13 +59,20 @@ const PRECACHE_URLS = [
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
-      .then(cache => cache.addAll(PRECACHE_URLS))
+      .then(cache => Promise.allSettled(
+        PRECACHE_URLS.map(url =>
+          cache.add(url).catch(err => {
+            console.warn('[SW] Не удалось precache:', url, err);
+            return null;
+          })
+        )
+      ))
       .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', event => {
-  const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, IMAGES_CACHE, API_CACHE, RSS_CACHE]; // ДОБАВЛЕНО RSS_CACHE
+  const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, IMAGES_CACHE, API_CACHE, RSS_CACHE];
   event.waitUntil(
     caches.keys().then(names =>
       Promise.all(names.filter(n => !currentCaches.includes(n)).map(n => caches.delete(n)))
@@ -74,7 +114,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ДОБАВЛЕНО: кеширование RSS-запросов
+  // Кеширование RSS-запросов
   if (url.hostname === 'api.rss2json.com') {
     event.respondWith((async () => {
       const cache = await caches.open(RSS_CACHE);

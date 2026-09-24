@@ -1,13 +1,16 @@
 // js/common-init.js – инициализация после загрузки переводов
 (function() {
-  // ---- Единое определение мобильного устройства ----
-  const isMobile = (() => {
-    const hasTouch = window.matchMedia('(pointer: coarse)').matches ||
-                    window.matchMedia('(hover: none)').matches ||
-                    ('ontouchstart' in window);
-    const isNarrow = window.innerWidth <= 768;
-    return hasTouch || isNarrow;
-  })();
+  // window.isMobile уже установлен в js/config.js (загружается первым).
+  // Здесь только страховка на случай, если config.js не подключён.
+  const isMobile = (typeof window.isMobile === 'boolean')
+    ? window.isMobile
+    : (() => {
+        const hasTouch = window.matchMedia('(pointer: coarse)').matches ||
+                        window.matchMedia('(hover: none)').matches ||
+                        ('ontouchstart' in window);
+        const isNarrow = window.innerWidth <= 768;
+        return hasTouch || isNarrow;
+      })();
 
   window.isMobile = isMobile;
 
@@ -26,6 +29,8 @@
   })();
 
   function addPreconnects() {
+    // Google Fonts удалены — шрифт Russo One подключён локально из css/typography.css
+    // (fonts/RussoOne.woff2). Оставляем только реально используемые источники.
     const links = [
       'https://api.github.com',
       'https://api.rss2json.com',
@@ -40,6 +45,20 @@
     });
   }
   addPreconnects();
+
+  function ensureConfig() {
+    if (!window.NeonConfig) {
+      console.warn('[common-init] window.NeonConfig не найден. ' +
+        'Убедитесь, что js/config.js подключён в <head> ДО остальных скриптов.');
+    }
+  }
+
+  function ensureDialog() {
+    if (!window.Dialog || typeof window.Dialog.showPrompt !== 'function') {
+      console.warn('[common-init] window.Dialog не найден. ' +
+        'Убедитесь, что js/features/dialog.js подключён в <head> ДО модулей, использующих его.');
+    }
+  }
 
   function loadPageScripts() {
     const path = location.pathname;
@@ -106,7 +125,63 @@
     return tryLoad(0);
   }
 
-  // ---- Загрузка модуля YouTube и инициализация ----
+  function ensureDOMPurify() {
+    if (typeof window.DOMPurify !== 'undefined' && typeof window.DOMPurify.sanitize === 'function') {
+      return Promise.resolve();
+    }
+
+    const cdnList = [
+      {
+        src: 'https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js',
+        integrity: 'sha384-3HPB1XT51W3gGRxAmZ+qbZwRpRlFQL632y8x+adAqCr4Wp3TaWwCLSTAJJKbyWEK',
+        crossorigin: 'anonymous'
+      },
+      {
+        src: 'https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js',
+        integrity: 'sha512-9+ilAOeXY8qy2bw/h51MmliNNHvdyhTpLIlqDmVpD26z8VjVJsUJtk5rhbDIUvYiD+EpGoAu0xTa7MhZohFQjA==',
+        crossorigin: 'anonymous'
+      }
+    ];
+
+    function loadScriptWithSri(item, timeout = 10000) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = item.src;
+        if (item.integrity) script.integrity = item.integrity;
+        if (item.crossorigin) script.crossOrigin = item.crossorigin;
+        script.defer = true;
+        const timer = setTimeout(() => reject(new Error(`Timeout loading ${item.src}`)), timeout);
+        script.onload = () => { clearTimeout(timer); resolve(); };
+        script.onerror = () => { clearTimeout(timer); reject(new Error(`Failed to load ${item.src}`)); };
+        document.head.appendChild(script);
+      });
+    }
+
+    async function tryLoad(index) {
+      if (index >= cdnList.length) {
+        console.warn('[DOMPurify] Не удалось загрузить ни с одного CDN. HTML из GitHub будет отброшен.');
+        return;
+      }
+      try {
+        await loadScriptWithSri(cdnList[index]);
+        if (typeof window.DOMPurify !== 'undefined' && typeof window.DOMPurify.sanitize === 'function') return;
+        throw new Error('DOMPurify not defined after load');
+      } catch (err) {
+        console.warn(`[DOMPurify] Ошибка загрузки с ${cdnList[index].src}, пробуем следующий...`, err);
+        return tryLoad(index + 1);
+      }
+    }
+
+    return tryLoad(0);
+  }
+
+  function ensureCacheCrypto() {
+    if (!window.CacheCrypto || typeof window.CacheCrypto.encryptCacheValue !== 'function') {
+      console.warn('[common-init] CacheCrypto не загружен! Кэш будет храниться без шифрования. ' +
+        'Убедитесь, что js/core/cache-crypto.js подключён ДО js/utils.js.');
+    }
+  }
+
   function loadYoutubeLoaderAndInit() {
     if (window.YoutubeLoader) {
       window.YoutubeLoader.initLazyYT();
@@ -268,6 +343,10 @@
     }
   }
 
+  /**
+   * Загружает модули хранилища и дожидается завершения их асинхронной инициализации.
+   * Вызывается ТОЛЬКО по требованию (открытие модалки «Хранилище»), а не на старте.
+   */
   async function loadStorageModules() {
     const modules = [
       'js/features/storage/core.js',
@@ -288,6 +367,22 @@
         });
       }
     }
+    if (typeof window._StorageEnsure === 'function') {
+      try {
+        await window._StorageEnsure();
+      } catch (e) {
+        console.warn('[Storage] Ошибка инициализации модулей:', e);
+      }
+    }
+    if (!window._StorageEnsure) {
+      for (let i = 0; i < 20 && !window._StorageEnsure; i++) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+      if (typeof window._StorageEnsure === 'function') {
+        try { await window._StorageEnsure(); } catch (e) { /* noop */ }
+      }
+    }
+    return window.BookmarkStorage;
   }
 
   function transformLangSwitcherToDropdown() {
@@ -343,10 +438,9 @@
     if (window.initFeedback) window.initFeedback();
     if (window.initGameUpdates) window.initGameUpdates();
     if (window.initPlatform) window.initPlatform();
-    const user = window.GithubAuth?.getCurrentUser();
-    if (user && window.GithubCore?.CONFIG?.ALLOWED_AUTHORS?.includes(user)) {
-      loadStorageModules().catch(() => {});
-    }
+    // ВАЖНО: модули хранилища НЕ грузятся здесь.
+    // Они подгружаются лениво при открытии модалки «Хранилище»
+    // (см. github-auth.js → handleAction('storage')).
   }
 
   function waitForLanguageAndInit() {
@@ -374,21 +468,21 @@
   }
 
   function initNonLanguageDependent() {
+    ensureConfig();
+    ensureCacheCrypto();
+    ensureDialog();
+
     loadPageScripts();
     ensureMarked().then(() => {});
+    ensureDOMPurify().then(() => {});
     loadYoutubeLoaderAndInit().catch(err => console.warn('YouTube loader init error:', err));
     loadDustParticles();
     registerServiceWorker();
     initDownloadConsent();
     initRateLimits();
-    const storageCore = document.createElement('script');
-    storageCore.src = 'js/features/storage/core.js';
-    storageCore.defer = true;
-    document.head.appendChild(storageCore);
-    const storageMetadata = document.createElement('script');
-    storageMetadata.src = 'js/features/storage/metadata.js';
-    storageMetadata.defer = true;
-    document.head.appendChild(storageMetadata);
+    // НЕ подгружаем storage/core.js и storage/metadata.js на старте —
+    // они будут загружены лениво через loadStorageModules() при первом
+    // открытии модалки «Хранилище».
   }
 
   if (document.readyState === 'loading') {
@@ -404,4 +498,5 @@
   }
 
   window.loadStorageModules = loadStorageModules;
+  window.ensureDOMPurify = ensureDOMPurify;
 })();

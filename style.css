@@ -1,16 +1,20 @@
-/* style.css — точка входа, импортирует все модули. */
-@import url('css/variables.css');
-@import url('css/base.css');
-@import url('css/typography.css');
-@import url('css/buttons.css');
-@import url('css/navigation.css');
-@import url('css/cards.css');
-@import url('css/layout.css');
-@import url('css/responsive.css');
-@import url('css/feedback.css');
-@import url('css/animations.css');
+/* style.css — глобальные дополнительные стили.
+   CSS-модули (variables, base, typography, buttons, navigation, cards,
+   layout, responsive, feedback, animations) подключаются отдельными
+   <link> в HTML и должны идти ДО этого файла, чтобы сохранить каскад.
+   Внешние шрифтовые CDN (Google Fonts) НЕ используются. Шрифт Russo One — локально:
+   css/typography.css → ../fonts/RussoOne.woff2
 
-/* ========== Глобальные дополнительные стили ========== */
+   Дублирующиеся селекторы, которые уже определены в css/*.css, здесь
+   намеренно отсутствуют:
+     - .requirements-grid                       → css/layout.css
+     - .req-item, .req-label, @keyframes shimmer → css/cards.css
+     - .consumption-card, .consumption-table    → css/cards.css
+     - .header-overlay                          → css/cards.css
+     - @media (pointer: coarse)                 → css/responsive.css
+*/
+
+/* ========== Кнопка доната ========== */
 
 .donate-button-fixed {
     position: fixed;
@@ -190,51 +194,7 @@
     margin-top: 8px;
 }
 
-/* ========== Улучшенные системные требования ========== */
-.requirements-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 24px;
-    margin: 24px 0;
-}
-.req-item {
-    flex: 1;
-    min-width: 220px;
-    background: linear-gradient(145deg, #252540, #1a1a2e);
-    border-radius: 24px;
-    padding: 20px;
-    border: 1px solid rgba(61,158,179,0.3);
-    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-}
-.req-item:hover {
-    transform: translateY(-5px);
-    border-color: var(--accent);
-    box-shadow: 0 15px 30px rgba(0,0,0,0.5);
-}
-.req-item::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-light));
-}
-.req-label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 26px;
-    font-weight: bold;
-    color: var(--accent);
-    margin-bottom: 20px;
-}
-.req-label i {
-    font-size: 28px;
-}
+/* ========== Уникальные части требований (общие — в css/cards.css) ========== */
 .req-specs {
     display: flex;
     flex-direction: column;
@@ -265,41 +225,6 @@
     margin-left: 8px;
 }
 
-.consumption-card {
-    background: linear-gradient(145deg, #252540, #1a1a2e);
-    border-radius: 24px;
-    padding: 24px;
-    margin-top: 24px;
-    border: 1px solid rgba(61,158,179,0.3);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-}
-.consumption-card h3 {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 0 0 8px;
-    font-size: 22px;
-    color: var(--accent);
-}
-.consumption-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-.consumption-table td {
-    padding: 12px 8px;
-    border-bottom: 1px solid rgba(61,158,179,0.2);
-    font-size: 14px;
-}
-.consumption-table td:first-child {
-    font-weight: bold;
-    color: var(--text-primary);
-    width: 40%;
-}
-.consumption-table tr:last-child td {
-    border-bottom: none;
-}
-
 /* Иконка Telegram справа от версии в шапке */
 .game-header .version-row {
     display: flex;
@@ -307,12 +232,6 @@
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
-}
-
-/* Убираем лишнее затенение шапки */
-.header-overlay {
-    background-color: rgba(0,0,0,0.3) !important;
-    backdrop-filter: blur(2px);
 }
 
 /* ========== Улучшения страницы лицензии ========== */
@@ -908,21 +827,22 @@
 
 /* ========== ПРАВКИ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ (ВКЛЮЧАЯ ГОРИЗОНТАЛЬНУЮ ОРИЕНТАЦИЮ) ========== */
 
-/* 1. Отключаем анимации и тяжёлые эффекты для touch-устройств (через класс .is-mobile) */
+/* 1. Отключаем анимации и тяжёлые эффекты для touch-устройств (через класс .is-mobile).
+   ВАЖНО: focus-visible НЕ отключаем — это ломает клавиатурную навигацию.
+   Используем явный префикс & для вложенных селекторов. */
 .is-mobile {
-    /* Все анимации отключаем, а opacity и transform сбрасываем в 1 и none */
-    .card, .project-card-link, .feature-item, .req-item, .consumption-card, .video-grid iframe,
-    .project-card-link:hover .project-card,
-    .project-card .image-wrapper img,
-    .game-icon,
-    .profile-card-link,
-    .button,
-    .download-button,
-    .social-icon,
-    .tilt-card,
-    .desc-text h3 span[data-lang],
-    .quote::before,
-    .block-follow .desc-text h3 span[data-lang] {
+    & .card, & .project-card-link, & .feature-item, & .req-item, & .consumption-card, & .video-grid iframe,
+    & .project-card-link:hover .project-card,
+    & .project-card .image-wrapper img,
+    & .game-icon,
+    & .profile-card-link,
+    & .button,
+    & .download-button,
+    & .social-icon,
+    & .tilt-card,
+    & .desc-text h3 span[data-lang],
+    & .quote::before,
+    & .block-follow .desc-text h3 span[data-lang] {
         animation: none !important;
         transition: none !important;
         transform: none !important;
@@ -930,57 +850,57 @@
         opacity: 1 !important;
     }
     /* Отключаем градиентный фон у текста и задаём статичный цвет */
-    .desc-text h3 span[data-lang] {
+    & .desc-text h3 span[data-lang] {
         background: none !important;
         -webkit-background-clip: unset !important;
         background-clip: unset !important;
         color: var(--color1) !important;
     }
-    .block-follow .desc-text h3 span[data-lang] {
+    & .block-follow .desc-text h3 span[data-lang] {
         color: var(--text-primary) !important;
         background: none !important;
         -webkit-background-clip: unset !important;
         background-clip: unset !important;
     }
-    .quote::before {
+    & .quote::before {
         display: none !important;
     }
     /* Цитата получает статичную цветную границу */
-    .quote {
+    & .quote {
         border-left: 4px solid var(--color1) !important;
         padding-left: 12px !important;
         background: rgba(0,0,0,0.2) !important;
     }
     /* Убираем наклоны и поднятия */
-    .tilt-card:hover {
+    & .tilt-card:hover {
         transform: none !important;
     }
-    .project-card-link:hover {
+    & .project-card-link:hover {
         transform: none !important;
     }
-    .project-card-link:hover .project-card {
+    & .project-card-link:hover .project-card {
         transform: none !important;
         box-shadow: var(--shadow) !important;
     }
     /* Убираем мерцание */
-    .req-item::before {
+    & .req-item::before {
         animation: none !important;
     }
-    .game-header::before {
+    & .game-header::before {
         opacity: 0.3;
     }
     /* Убираем рябь и сложные фоны */
-    body {
+    & body {
         background-image: radial-gradient(circle at 30% 10%, rgba(61,158,179,0.03) 0%, transparent 60%);
     }
-    .modal-content-full::before {
+    & .modal-content-full::before {
         animation: none !important;
     }
 
     /* Скелетон – тоже должен быть видимым */
-    .skeleton-image,
-    .skeleton-title,
-    .skeleton-text {
+    & .skeleton-image,
+    & .skeleton-title,
+    & .skeleton-text {
         animation: none !important;
         background: var(--bg-card) !important;
         opacity: 1 !important;
@@ -991,30 +911,30 @@
     /* Это обеспечит плавное затухание гифок */
 
     /* ---------- БЛОК СКАЧИВАНИЯ: ПОКАЗЫВАЕМ ГИФКИ (НО ОНИ СТАТИЧНЫ, РОТАЦИЯ ОТКЛЮЧЕНА В JS) ---------- */
-    .download-card {
+    & .download-card {
         background: transparent !important;
     }
-    .download-card .bg-gif-layer,
-    .download-card .bg-gif-mask {
+    & .download-card .bg-gif-layer,
+    & .download-card .bg-gif-mask {
         display: block !important;
     }
-    .download-subsection {
+    & .download-subsection {
         background: rgba(0,0,0,0.3) !important;
         backdrop-filter: blur(4px) !important;
         -webkit-backdrop-filter: blur(4px) !important;
     }
 
     /* ---------- ШАПКА: закругление оставляем, затенение убираем ---------- */
-    .game-header {
+    & .game-header {
         border-radius: 20px !important;
         overflow: hidden !important;
     }
-    .game-header .header-overlay {
+    & .game-header .header-overlay {
         background: transparent !important;
         backdrop-filter: none !important;
         padding: 20px 16px !important;
     }
-    .game-header .header-content {
+    & .game-header .header-content {
         background: rgba(0,0,0,0.3) !important;
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
@@ -1023,78 +943,61 @@
         box-shadow: none !important;
         border: none !important;
     }
-    .game-header .header-content .game-title {
+    & .game-header .header-content .game-title {
         text-shadow: 0 2px 8px rgba(0,0,0,0.6) !important;
     }
-    .game-icon-circle {
+    & .game-icon-circle {
         width: 64px !important;
         height: 64px !important;
     }
-    .game-icon {
+    & .game-icon {
         max-width: 56px !important;
         max-height: 56px !important;
     }
-    .header-text .game-title {
+    & .header-text .game-title {
         font-size: 26px !important;
     }
 
     /* Отключаем backdrop-filter у некоторых карточек для производительности, но НЕ у .desc-block и .desc-text */
-    .card,
-    .project-card,
-    .profile-card,
-    .feature-item,
-    .req-item,
-    .consumption-card,
-    .modal-content,
-    .modal-content-full,
-    .license-hero,
-    .license-section-card,
-    .license-card,
-    .contact-card,
-    .consent-box,
-    .feedback-item,
-    .comment,
-    .rate-panel .rate-summary,
-    .rate-panel .rate-limit-item,
-    .rate-panel .rate-info,
-    .rate-panel .rate-tab-content .rate-history-item,
-    .rate-panel .rate-tab-content .rate-queue-item {
+    & .card,
+    & .project-card,
+    & .profile-card,
+    & .feature-item,
+    & .req-item,
+    & .consumption-card,
+    & .modal-content,
+    & .modal-content-full,
+    & .license-hero,
+    & .license-section-card,
+    & .license-card,
+    & .contact-card,
+    & .consent-box,
+    & .feedback-item,
+    & .comment,
+    & .rate-panel .rate-summary,
+    & .rate-panel .rate-limit-item,
+    & .rate-panel .rate-info,
+    & .rate-panel .rate-tab-content .rate-history-item,
+    & .rate-panel .rate-tab-content .rate-queue-item {
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
     }
 
-    /* Удаление жёлтых квадратов на мобильных */
-    *,
-    *:focus,
-    *:active,
-    *:focus-visible,
-    a,
-    a:focus,
-    a:active,
-    a:focus-visible,
-    button,
-    button:focus,
-    button:active,
-    button:focus-visible,
-    input,
-    input:focus,
-    input:active,
-    input:focus-visible,
-    textarea,
-    textarea:focus,
-    textarea:active,
-    textarea:focus-visible,
-    [tabindex]:focus,
-    [tabindex]:active,
-    [tabindex]:focus-visible {
-        outline: none !important;
+    /* Удаление жёлтых квадратов на мобильных — отключаем только tap-highlight,
+       НЕ трогаем focus-visible, чтобы сохранить клавиатурную доступность. */
+    & a,
+    & button,
+    & input,
+    & textarea,
+    & select,
+    & [tabindex] {
         -webkit-tap-highlight-color: transparent !important;
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
-        box-shadow: none !important;
     }
 }
 
-/* 2. Отключаем анимации для пользователей, предпочитающих reduced motion */
+/* 2. Отключаем анимации для пользователей, предпочитающих reduced motion.
+   Также НЕ трогаем focus-visible. */
 @media (prefers-reduced-motion: reduce) {
     /* Все анимации отключаем, а opacity и transform сбрасываем в 1 и none */
     .card, .project-card-link, .feature-item, .req-item, .consumption-card, .video-grid iframe,
@@ -1265,34 +1168,15 @@
         -webkit-backdrop-filter: none !important;
     }
 
-    /* Удаление жёлтых квадратов на мобильных */
-    *,
-    *:focus,
-    *:active,
-    *:focus-visible,
+    /* Не отключаем focus-visible! Убираем только tap-highlight для тачей. */
     a,
-    a:focus,
-    a:active,
-    a:focus-visible,
     button,
-    button:focus,
-    button:active,
-    button:focus-visible,
     input,
-    input:focus,
-    input:active,
-    input:focus-visible,
     textarea,
-    textarea:focus,
-    textarea:active,
-    textarea:focus-visible,
-    [tabindex]:focus,
-    [tabindex]:active,
-    [tabindex]:focus-visible {
-        outline: none !important;
+    select,
+    [tabindex] {
         -webkit-tap-highlight-color: transparent !important;
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
-        box-shadow: none !important;
     }
 }
 
@@ -1384,33 +1268,24 @@
 
 /* ===== Удаление жёлтых квадратов на мобильных через медиа-запрос (доп. страховка) ===== */
 @media (pointer: coarse) {
-    *,
-    *:focus,
-    *:active,
-    *:focus-visible,
     a,
-    a:focus,
-    a:active,
-    a:focus-visible,
     button,
-    button:focus,
-    button:active,
-    button:focus-visible,
     input,
-    input:focus,
-    input:active,
-    input:focus-visible,
     textarea,
-    textarea:focus,
-    textarea:active,
-    textarea:focus-visible,
-    [tabindex]:focus,
-    [tabindex]:active,
-    [tabindex]:focus-visible {
-        outline: none !important;
+    select,
+    [tabindex] {
         -webkit-tap-highlight-color: transparent !important;
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
-        box-shadow: none !important;
+    }
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible,
+    [tabindex]:focus-visible {
+        outline: 2px solid var(--accent) !important;
+        outline-offset: 2px !important;
+        border-radius: 6px !important;
     }
 }
 

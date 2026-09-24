@@ -1,7 +1,7 @@
-// js/pages/game-updates.js – использует общий кэш и DocumentFragment, с локализацией, обновление кнопки при смене языка
-// При смене языка не перезагружает данные, только обновляет тексты через data-lang
+// js/pages/game-updates.js – использует общий кэш и DocumentFragment, с локализацией
+// cacheGet/cacheSet теперь асинхронные (шифрование через CacheCrypto).
 (function() {
-  const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractAllowed, extractSummary, decryptPrivateBody, loadModule, createElement } = window.GithubCore;
+  const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, loadModule, createElement, sanitizeHtml } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
   const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
   const { showToast } = window.UIUtils;
@@ -9,7 +9,6 @@
   let currentAbort = null, currentGame = null;
   const UPDATES_CACHE_TTL = 15 * 60 * 1000;
 
-  // ---- экспорт функции инициализации ----
   window.initGameUpdates = function() {
     const container = document.getElementById('game-updates');
     if (container?.dataset.game) {
@@ -35,7 +34,6 @@
     window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
     window.addEventListener('github-logout', () => { if (currentGame) refreshGameUpdates(currentGame); });
 
-    // ---- обновление кнопки при смене языка (без перезагрузки) ----
     window.addEventListener('languageChanged', () => {
       const container = document.getElementById('game-updates');
       if (!container) return;
@@ -45,7 +43,7 @@
         const btn = header.querySelector('.admin-update-btn');
         if (btn) {
           const t = window.I18n?.translate || (k => k);
-          btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
+          btn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addUpdate')}`);
         }
       }
     });
@@ -58,8 +56,7 @@
 
   async function loadGameUpdates(container, game) {
     const t = window.I18n?.translate || (k => k);
-    // Используем data-lang для сообщения загрузки
-    container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="loading">${t('loading')}</p></div>`;
+    container.innerHTML = sanitizeHtml(`<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="loading">${t('loading')}</p></div>`);
     if (currentAbort) {
       currentAbort.controller.abort();
       currentAbort = null;
@@ -68,10 +65,10 @@
     currentAbort = { controller };
     try {
       const cacheKey = `game_issues_${game}`;
-      let issues = cacheGet(cacheKey);
+      let issues = await cacheGet(cacheKey);
       if (!issues) {
         issues = await loadIssues({ labels: `game:${game}`, state: 'open', per_page: 100, signal: controller.signal });
-        cacheSet(cacheKey, issues);
+        await cacheSet(cacheKey, issues);
       }
       let posts = issues.filter(i =>
         i.labels.some(l => l.name === 'type:update') &&
@@ -85,17 +82,9 @@
         game,
         labels: i.labels.map(l => l.name)
       }));
-      const currentUser = getCurrentUser();
-      posts = posts.filter(p => {
-        if (!p.labels.includes('private')) return true;
-        if (isAdmin()) return true;
-        const allowed = extractAllowed(p.body);
-        return allowed && allowed.split(',').map(s=>s.trim()).includes(currentUser);
-      });
       posts.sort((a, b) => b.date - a.date);
       if (posts.length === 0) {
-        // Используем data-lang для автоматического обновления при смене языка
-        container.innerHTML = '<p class="text-secondary" data-lang="noUpdates"></p>';
+        container.innerHTML = sanitizeHtml('<p class="text-secondary" data-lang="noUpdates"></p>');
         return;
       }
       container.innerHTML = '';
@@ -109,36 +98,29 @@
       let header = parent.querySelector('.updates-header');
       if (!header) {
         header = createElement('div', 'updates-header', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' });
-        header.innerHTML = `<div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);"></i> <h2 style="margin:0;" data-lang="updatesTitle">${t('updatesTitle')}</h2></div>`;
+        header.innerHTML = sanitizeHtml(`<div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);"></i> <h2 style="margin:0;" data-lang="updatesTitle">${t('updatesTitle')}</h2></div>`);
         parent.insertBefore(header, container);
       }
       const existing = header.querySelector('.admin-update-btn');
       if (isAdmin() && hasScope('repo')) {
         if (!existing) {
           const btn = createElement('button', 'button admin-update-btn');
-          btn.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
+          btn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addUpdate')}`);
           btn.addEventListener('click', async () => { if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js'); window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update'); });
           header.appendChild(btn);
         } else {
-          // Обновляем текст
-          existing.innerHTML = `<i class="fas fa-plus"></i> ${t('addUpdate')}`;
+          existing.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addUpdate')}`);
         }
       } else if (existing) existing.remove();
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error('Update load error:', err);
-      // Используем data-lang для ошибки
-      container.innerHTML = `<p class="error-message" data-lang="updatesLoadError"></p>`;
+      container.innerHTML = sanitizeHtml(`<p class="error-message" data-lang="updatesLoadError"></p>`);
     } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
   }
 
   function createUpdateCard(post) {
     let previewBody = post.body;
-    const allowed = extractAllowed(post.body);
-    const currentUser = getCurrentUser();
-    if (post.labels.includes('private') && allowed && currentUser && allowed.split(',').map(s=>s.trim()).includes(currentUser)) {
-      try { previewBody = decryptPrivateBody(post.body, allowed); } catch {}
-    }
     const card = createElement('div', 'project-card-link no-tilt tilt-card', { cursor: 'pointer' });
     const inner = createElement('div', 'project-card');
     const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
@@ -149,7 +131,7 @@
     const title = createElement('h3');
     title.textContent = post.title.length > 70 ? post.title.slice(0,70)+'…' : post.title;
     const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
-    meta.innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`;
+    meta.innerHTML = sanitizeHtml(`<i class="fas fa-user"></i> ${escapeHtml(post.author)} · <i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`);
     const summary = extractSummary(previewBody) || stripHtml(previewBody).substring(0,120)+'…';
     const preview = createElement('p', 'text-secondary', { fontSize: '13px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' });
     preview.textContent = summary;
