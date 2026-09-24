@@ -16,8 +16,9 @@
 
 /* ============================================================
    ВИДЕО-ПРЕВЬЮ — карточка-ссылка на внешнюю платформу
-   Минималистично: только превью + маленькая иконка платформы.
-   Без бейджей, без кнопок play, без заголовков, без border.
+   Стиль: кнопка Play по центру, меняет цвет при наведении.
+   Для Twitch вместо треугольника — логотип Twitch.
+   Без иконок платформы в углу, без лишних бейджей и заголовков.
    ============================================================ */
 
 .video-preview {
@@ -34,7 +35,7 @@
     transition: transform var(--transition), box-shadow var(--transition);
     cursor: pointer;
     isolation: isolate;
-    /* Без border — убирает «белые линии» по краям */
+    /* Без border — убирает белые линии по краям после анимаций */
 }
 .video-preview:hover {
     transform: translateY(-4px);
@@ -55,29 +56,49 @@
     /* Без transform: scale — убирает субпиксельные артефакты по краям */
 }
 
-/* Маленькая иконка платформы в правом верхнем углу.
-   Без фона, без рамки — только лого + мягкая тень, чтобы было видно
-   на любом превью. */
-.video-preview__platform {
+/* Кнопка Play по центру */
+.video-preview__play {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 26px;
-    height: 26px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: rgba(15, 15, 26, 0.85);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
-    line-height: 1;
+    font-size: 26px;
+    color: #fff;
     z-index: 2;
     pointer-events: none;
-    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.75)) drop-shadow(0 0 1px rgba(0,0,0,0.9));
+    transition: transform 0.25s ease, background 0.25s ease, box-shadow 0.25s ease, color 0.25s ease;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+    border: none;
+    padding-left: 0;
 }
-.video-preview__platform--youtube {
-    color: #ff0033;
+.video-preview__play i {
+    line-height: 1;
 }
-.video-preview__platform--twitch {
-    color: #9146FF;
+/* Небольшой сдвиг треугольника Play для оптической центровки */
+.video-preview--youtube .video-preview__play i.fa-play {
+    margin-left: 4px;
+}
+.video-preview:hover .video-preview__play {
+    transform: translate(-50%, -50%) scale(1.15);
+}
+.video-preview--youtube:hover .video-preview__play {
+    background: #ff0033;
+    color: #fff;
+    box-shadow: 0 8px 28px rgba(255,0,51,0.6);
+}
+.video-preview--twitch:hover .video-preview__play {
+    background: #9146FF;
+    color: #fff;
+    box-shadow: 0 8px 28px rgba(145,70,255,0.6);
 }
 
 /* Трейлер — 16:9 без растягивания на всю высоту карточки */
@@ -101,12 +122,13 @@
 }
 
 @media (max-width: 600px) {
-    .video-preview__platform {
-        top: 6px;
-        right: 6px;
-        font-size: 20px;
-        width: 22px;
-        height: 22px;
+    .video-preview__play {
+        width: 56px;
+        height: 56px;
+        font-size: 22px;
+    }
+    .video-preview--youtube .video-preview__play i.fa-play {
+        margin-left: 3px;
     }
 }
 
