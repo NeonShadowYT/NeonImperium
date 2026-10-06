@@ -1,6 +1,11 @@
-// js/lang.js — локализация без встроенных словарей, только из JSON-файлов
-// Теперь поддерживает HTML-теги в переводах (безопасно, т.к. контент доверенный)
+// js/lang.js — локализация через JSON-файлы (locales/ru.json, locales/en.json).
+// Кеширует переводы в sessionStorage + localStorage.
+// Поддерживает HTML в переводах через DomUtils.setElementText (санитизация).
+// Языковой переключатель создаётся в common-init.js как dropdown.
+
 (function() {
+    'use strict';
+
     const SUPPORTED = ['ru', 'en'];
     const DEFAULT = 'ru';
     const LOCALE_PATH = 'locales/';
@@ -10,11 +15,13 @@
     let translations = {};
     let observer = null;
 
-    const OLD_KEYS = ['i18n_ru', 'i18n_en', 'i18n_ru_time', 'i18n_en_time'];
-    OLD_KEYS.forEach(key => {
-        sessionStorage.removeItem(key);
-        localStorage.removeItem(key);
-    });
+    function cleanLegacyKeys() {
+        const legacy = ['i18n_ru', 'i18n_en', 'i18n_ru_time', 'i18n_en_time'];
+        for (const key of legacy) {
+            try { sessionStorage.removeItem(key); } catch { /* noop */ }
+            try { localStorage.removeItem(key); } catch { /* noop */ }
+        }
+    }
 
     function detectBrowserLang() {
         const navLang = (navigator.language || navigator.userLanguage || '').split('-')[0];
@@ -22,56 +29,65 @@
     }
 
     function getSavedLang() {
-        return localStorage.getItem('preferredLanguage') || detectBrowserLang();
+        try {
+            const saved = localStorage.getItem('preferredLanguage');
+            if (saved && SUPPORTED.includes(saved)) return saved;
+        } catch { /* noop */ }
+        return detectBrowserLang();
     }
 
     async function fetchTranslations(lang) {
         const cacheKey = CACHE_PREFIX + lang;
-        const sessionCached = sessionStorage.getItem(cacheKey);
-        if (sessionCached) {
-            try {
-                return JSON.parse(sessionCached);
-            } catch(e) {}
-        }
-        const localCached = localStorage.getItem(cacheKey);
-        if (localCached) {
-            try {
-                const data = JSON.parse(localCached);
-                sessionStorage.setItem(cacheKey, JSON.stringify(data));
-                return data;
-            } catch(e) {}
-        }
+
+        try {
+            const cached = sessionStorage.getItem(cacheKey);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed && typeof parsed === 'object') return parsed;
+            }
+        } catch { /* noop */ }
+
+        try {
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed && typeof parsed === 'object') {
+                    try { sessionStorage.setItem(cacheKey, cached); } catch { /* noop */ }
+                    return parsed;
+                }
+            }
+        } catch { /* noop */ }
+
         try {
             const response = await fetch(`${LOCALE_PATH}${lang}.json`);
-            if (!response.ok) throw new Error();
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-            sessionStorage.setItem(cacheKey, JSON.stringify(data));
-            localStorage.setItem(cacheKey, JSON.stringify(data));
+            try { sessionStorage.setItem(cacheKey, JSON.stringify(data)); } catch { /* noop */ }
+            try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch { /* noop */ }
             return data;
         } catch (err) {
-            console.warn(`Failed to load translations for ${lang}`, err);
+            console.warn(`[I18n] Failed to load translations for ${lang}:`, err);
             return null;
         }
     }
 
     function translate(key) {
-        return translations[key] ?? key;
+        if (!key) return '';
+        if (Object.prototype.hasOwnProperty.call(translations, key)) {
+            return translations[key];
+        }
+        return key;
     }
 
     function updateElements() {
+        const setText = (window.DomUtils && window.DomUtils.setElementText)
+            ? window.DomUtils.setElementText
+            : (el, text) => { el.textContent = text == null ? '' : String(text); };
+
         document.querySelectorAll('[data-lang]').forEach(el => {
             const key = el.getAttribute('data-lang');
-            const text = translate(key);
-            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                if (el.placeholder !== undefined) {
-                    el.placeholder = text;
-                } else {
-                    el.textContent = text;
-                }
-            } else {
-                // Вставляем как HTML, чтобы поддерживать <strong>, <em> и т.д.
-                el.innerHTML = text;
-            }
+            if (!key) return;
+            setText(el, translate(key));
         });
 
         const titleKeys = {
@@ -80,61 +96,77 @@
             '/starve-neon.html': 'starvePageTitle',
             '/alpha-01.html': 'alphaPageTitle',
             '/gc-adven.html': 'gcPageTitle',
-            '/license.html': 'licenseTitle'
+            '/license.html': 'licenseTitle',
+            '/404.html': 'notFoundTitle'
         };
         const path = location.pathname;
-        const titleKey = titleKeys[path] || titleKeys[path.split('/').pop()] || 'siteTitle';
+        const fileName = path.split('/').pop() || 'index.html';
+        const titleKey = titleKeys[path] || titleKeys[fileName] || 'siteTitle';
         document.title = translate(titleKey);
-
-        document.querySelectorAll('.lang-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.langCode === currentLang);
-        });
     }
 
     async function setLanguage(lang) {
         if (lang === currentLang || !SUPPORTED.includes(lang)) return;
+
         currentLang = lang;
-        localStorage.setItem('preferredLanguage', lang);
-        translations = {};
-        updateElements();
+        try { localStorage.setItem('preferredLanguage', lang); }
+        catch { /* noop */ }
+
         const full = await fetchTranslations(lang);
         if (full) {
             translations = full;
             updateElements();
         }
-        window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: lang } }));
+
+        window.dispatchEvent(new CustomEvent('languageChanged', {
+            detail: { language: lang }
+        }));
     }
 
     async function init() {
+        cleanLegacyKeys();
+
         currentLang = getSavedLang();
-        translations = await fetchTranslations(currentLang) || {};
+        const loaded = await fetchTranslations(currentLang);
+        translations = loaded || {};
+
         updateElements();
 
-        // Обработчики для кнопок (оставлены для обратной совместимости, но они будут заменены выпадающим списком)
-        document.querySelectorAll('.lang-btn').forEach(btn => {
-            btn.addEventListener('click', () => setLanguage(btn.dataset.langCode));
-        });
-
+        if (observer) observer.disconnect();
         observer = new MutationObserver(mutations => {
             let needUpdate = false;
             for (const m of mutations) {
-                if (m.type === 'childList' && m.addedNodes.length) {
-                    for (const node of m.addedNodes) {
-                        if (node.nodeType === Node.ELEMENT_NODE && (node.matches?.('[data-lang]') || node.querySelector?.('[data-lang]'))) {
-                            needUpdate = true;
-                            break;
-                        }
-                    }
+                if (m.type !== 'childList' || !m.addedNodes.length) continue;
+                for (const node of m.addedNodes) {
+                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                    if (node.matches && node.matches('[data-lang]')) { needUpdate = true; break; }
+                    if (node.querySelector && node.querySelector('[data-lang]')) { needUpdate = true; break; }
                 }
+                if (needUpdate) break;
             }
             if (needUpdate) updateElements();
         });
         observer.observe(document.body, { childList: true, subtree: true });
-        window.dispatchEvent(new CustomEvent('languageLoaded', { detail: { language: currentLang } }));
+
+        // Очистка observer при уходе со страницы
+        window.addEventListener('pagehide', () => {
+            if (observer) { observer.disconnect(); observer = null; }
+        }, { once: true });
+
+        window.dispatchEvent(new CustomEvent('languageLoaded', {
+            detail: { language: currentLang }
+        }));
     }
 
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-    else init();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init, { once: true });
+    } else {
+        init();
+    }
 
-    window.I18n = { setLanguage, translate, getCurrentLang: () => currentLang };
+    window.I18n = {
+        setLanguage,
+        translate,
+        getCurrentLang: () => currentLang
+    };
 })();

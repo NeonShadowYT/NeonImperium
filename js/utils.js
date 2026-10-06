@@ -1,234 +1,144 @@
-// js/utils.js – централизованные утилиты для всего сайта
-// Кэш шифруется через CacheCrypto (AES-GCM), кроме исключённых ключей.
-// cacheGet/cacheSet — асинхронные.
+// js/utils.js
+// Чистые утилиты без побочных эффектов.
+// Cache-функции живут в js/core/api-cache.js, DOM-функции — в js/core/dom-utils.js.
+// Все три файла мержатся в window.Utils для обратной совместимости.
+
 (function() {
-    // ---- Источник конфигурации: window.NeonConfig (js/config.js) с fallback на дефолты ----
-    const NC = (typeof window !== 'undefined' && window.NeonConfig) || {};
-    const CONFIG = {
-        CACHE_TTL: NC.CACHE_TTL || 10 * 60 * 1000,
-        REPO_OWNER: NC.REPO_OWNER || 'NeonShadowYT',
-        REPO_NAME: NC.REPO_NAME || 'NeonImperium'
-    };
+    'use strict';
 
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function stripHtml(html) {
-        const div = document.createElement('div');
-        div.innerHTML = html;
-        return div.textContent || div.innerText || '';
-    }
-
-    function createElement(tag, className, styles = {}, attrs = {}) {
-        const el = document.createElement(tag);
-        if (className) el.className = className;
-        Object.assign(el.style, styles);
-        Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
-        return el;
-    }
-
-    function formatDate(date, lang = null) {
-        const locale = lang || localStorage.getItem('preferredLanguage') || 'ru';
-        const d = new Date(date);
-        return d.toLocaleDateString(locale === 'en' ? 'en-US' : 'ru-RU', {
-            year: 'numeric', month: 'long', day: 'numeric'
-        });
-    }
-
-    // ---- Асинхронный кэш с шифрованием ----
-
-    /**
-     * Читает значение из кэша. Если ключ не в исключениях — расшифровывает.
-     * При ошибке расшифровки удаляет повреждённый ключ и возвращает null.
-     */
-    async function cacheGet(key, ttl = CONFIG.CACHE_TTL) {
-        const isExcluded = window.CacheCrypto?.isExcludedKey(key) ?? true;
-
-        const session = sessionStorage.getItem(key);
-        const sessionTime = sessionStorage.getItem(`${key}_time`);
-        if (session && sessionTime && (Date.now() - parseInt(sessionTime) < ttl)) {
-            if (isExcluded) {
-                try { return JSON.parse(session); } catch { return null; }
-            }
-            const decrypted = await window.CacheCrypto.decryptCacheValue(session);
-            if (decrypted === null) {
-                sessionStorage.removeItem(key);
-                sessionStorage.removeItem(`${key}_time`);
-                return null;
-            }
-            try { return JSON.parse(decrypted); } catch { return null; }
-        }
-
-        try {
-            const local = localStorage.getItem(key);
-            const localTime = localStorage.getItem(`${key}_time`);
-            if (local && localTime && (Date.now() - parseInt(localTime) < ttl)) {
-                sessionStorage.setItem(key, local);
-                sessionStorage.setItem(`${key}_time`, localTime);
-                if (isExcluded) {
-                    try { return JSON.parse(local); } catch { return null; }
-                }
-                const decrypted = await window.CacheCrypto.decryptCacheValue(local);
-                if (decrypted === null) {
-                    localStorage.removeItem(key);
-                    localStorage.removeItem(`${key}_time`);
-                    return null;
-                }
-                try { return JSON.parse(decrypted); } catch { return null; }
-            }
-        } catch {}
-
-        return null;
-    }
-
-    /**
-     * Записывает значение в кэш. Если ключ не в исключениях — шифрует.
-     */
-    async function cacheSet(key, data) {
-        const str = JSON.stringify(data);
-        const isExcluded = window.CacheCrypto?.isExcludedKey(key) ?? true;
-
-        let storedValue;
-        if (isExcluded) {
-            storedValue = str;
-        } else if (window.CacheCrypto) {
-            try {
-                storedValue = await window.CacheCrypto.encryptCacheValue(str);
-            } catch (e) {
-                console.warn('[cacheSet] Ошибка шифрования, сохраняем как есть:', e);
-                storedValue = str;
-            }
-        } else {
-            storedValue = str;
-        }
-
-        const now = Date.now().toString();
-        sessionStorage.setItem(key, storedValue);
-        sessionStorage.setItem(`${key}_time`, now);
-        try {
-            localStorage.setItem(key, storedValue);
-            localStorage.setItem(`${key}_time`, now);
-        } catch {}
-    }
-
-    function cacheRemove(key) {
-        sessionStorage.removeItem(key);
-        sessionStorage.removeItem(`${key}_time`);
-        try {
-            localStorage.removeItem(key);
-            localStorage.removeItem(`${key}_time`);
-        } catch {}
-    }
-
-    function cacheRemoveByPrefix(prefix) {
-        for (let i = sessionStorage.length - 1; i >= 0; i--) {
-            const k = sessionStorage.key(i);
-            if (k && k.startsWith(prefix)) {
-                sessionStorage.removeItem(k);
-                sessionStorage.removeItem(k + '_time');
-            }
-        }
-        try {
-            for (let i = localStorage.length - 1; i >= 0; i--) {
-                const k = localStorage.key(i);
-                if (k && k.startsWith(prefix)) {
-                    localStorage.removeItem(k);
-                    localStorage.removeItem(k + '_time');
-                }
-            }
-        } catch {}
-    }
+    // ============================================================
+    // Утилиты коллекций
+    // ============================================================
 
     function deduplicateByNumber(items) {
+        if (!Array.isArray(items)) return [];
         const seen = new Set();
-        return items.filter(i => {
-            if (seen.has(i.number)) return false;
-            seen.add(i.number);
-            return true;
-        });
+        const result = [];
+        for (const item of items) {
+            const key = item && item.number;
+            if (key == null) { result.push(item); continue; }
+            if (seen.has(key)) continue;
+            seen.add(key);
+            result.push(item);
+        }
+        return result;
     }
 
+    // ============================================================
+    // Debounce / Throttle
+    // ============================================================
+
     function debounce(fn, delay) {
-        let timer;
-        return function(...args) {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn.apply(this, args), delay);
+        if (typeof fn !== 'function') throw new TypeError('debounce: fn must be a function');
+        let timer = null;
+        const wrapped = function(...args) {
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(() => {
+                timer = null;
+                try { fn.apply(this, args); }
+                catch (e) { console.error('[debounce]', e); }
+            }, delay);
         };
+        wrapped.cancel = () => {
+            if (timer) { clearTimeout(timer); timer = null; }
+        };
+        wrapped.flush = function(...args) {
+            if (timer) { clearTimeout(timer); timer = null; }
+            try { fn.apply(this, args); }
+            catch (e) { console.error('[debounce]', e); }
+        };
+        return wrapped;
     }
 
     function throttle(fn, delay) {
+        if (typeof fn !== 'function') throw new TypeError('throttle: fn must be a function');
         let last = 0;
+        let timer = null;
         return function(...args) {
             const now = Date.now();
-            if (now - last >= delay) {
+            const remaining = delay - (now - last);
+            if (remaining <= 0) {
+                if (timer) { clearTimeout(timer); timer = null; }
                 last = now;
-                fn.apply(this, args);
+                try { fn.apply(this, args); }
+                catch (e) { console.error('[throttle]', e); }
+            } else if (!timer) {
+                timer = setTimeout(() => {
+                    last = Date.now();
+                    timer = null;
+                    try { fn.apply(this, args); }
+                    catch (e) { console.error('[throttle]', e); }
+                }, remaining);
             }
         };
     }
 
-    /**
-     * Санитайзит HTML с помощью DOMPurify.
-     */
-    function sanitizeHtml(html) {
-        if (!html) return '';
-        if (typeof window.DOMPurify === 'undefined' || typeof window.DOMPurify.sanitize !== 'function') {
-            console.warn('[sanitizeHtml] DOMPurify не загружен. HTML будет отброшен.');
-            return '';
-        }
-        return window.DOMPurify.sanitize(html, {
-            ADD_ATTR: ['target'],
-            FORBID_TAGS: ['style'],
-            FORBID_ATTR: ['onerror', 'onload', 'onclick']
-        });
-    }
-
-    function renderMarkdown(text) {
-        if (!text) return '';
-        let rawHtml;
-        if (window.marked) {
-            if (typeof marked.setOptions === 'function') {
-                marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
-            }
-            if (typeof marked.parse === 'function') {
-                rawHtml = marked.parse(text);
-            } else if (typeof marked === 'function') {
-                rawHtml = marked(text);
-            }
-        }
-        if (rawHtml === undefined) {
-            rawHtml = text.replace(/\n/g, '<br>');
-        }
-        return sanitizeHtml(rawHtml);
-    }
+    // ============================================================
+    // AbortController с таймаутом
+    // ============================================================
 
     function createAbortable(timeout = 20000) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        const timeoutId = setTimeout(() => {
+            try { controller.abort(new Error('timeout')); }
+            catch { controller.abort(); }
+        }, timeout);
         return { controller, timeoutId };
     }
 
-    const loadedScripts = new Set();
+    // ============================================================
+    // Загрузчик ES5-скриптов
+    // ============================================================
+
+    const loadedModules = new Set();
+    const modulePromises = new Map();
+
     function loadModule(path) {
-        if (loadedScripts.has(path)) return Promise.resolve();
-        return new Promise((resolve, reject) => {
+        if (!path) return Promise.reject(new Error('loadModule: path is required'));
+        if (loadedModules.has(path)) return Promise.resolve();
+        if (modulePromises.has(path)) return modulePromises.get(path);
+
+        const promise = new Promise((resolve, reject) => {
+            if (document.querySelector(`script[src="${path}"]`)) {
+                loadedModules.add(path);
+                resolve();
+                return;
+            }
             const script = document.createElement('script');
             script.src = path;
             script.async = true;
-            script.onload = () => { loadedScripts.add(path); resolve(); };
-            script.onerror = reject;
+            script.onload = () => {
+                loadedModules.add(path);
+                modulePromises.delete(path);
+                resolve();
+            };
+            script.onerror = () => {
+                modulePromises.delete(path);
+                reject(new Error(`Failed to load module: ${path}`));
+            };
             document.head.appendChild(script);
         });
+
+        modulePromises.set(path, promise);
+        return promise;
     }
+
+    // ============================================================
+    // Markdown / HTML безопасность
+    // ============================================================
+
+    const TOKEN_PATTERNS = [
+        /ghp_[A-Za-z0-9]{36}/,
+        /github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}/,
+        /gho_[A-Za-z0-9]{36}/,
+        /ghu_[A-Za-z0-9]{36}/,
+        /ghs_[A-Za-z0-9]{36}/,
+        /gpl_[A-Za-z0-9]{36}/
+    ];
 
     function stripMarkdownAndHtml(text) {
         if (!text) return '';
-        let cleaned = text;
-
+        let cleaned = String(text);
         cleaned = cleaned.replace(/<details[\s\S]*?<\/details>/gi, '');
         cleaned = cleaned.replace(/<[^>]*>/g, ' ');
         cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
@@ -237,47 +147,122 @@
         cleaned = cleaned.replace(/\bhttps?:\/\/[^\s]+/g, '');
         cleaned = cleaned.replace(/[#*_~`>\-+=|]/g, ' ');
         cleaned = cleaned.replace(/\s+/g, ' ').trim();
-
         return cleaned;
     }
 
     function getPlainTextLength(text) {
-        const plain = stripMarkdownAndHtml(text);
-        return plain.length;
+        return stripMarkdownAndHtml(text).length;
     }
 
     function containsGitHubToken(text) {
         if (!text) return false;
-        const patterns = [
-            /ghp_[a-zA-Z0-9]{36}/,
-            /github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}/,
-            /gho_[a-zA-Z0-9]{36}/,
-            /ghu_[a-zA-Z0-9]{36}/,
-            /ghs_[a-zA-Z0-9]{36}/,
-            /gpl_[a-zA-Z0-9]{36}/
-        ];
-        for (const p of patterns) {
-            if (p.test(text)) return true;
+        const str = String(text);
+        for (const pattern of TOKEN_PATTERNS) {
+            if (pattern.test(str)) return true;
         }
-        if (/\bgithub_token\b/i.test(text)) return true;
-        return false;
+        return /\bgithub_token\b/i.test(str);
     }
 
-    // ----- XOR (оставлено для истории / обратной совместимости) -----
+    function sanitizeHtml(html) {
+        if (!html) return '';
+        if (typeof window.DOMPurify === 'undefined' ||
+            typeof window.DOMPurify.sanitize !== 'function') {
+            console.warn('[sanitizeHtml] DOMPurify не загружен. HTML будет отброшен.');
+            return '';
+        }
+        return window.DOMPurify.sanitize(String(html), {
+            ADD_ATTR: ['target', 'rel', 'loading', 'referrerpolicy'],
+            FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed'],
+            FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus']
+        });
+    }
+
+    // ---- Markdown LRU по djb2-хешу ----
+    const MAX_MARKDOWN_CACHE = 200;
+    const markdownCache = new Map();
+
+    function djb2Hash(str) {
+        let hash = 5381;
+        for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
+        }
+        return hash >>> 0;
+    }
+
+    function renderMarkdown(text) {
+        if (!text) return '';
+        const str = String(text);
+        const hash = djb2Hash(str);
+
+        if (markdownCache.has(hash)) {
+            const entry = markdownCache.get(hash);
+            if (entry.text === str) {
+                markdownCache.delete(hash);
+                markdownCache.set(hash, entry);
+                return entry.html;
+            }
+        }
+
+        let rawHtml;
+        if (window.marked) {
+            try {
+                if (typeof window.marked.setOptions === 'function') {
+                    window.marked.setOptions({
+                        gfm: true,
+                        breaks: true,
+                        headerIds: false,
+                        mangle: false
+                    });
+                }
+                if (typeof window.marked.parse === 'function') {
+                    rawHtml = window.marked.parse(str);
+                } else if (typeof window.marked === 'function') {
+                    rawHtml = window.marked(str);
+                }
+            } catch (e) {
+                console.warn('[renderMarkdown] marked error:', e);
+            }
+        }
+        if (rawHtml === undefined || rawHtml === null) {
+            rawHtml = str.replace(/\n/g, '<br>');
+        }
+        const safe = sanitizeHtml(rawHtml);
+
+        if (markdownCache.size >= MAX_MARKDOWN_CACHE) {
+            const firstKey = markdownCache.keys().next().value;
+            if (firstKey !== undefined) markdownCache.delete(firstKey);
+        }
+        markdownCache.set(hash, { text: str, html: safe });
+        return safe;
+    }
+
+    // ============================================================
+    // XOR — ТОЛЬКО для обфускации истории лимитов (rate-limits.js).
+    // НЕ ИСПОЛЬЗУЕТСЯ для токенов — для токена см. js/core/token-store.js
+    // (IndexedDB + AES-GCM).
+    // XOR НЕ является криптографической защитой.
+    // ============================================================
+
     function xorEncrypt(data, key) {
+        if (!data || !key) return '';
         let result = '';
         for (let i = 0; i < data.length; i++) {
-            result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+            result += String.fromCharCode(
+                data.charCodeAt(i) ^ key.charCodeAt(i % key.length)
+            );
         }
         return btoa(unescape(encodeURIComponent(result)));
     }
 
     function xorDecrypt(encrypted, key) {
+        if (!encrypted || !key) return null;
         try {
             const decoded = decodeURIComponent(escape(atob(encrypted)));
             let result = '';
             for (let i = 0; i < decoded.length; i++) {
-                result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+                result += String.fromCharCode(
+                    decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length)
+                );
             }
             return result;
         } catch (e) {
@@ -285,26 +270,24 @@
         }
     }
 
-    function generateRandomKey(length = 32) {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=';
-        let key = '';
-        for (let i = 0; i < length; i++) {
-            key += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return key;
-    }
+    // ============================================================
+    // Публикация
+    // ============================================================
 
-    window.Utils = {
-        escapeHtml, stripHtml, createElement, formatDate,
-        cacheGet, cacheSet, cacheRemove, cacheRemoveByPrefix,
-        deduplicateByNumber, debounce, throttle, renderMarkdown,
-        createAbortable, loadModule,
+    const api = {
+        deduplicateByNumber,
+        debounce,
+        throttle,
+        createAbortable,
+        loadModule,
         stripMarkdownAndHtml,
         getPlainTextLength,
         containsGitHubToken,
+        sanitizeHtml,
+        renderMarkdown,
         xorEncrypt,
-        xorDecrypt,
-        generateRandomKey,
-        sanitizeHtml
+        xorDecrypt
     };
+
+    window.Utils = Object.assign(window.Utils || {}, api);
 })();

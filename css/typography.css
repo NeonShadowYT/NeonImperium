@@ -1,9 +1,11 @@
+/* typography.css — шрифты, заголовки, типографические утилиты */
+
 @font-face {
-  font-family: 'Russo One';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('../fonts/RussoOne.woff2') format('woff2');
+    font-family: 'Russo One';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/RussoOne.woff2') format('woff2');
 }
 
 h1, h2, h3, h4, .game-title {

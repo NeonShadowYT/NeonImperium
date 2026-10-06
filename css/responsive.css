@@ -1,8 +1,158 @@
+/* responsive.css — все media queries и адаптивные правила.
+   Единый источник правды для:
+     — max-width: 900, 700, 600, 500, 400
+     — @media (pointer: coarse) — тач-устройства
+     — @media (hover: hover) and (pointer: fine) — desktop
+     — отключение backdrop-filter на мобильных
+*/
+
 /* ===========================================
-   Все адаптивные стили
+   Desktop: включаем backdrop-filter
+   =========================================== */
+@media (hover: hover) and (pointer: fine) {
+    .card,
+    .project-card,
+    .modal-content,
+    .modal-content-full,
+    .nav-bar,
+    .game-header .header-content,
+    .download-subsection,
+    .feedback-form,
+    .feedback-item,
+    .bookmark-card,
+    .profile-card,
+    .feature-item,
+    .req-item,
+    .consumption-card,
+    .license-hero,
+    .license-section-card,
+    .license-card,
+    .contact-card,
+    .consent-box,
+    .rate-panel .rate-summary,
+    .rate-panel .rate-limit-item {
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+    }
+
+    .tilt-card:hover {
+        transform: translateY(-5px) scale(1.02);
+        box-shadow: var(--shadow-hover);
+    }
+    .feature-item.tilt-card:hover {
+        transform: none;
+        box-shadow: none;
+    }
+}
+
+/* ===========================================
+   Mobile: отключаем backdrop-filter
+   =========================================== */
+@media (hover: none), (pointer: coarse) {
+    .card,
+    .project-card,
+    .modal-content,
+    .modal-content-full,
+    .nav-bar,
+    .game-header .header-content,
+    .download-subsection,
+    .feedback-form,
+    .feedback-item,
+    .bookmark-card,
+    .profile-card,
+    .feature-item,
+    .req-item,
+    .consumption-card,
+    .license-hero,
+    .license-section-card,
+    .license-card,
+    .contact-card,
+    .consent-box,
+    .rate-panel .rate-summary,
+    .rate-panel .rate-limit-item {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background: var(--glass-bg-solid) !important;
+    }
+
+    .tilt-card {
+        transform: none !important;
+    }
+    .tilt-card:hover {
+        transform: translateY(-5px) !important;
+    }
+    .feature-item.tilt-card:hover {
+        transform: none !important;
+    }
+}
+
+/* Fallback для браузеров без backdrop-filter */
+@supports not (backdrop-filter: blur(6px)) {
+    .card,
+    .nav-bar,
+    .modal-content,
+    .modal-content-full {
+        background: rgba(30, 30, 48, 0.95);
+    }
+}
+
+/* ===========================================
+   Тач-устройства: tap-highlight, focus-visible, target size
+   =========================================== */
+@media (pointer: coarse) {
+    *,
+    *::before,
+    *::after {
+        -webkit-tap-highlight-color: transparent !important;
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+    }
+
+    a,
+    button,
+    input,
+    textarea,
+    select,
+    [tabindex],
+    .button,
+    .download-button,
+    .nav-link,
+    .lang-dropdown-btn,
+    .feedback-tab,
+    .rate-tab,
+    .reaction-button {
+        touch-action: manipulation;
+    }
+
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible,
+    [tabindex]:focus-visible {
+        outline: 2px solid var(--accent) !important;
+        outline-offset: 2px !important;
+        border-radius: 6px !important;
+    }
+
+    .nav-link,
+    .lang-dropdown-btn,
+    .button,
+    .download-button,
+    .feedback-tab,
+    .rate-tab,
+    .reaction-button,
+    .editor-btn {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* ===========================================
+   max-width: 900px
    =========================================== */
 @media (max-width: 900px) {
-    /* Навигация – не переносим, добавляем скролл при необходимости */
     .nav-bar {
         flex-wrap: nowrap;
         padding: 6px 10px;
@@ -26,7 +176,7 @@
         flex-shrink: 0;
         margin-left: auto;
     }
-    /* Уменьшаем минимальную ширину колонок для постов и видео */
+
     .projects-grid {
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 16px;
@@ -35,39 +185,27 @@
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 16px;
     }
-    /* Профили (разработчики, ютуберы) – более компактные */
-    .profile-cards {
-        gap: 12px;
-    }
-    .profile-card {
-        padding: 12px;
-    }
-    .avatar-wrapper {
-        width: 60px;
-        height: 60px;
-    }
-    .profile-name {
-        font-size: 14px;
-    }
+    .profile-cards { gap: 12px; }
+    .profile-card { padding: 12px; }
+    .avatar-wrapper { width: 60px; height: 60px; }
+    .profile-name { font-size: 14px; }
 }
 
+/* ===========================================
+   max-width: 700px
+   =========================================== */
 @media (max-width: 700px) {
-    .row {
-        flex-direction: column;
-    }
-    .trailer-card, .developer-card, .half {
+    .row { flex-direction: column; }
+    .trailer-card,
+    .developer-card,
+    .half {
         flex: 1 1 auto;
         min-width: auto;
     }
-    .small-projects-container {
-        grid-template-columns: 1fr;
-    }
-    .small-projects-container .project-card-link {
-        width: 100%;
-    }
-    .small-projects-container .project-card {
-        width: 100%;
-    }
+    .small-projects-container { grid-template-columns: 1fr; }
+    .small-projects-container .project-card-link { width: 100%; }
+    .small-projects-container .project-card { width: 100%; }
+
     .header-content {
         flex-direction: column;
         padding: 20px;
@@ -76,22 +214,16 @@
         width: 80px;
         height: 80px;
     }
-    .game-title {
-        font-size: 28px;
-    }
+    .game-title { font-size: 28px; }
+
     .nav-link {
         padding: 6px 10px;
         font-size: 13px;
     }
-    .card {
-        margin-bottom: 16px;
-    }
-    .game-header {
-        background-size: cover !important;
-    }
-    .features-grid {
-        grid-template-columns: 1fr;
-    }
+    .card { margin-bottom: 16px; }
+    .game-header { background-size: cover !important; }
+    .features-grid { grid-template-columns: 1fr; }
+
     .bookmarks-grid {
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
     }
@@ -103,52 +235,26 @@
         flex-direction: column;
         gap: 10px;
     }
-    .storage-add-form {
-        grid-template-columns: 1fr;
-    }
+    .storage-add-form { grid-template-columns: 1fr; }
+
     .feedback-tabs {
         overflow-x: auto;
         scrollbar-width: none;
     }
-    @media screen and (-webkit-min-device-pixel-ratio:0) {
-        .feedback-tabs::-webkit-scrollbar {
-            display: none;
-        }
+    @media screen and (-webkit-min-device-pixel-ratio: 0) {
+        .feedback-tabs::-webkit-scrollbar { display: none; }
     }
-    .card {
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-    }
-    .nav-bar {
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-    }
+
     .game-header .header-content {
-        backdrop-filter: blur(4px);
         padding: 16px 24px;
         gap: 16px;
     }
-    .project-card {
-        backdrop-filter: blur(4px);
-    }
-    .modal-content-full {
-        backdrop-filter: blur(8px);
-    }
-    /* Дополнительное уплотнение профилей */
-    .profile-cards {
-        gap: 10px;
-    }
-    .profile-card {
-        padding: 10px;
-    }
-    .avatar-wrapper {
-        width: 48px;
-        height: 48px;
-    }
-    .profile-name {
-        font-size: 13px;
-    }
-    /* Ещё меньше колонки для сеток */
+
+    .profile-cards { gap: 10px; }
+    .profile-card { padding: 10px; }
+    .avatar-wrapper { width: 48px; height: 48px; }
+    .profile-name { font-size: 13px; }
+
     .projects-grid {
         grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
         gap: 12px;
@@ -157,89 +263,95 @@
         grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
         gap: 12px;
     }
+
+    .feature-item .feature-banner { height: 100px; }
+    .editor-split { flex-direction: column; }
+    .editor-split-left textarea { min-height: 200px; }
+
+    .modal-header-actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+    .comment-form { flex-wrap: wrap; }
+    .comment-form .comment-input {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+    .comment-form .button-group {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .download-subsection .store-buttons,
+    .download-subsection .cloud-buttons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .download-subsection .download-button {
+        width: 100%;
+        justify-content: center;
+    }
+    .github-block .platform-selector { flex-wrap: wrap; }
+    .github-block .version-select { width: 100%; }
 }
 
+/* ===========================================
+   max-width: 600px
+   =========================================== */
 @media (max-width: 600px) {
-    body {
-        padding: 10px;
-    }
-    .game-title {
-        font-size: 32px;
-    }
-    .card {
-        padding: 20px;
-    }
+    body { padding: 10px; }
+    .game-title { font-size: 32px; }
+    .card { padding: 20px; }
+
     .download-buttons {
         flex-direction: column;
         align-items: stretch;
     }
-    .download-button {
-        width: 100%;
-    }
+    .download-button { width: 100%; }
+
     .progress-row {
         flex-direction: column;
         align-items: stretch;
         gap: 8px;
     }
-    .progress-label, .progress-percent {
-        text-align: center;
-    }
-    .progress-bar {
-        min-width: auto;
-    }
-    .bookmarks-grid {
-        grid-template-columns: 1fr !important;
-    }
+    .progress-label,
+    .progress-percent { text-align: center; }
+    .progress-bar { min-width: auto; }
+
+    .bookmarks-grid { grid-template-columns: 1fr !important; }
+
+    .modal-fullscreen { padding: 10px; }
     .modal-content-full {
         max-height: 95vh;
         border-radius: var(--radius-md);
     }
-    .modal-header {
-        padding: 15px 20px;
-    }
-    .modal-header h2 {
-        font-size: 20px;
-    }
-    .modal-body {
-        padding: 20px;
-    }
+    .modal-header { padding: 12px 15px; }
+    .modal-header h2 { font-size: 18px; }
+    .modal-body { padding: 16px; }
+
     .feedback-header {
         flex-direction: column;
         align-items: stretch;
     }
-    .feedback-header .button {
-        width: 100%;
-    }
-    .feedback-tab {
-        flex-shrink: 0;
-    }
-    .feedback-form .button-group {
-        flex-direction: column;
-    }
-    .feedback-form .button {
-        width: 100%;
-    }
+    .feedback-header .button { width: 100%; }
+    .feedback-tab { flex-shrink: 0; }
+    .feedback-form .button-group { flex-direction: column; }
+    .feedback-form .button { width: 100%; }
     .feedback-item-header {
         flex-direction: column;
         align-items: flex-start;
     }
-    .reactions-container {
-        justify-content: center;
-    }
+    .reactions-container { justify-content: center; }
     .reaction-button {
         padding: 6px 12px;
         font-size: 14px;
     }
-    .editor-toolbar {
-        gap: 3px;
-    }
+    .editor-toolbar { gap: 3px; }
     .editor-btn {
         padding: 4px 8px;
         font-size: 12px;
     }
-    .editor-btn i {
-        font-size: 14px;
-    }
+    .editor-btn i { font-size: 14px; }
     .editor-btn-group {
         display: flex;
         flex-wrap: wrap;
@@ -254,22 +366,12 @@
         right: auto;
         left: 0;
     }
-    .modal-fullscreen {
-        padding: 10px;
-    }
-    .modal-content-full {
-        max-height: 95vh;
-    }
-    .preview-url-wrapper {
-        flex-wrap: nowrap !important;
-    }
+    .preview-url-wrapper { flex-wrap: nowrap !important; }
     .image-services-btn {
         width: auto !important;
         justify-content: flex-start !important;
     }
-    .feedback-item-actions {
-        justify-content: center;
-    }
+    .feedback-item-actions { justify-content: center; }
     .feedback-item-actions .action-btn {
         width: 40px;
         height: 40px;
@@ -279,15 +381,9 @@
         height: 32px;
         font-size: 14px;
     }
-    .modal-header-actions {
-        margin-right: 5px;
-    }
-    .comment-form {
-        flex-wrap: wrap;
-    }
-    .comment-form .comment-input {
-        min-width: 200px;
-    }
+    .modal-header-actions { margin-right: 5px; }
+    .comment-form { flex-wrap: wrap; }
+    .comment-form .comment-input { min-width: 200px; }
     .comment-form .button-group {
         width: 100%;
         justify-content: flex-end;
@@ -298,25 +394,17 @@
         bottom: 16px;
         right: 16px;
     }
-    .donate-button-fixed i {
-        font-size: 16px;
-    }
-    /* Ещё более компактные профили */
-    .profile-cards {
-        gap: 8px;
-    }
+    .donate-button-fixed i { font-size: 16px; }
+
+    .profile-cards { gap: 8px; }
     .profile-card {
         padding: 8px;
         flex: 0 0 calc(50% - 8px);
         min-width: 100px;
     }
-    .avatar-wrapper {
-        width: 40px;
-        height: 40px;
-    }
-    .profile-name {
-        font-size: 12px;
-    }
+    .avatar-wrapper { width: 40px; height: 40px; }
+    .profile-name { font-size: 12px; }
+
     .projects-grid {
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
         gap: 10px;
@@ -327,10 +415,11 @@
     }
 }
 
+/* ===========================================
+   max-width: 500px
+   =========================================== */
 @media (max-width: 500px) {
-    .nav-links {
-        flex-wrap: nowrap;
-    }
+    .nav-links { flex-wrap: nowrap; }
     .nav-link {
         flex: 0 0 auto;
         font-size: 12px;
@@ -344,9 +433,7 @@
         flex-direction: column;
         width: 100%;
     }
-    .developer-actions .button {
-        width: 100%;
-    }
+    .developer-actions .button { width: 100%; }
     .lang-btn {
         padding: 6px 8px;
         font-size: 13px;
@@ -361,19 +448,13 @@
         width: 100%;
         margin-bottom: 8px;
     }
-    .modal-header-spacer {
-        display: none;
-    }
+    .modal-header-spacer { display: none; }
     .modal-header-actions {
         margin-left: 0;
         margin-right: auto;
     }
-    .modal-close {
-        margin-left: auto;
-    }
-    .game-header::before {
-        opacity: 0.3;
-    }
+    .modal-close { margin-left: auto; }
+    .game-header::before { opacity: 0.3; }
     .game-icon-circle {
         width: 72px;
         height: 72px;
@@ -382,9 +463,8 @@
         max-width: 56px;
         max-height: 56px;
     }
-    .game-title {
-        font-size: 28px;
-    }
+    .game-title { font-size: 28px; }
+
     .projects-grid {
         grid-template-columns: 1fr 1fr;
         gap: 8px;
@@ -393,42 +473,47 @@
         grid-template-columns: 1fr 1fr;
         gap: 8px;
     }
-    .profile-cards {
-        gap: 6px;
-    }
+
+    .profile-cards { gap: 6px; }
     .profile-card {
         flex: 0 0 calc(50% - 6px);
         padding: 6px;
     }
-    .avatar-wrapper {
-        width: 32px;
-        height: 32px;
+    .avatar-wrapper { width: 32px; height: 32px; }
+    .profile-name { font-size: 11px; }
+
+    .modal-header {
+        flex-direction: column;
+        align-items: flex-start;
     }
-    .profile-name {
-        font-size: 11px;
+    .modal-header-actions {
+        margin-left: 0;
+        margin-top: 8px;
+        width: 100%;
+        justify-content: space-between;
     }
+    .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+    }
+    .feature-item .feature-banner { height: 80px; }
 }
 
+/* ===========================================
+   max-width: 400px
+   =========================================== */
 @media (max-width: 400px) {
-    .game-title {
-        font-size: 24px;
-    }
-    .header-content {
-        padding: 15px 10px;
-    }
+    .game-title { font-size: 24px; }
+    .header-content { padding: 15px 10px; }
     .version-badge {
         font-size: 12px;
         padding: 4px 12px;
     }
-    .card {
-        padding: 16px;
-    }
-    h2 {
-        font-size: 20px;
-    }
-    .project-card h3 {
-        font-size: 18px;
-    }
+    .card { padding: 16px; }
+    h2 { font-size: 20px; }
+    .project-card h3 { font-size: 18px; }
+
     .projects-grid {
         grid-template-columns: 1fr;
         gap: 10px;
@@ -437,90 +522,90 @@
         grid-template-columns: 1fr;
         gap: 10px;
     }
-    .profile-cards {
-        gap: 6px;
-    }
+    .profile-cards { gap: 6px; }
     .profile-card {
         flex: 0 0 100%;
         padding: 8px;
     }
-    .avatar-wrapper {
-        width: 36px;
-        height: 36px;
-    }
+    .avatar-wrapper { width: 36px; height: 36px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        transition-duration: 0.01ms !important;
-    }
-}
-
-/* ===== Навигация на мобильных ===== */
+/* ===========================================
+   Мобильная навигация: горизонтальный скролл nav-links
+   =========================================== */
 @media (max-width: 900px) {
-  .nav-bar {
-    flex-wrap: nowrap !important;
-    padding: 6px 8px;
-    gap: 4px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none; /* Firefox */
-  }
-  .nav-bar::-webkit-scrollbar {
-    display: none; /* Chrome, Safari */
-  }
-  .nav-links {
-    flex: 0 1 auto;
-    flex-wrap: nowrap !important;
-    overflow: visible;
-    gap: 2px;
-  }
-  .nav-link {
-    flex-shrink: 0;
-    padding: 6px 10px;
-    font-size: 13px;
-    white-space: nowrap;
-  }
-  .lang-switcher {
-    flex-shrink: 0;
-    margin-left: auto;
-  }
-  .nav-profile {
-    flex-shrink: 0;
-    padding: 4px 8px;
-    margin-left: 2px;
-  }
-  .nav-profile .profile-dropdown {
-    right: 0;
-    left: auto;
-    min-width: 160px;
-    max-width: 90vw;
-  }
+    .nav-bar {
+        flex-wrap: nowrap !important;
+        padding: 6px 8px;
+        gap: 4px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .nav-bar::-webkit-scrollbar { display: none; }
+    .nav-links {
+        flex: 0 1 auto;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+        gap: 2px;
+    }
+    .nav-link {
+        flex-shrink: 0;
+        padding: 6px 10px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    .lang-switcher {
+        flex-shrink: 0;
+        margin-left: auto;
+    }
+    .nav-profile {
+        flex-shrink: 0;
+        padding: 4px 8px;
+        margin-left: 2px;
+    }
+    .nav-profile .profile-dropdown {
+        right: 0;
+        left: auto;
+        min-width: 160px;
+        max-width: 90vw;
+    }
 }
 
-/* ============================================================
-   Доступность: не отключаем focus-visible на тач-устройствах,
-   оставляем только -webkit-tap-highlight-color: transparent.
-   ============================================================ */
-@media (pointer: coarse) {
-    a,
-    button,
-    input,
-    textarea,
-    select,
-    [tabindex] {
-        -webkit-tap-highlight-color: transparent;
-        -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
-    }
-    a:focus-visible,
-    button:focus-visible,
-    input:focus-visible,
-    textarea:focus-visible,
-    select:focus-visible,
-    [tabindex]:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
-        border-radius: 6px;
-    }
+/* ===========================================
+   Мобильный класс (управляется из JS)
+   =========================================== */
+body.is-mobile .card,
+body.is-mobile .nav-bar,
+body.is-mobile .project-card,
+body.is-mobile .modal-content-full,
+body.is-mobile .download-subsection,
+body.is-mobile .feedback-form,
+body.is-mobile .feedback-item,
+body.is-mobile .profile-card,
+body.is-mobile .feature-item,
+body.is-mobile .req-item,
+body.is-mobile .consumption-card,
+body.is-mobile .license-hero,
+body.is-mobile .license-section-card,
+body.is-mobile .license-card,
+body.is-mobile .contact-card,
+body.is-mobile .consent-box {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--glass-bg-solid) !important;
+}
+
+body.is-mobile .tilt-card,
+body.is-mobile .tilt-card:hover {
+    transform: none !important;
+}
+
+body.is-mobile .game-header::before { opacity: 0.3; }
+
+body.is-mobile .skeleton-image::after,
+body.is-mobile .skeleton-title::after,
+body.is-mobile .skeleton-text::after {
+    animation: none !important;
+    background: none !important;
 }

@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://cdn.skypack.dev https://esm.sh; style-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://img.youtube.com https://i.ytimg.com https://static-cdn.jtvnw.net https://img.shields.io https://telegram-badge.vercel.app https://avatars.githubusercontent.com https://img.itch.zone; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; connect-src 'self' https://api.github.com https://api.rss2json.com https://api.twitchinsights.net https://noembed.com https://iframe.ly https://api.microlink.io https://openunfurl.vercel.app https://oembed.com https://api.allorigins.win https://corsproxy.io https://loader.to https://ssyoutube.com https://www.y2mate.com https://vimeo.com https://www.dailymotion.com https://www.youtube.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://player.twitch.tv https://rutube.ru https://coub.com; media-src 'self' https://img.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+    <!-- frame-ancestors не работает через meta на GitHub Pages. -->
     <meta charset="UTF-8">
-    <meta name="referrer" content="same-origin">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1e1e30">
@@ -17,9 +19,19 @@
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
+
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://api.github.com" crossorigin>
     <link rel="preconnect" href="https://img.youtube.com">
     <link rel="preconnect" href="https://i.ytimg.com">
+
+    <link rel="preload" as="font" type="font/woff2" href="fonts/RussoOne.woff2" crossorigin>
+    <link rel="preload" as="style" href="css/variables.css">
+    <link rel="preload" as="style" href="css/base.css">
+    <link rel="preload" as="script" href="js/config.js">
+    <link rel="preload" as="script" href="js/core/cache-crypto.js">
+
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/typography.css">
@@ -29,13 +41,15 @@
     <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/responsive.css">
     <link rel="stylesheet" href="css/feedback.css">
+    <link rel="stylesheet" href="css/auth.css">
     <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="style.css">
-    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'"><noscript>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js" integrity="sha384-3HPB1XT51W3gGRxAmZ+qbZwRpRlFQL632y8x+adAqCr4Wp3TaWwCLSTAJJKbyWEK" crossorigin="anonymous" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <script src="js/config.js" defer></script>
     <script src="js/core/cache-crypto.js" defer></script>
+    <script src="js/core/token-store.js" defer></script>
+    <script src="js/core/dom-utils.js" defer></script>
+    <script src="js/core/api-cache.js" defer></script>
     <script src="js/utils.js" defer></script>
     <script src="js/features/dialog.js" defer></script>
     <script src="js/core/github-core.js" defer></script>
@@ -46,7 +60,6 @@
     <script src="js/features/ui-feedback.js" defer></script>
     <script src="js/lang.js" defer></script>
     <script src="js/effects.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="js/pages/feedback.js" defer></script>
     <script src="js/pages/game-updates.js" defer></script>
     <script src="js/common-init.js" defer></script>
@@ -94,7 +107,7 @@
                     <a class="video-preview video-preview--youtube"
                        href="https://youtu.be/scqYneefAds"
                        target="_blank"
-                       rel="noopener"
+                       rel="noopener noreferrer"
                        aria-label="Смотреть трейлер ГК Адвенчур на YouTube">
                         <img src="https://img.youtube.com/vi/scqYneefAds/mqdefault.jpg" alt="" loading="lazy">
                         <span class="video-preview__play" aria-hidden="true"><i class="fas fa-play"></i></span>
@@ -113,7 +126,7 @@
                         <div class="developer-details">
                             <h3>Golden Creeper</h3>
                             <div class="developer-actions">
-                                <a href="https://www.youtube.com/@Gc567" target="_blank" rel="noopener" class="button small" aria-label="YouTube-канал Golden Creeper"><i class="fab fa-youtube" aria-hidden="true"></i> YouTube</a>
+                                <a href="https://www.youtube.com/@Gc567" target="_blank" rel="noopener noreferrer" class="button small" aria-label="YouTube-канал Golden Creeper"><i class="fab fa-youtube" aria-hidden="true"></i> YouTube</a>
                             </div>
                         </div>
                     </div>
@@ -125,7 +138,7 @@
                     <h2 data-lang="downloadTitle">Скачать</h2>
                 </div>
                 <div class="download-buttons">
-                    <a href="https://gamejolt.com/games/Gc_advenchur/804610" target="_blank" rel="noopener" class="download-button gamejolt" aria-label="Скачать ГК Адвенчур с GameJolt">GameJolt</a>
+                    <a href="https://gamejolt.com/games/Gc_advenchur/804610" target="_blank" rel="noopener noreferrer" class="download-button gamejolt" aria-label="Скачать ГК Адвенчур с GameJolt">GameJolt</a>
                 </div>
                 <p class="text-secondary small-note" data-lang="gcDownloadNote">Версия 0.1.0 · Обновление от 01.11.2023</p>
                 <p style="font-size: 13px; color: var(--text-secondary); margin-top: 15px;">
@@ -158,7 +171,7 @@
                     <a class="video-preview video-preview--youtube"
                        href="https://youtu.be/scqYneefAds"
                        target="_blank"
-                       rel="noopener"
+                       rel="noopener noreferrer"
                        aria-label="Смотреть видео ГК Адвенчур на YouTube">
                         <img src="https://img.youtube.com/vi/scqYneefAds/mqdefault.jpg" alt="" loading="lazy">
                         <span class="video-preview__play" aria-hidden="true"><i class="fas fa-play"></i></span>
@@ -166,7 +179,7 @@
                     <a class="video-preview video-preview--youtube"
                        href="https://youtu.be/koe3h-kXr3k"
                        target="_blank"
-                       rel="noopener"
+                       rel="noopener noreferrer"
                        aria-label="Смотреть видео ГК Адвенчур на YouTube">
                         <img src="https://img.youtube.com/vi/koe3h-kXr3k/mqdefault.jpg" alt="" loading="lazy">
                         <span class="video-preview__play" aria-hidden="true"><i class="fas fa-play"></i></span>

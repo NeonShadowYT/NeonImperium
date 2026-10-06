@@ -1,18 +1,22 @@
-/* animations.css — анимации для появления элементов, пульсации и т.д. */
+/* animations.css — все @keyframes + @media prefers-reduced-motion.
+   Все анимации используют ТОЛЬКО transform / opacity (кроме glowPulse — box-shadow). */
 
-/* Анимация появления (fade-in up) */
+/* ===== Появление (fade-in up) ===== */
 @keyframes fadeInUp {
     0% { opacity: 0; transform: translateY(30px); }
     100% { opacity: 1; transform: translateY(0); }
 }
 
-/* Применяем к карточкам, секциям, элементам с задержкой */
-.card, .project-card-link, .feature-item, .req-item, .consumption-card, .video-grid iframe {
+.card,
+.project-card-link,
+.feature-item,
+.req-item,
+.consumption-card,
+.video-preview {
     opacity: 0;
-    animation: fadeInUp 0.6s cubic-bezier(0.2, 0.9, 0.4, 1) forwards;
+    animation: fadeInUp 0.6s var(--ease-out) forwards;
 }
 
-/* Задержки для разных элементов */
 .card:nth-child(1) { animation-delay: 0.05s; }
 .card:nth-child(2) { animation-delay: 0.10s; }
 .card:nth-child(3) { animation-delay: 0.15s; }
@@ -34,52 +38,56 @@
 .req-item:nth-child(2) { animation-delay: 0.10s; }
 .req-item:nth-child(3) { animation-delay: 0.15s; }
 
-.video-grid iframe:nth-child(1) { animation-delay: 0.05s; }
-.video-grid iframe:nth-child(2) { animation-delay: 0.10s; }
-.video-grid iframe:nth-child(3) { animation-delay: 0.15s; }
-.video-grid iframe:nth-child(4) { animation-delay: 0.20s; }
-.video-grid iframe:nth-child(5) { animation-delay: 0.25s; }
+.video-preview:nth-child(1) { animation-delay: 0.05s; }
+.video-preview:nth-child(2) { animation-delay: 0.10s; }
+.video-preview:nth-child(3) { animation-delay: 0.15s; }
+.video-preview:nth-child(4) { animation-delay: 0.20s; }
+.video-preview:nth-child(5) { animation-delay: 0.25s; }
 
-/* Пульсация только для основных кнопок (не для download) */
+/* ===== Пульсация (только transform) ===== */
 @keyframes pulse {
     0% { transform: scale(1); }
     50% { transform: scale(1.04); }
     100% { transform: scale(1); }
 }
 .button.primary {
-    animation: pulse 2.5s infinite ease-in-out;
+    animation: pulse 2.5s infinite var(--ease-in-out);
 }
 .button.primary:hover {
     animation: none;
 }
 
-/* Покачивание иконок соцсетей */
-.social-icon {
-    display: inline-block;
-    transition: transform 0.3s ease;
-}
-.social-icon:hover {
-    animation: wobble 0.4s ease;
-}
+/* ===== Покачивание иконок соцсетей ===== */
 @keyframes wobble {
     0% { transform: rotate(0deg); }
     25% { transform: rotate(-8deg); }
     75% { transform: rotate(8deg); }
     100% { transform: rotate(0deg); }
 }
+.social-icon {
+    display: inline-block;
+    transition: transform 0.3s var(--ease-out);
+}
+.social-icon:hover {
+    animation: wobble 0.4s var(--ease-out);
+}
 
-/* Динамический градиентный фон — удалён, теперь статичен */
+/* ===== Shimmer — через translateX (GPU) ===== */
+@keyframes shimmerSlide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
 
-/* Дополнительное свечение для активных элементов */
+/* ===== Свечение (box-shadow — GPU-компоситинг, дороже transform) ===== */
 .active-glow {
     animation: glowPulse 2s infinite alternate;
 }
 @keyframes glowPulse {
-    0% { box-shadow: 0 0 5px rgba(61,158,179,0.2); }
-    100% { box-shadow: 0 0 25px rgba(61,158,179,0.6); }
+    0% { box-shadow: 0 0 5px rgba(61, 158, 179, 0.2); }
+    100% { box-shadow: 0 0 25px rgba(61, 158, 179, 0.6); }
 }
 
-/* Эффект мерцания для текста (можно использовать для заголовков) */
+/* ===== Мерцание текста ===== */
 .neon-flicker {
     animation: flicker 3s infinite;
 }
@@ -88,7 +96,7 @@
     20%, 24%, 55% { opacity: 0.7; }
 }
 
-/* ===== ДОБАВЛЕНО: СКЕЛЕТОН (пульсирующие карточки) ===== */
+/* ===== Скелетон — через translateX (GPU) ===== */
 .skeleton-grid .project-card {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
@@ -96,37 +104,58 @@
     overflow: hidden;
 }
 
-.skeleton-image {
-    background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-inner-gradient) 50%, var(--bg-card) 75%);
-    background-size: 200% 100%;
-    animation: skeleton-loading 1.5s infinite;
-    width: 100%;
-    height: 0;
-    padding-bottom: 56.25%; /* пропорции 16:9 */
-}
-
+.skeleton-image,
 .skeleton-title,
 .skeleton-text {
-    height: 16px;
+    position: relative;
+    overflow: hidden;
     background: var(--bg-card);
     border-radius: 4px;
-    margin: 8px 0;
-    background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-inner-gradient) 50%, var(--bg-card) 75%);
-    background-size: 200% 100%;
-    animation: skeleton-loading 1.5s infinite;
 }
-.skeleton-title { width: 70%; height: 20px; }
-.skeleton-text { width: 90%; }
+
+.skeleton-image {
+    width: 100%;
+    height: 0;
+    padding-bottom: 56.25%;
+    border-radius: 0;
+}
+
+.skeleton-image::after,
+.skeleton-title::after,
+.skeleton-text::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.06),
+        transparent
+    );
+    transform: translateX(-100%);
+    animation: skeletonSlide 1.5s infinite linear;
+    will-change: transform;
+}
+
+@keyframes skeletonSlide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.skeleton-title {
+    height: 20px;
+    width: 70%;
+    margin: 8px 0;
+}
+.skeleton-text {
+    height: 16px;
+    width: 90%;
+    margin: 8px 0;
+}
 .skeleton-text.short { width: 50%; }
 
-@keyframes skeleton-loading {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
-/* Карточки-скелетоны появляются с задержкой */
 .skeleton-card {
-    animation: fadeInUp 0.4s ease forwards;
+    animation: fadeInUp 0.4s var(--ease-out) forwards;
     opacity: 0;
 }
 .skeleton-card:nth-child(1) { animation-delay: 0.05s; }
@@ -135,3 +164,71 @@
 .skeleton-card:nth-child(4) { animation-delay: 0.20s; }
 .skeleton-card:nth-child(5) { animation-delay: 0.25s; }
 .skeleton-card:nth-child(6) { animation-delay: 0.30s; }
+
+/* ===== Модалка ===== */
+@keyframes modalFadeIn {
+    0% { opacity: 0; transform: scale(0.96); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+/* ===== Всплывающее уведомление ===== */
+@keyframes bounceUp {
+    0% { transform: translateY(0); }
+    30% { transform: translateY(-15px); }
+    70% { transform: translateY(5px); }
+    100% { transform: translateY(0); }
+}
+
+/* ===== Градиент (только для desktop, см. style.css) ===== */
+@keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+}
+@keyframes gradientMoveVertical {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 0% 100%; }
+}
+
+/* ============================================================
+   prefers-reduced-motion:
+   1) Глобальное ускорение анимаций до ~0.
+   2) Явная видимость элементов с opacity: 0 — на случай, если
+      анимация не сработала (например, CSS загрузился после DOM).
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    /* Гарантируем видимость элементов с fadeInUp */
+    .card,
+    .project-card-link,
+    .feature-item,
+    .req-item,
+    .consumption-card,
+    .video-preview,
+    .skeleton-card {
+        opacity: 1 !important;
+        animation: none !important;
+    }
+
+    /* Гарантируем отсутствие мерцающих скелетонов */
+    .skeleton-image::after,
+    .skeleton-title::after,
+    .skeleton-text::after {
+        animation: none !important;
+        background: none !important;
+    }
+
+    /* Отключаем декоративные shimmer */
+    .req-item::before,
+    .modal-fullscreen .modal-content-full::before,
+    .auth-modal-top-bar::after {
+        animation: none !important;
+    }
+}

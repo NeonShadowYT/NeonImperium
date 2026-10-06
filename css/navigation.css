@@ -1,7 +1,7 @@
+/* navigation.css — верхняя панель, ссылки, переключатель языка, меню профиля */
+
 .nav-bar {
     background: var(--glass-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     border-radius: var(--radius-pill);
     padding: 6px 20px;
     margin-bottom: 24px;
@@ -28,7 +28,10 @@
     padding: 10px 20px;
     border-radius: var(--radius-pill);
     font-size: 16px;
-    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+    transition:
+        background var(--duration-base) var(--ease-out),
+        color var(--duration-base) var(--ease-out),
+        box-shadow var(--duration-base) var(--ease-out);
     white-space: nowrap;
     text-decoration: none;
     position: relative;
@@ -57,6 +60,8 @@
     filter: blur(1px);
 }
 
+/* ---------- Переключатель языка ---------- */
+
 .lang-switcher {
     display: flex;
     gap: 5px;
@@ -71,7 +76,7 @@
     border-radius: var(--radius-pill);
     cursor: pointer;
     font-size: 14px;
-    transition: all var(--transition);
+    transition: all var(--duration-base) var(--ease-out);
     white-space: nowrap;
     font-family: var(--font-family);
     position: relative;
@@ -93,6 +98,8 @@
     box-shadow: var(--neon-glow);
 }
 
+/* ---------- Профиль в навигации ---------- */
+
 .nav-profile {
     display: flex;
     align-items: center;
@@ -102,7 +109,9 @@
     background: var(--bg-card);
     border: 1px solid var(--glass-border);
     cursor: pointer;
-    transition: border-color var(--transition), box-shadow var(--transition);
+    transition:
+        border-color var(--duration-base) var(--ease-out),
+        box-shadow var(--duration-base) var(--ease-out);
     position: relative;
 }
 
@@ -136,13 +145,14 @@
 .nav-profile-chevron {
     color: var(--text-secondary);
     font-size: 12px;
-    transition: transform 0.3s ease;
+    transition: transform 0.3s var(--ease-out);
 }
 .nav-profile:hover .nav-profile-chevron {
     transform: rotate(90deg);
 }
 
-/* Выпадающее меню профиля — убрана прозрачность и смещение */
+/* ---------- Выпадающее меню профиля ---------- */
+
 .profile-dropdown {
     position: absolute;
     top: calc(100% + 8px);
@@ -152,14 +162,15 @@
     border-radius: var(--radius-md);
     padding: 8px 0;
     min-width: 220px;
-    box-shadow: var(--shadow), 0 0 30px rgba(0,0,0,0.4);
+    box-shadow: var(--shadow), 0 0 30px rgba(0, 0, 0, 0.4);
     display: none;
     z-index: 1000;
     overflow: hidden;
 }
+
 .nav-profile.active .profile-dropdown {
     display: block;
-    animation: slideDown 0.25s cubic-bezier(0.2, 0.9, 0.4, 1);
+    animation: slideDown 0.25s var(--ease-out);
     max-width: 90vw;
     left: auto;
     right: 0;
@@ -175,7 +186,8 @@
     color: var(--text-secondary);
     font-size: 14px;
     cursor: pointer;
-    transition: background var(--transition), color var(--transition);
+    transition: background var(--duration-base) var(--ease-out),
+                color var(--duration-base) var(--ease-out);
     white-space: nowrap;
     display: flex;
     align-items: center;

@@ -1,3 +1,5 @@
+/* buttons.css — .button, .download-button и их варианты */
+
 .button {
     display: inline-block;
     background: var(--accent);
@@ -5,7 +7,10 @@
     padding: 10px 20px;
     border-radius: var(--radius-pill);
     font-size: 14px;
-    transition: background var(--transition), transform 0.15s, box-shadow var(--transition);
+    transition:
+        background var(--duration-base) var(--ease-out),
+        transform var(--duration-fast) var(--ease-out),
+        box-shadow var(--duration-base) var(--ease-out);
     border: none;
     cursor: pointer;
     text-align: center;
@@ -20,7 +25,11 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,0.25) 0%, transparent 60%);
+    background: radial-gradient(
+        circle at var(--ripple-x, 50%) var(--ripple-y, 50%),
+        rgba(255, 255, 255, 0.25) 0%,
+        transparent 60%
+    );
     opacity: 0;
     transition: opacity 0.4s;
     pointer-events: none;
@@ -34,10 +43,11 @@
     background: var(--accent-light);
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(61, 158, 179, 0.35);
+    will-change: transform;
 }
 
 .button:active {
-    transform: translateY(0px) scale(0.98);
+    transform: translateY(0) scale(0.98);
 }
 
 .button.small {
@@ -67,20 +77,25 @@
     padding-right: 30px;
 }
 
-/* Кнопки скачивания — пульсация убрана */
+/* ---------- Кнопки скачивания ---------- */
+
 .download-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     background: var(--glass-bg);
-    backdrop-filter: blur(4px);
     color: var(--text-primary);
     padding: 14px 20px;
     border-radius: var(--radius-pill);
     border: 2px solid var(--accent);
     font-size: 16px;
-    transition: all var(--transition);
+    transition:
+        background var(--duration-base) var(--ease-out),
+        color var(--duration-base) var(--ease-out),
+        transform var(--duration-fast) var(--ease-out),
+        box-shadow var(--duration-base) var(--ease-out),
+        border-color var(--duration-base) var(--ease-out);
     min-width: 200px;
     flex: 0 1 auto;
     font-family: var(--font-family);
@@ -95,6 +110,7 @@
     transform: translateY(-3px);
     box-shadow: 0 8px 24px rgba(61, 158, 179, 0.4);
     border-color: var(--accent-light);
+    will-change: transform;
 }
 
 .download-button:active {
@@ -111,11 +127,6 @@
     font-family: "Font Awesome 6 Brands";
 }
 
-:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-radius: 4px;
-}
 .button:focus-visible,
 .download-button:focus-visible,
 .social-icon:focus-visible {

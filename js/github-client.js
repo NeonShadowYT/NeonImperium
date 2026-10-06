@@ -1,12 +1,90 @@
-// js/github-client.js – универсальный клиент GitHub API с ретраями, кэшированием и аутентификацией
-// cacheGet/cacheSet теперь асинхронные (шифрование через CacheCrypto).
+// js/github-client.js
+// Универсальный клиент GitHub API.
+//   — Singleton.
+//   — Exponential backoff с jitter на 5xx/429.
+//   — Кеширование GET-запросов через ApiCache (stale-while-revalidate).
+//   — ETag / If-None-Match для минимизации трафика.
+//   — Дедупликация одновременных GET-запросов к одному URL.
+//   — Все ошибки нормализованы в Error с полями .status и .body.
+//
+// ДЕДУПЛИКАЦИЯ:
+//   Активна только для GET без signal и без ifNoneMatch.
+//
+// ФОРМАТ КЕША:
+//   { data: <response>, etag: <etag|null> }
+//   Старый формат (просто data) поддерживается для обратной совместимости.
+
 (function() {
-    const { cacheGet, cacheSet, cacheRemoveByPrefix, createAbortable, debounce } = window.Utils;
+    'use strict';
+
+    const NC = (typeof window !== 'undefined' && window.NeonConfig) || {};
+    const CONFIG = {
+        REPO_OWNER: NC.REPO_OWNER || 'NeonShadowYT',
+        REPO_NAME: NC.REPO_NAME || 'NeonImperium'
+    };
 
     const BASE_URL = 'https://api.github.com';
     const DEFAULT_RETRIES = 3;
-    const RETRY_DELAY = 1000;
-    const CONFIG = window.GithubCore?.CONFIG || { REPO_OWNER: 'NeonShadowYT', REPO_NAME: 'NeonImperium' };
+    const RETRY_BASE_DELAY = 1000;
+    const MAX_RETRY_DELAY = 30000;
+    const REQUEST_TIMEOUT = 15000;
+    const API_CACHE_TTL = NC.API_CACHE_TTL || 5 * 60 * 1000;
+
+    const MAX_INFLIGHT = 50;
+    const inflightRequests = new Map();
+
+    // ---- Cache helpers ----
+
+    function invalidateCache(prefix) {
+        const cache = window.ApiCache;
+        if (!cache || typeof cache.cacheRemoveByPrefix !== 'function') return;
+        try { cache.cacheRemoveByPrefix(prefix); } catch (e) { /* noop */ }
+    }
+
+    /**
+     * Читает кеш-запись.
+     * @returns {Promise<{data:*, etag:string|null}|null>}
+     */
+    async function readCacheEntry(key) {
+        const cache = window.ApiCache;
+        if (!cache || typeof cache.cacheGet !== 'function') return null;
+        try {
+            const value = await cache.cacheGet(key, API_CACHE_TTL);
+            if (value === undefined || value === null) return null;
+            // Новый формат
+            if (value && typeof value === 'object' && !Array.isArray(value) && 'data' in value) {
+                return {
+                    data: value.data,
+                    etag: value.etag || null
+                };
+            }
+            // Старый формат: значение — это сразу data
+            return { data: value, etag: null };
+        } catch { return null; }
+    }
+
+    async function writeCacheEntry(key, data, etag) {
+        const cache = window.ApiCache;
+        if (!cache || typeof cache.cacheSet !== 'function') return;
+        try {
+            await cache.cacheSet(key, { data, etag: etag || null });
+        } catch (e) { /* noop */ }
+    }
+
+    function delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function buildError(message, status, body) {
+        const err = new Error(message || 'Request failed');
+        if (status) err.status = status;
+        if (body) err.body = body;
+        return err;
+    }
+
+    // ============================================================
+    // GitHubClient
+    // ============================================================
 
     class GitHubClient {
         constructor(token = null) {
@@ -15,73 +93,182 @@
 
         setToken(token) {
             this.token = token;
-            window.GithubCore?.cacheRemoveByPrefix('gh_api_/repos/');
+            invalidateCache(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}`);
             console.log('[GitHubClient] Токен обновлён, кеш API очищен');
         }
 
         getToken() {
             if (this.token) return this.token;
-            const sessionToken = sessionStorage.getItem('github_token');
-            if (sessionToken) return sessionToken;
-            const localToken = localStorage.getItem('github_token');
-            if (localToken) return localToken;
+            try {
+                const s = sessionStorage.getItem('github_token');
+                if (s) return s;
+            } catch { /* noop */ }
             return null;
         }
 
+        /**
+         * Обычный запрос — возвращает только data.
+         * Используется для мутаций (POST/PATCH/DELETE) и обратной совместимости.
+         */
         async request(endpoint, options = {}, retries = DEFAULT_RETRIES) {
+            const result = await this._performRequest(endpoint, options, retries);
+            return result.data;
+        }
+
+        /**
+         * Запрос с метаданными кеша.
+         * @returns {Promise<{data:*, etag:string|null, notModified:boolean}>}
+         */
+        async requestWithETag(endpoint, options = {}, retries = DEFAULT_RETRIES) {
+            return this._performRequest(endpoint, options, retries);
+        }
+
+        async _performRequest(endpoint, options, retries) {
             const url = endpoint.startsWith('http') ? endpoint : `${BASE_URL}${endpoint}`;
+            const method = (options.method || 'GET').toUpperCase();
+            const isGet = method === 'GET';
+            const hasSignal = !!options.signal;
+            const hasIfNoneMatch = !!options.ifNoneMatch;
+
+            const canDedupe = isGet && !hasSignal && !hasIfNoneMatch;
+            const inflightKey = canDedupe ? `${method}:${url}` : null;
+
+            if (canDedupe && inflightRequests.has(inflightKey)) {
+                return inflightRequests.get(inflightKey);
+            }
+
+            const promise = this._doRequestWithMeta(url, options, retries);
+
+            if (!canDedupe) {
+                return promise;
+            }
+
+            if (inflightRequests.size >= MAX_INFLIGHT) {
+                const firstKey = inflightRequests.keys().next().value;
+                if (firstKey !== undefined) inflightRequests.delete(firstKey);
+            }
+
+            inflightRequests.set(inflightKey, promise);
+
+            try {
+                return await promise;
+            } finally {
+                inflightRequests.delete(inflightKey);
+            }
+        }
+
+        async _doRequestWithMeta(url, options, retries) {
             const token = this.getToken();
-            const headers = {
-                'Accept': 'application/vnd.github.v3+json',
-                ...options.headers
-            };
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            } else {
-                throw new Error('No GitHub token provided');
+            if (!token) throw buildError('No GitHub token provided', 401);
+
+            const headers = Object.assign(
+                { 'Accept': 'application/vnd.github.v3+json' },
+                options.headers || {}
+            );
+            headers['Authorization'] = `Bearer ${token}`;
+
+            if (options.ifNoneMatch) {
+                headers['If-None-Match'] = options.ifNoneMatch;
             }
 
             let lastError;
+
             for (let attempt = 0; attempt <= retries; attempt++) {
-                const { controller, timeoutId } = createAbortable(options.timeout || 15000);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    try { controller.abort(new Error('timeout')); }
+                    catch { controller.abort(); }
+                }, options.timeout || REQUEST_TIMEOUT);
+
+                let externalAbortHandler = null;
+                if (options.signal) {
+                    if (options.signal.aborted) {
+                        clearTimeout(timeoutId);
+                        throw buildError('Aborted', 0);
+                    }
+                    externalAbortHandler = () => {
+                        try { controller.abort(); } catch { /* noop */ }
+                    };
+                    options.signal.addEventListener('abort', externalAbortHandler, { once: true });
+                }
+
                 try {
-                    const response = await fetch(url, {
-                        ...options,
+                    const response = await fetch(url, Object.assign({}, options, {
                         headers,
                         signal: controller.signal
-                    });
+                    }));
                     clearTimeout(timeoutId);
+                    if (externalAbortHandler && options.signal) {
+                        options.signal.removeEventListener('abort', externalAbortHandler);
+                    }
+
+                    // 304 Not Modified — кеш актуален
+                    if (response.status === 304) {
+                        return {
+                            data: null,
+                            etag: options.ifNoneMatch || null,
+                            notModified: true
+                        };
+                    }
 
                     if (response.ok) {
-                        if (response.status === 204) return null;
-                        return await response.json();
+                        if (response.status === 204) {
+                            return { data: null, etag: null, notModified: false };
+                        }
+                        const data = await response.json();
+                        const etag = response.headers.get('ETag') || null;
+                        return { data, etag, notModified: false };
                     }
 
+                    // 5xx и 429 — retry
                     if (response.status >= 500 || response.status === 429) {
-                        lastError = new Error(`HTTP ${response.status}`);
-                        const delay = RETRY_DELAY * Math.pow(2, attempt);
-                        await new Promise(r => setTimeout(r, delay));
-                        continue;
+                        lastError = buildError(`HTTP ${response.status}`, response.status);
+                        if (attempt < retries) {
+                            const backoff = Math.min(
+                                RETRY_BASE_DELAY * Math.pow(2, attempt),
+                                MAX_RETRY_DELAY
+                            );
+                            const jitter = Math.floor(Math.random() * 500);
+                            await delay(backoff + jitter);
+                            continue;
+                        }
+                        throw lastError;
                     }
 
+                    // 4xx (кроме 429) — сразу
                     let errorMsg = `HTTP ${response.status}`;
+                    let errorBody = null;
                     try {
-                        const errorData = await response.json();
-                        errorMsg = errorData.message || errorMsg;
-                    } catch {}
-                    throw new Error(errorMsg);
+                        errorBody = await response.json();
+                        if (errorBody && errorBody.message) errorMsg = errorBody.message;
+                    } catch { /* noop */ }
+                    throw buildError(errorMsg, response.status, errorBody);
                 } catch (err) {
-                    if (err.name === 'AbortError') {
-                        lastError = new Error('Request timeout');
+                    clearTimeout(timeoutId);
+                    if (externalAbortHandler && options.signal) {
+                        options.signal.removeEventListener('abort', externalAbortHandler);
+                    }
+
+                    if (err.name === 'AbortError' || err.message === 'timeout') {
+                        lastError = buildError('Request timeout', 0);
+                    } else if (err.status) {
+                        if (err.status !== 429 && err.status < 500) throw err;
+                        lastError = err;
                     } else {
                         lastError = err;
                     }
-                    if (attempt === retries) break;
-                    const delay = RETRY_DELAY * Math.pow(2, attempt);
-                    await new Promise(r => setTimeout(r, delay));
+
+                    if (attempt >= retries) break;
+
+                    const backoff = Math.min(
+                        RETRY_BASE_DELAY * Math.pow(2, attempt),
+                        MAX_RETRY_DELAY
+                    );
+                    await delay(backoff);
                 }
             }
-            throw lastError || new Error('Request failed');
+
+            throw lastError || buildError('Request failed');
         }
 
         get issues() { return new IssuesAPI(this); }
@@ -89,44 +276,65 @@
         get comments() { return new CommentsAPI(this); }
     }
 
-    // ------ Issues API ------
+    // ============================================================
+    // Issues API
+    // ============================================================
+
     class IssuesAPI {
         constructor(client) { this.client = client; }
 
+        _basePath() {
+            return `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues`;
+        }
+
         async load({ labels = '', state = 'open', per_page = 20, page = 1, signal } = {}) {
             const query = new URLSearchParams({ state, per_page, page, labels }).toString();
-            const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?${query}`;
+            const url = `${this._basePath()}?${query}`;
             const cacheKey = `gh_api_${url}`;
-            const cached = await cacheGet(cacheKey);
-            if (cached && !signal?.aborted) {
-                // Фоновое обновление
-                this.client.request(url, { signal: AbortSignal.timeout(5000) })
-                    .then(data => cacheSet(cacheKey, data))
-                    .catch(() => {});
-                return cached;
+
+            const cached = await readCacheEntry(cacheKey);
+            if (cached && !(signal && signal.aborted)) {
+                // SWR: отдаём кеш, обновляем в фоне с If-None-Match
+                this.client.requestWithETag(url, {
+                    signal: AbortSignal.timeout(5000),
+                    ifNoneMatch: cached.etag
+                }).then(result => {
+                    if (!result.notModified) {
+                        writeCacheEntry(cacheKey, result.data, result.etag);
+                    }
+                }).catch(() => {});
+                return cached.data;
             }
-            const data = await this.client.request(url, { signal });
-            await cacheSet(cacheKey, data);
-            return data;
+
+            const result = await this.client.requestWithETag(url, { signal });
+            await writeCacheEntry(cacheKey, result.data, result.etag);
+            return result.data;
         }
 
         async loadOne(issueNumber, signal) {
-            const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`;
+            const url = `${this._basePath()}/${issueNumber}`;
             const cacheKey = `gh_api_${url}`;
-            const cached = await cacheGet(cacheKey);
-            if (cached && !signal?.aborted) {
-                this.client.request(url, { signal: AbortSignal.timeout(5000) })
-                    .then(data => cacheSet(cacheKey, data))
-                    .catch(() => {});
-                return cached;
+
+            const cached = await readCacheEntry(cacheKey);
+            if (cached && !(signal && signal.aborted)) {
+                this.client.requestWithETag(url, {
+                    signal: AbortSignal.timeout(5000),
+                    ifNoneMatch: cached.etag
+                }).then(result => {
+                    if (!result.notModified) {
+                        writeCacheEntry(cacheKey, result.data, result.etag);
+                    }
+                }).catch(() => {});
+                return cached.data;
             }
-            const data = await this.client.request(url, { signal });
-            await cacheSet(cacheKey, data);
-            return data;
+
+            const result = await this.client.requestWithETag(url, { signal });
+            await writeCacheEntry(cacheKey, result.data, result.etag);
+            return result.data;
         }
 
         async create(title, body, labels) {
-            const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues`;
+            const url = this._basePath();
             const data = await this.client.request(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -138,7 +346,7 @@
         }
 
         async update(issueNumber, updates) {
-            const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`;
+            const url = `${this._basePath()}/${issueNumber}`;
             const data = await this.client.request(url, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -153,35 +361,53 @@
         }
 
         _invalidateCache(issueNumber) {
-            cacheRemoveByPrefix(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`);
+            invalidateCache(
+                `gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}`
+            );
         }
 
         _invalidateListCache() {
-            cacheRemoveByPrefix(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?`);
+            invalidateCache(
+                `gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues?`
+            );
         }
     }
 
-    // ------ Reactions API ------
+    // ============================================================
+    // Reactions API
+    // ============================================================
+
     class ReactionsAPI {
         constructor(client) { this.client = client; }
 
+        _basePath(issueNumber) {
+            return `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
+        }
+
         async load(issueNumber, signal) {
-            const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
+            const url = this._basePath(issueNumber);
             const cacheKey = `gh_api_${url}`;
-            const cached = await cacheGet(cacheKey);
-            if (cached && !signal?.aborted) {
-                this.client.request(url, { signal: AbortSignal.timeout(5000) })
-                    .then(data => cacheSet(cacheKey, data))
-                    .catch(() => {});
-                return cached;
+
+            const cached = await readCacheEntry(cacheKey);
+            if (cached && !(signal && signal.aborted)) {
+                this.client.requestWithETag(url, {
+                    signal: AbortSignal.timeout(5000),
+                    ifNoneMatch: cached.etag
+                }).then(result => {
+                    if (!result.notModified) {
+                        writeCacheEntry(cacheKey, result.data, result.etag);
+                    }
+                }).catch(() => {});
+                return cached.data;
             }
-            const data = await this.client.request(url, { signal });
-            await cacheSet(cacheKey, data);
-            return data;
+
+            const result = await this.client.requestWithETag(url, { signal });
+            await writeCacheEntry(cacheKey, result.data, result.etag);
+            return result.data;
         }
 
         async add(issueNumber, content) {
-            const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`;
+            const url = this._basePath(issueNumber);
             const data = await this.client.request(url, {
                 method: 'POST',
                 headers: {
@@ -190,44 +416,58 @@
                 },
                 body: JSON.stringify({ content })
             });
-            cacheRemoveByPrefix(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`);
+            invalidateCache(url);
             return data;
         }
 
         async remove(issueNumber, reactionId) {
-            const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions/${reactionId}`;
+            const url = `${this._basePath(issueNumber)}/${reactionId}`;
             await this.client.request(url, { method: 'DELETE' });
-            cacheRemoveByPrefix(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/reactions`);
+            invalidateCache(this._basePath(issueNumber));
         }
     }
 
-    // ------ Comments API ------
+    // ============================================================
+    // Comments API
+    // ============================================================
+
     class CommentsAPI {
         constructor(client) { this.client = client; }
 
+        _basePath(issueNumber) {
+            return `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`;
+        }
+
         async load(issueNumber, signal) {
-            const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`;
+            const url = this._basePath(issueNumber);
             const cacheKey = `gh_api_${url}`;
-            const cached = await cacheGet(cacheKey);
-            if (cached && !signal?.aborted) {
-                this.client.request(url, { signal: AbortSignal.timeout(5000) })
-                    .then(data => cacheSet(cacheKey, data))
-                    .catch(() => {});
-                return cached;
+
+            const cached = await readCacheEntry(cacheKey);
+            if (cached && !(signal && signal.aborted)) {
+                this.client.requestWithETag(url, {
+                    signal: AbortSignal.timeout(5000),
+                    ifNoneMatch: cached.etag
+                }).then(result => {
+                    if (!result.notModified) {
+                        writeCacheEntry(cacheKey, result.data, result.etag);
+                    }
+                }).catch(() => {});
+                return cached.data;
             }
-            const data = await this.client.request(url, { signal });
-            await cacheSet(cacheKey, data);
-            return data;
+
+            const result = await this.client.requestWithETag(url, { signal });
+            await writeCacheEntry(cacheKey, result.data, result.etag);
+            return result.data;
         }
 
         async add(issueNumber, body) {
-            const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`;
+            const url = this._basePath(issueNumber);
             const data = await this.client.request(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ body })
             });
-            cacheRemoveByPrefix(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/${issueNumber}/comments`);
+            invalidateCache(this._basePath(issueNumber));
             return data;
         }
 
@@ -238,16 +478,20 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ body })
             });
-            cacheRemoveByPrefix(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/`);
+            invalidateCache(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/`);
             return data;
         }
 
         async delete(commentId) {
             const url = `/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/comments/${commentId}`;
             await this.client.request(url, { method: 'DELETE' });
-            cacheRemoveByPrefix(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/`);
+            invalidateCache(`gh_api_/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/issues/`);
         }
     }
+
+    // ============================================================
+    // Singleton
+    // ============================================================
 
     let clientInstance = null;
 
@@ -259,8 +503,7 @@
     }
 
     function updateToken(token) {
-        const client = getClient();
-        client.setToken(token);
+        getClient().setToken(token);
     }
 
     window.GitHubClient = GitHubClient;
@@ -268,6 +511,7 @@
         getClient,
         updateToken,
         request: (...args) => getClient().request(...args),
+        requestWithETag: (...args) => getClient().requestWithETag(...args),
         issues: () => getClient().issues,
         reactions: () => getClient().reactions,
         comments: () => getClient().comments

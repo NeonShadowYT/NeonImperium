@@ -1,0 +1,376 @@
+/* auth.css — стили модального окна входа через GitHub.
+   Вынесены из github-auth.js::injectLoginModalStyles + inline-стилей buildLoginModalHTML. */
+
+/* ===== Анимации ===== */
+@keyframes authShimmerSlide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+@keyframes authModalFadeIn {
+    0% { opacity: 0; transform: scale(0.96) translateY(-10px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ===== Оверлей ===== */
+.auth-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+.auth-modal.active {
+    display: flex !important;
+    animation: authModalFadeIn 0.3s var(--ease-out);
+}
+
+/* ===== Контент модалки ===== */
+.auth-modal-content {
+    max-width: 480px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    background: var(--glass-bg);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow), 0 0 40px rgba(61, 158, 179, 0.05);
+    padding: 32px 28px;
+    position: relative;
+    overflow: hidden;
+    animation: authModalFadeIn 0.3s var(--ease-out);
+}
+
+/* ===== Декоративная полоска сверху (shimmer через translateX) ===== */
+.auth-modal-top-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        var(--accent),
+        var(--accent-light),
+        var(--accent),
+        transparent
+    );
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    overflow: hidden;
+}
+.auth-modal-top-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+    );
+    transform: translateX(-100%);
+    animation: authShimmerSlide 3s infinite linear;
+    will-change: transform;
+}
+
+/* ===== Заголовок ===== */
+.auth-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+.auth-modal-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(61, 158, 179, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--accent);
+    box-shadow: var(--neon-glow);
+    flex-shrink: 0;
+}
+.auth-modal-icon i {
+    font-size: 28px;
+    color: var(--accent);
+}
+.auth-modal-title {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 26px;
+    letter-spacing: 0.5px;
+    text-shadow: var(--neon-text-glow);
+}
+
+/* ===== Аккордеон "Зачем это нужно?" ===== */
+.auth-modal-accordion {
+    margin-bottom: 16px;
+}
+.auth-modal-accordion-toggle {
+    background: transparent;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-pill);
+    padding: 8px 16px;
+    color: var(--accent);
+    cursor: pointer;
+    font-family: var(--font-family);
+    font-size: 14px;
+    transition: all var(--duration-base) var(--ease-out);
+    width: 100%;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.auth-modal-accordion-toggle:hover {
+    border-color: var(--accent);
+    background: rgba(61, 158, 179, 0.05);
+}
+.auth-modal-accordion-chevron {
+    margin-left: auto;
+    transition: transform 0.3s var(--ease-out);
+}
+.auth-modal-accordion-content {
+    display: none;
+    margin-top: 12px;
+    padding: 14px 16px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--accent);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.auth-modal-accordion-content.visible {
+    display: block;
+}
+
+/* ===== Поле ввода токена ===== */
+.auth-modal-token-row {
+    position: relative;
+    margin-bottom: 12px;
+}
+.auth-modal-token-input {
+    width: 100%;
+    padding: 14px 16px;
+    padding-right: 48px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-pill);
+    color: var(--text-primary);
+    font-family: monospace;
+    font-size: 15px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    outline: none;
+}
+.auth-modal-token-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(61, 158, 179, 0.2);
+}
+.auth-modal-token-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px 8px;
+}
+
+/* ===== Ссылки и чекбокс ===== */
+.auth-modal-links {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.auth-modal-link {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--accent);
+    font-size: 13px;
+    align-self: flex-start;
+    transition: color var(--duration-base) var(--ease-out),
+                border-color var(--duration-base) var(--ease-out);
+}
+.auth-modal-link:hover {
+    color: var(--accent-light);
+    border-color: var(--accent-light);
+}
+
+.auth-modal-remember {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+.auth-modal-remember input[type="checkbox"] {
+    display: none;
+}
+.auth-modal-checkmark {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 2px solid var(--glass-border);
+    border-radius: 6px;
+    position: relative;
+    transition: all 0.2s var(--ease-out);
+    flex-shrink: 0;
+}
+.auth-modal-checkmark.checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.auth-modal-checkmark.checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 5px;
+    height: 10px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: translate(-50%, -60%) rotate(45deg);
+}
+
+/* ===== Ошибки ===== */
+.auth-modal-error {
+    margin-bottom: 16px;
+}
+
+/* ===== Кнопки действий ===== */
+.auth-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+.auth-modal-btn {
+    padding: 10px 24px;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-family);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all var(--duration-base) var(--ease-out);
+    border: none;
+}
+.auth-modal-btn-cancel {
+    background: var(--glass-bg);
+    color: var(--text-secondary);
+    border: 1px solid var(--glass-border);
+}
+.auth-modal-btn-cancel:hover {
+    background: rgba(61, 158, 179, 0.12);
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+.auth-modal-btn-submit {
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 28px;
+    box-shadow: 0 0 20px rgba(61, 158, 179, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+.auth-modal-btn-submit:hover {
+    background: var(--accent-light);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(61, 158, 179, 0.4);
+}
+.auth-modal-btn-submit:active {
+    transform: scale(0.96);
+}
+.auth-modal-btn-submit::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+        circle at var(--ripple-x, 50%) var(--ripple-y, 50%),
+        rgba(255, 255, 255, 0.2) 0%,
+        transparent 60%
+    );
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+}
+.auth-modal-btn-submit:active::after {
+    opacity: 1;
+    transition: opacity 0s;
+}
+
+/* ===== Скроллбар ===== */
+.auth-modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+.auth-modal-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+.auth-modal-content::-webkit-scrollbar-thumb {
+    background: var(--accent);
+    border-radius: 10px;
+}
+.auth-modal-content {
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent) rgba(0, 0, 0, 0.1);
+}
+
+/* ===== Мобильная адаптация ===== */
+@media (max-width: 600px) {
+    .auth-modal {
+        padding: 12px;
+    }
+    .auth-modal-content {
+        padding: 24px 20px;
+    }
+    .auth-modal-title {
+        font-size: 20px;
+    }
+    .auth-modal-icon {
+        width: 40px;
+        height: 40px;
+    }
+    .auth-modal-icon i {
+        font-size: 22px;
+    }
+    .auth-modal-actions {
+        flex-direction: column-reverse;
+    }
+    .auth-modal-btn {
+        width: 100%;
+    }
+}
+
+/* Мобильные устройства: backdrop-filter off */
+@media (hover: none), (pointer: coarse) {
+    .auth-modal-content {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background: var(--glass-bg-solid) !important;
+    }
+}
+
+/* prefers-reduced-motion: отключаем shimmer полоски */
+@media (prefers-reduced-motion: reduce) {
+    .auth-modal-top-bar::after {
+        animation: none !important;
+    }
+}
