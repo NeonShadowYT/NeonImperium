@@ -1,12 +1,15 @@
 // js/features/storage/manager.js
 // Управление хранилищем: загрузка, сохранение, добавление, удаление.
 //
+// ТРЕБОВАНИЯ К ТОКЕНУ:
+//   Classic-токен со scope `gist`. Fine-grained НЕ поддерживаются.
+//
 // ПОРЯДОК ЗАГРУЗКИ (loadOrCreateStorage):
 //   1. Память (cachedMasterKey).
 //   2. Зашифрованный кэш payload.
-//   3. gistId из localStorage (НАДЁЖНЫЙ путь).
+//   3. gistId из localStorage.
 //   4. gistId из зашифрованного ApiCache.
-//   5. Листинг через `GET /gists` (РЕЗЕРВ, не урезан).
+//   5. Листинг `GET /gists` (classic-токены).
 //   6. Ручной ввод gistId через UI (tryLoadByGistId).
 //   7. Создание нового Gist.
 
@@ -23,6 +26,7 @@
         VERSION,
         GIST_CACHE_TTL,
         getGistIdKey,
+        normalizeGistId,
         deriveKeyFromString,
         encryptData,
         decryptData,
@@ -175,7 +179,7 @@
             }
         }
 
-        // 3. gistId из localStorage (НАДЁЖНЫЙ ПУТЬ)
+        // 3. gistId из localStorage
         let storedGistId = loadGistIdFromLocal();
 
         // 4. gistId из зашифрованного ApiCache
@@ -186,7 +190,7 @@
             } catch { /* noop */ }
         }
 
-        // 5. Листинг — РЕЗЕРВНЫЙ путь (НЕ УРЕЗАН)
+        // 5. Листинг — резервный путь
         if (!storedGistId) {
             console.log('[Storage] gistId не найден, пробуем листинг...');
             const foundId = await findGistByListing();
@@ -205,7 +209,7 @@
             try {
                 gistData = await gistFetchById(gistId);
             } catch (err) {
-                if (err.status === 401) throw err;
+                if (err.status === 401 || err.status === 403) throw err;
                 console.warn('[Storage] Ошибка загрузки Gist по ID:', err);
             }
 
@@ -733,7 +737,10 @@
             if (token) {
                 await fetch(`https://api.github.com/gists/${gistId}`, {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'X-GitHub-Api-Version': '2022-11-28'
+                    }
                 }).catch(() => {});
             }
         }
@@ -836,22 +843,22 @@
     function setStatusCallback(cb) { statusCallback = cb; }
 
     // ============================================================
-    // НОВОЕ: методы для UI восстановления
+    // UI-восстановление: загрузка по Gist ID
     // ============================================================
 
     /**
-     * Загружает хранилище по указанному gistId.
-     * Используется в UI восстановления.
-     * @param {string} id — Gist ID, введённый пользователем.
+     * Загружает хранилище по указанному gistId (ID или URL).
+     * @param {string} input — Gist ID или полный URL
      * @throws {Error} если Gist не найден, недоступен, или в нём нет нужного файла.
      */
-    async function tryLoadByGistId(id) {
-        if (!id || typeof id !== 'string') throw new Error('Введите Gist ID');
-        const cleanId = id.trim();
-        if (cleanId.length < 8) throw new Error('Gist ID слишком короткий');
-        if (!/^[a-zA-Z0-9_-]+$/.test(cleanId)) {
-            throw new Error('Gist ID содержит недопустимые символы');
+    async function tryLoadByGistId(input) {
+        if (!input || typeof input !== 'string') throw new Error('Введите Gist ID или ссылку');
+
+        const cleanId = normalizeGistId(input);
+        if (!cleanId) {
+            throw new Error('Не удалось распознать Gist ID. Проверьте формат: ID или ссылка вида https://gist.github.com/user/abc123...');
         }
+
         if (!getCurrentUserLogin() || !getAuthToken()) {
             throw new Error('Сначала войдите в GitHub');
         }
@@ -860,7 +867,12 @@
         try {
             gist = await gistFetchById(cleanId);
         } catch (err) {
-            if (err.status === 401) throw new Error('Токен не имеет доступа к Gists');
+            if (err.status === 401) {
+                throw new Error('Токен не имеет доступа к Gists. Убедитесь, что используется classic-токен со scope `gist`.');
+            }
+            if (err.status === 403) {
+                throw new Error('Доступ запрещён. Проверьте права токена: нужен classic-токен со scope `gist`.');
+            }
             throw new Error('Не удалось загрузить Gist: ' + err.message);
         }
 
@@ -887,20 +899,17 @@
             await cacheSet(STORAGE_KEY_PREFIX + user, { gistId: cleanId });
         } catch { /* noop */ }
 
-        // Загружаем
         return await loadOrCreateStorage(true);
     }
 
     /**
-     * Принудительно создаёт новый Gist, даже если был старый.
-     * Используется в UI восстановления.
+     * Принудительно создаёт новый Gist.
      */
     async function createNewStorageManually() {
         const user = getCurrentUserLogin();
         const token = getAuthToken();
         if (!user || !token) throw new Error('Сначала войдите в GitHub');
 
-        // Сбрасываем состояние
         isInitialized = false;
         cachedMasterKey = null;
         cachedBookmarks = null;
@@ -942,15 +951,16 @@
         importBookmarksBatch,
         startBackgroundUpdate,
         stopBackgroundUpdate,
-        // Диагностика
         getGistId: () => gistId,
         getStoredGistId: () => loadGistIdFromLocal(),
         setGistIdManually: (id) => {
-            saveGistIdToLocal(id);
-            gistId = id;
-            console.log('[Storage] GistId установлен вручную:', id);
+            const clean = normalizeGistId(id);
+            if (!clean) return false;
+            saveGistIdToLocal(clean);
+            gistId = clean;
+            console.log('[Storage] GistId установлен вручную:', clean);
+            return true;
         },
-        // Восстановление из UI
         tryLoadByGistId,
         createNewStorageManually
     };

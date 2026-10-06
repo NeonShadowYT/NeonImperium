@@ -365,5 +365,18 @@
   "rememberMe": "Remember me",
   "createToken": "Create classic token",
   "loginDescription": "To fully participate in the community you need a GitHub token.\n\nRequired scopes:\n• repo – create and edit posts, comments, reactions.\n• gist – personal bookmark storage.\n\nIf you provide only one of the scopes, the corresponding features will be unavailable. Without a token you can only read content.\n\n🔒 Security: token is stored locally in encrypted form (obfuscated) and sent only to the GitHub API. We do not store it on our servers. You can always revoke the token in your GitHub settings.",
-  "sessionExpired": "Session expired. Please sign in again."
+  "sessionExpired": "Session expired. Please sign in again.",
+  "storageRecoveryTitle": "Storage Recovery",
+  "storageRecoveryIntro": "Storage not found. Possible reasons: browser change, site data cleared, or Gist was deleted.",
+  "storageRecoveryTokenWarning": "Classic token with `gist` scope required. Fine-grained tokens do not support Gist API.",
+  "storageRecoveryVariant1": "Option 1: Restore existing",
+  "storageRecoveryVariant2": "Option 2: Create new",
+  "storageRecoveryLoadBtn": "Load",
+  "storageRecoveryCreateBtn": "Create new Gist",
+  "storageRecoveryHowToFind": "How to find your Gist ID or URL?",
+  "storageTokenUnauthorized": "Token does not have access to Gists. Make sure you use a classic token with `gist` scope.",
+  "storageTokenForbidden": "Access denied. Check token permissions: classic token with `gist` scope is required.",
+  "storageGistNotFound": "Gist not found or inaccessible. Check ID and token permissions.",
+  "storageGistNoFile": "This Gist does not contain the Neon Imperium file. Possibly wrong Gist.",
+  "storageGistInvalidId": "Could not recognize Gist ID. Check format: ID or URL like https://gist.github.com/user/abc123..."
 }

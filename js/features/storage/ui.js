@@ -1,10 +1,9 @@
 // js/features/storage/ui.js
 // UI хранилища. Все диалоги ввода/подтверждения — через window.Dialog.
 //
-// АРХИТЕКТУРА СТИЛЕЙ:
-//   Все storage-стили инжектятся один раз при инициализации модуля
-//   (injectStorageStyles). Это гарантирует, что recovery-модалка
-//   (которая может открыться до основной) имеет все нужные стили.
+// ТРЕБОВАНИЯ К ТОКЕНУ:
+//   Для работы с Gist API нужен CLASSIC-токен со scope `gist`.
+//   Fine-grained токены НЕ поддерживают Gist API.
 
 (function() {
     'use strict';
@@ -412,6 +411,15 @@
                 border-left: 3px solid #f44336;
                 border-radius: 6px;
                 color: #f44336;
+                font-size: 13px;
+            }
+            .storage-recovery-warn {
+                margin-top: 10px;
+                padding: 8px 12px;
+                background: rgba(255,152,0,0.1);
+                border-left: 3px solid #ff9800;
+                border-radius: 6px;
+                color: #ff9800;
                 font-size: 13px;
             }
             .storage-recovery-help {
@@ -950,11 +958,21 @@
                     Хранилище не найдено. Возможные причины: смена браузера, очистка данных сайта, или Gist был удалён.
                 </p>
 
+                <div class="storage-recovery-warn">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Требуется classic-токен со scope ` + '`gist`' + `.</strong>
+                    Fine-grained токены не поддерживают Gist API. Если видите ошибку «Токен не имеет доступа к Gists» — создайте новый токен:
+                    <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">github.com/settings/tokens/new</a>
+                    → отметьте галочку ` + '`gist`' + ` → сгенерируйте и войдите заново.
+                </div>
+
                 <div class="storage-recovery-block">
                     <h4><i class="fas fa-key"></i> Вариант 1: Восстановить существующее</h4>
-                    <p class="text-secondary">Если у вас уже есть Gist с закладками Neon Imperium, введите его ID:</p>
+                    <p class="text-secondary">Вставьте <strong>Gist ID</strong> или <strong>полную ссылку</strong> на Gist с закладками Neon Imperium:</p>
                     <div class="storage-recovery-input">
-                        <input type="text" id="recovery-gist-input" placeholder="Gist ID (например, abc123def456...)" autocomplete="off" spellcheck="false">
+                        <input type="text" id="recovery-gist-input"
+                            placeholder="abc123... или https://gist.github.com/user/abc123..."
+                            autocomplete="off" spellcheck="false">
                         <button class="storage-btn primary" id="recovery-load-btn" type="button">
                             <i class="fas fa-download"></i> Загрузить
                         </button>
@@ -971,29 +989,29 @@
                 </div>
 
                 <details class="storage-recovery-help">
-                    <summary><i class="fas fa-question-circle"></i> Как найти свой Gist ID?</summary>
+                    <summary><i class="fas fa-question-circle"></i> Как найти свой Gist ID или ссылку?</summary>
                     <ol>
                         <li>Откройте <a href="https://gist.github.com" target="_blank" rel="noopener noreferrer">gist.github.com</a></li>
                         <li>Найдите Gist с описанием <code>Neon Imperium encrypted bookmarks</code></li>
-                        <li>ID — это часть URL после вашего логина:
+                        <li>Скопируйте <strong>всю ссылку из адресной строки</strong> — например:
                             <div class="storage-recovery-url-example">
-                                gist.github.com/USER/<strong>ABC123DEF456</strong>
+                                https://gist.github.com/USER/<strong>ABC123DEF456</strong>
                             </div>
+                            и вставьте её в поле выше. Система сама извлечёт ID.
                         </li>
-                        <li>Скопируйте выделенную часть и вставьте её в поле выше.</li>
+                        <li>Либо скопируйте только выделенную часть (ID) и вставьте её.</li>
                     </ol>
+                    <p style="margin:0 0 8px;">Оба варианта работают.</p>
                 </details>
             </div>
         `;
 
-        // size: 'full' — создаёт .modal-fullscreen + .modal-content-full
         const { modal, closeModal } = createModal(
             'Восстановление хранилища',
             html,
             { size: 'full' }
         );
 
-        // Добавляем класс, который ограничивает max-width и организует скролл
         const modalContent = modal.querySelector('.modal-content-full');
         if (modalContent) modalContent.classList.add('storage-recovery-modal-content');
 
@@ -1012,13 +1030,13 @@
 
         loadBtn.addEventListener('click', async () => {
             hideError();
-            const id = input.value.trim();
-            if (!id) { showError('Введите Gist ID'); return; }
+            const raw = input.value.trim();
+            if (!raw) { showError('Введите Gist ID или ссылку'); return; }
             loadBtn.disabled = true;
             const oldHtml = loadBtn.innerHTML;
             loadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Загрузка...';
             try {
-                await _StorageManager.tryLoadByGistId(id);
+                await _StorageManager.tryLoadByGistId(raw);
                 closeModal();
                 showToast('Хранилище восстановлено', 'success');
                 if (onSuccess) onSuccess();
@@ -1032,7 +1050,7 @@
         createBtn.addEventListener('click', async () => {
             const ok = await window.Dialog.showConfirm({
                 title: 'Создать новое хранилище?',
-                message: 'Создастся новый приватный Gist. Старые закладки останутся в старом Gist, но не будут видны здесь.',
+                message: 'Создастся новый приватный Gist. Старые закладки останутся в старом Gist, но не будут видны здесь.\n\nТребуется classic-токен со scope `gist`.',
                 confirmText: 'Создать',
                 cancelText: 'Отмена'
             });
@@ -1069,7 +1087,10 @@
         const t = (key) => window.I18n?.translate(key) || key;
         const user = getCurrentUser();
         if (!user) { showToast(t('loginToGitHub'), 'error'); return; }
-        if (!hasScope('gist')) { showToast(t('needGistScope'), 'error'); return; }
+        if (!hasScope('gist')) {
+            showToast('Нужен scope `gist`. Создайте classic-токен.', 'error', 8000);
+            return;
+        }
 
         try {
             await _StorageManager.ensureStorage();

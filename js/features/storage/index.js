@@ -88,6 +88,7 @@
                     // Диагностика и восстановление
                     getGistId: () => window._StorageManager.getGistId(),
                     getStoredGistId: () => window._StorageManager.getStoredGistId(),
+                    normalizeGistId: (input) => window._StorageCore.normalizeGistId(input),
                     setGistIdManually: (id) => window._StorageManager.setGistIdManually(id),
                     tryLoadByGistId: async (id) => {
                         await ensureModules();
