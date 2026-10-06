@@ -1,9 +1,5 @@
 // js/features/storage/ui.js
-// UI хранилища. Все диалоги ввода/подтверждения — через window.Dialog.
-//
-// ТРЕБОВАНИЯ К ТОКЕНУ:
-//   Для работы с Gist API нужен CLASSIC-токен со scope `gist`.
-//   Fine-grained токены НЕ поддерживают Gist API.
+// UI хранилища.
 
 (function() {
     'use strict';
@@ -27,7 +23,7 @@
     }
 
     // ============================================================
-    // Стили — инжектятся один раз при инициализации модуля
+    // Стили — инжектятся один раз при загрузке модуля
     // ============================================================
 
     function injectStorageStyles() {
@@ -35,468 +31,89 @@
         const style = document.createElement('style');
         style.id = 'storage-styles';
         style.textContent = `
-            /* ===== Контейнер модалки хранилища ===== */
-            .storage-modal-container {
-                display: flex;
-                flex-direction: column;
-                gap: 20px;
-            }
-            .storage-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 15px;
-            }
-            .storage-controls {
-                display: flex;
-                gap: 15px;
-                flex-wrap: wrap;
-            }
-            .storage-sort,
-            .storage-categories {
-                display: flex;
-                background: var(--bg-primary);
-                border-radius: 40px;
-                padding: 4px;
-                border: 1px solid var(--border);
-            }
-            .sort-btn,
-            .cat-btn {
-                background: 0;
-                border: 0;
-                color: var(--text-secondary);
-                padding: 8px 16px;
-                border-radius: 40px;
-                font-size: 14px;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                transition: 0.2s;
-                font-family: 'Russo One', sans-serif;
-            }
-            .sort-btn.active,
-            .cat-btn.active {
-                background: var(--accent);
-                color: #fff;
-            }
-            .storage-actions {
-                display: flex;
-                gap: 8px;
-                align-items: center;
-                flex-wrap: wrap;
-            }
+            /* ===== Контейнер модалки ===== */
+            .storage-modal-container { display: flex; flex-direction: column; gap: 20px; }
+            .storage-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+            .storage-controls { display: flex; gap: 15px; flex-wrap: wrap; }
+            .storage-sort, .storage-categories { display: flex; background: var(--bg-primary); border-radius: 40px; padding: 4px; border: 1px solid var(--border); }
+            .sort-btn, .cat-btn { background: 0; border: 0; color: var(--text-secondary); padding: 8px 16px; border-radius: 40px; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: 0.2s; font-family: 'Russo One', sans-serif; }
+            .sort-btn.active, .cat-btn.active { background: var(--accent); color: #fff; }
+            .storage-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-            /* ===== Кнопки хранилища ===== */
-            .storage-btn {
-                background: var(--bg-primary);
-                border: 1px solid var(--border);
-                color: var(--text-secondary);
-                padding: 8px 16px;
-                border-radius: 40px;
-                font-size: 14px;
-                cursor: pointer;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                gap: 6px;
-                transition: 0.2s;
-                font-family: 'Russo One', sans-serif;
-                text-decoration: none;
-                line-height: 1.4;
-                white-space: nowrap;
-            }
-            .storage-btn:hover:not(:disabled) {
-                transform: translateY(-2px);
-                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-                border-color: var(--accent);
-                color: var(--text-primary);
-            }
-            .storage-btn:disabled {
-                opacity: 0.6;
-                cursor: not-allowed;
-            }
-            .storage-btn.primary {
-                background: var(--accent);
-                color: #fff;
-                border-color: var(--accent);
-            }
-            .storage-btn.primary:hover:not(:disabled) {
-                background: var(--accent-light);
-                border-color: var(--accent-light);
-                color: #fff;
-            }
+            /* ===== Кнопки ===== */
+            .storage-btn { background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-secondary); padding: 8px 16px; border-radius: 40px; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; font-family: 'Russo One', sans-serif; text-decoration: none; line-height: 1.4; white-space: nowrap; }
+            .storage-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); border-color: var(--accent); color: var(--text-primary); }
+            .storage-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+            .storage-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+            .storage-btn.primary:hover:not(:disabled) { background: var(--accent-light); border-color: var(--accent-light); color: #fff; }
 
             /* ===== Сетка закладок ===== */
-            .bookmarks-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-                gap: 20px;
-            }
-            .storage-add-form {
-                background: var(--bg-inner-gradient);
-                padding: 16px;
-                border-radius: 20px;
-                border: 1px solid var(--border);
-            }
-            .storage-search {
-                padding: 6px 14px;
-                border-radius: 40px;
-                background: var(--bg-primary);
-                border: 1px solid var(--border);
-                color: var(--text-primary);
-                font-family: var(--font-family);
-                font-size: 14px;
-                width: 160px;
-            }
-            .storage-search:focus {
-                border-color: var(--accent);
-                outline: none;
-            }
-            .storage-url-input {
-                flex: 1;
-                padding: 8px 16px;
-                border-radius: 40px;
-                background: var(--bg-primary);
-                border: 1px solid var(--border);
-                color: var(--text-primary);
-                font-family: var(--font-family);
-                font-size: 14px;
-                min-width: 150px;
-            }
-            .storage-url-input:focus {
-                border-color: var(--accent);
-                outline: none;
-            }
+            .bookmarks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+            .storage-add-form { background: var(--bg-inner-gradient); padding: 16px; border-radius: 20px; border: 1px solid var(--border); }
+            .storage-search { padding: 6px 14px; border-radius: 40px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); font-family: var(--font-family); font-size: 14px; width: 160px; }
+            .storage-search:focus { border-color: var(--accent); outline: none; }
+            .storage-url-input { flex: 1; padding: 8px 16px; border-radius: 40px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); font-family: var(--font-family); font-size: 14px; min-width: 150px; }
+            .storage-url-input:focus { border-color: var(--accent); outline: none; }
 
             /* ===== Карточка закладки ===== */
-            .bookmark-card-wrapper {
-                position: relative;
-                transition: transform 0.2s;
-                height: 100%;
-            }
-            .bookmark-card-wrapper:hover {
-                transform: translateY(-4px);
-            }
-            .bookmark-delete-btn {
-                opacity: 0;
-                transition: opacity 0.2s;
-                position: absolute;
-                top: 8px;
-                right: 8px;
-                background: rgba(0,0,0,0.6);
-                border: none;
-                border-radius: 50%;
-                width: 28px;
-                height: 28px;
-                color: #f44336;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 14px;
-                z-index: 5;
-            }
-            .bookmark-card-wrapper:hover .bookmark-delete-btn {
-                opacity: 1;
-            }
-            .bookmark-card {
-                background: var(--bg-inner-gradient);
-                border-radius: 20px;
-                border: 1px solid var(--border);
-                overflow: hidden;
-                display: flex;
-                flex-direction: column;
-                height: 100%;
-            }
-            .bookmark-media {
-                position: relative;
-                padding-bottom: 56.25%;
-                background: var(--bg-primary);
-                border-bottom: 1px solid var(--border);
-                flex-shrink: 0;
-                overflow: hidden;
-            }
-            .bookmark-media img {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-            .bookmark-media iframe {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                border: none;
-                border-radius: 12px 12px 0 0;
-            }
-            .play-overlay {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: rgba(0,0,0,0.3);
-                border-radius: 50%;
-                width: 60px;
-                height: 60px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-                font-size: 30px;
-                pointer-events: none;
-                transition: background 0.3s;
-            }
-            .bookmark-icon {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 48px;
-                padding: 20px 0;
-                background: var(--bg-primary);
-                border-bottom: 1px solid var(--border);
-                height: 100%;
-            }
-            .bookmark-content {
-                padding: 12px;
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-            }
-            .bookmark-content h4 {
-                margin: 0 0 4px;
-                font-size: 16px;
-                color: var(--text-primary);
-                word-break: break-word;
-            }
-            .bookmark-content .button.small {
-                padding: 4px 12px;
-                font-size: 12px;
-                background: var(--accent);
-                color: #fff;
-                border: none;
-                border-radius: 30px;
-                cursor: pointer;
-                font-family: var(--font-family);
-                transition: 0.2s;
-            }
-            .bookmark-content .button.small:hover {
-                background: var(--accent-light);
-                transform: translateY(-2px);
-            }
-            #modal-status-mini {
-                font-size: 12px;
-                color: var(--text-secondary);
-                margin-left: 16px;
-                opacity: 0.7;
-                font-weight: normal;
-            }
+            .bookmark-card-wrapper { position: relative; transition: transform 0.2s; height: 100%; }
+            .bookmark-card-wrapper:hover { transform: translateY(-4px); }
+            .bookmark-delete-btn { opacity: 0; transition: opacity 0.2s; position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; width: 28px; height: 28px; color: #f44336; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; z-index: 5; }
+            .bookmark-card-wrapper:hover .bookmark-delete-btn { opacity: 1; }
+            .bookmark-card { background: var(--bg-inner-gradient); border-radius: 20px; border: 1px solid var(--border); overflow: hidden; display: flex; flex-direction: column; height: 100%; }
+            .bookmark-media { position: relative; padding-bottom: 56.25%; background: var(--bg-primary); border-bottom: 1px solid var(--border); flex-shrink: 0; overflow: hidden; }
+            .bookmark-media img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+            .bookmark-media iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; border-radius: 12px 12px 0 0; }
+            .play-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.3); border-radius: 50%; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; color: white; font-size: 30px; pointer-events: none; transition: background 0.3s; }
+            .bookmark-icon { display: flex; align-items: center; justify-content: center; font-size: 48px; padding: 20px 0; background: var(--bg-primary); border-bottom: 1px solid var(--border); height: 100%; }
+            .bookmark-content { padding: 12px; flex: 1; display: flex; flex-direction: column; }
+            .bookmark-content h4 { margin: 0 0 4px; font-size: 16px; color: var(--text-primary); word-break: break-word; }
+            .bookmark-content .button.small { padding: 4px 12px; font-size: 12px; background: var(--accent); color: #fff; border: none; border-radius: 30px; cursor: pointer; font-family: var(--font-family); transition: 0.2s; }
+            .bookmark-content .button.small:hover { background: var(--accent-light); transform: translateY(-2px); }
+            #modal-status-mini { font-size: 12px; color: var(--text-secondary); margin-left: 16px; opacity: 0.7; font-weight: normal; }
 
-            /* ===== Футер хранилища с Gist ID ===== */
-            .storage-footer {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 8px;
-                margin-top: 16px;
-                padding-top: 12px;
-                border-top: 1px solid var(--glass-border);
-                font-size: 12px;
-                color: var(--text-secondary);
-            }
-            .storage-gist-info {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                flex-wrap: wrap;
-            }
-            .storage-gist-info code {
-                background: var(--bg-primary);
-                padding: 3px 8px;
-                border-radius: 6px;
-                font-family: monospace;
-                font-size: 11px;
-                color: var(--accent);
-                max-width: 160px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                cursor: text;
-                user-select: all;
-            }
-            .storage-icon-btn {
-                background: transparent;
-                border: none;
-                color: var(--text-secondary);
-                cursor: pointer;
-                padding: 4px 6px;
-                border-radius: 6px;
-                transition: 0.2s;
-                font-size: 12px;
-            }
-            .storage-icon-btn:hover {
-                background: var(--accent);
-                color: white;
-            }
+            /* ===== Футер с Gist ID ===== */
+            .storage-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--glass-border); font-size: 12px; color: var(--text-secondary); }
+            .storage-gist-info { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+            .storage-gist-info code { background: var(--bg-primary); padding: 3px 8px; border-radius: 6px; font-family: monospace; font-size: 11px; color: var(--accent); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text; user-select: all; }
+            .storage-icon-btn { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px 6px; border-radius: 6px; transition: 0.2s; font-size: 12px; }
+            .storage-icon-btn:hover { background: var(--accent); color: white; }
 
             /* ===== Recovery-модалка ===== */
-            .storage-recovery {
-                display: flex;
-                flex-direction: column;
-                gap: 16px;
-            }
-            .storage-recovery-intro {
-                font-size: 14px;
-                color: var(--text-secondary);
-                background: rgba(61,158,179,0.08);
-                border-left: 3px solid var(--accent);
-                padding: 10px 14px;
-                border-radius: 8px;
-                margin: 0;
-            }
-            .storage-recovery-intro i {
-                color: var(--accent);
-                margin-right: 6px;
-            }
-            .storage-recovery-block {
-                background: var(--glass-bg);
-                border: 1px solid var(--glass-border);
-                border-radius: 16px;
-                padding: 16px;
-            }
-            .storage-recovery-block h4 {
-                margin: 0 0 8px;
-                font-size: 16px;
-                color: var(--accent);
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            .storage-recovery-block p {
-                margin: 0 0 12px;
-                font-size: 13px;
-            }
-            .storage-recovery-input {
-                display: flex;
-                gap: 8px;
-                align-items: stretch;
-                flex-wrap: wrap;
-            }
-            .storage-recovery-input input {
-                flex: 1;
-                padding: 10px 16px;
-                background: var(--bg-primary);
-                border: 1px solid var(--border);
-                border-radius: 40px;
-                color: var(--text-primary);
-                font-family: var(--font-family);
-                font-size: 14px;
-                min-width: 140px;
-            }
-            .storage-recovery-input input:focus {
-                border-color: var(--accent);
-                outline: none;
-                box-shadow: 0 0 0 3px rgba(61,158,179,0.15);
-            }
-            .storage-recovery-error {
-                margin-top: 10px;
-                padding: 8px 12px;
-                background: rgba(244,67,54,0.1);
-                border-left: 3px solid #f44336;
-                border-radius: 6px;
-                color: #f44336;
-                font-size: 13px;
-            }
-            .storage-recovery-warn {
-                margin-top: 10px;
-                padding: 8px 12px;
-                background: rgba(255,152,0,0.1);
-                border-left: 3px solid #ff9800;
-                border-radius: 6px;
-                color: #ff9800;
-                font-size: 13px;
-            }
-            .storage-recovery-help {
-                font-size: 13px;
-                color: var(--text-secondary);
-                background: var(--bg-inner-gradient);
-                border-radius: 12px;
-                padding: 4px 12px;
-            }
-            .storage-recovery-help summary {
-                cursor: pointer;
-                padding: 8px 0;
-                color: var(--accent);
-                font-weight: bold;
-                list-style: none;
-            }
-            .storage-recovery-help summary::-webkit-details-marker {
-                display: none;
-            }
-            .storage-recovery-help summary::before {
-                content: '▸ ';
-                display: inline-block;
-                transition: transform 0.2s;
-            }
-            .storage-recovery-help[open] summary::before {
-                transform: rotate(90deg);
-            }
-            .storage-recovery-help ol {
-                margin: 0 0 12px 0;
-                padding-left: 24px;
-                line-height: 1.8;
-            }
-            .storage-recovery-help code {
-                background: rgba(0,0,0,0.3);
-                padding: 2px 6px;
-                border-radius: 4px;
-                font-family: monospace;
-                font-size: 12px;
-            }
-            .storage-recovery-url-example {
-                background: var(--bg-primary);
-                padding: 6px 12px;
-                border-radius: 6px;
-                margin: 6px 0;
-                font-family: monospace;
-                font-size: 12px;
-                color: var(--text-secondary);
-            }
-            .storage-recovery-url-example strong {
-                color: var(--accent);
-            }
+            .storage-recovery { display: flex; flex-direction: column; gap: 16px; }
+            .storage-recovery-intro { font-size: 14px; color: var(--text-secondary); background: rgba(61,158,179,0.08); border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 8px; margin: 0; }
+            .storage-recovery-intro i { color: var(--accent); margin-right: 6px; }
+            .storage-recovery-block { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 16px; padding: 16px; }
+            .storage-recovery-block h4 { margin: 0 0 8px; font-size: 16px; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+            .storage-recovery-block p { margin: 0 0 12px; font-size: 13px; }
+            .storage-recovery-input { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+            .storage-recovery-input input { flex: 1; padding: 10px 16px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 40px; color: var(--text-primary); font-family: var(--font-family); font-size: 14px; min-width: 140px; }
+            .storage-recovery-input input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(61,158,179,0.15); }
+            .storage-recovery-error { margin-top: 10px; padding: 8px 12px; background: rgba(244,67,54,0.1); border-left: 3px solid #f44336; border-radius: 6px; color: #f44336; font-size: 13px; }
+            .storage-recovery-warn { margin-top: 10px; padding: 10px 14px; background: rgba(255,152,0,0.1); border-left: 3px solid #ff9800; border-radius: 6px; color: #ff9800; font-size: 13px; line-height: 1.5; }
+            .storage-recovery-warn a { color: var(--accent); text-decoration: underline; }
+            .storage-recovery-help { font-size: 13px; color: var(--text-secondary); background: var(--bg-inner-gradient); border-radius: 12px; padding: 4px 12px; }
+            .storage-recovery-help summary { cursor: pointer; padding: 8px 0; color: var(--accent); font-weight: bold; list-style: none; }
+            .storage-recovery-help summary::-webkit-details-marker { display: none; }
+            .storage-recovery-help summary::before { content: '▸ '; display: inline-block; transition: transform 0.2s; }
+            .storage-recovery-help[open] summary::before { transform: rotate(90deg); }
+            .storage-recovery-help ol { margin: 0 0 12px 0; padding-left: 24px; line-height: 1.8; }
+            .storage-recovery-help code { background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+            .storage-recovery-url-example { background: var(--bg-primary); padding: 6px 12px; border-radius: 6px; margin: 6px 0; font-family: monospace; font-size: 12px; color: var(--text-secondary); }
+            .storage-recovery-url-example strong { color: var(--accent); }
 
-            /* ===== Модалка восстановления: max-width + скролл ===== */
-            .modal-fullscreen .modal-content-full.storage-recovery-modal-content {
-                max-width: 640px;
-                max-height: 90vh;
-                display: flex;
-                flex-direction: column;
-            }
-            .modal-fullscreen .modal-content-full.storage-recovery-modal-content .modal-body {
-                flex: 1;
-                min-height: 0;
-                overflow-y: auto;
-                padding: 24px;
-            }
-            .modal-fullscreen .modal-content-full.storage-recovery-modal-content .modal-header h2 {
-                font-size: 20px;
-            }
+            /* ===== Скролл recovery-модалки ===== */
+            .modal-fullscreen .modal-content-full.storage-recovery-modal-content { max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; }
+            .modal-fullscreen .modal-content-full.storage-recovery-modal-content .modal-body { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; }
+            .modal-fullscreen .modal-content-full.storage-recovery-modal-content .modal-header h2 { font-size: 20px; }
         `;
         document.head.appendChild(style);
     }
 
-    // Инжектим стили сразу при загрузке модуля
     injectStorageStyles();
 
     // ============================================================
-    // Статус
+    // Остальной код UI (статус, превью, карточки)
     // ============================================================
 
     let statusElement = null;
@@ -516,17 +133,11 @@
         return title.slice(0, maxLength) + '…';
     }
 
-    // ============================================================
-    // Превью / ссылки
-    // ============================================================
-
     async function ensureDownloadUrl(bm) {
         await ensureModules();
         if (!_StorageDownload) return null;
         if (!bm || bm.type !== 'video' || !bm.url) return null;
-        if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) {
-            return bm.downloadUrl;
-        }
+        if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) return bm.downloadUrl;
         try {
             const url = await _StorageDownload.fetchVideoDownloadUrl(bm.url, true);
             if (url) {
@@ -583,10 +194,6 @@
         const overlay = mediaContainer.querySelector('.play-overlay');
         if (overlay) overlay.remove();
     }
-
-    // ============================================================
-    // Карточка закладки
-    // ============================================================
 
     function createBookmarkCardElement(bm, modal) {
         const t = (key) => window.I18n?.translate(key) || key;
@@ -668,16 +275,12 @@
             downloadBtn.className = 'button small download-btn';
             downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
             downloadBtn.style.cssText = 'background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;font-family:var(--font-family);transition:0.2s;';
-
             const hasValidDownload = bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires;
             if (hasValidDownload) {
                 downloadBtn.onclick = (e) => {
                     e.stopPropagation();
                     const a = document.createElement('a');
-                    a.href = bm.downloadUrl;
-                    a.download = bm.title + '.mp4';
-                    a.target = '_blank';
-                    a.click();
+                    a.href = bm.downloadUrl; a.download = bm.title + '.mp4'; a.target = '_blank'; a.click();
                 };
             } else {
                 downloadBtn.onclick = async (e) => {
@@ -691,28 +294,19 @@
                             downloadBtn.onclick = (ev) => {
                                 ev.stopPropagation();
                                 const a = document.createElement('a');
-                                a.href = url;
-                                a.download = bm.title + '.mp4';
-                                a.target = '_blank';
-                                a.click();
+                                a.href = url; a.download = bm.title + '.mp4'; a.target = '_blank'; a.click();
                             };
                             downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
                             showToast('Ссылка получена', 'success');
                         } else {
                             showToast('Не удалось получить ссылку', 'error');
                             downloadBtn.textContent = '❌ Ошибка';
-                            setTimeout(() => {
-                                downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
-                                downloadBtn.disabled = false;
-                            }, 3000);
+                            setTimeout(() => { downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать'); downloadBtn.disabled = false; }, 3000);
                         }
                     } catch (err) {
                         showToast('Ошибка: ' + err.message, 'error');
                         downloadBtn.textContent = '❌ Ошибка';
-                        setTimeout(() => {
-                            downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать');
-                            downloadBtn.disabled = false;
-                        }, 3000);
+                        setTimeout(() => { downloadBtn.textContent = '⬇ ' + (t('downloadBtn') || 'Скачать'); downloadBtn.disabled = false; }, 3000);
                     }
                 };
             }
@@ -732,9 +326,7 @@
                     for (let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
                     const blob = new Blob([bytes], { type: 'text/plain' });
                     const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = bm.saveData.fileName || 'save.dat';
-                    a.click();
+                    a.href = URL.createObjectURL(blob); a.download = bm.saveData.fileName || 'save.dat'; a.click();
                     URL.revokeObjectURL(a.href);
                 } catch (err) { showToast('Ошибка скачивания', 'error'); }
             });
@@ -747,13 +339,11 @@
         if (!isVideo) {
             card.addEventListener('click', async (e) => {
                 if (e.target.closest('button')) return;
-
                 if (isPost && bm.postData && bm.postData.id) {
                     if (window.UIFeedback) window.UIFeedback.openFullModal(bm.postData);
                     else showToast(t('viewerNotAvailable'), 'error');
                     return;
                 }
-
                 if (isSave && bm.saveData) {
                     try {
                         const binary = atob(bm.saveData.content);
@@ -761,14 +351,11 @@
                         for (let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
                         const blob = new Blob([bytes], { type: 'text/plain' });
                         const a = document.createElement('a');
-                        a.href = URL.createObjectURL(blob);
-                        a.download = bm.saveData.fileName || 'save.dat';
-                        a.click();
+                        a.href = URL.createObjectURL(blob); a.download = bm.saveData.fileName || 'save.dat'; a.click();
                         URL.revokeObjectURL(a.href);
                     } catch (err) { showToast('Ошибка скачивания', 'error'); }
                     return;
                 }
-
                 if (bm.url) window.open(bm.url, '_blank');
             });
         }
@@ -925,8 +512,7 @@
         await ensureModules();
         const bookmarks = _StorageManager.getBookmarks() || [];
         const videoBookmarks = bookmarks.filter(b => b.type === 'video' && b.url);
-        let updated = 0;
-        let failed = 0;
+        let updated = 0, failed = 0;
         for (const bm of videoBookmarks) {
             if (bm.downloadUrl && bm.downloadUrlExpires && Date.now() < bm.downloadUrlExpires) continue;
             try {
@@ -936,16 +522,13 @@
                     await _StorageManager.updateBookmark(bm.id, { downloadUrl: url, downloadUrlExpires: expires });
                     updated++;
                 } else failed++;
-            } catch (e) {
-                failed++;
-                console.warn('Failed to update video link for', bm.id, e);
-            }
+            } catch (e) { failed++; console.warn('Failed to update video link for', bm.id, e); }
         }
         return { updated, failed, total: videoBookmarks.length };
     }
 
     // ============================================================
-    // Модалка восстановления
+    // Recovery-модалка
     // ============================================================
 
     function showRecoveryModal(onSuccess) {
@@ -960,10 +543,14 @@
 
                 <div class="storage-recovery-warn">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <strong>Требуется classic-токен со scope ` + '`gist`' + `.</strong>
-                    Fine-grained токены не поддерживают Gist API. Если видите ошибку «Токен не имеет доступа к Gists» — создайте новый токен:
-                    <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">github.com/settings/tokens/new</a>
-                    → отметьте галочку ` + '`gist`' + ` → сгенерируйте и войдите заново.
+                    <strong>Требуется classic-токен (ghp_...) со scope `gist`.</strong>
+                    Fine-grained токены НЕ поддерживают Gist API.
+                    Проверьте: <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer">github.com/settings/tokens</a>
+                    → тип <strong>Tokens (classic)</strong> → галочка <code>gist</code>.<br>
+                    <button class="storage-btn" id="recovery-check-token-btn" type="button" style="margin-top:8px;">
+                        <i class="fas fa-shield-alt"></i> Проверить текущий токен
+                    </button>
+                    <div id="recovery-token-result" style="margin-top:8px; font-size:12px;"></div>
                 </div>
 
                 <div class="storage-recovery-block">
@@ -1019,13 +606,36 @@
         const loadBtn = modal.querySelector('#recovery-load-btn');
         const createBtn = modal.querySelector('#recovery-create-btn');
         const errEl = modal.querySelector('#recovery-error');
+        const checkTokenBtn = modal.querySelector('#recovery-check-token-btn');
+        const tokenResultEl = modal.querySelector('#recovery-token-result');
 
-        function showError(msg) {
-            errEl.textContent = msg;
-            errEl.style.display = 'block';
-        }
-        function hideError() {
-            errEl.style.display = 'none';
+        function showError(msg) { errEl.textContent = msg; errEl.style.display = 'block'; }
+        function hideError() { errEl.style.display = 'none'; }
+
+        if (checkTokenBtn) {
+            checkTokenBtn.addEventListener('click', async () => {
+                tokenResultEl.textContent = 'Проверка...';
+                tokenResultEl.style.color = 'var(--text-secondary)';
+                try {
+                    const result = await window._StorageCore.checkGistScope();
+                    if (result.ok) {
+                        tokenResultEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4caf50;"></i> Токен валиден. Scopes: ' + result.scopes.join(', ');
+                        tokenResultEl.style.color = '#4caf50';
+                    } else {
+                        let msg = '';
+                        if (result.reason === 'not_logged_in') msg = 'Вы не вошли в GitHub';
+                        else if (result.reason === 'unauthorized') msg = 'Токен невалиден или просрочен';
+                        else if (result.reason === 'no_gist_scope') msg = 'У токена НЕТ scope `gist`. Scopes: ' + (result.scopes.join(', ') || 'нет');
+                        else if (result.reason === 'network_error') msg = 'Ошибка сети';
+                        else msg = 'HTTP ' + result.reason;
+                        tokenResultEl.innerHTML = '<i class="fas fa-times-circle" style="color:#f44336;"></i> ' + msg;
+                        tokenResultEl.style.color = '#f44336';
+                    }
+                } catch (e) {
+                    tokenResultEl.textContent = 'Ошибка: ' + e.message;
+                    tokenResultEl.style.color = '#f44336';
+                }
+            });
         }
 
         loadBtn.addEventListener('click', async () => {
@@ -1079,7 +689,7 @@
     }
 
     // ============================================================
-    // Главная модалка хранилища
+    // Главная модалка
     // ============================================================
 
     async function openStorageModal(gameContext = null) {
@@ -1172,7 +782,6 @@
         _StorageManager.setStatusCallback(updateStatus);
         _StorageManager.setRefreshGridCallback(() => renderBookmarks(modal));
 
-        // ---- Gist ID в футере ----
         const gistIdEl = modal.querySelector('#storage-gist-id');
         const copyGistBtn = modal.querySelector('#storage-copy-gist');
         const recoverGistBtn = modal.querySelector('#storage-recover-gist');
@@ -1187,16 +796,10 @@
             copyGistBtn.addEventListener('click', async () => {
                 const id = _StorageManager.getGistId() || _StorageManager.getStoredGistId();
                 if (!id) { showToast('Gist ID недоступен', 'warning'); return; }
-                try {
-                    await navigator.clipboard.writeText(id);
-                    showToast('Gist ID скопирован', 'success');
-                } catch {
+                try { await navigator.clipboard.writeText(id); showToast('Gist ID скопирован', 'success'); }
+                catch {
                     const ta = document.createElement('textarea');
-                    ta.value = id;
-                    document.body.appendChild(ta);
-                    ta.select();
-                    document.execCommand('copy');
-                    ta.remove();
+                    ta.value = id; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
                     showToast('Gist ID скопирован', 'success');
                 }
             });

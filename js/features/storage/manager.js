@@ -1,17 +1,5 @@
 // js/features/storage/manager.js
-// Управление хранилищем: загрузка, сохранение, добавление, удаление.
-//
-// ТРЕБОВАНИЯ К ТОКЕНУ:
-//   Classic-токен со scope `gist`. Fine-grained НЕ поддерживаются.
-//
-// ПОРЯДОК ЗАГРУЗКИ (loadOrCreateStorage):
-//   1. Память (cachedMasterKey).
-//   2. Зашифрованный кэш payload.
-//   3. gistId из localStorage.
-//   4. gistId из зашифрованного ApiCache.
-//   5. Листинг `GET /gists` (classic-токены).
-//   6. Ручной ввод gistId через UI (tryLoadByGistId).
-//   7. Создание нового Gist.
+// Управление хранилищем. Все вызовы getToken — асинхронные.
 
 (function() {
     'use strict';
@@ -27,6 +15,8 @@
         GIST_CACHE_TTL,
         getGistIdKey,
         normalizeGistId,
+        getAuthToken,
+        checkGistScope,
         deriveKeyFromString,
         encryptData,
         decryptData,
@@ -40,16 +30,9 @@
     } = window._StorageCore;
 
     const { fetchMetadata } = window._StorageMetadata;
-    const { getCurrentUser, getToken, hasScope } = window.GithubAuth || {};
+    const { getCurrentUser, hasScope } = window.GithubAuth || {};
     const { showToast } = window.UIUtils || {};
     const { debounce, performAction, cacheGet, cacheSet, cacheRemove } = window.GithubCore || {};
-
-    function getAuthToken() {
-        if (window.GithubAuth && typeof window.GithubAuth.getToken === 'function') {
-            return window.GithubAuth.getToken();
-        }
-        return sessionStorage.getItem('github_token') || null;
-    }
 
     function getCurrentUserLogin() {
         if (window.GithubAuth && typeof window.GithubAuth.getCurrentUser === 'function') {
@@ -142,7 +125,7 @@
     // ---- Основная загрузка ----
     async function loadOrCreateStorage(forceRefresh = false) {
         const user = getCurrentUserLogin();
-        const token = getAuthToken();
+        const token = await getAuthToken();
         if (!user || !token) throw new Error('not_logged_in');
 
         currentUser = user;
@@ -519,7 +502,7 @@
                     const exported = await crypto.subtle.exportKey('raw', masterKey);
                     const masterKeyArray = Array.from(new Uint8Array(exported));
                     const user = getCurrentUserLogin();
-                    const token = getAuthToken();
+                    const token = await getAuthToken();
                     if (user && token) {
                         const keyToken = await deriveKeyFromString(token);
                         payload.masterKeyEncrypted.byToken = await encryptData(masterKeyArray, keyToken);
@@ -733,7 +716,7 @@
 
     async function resetStorage(silent = false) {
         if (gistId) {
-            const token = getAuthToken();
+            const token = await getAuthToken();
             if (token) {
                 await fetch(`https://api.github.com/gists/${gistId}`, {
                     method: 'DELETE',
@@ -769,7 +752,7 @@
         await ensureStorage();
         if (!masterKey) throw new Error('Storage not initialized');
         const user = getCurrentUserLogin();
-        const token = getAuthToken();
+        const token = await getAuthToken();
         if (!user || !token) throw new Error('not_logged_in');
         const gist = await gistFetchById(gistId);
         if (!gist) throw new Error('Gist not found');
@@ -815,7 +798,7 @@
         await ensureStorage();
         if (!masterKey) throw new Error('Storage not initialized');
         if (!password || password.length < 4) throw new Error('Пароль должен быть не менее 4 символов');
-        const token = getAuthToken();
+        const token = await getAuthToken();
         if (password === token) throw new Error('Пароль не должен совпадать с токеном GitHub');
         const exportData = { version: 1, exportedAt: Date.now(), bookmarks: bookmarks };
         const jsonStr = JSON.stringify(exportData);
@@ -843,14 +826,9 @@
     function setStatusCallback(cb) { statusCallback = cb; }
 
     // ============================================================
-    // UI-восстановление: загрузка по Gist ID
+    // UI-восстановление
     // ============================================================
 
-    /**
-     * Загружает хранилище по указанному gistId (ID или URL).
-     * @param {string} input — Gist ID или полный URL
-     * @throws {Error} если Gist не найден, недоступен, или в нём нет нужного файла.
-     */
     async function tryLoadByGistId(input) {
         if (!input || typeof input !== 'string') throw new Error('Введите Gist ID или ссылку');
 
@@ -859,7 +837,7 @@
             throw new Error('Не удалось распознать Gist ID. Проверьте формат: ID или ссылка вида https://gist.github.com/user/abc123...');
         }
 
-        if (!getCurrentUserLogin() || !getAuthToken()) {
+        if (!getCurrentUserLogin() || !(await getAuthToken())) {
             throw new Error('Сначала войдите в GitHub');
         }
 
@@ -894,7 +872,6 @@
         clearGistCache();
 
         const user = getCurrentUserLogin();
-        const token = getAuthToken();
         try {
             await cacheSet(STORAGE_KEY_PREFIX + user, { gistId: cleanId });
         } catch { /* noop */ }
@@ -902,12 +879,9 @@
         return await loadOrCreateStorage(true);
     }
 
-    /**
-     * Принудительно создаёт новый Gist.
-     */
     async function createNewStorageManually() {
         const user = getCurrentUserLogin();
-        const token = getAuthToken();
+        const token = await getAuthToken();
         if (!user || !token) throw new Error('Сначала войдите в GitHub');
 
         isInitialized = false;

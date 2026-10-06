@@ -2,13 +2,9 @@
 // Ядро: шифрование, работа с Gist, хеши, константы.
 //
 // ТРЕБОВАНИЯ К ТОКЕНУ:
-//   Для работы с Gist API нужен CLASSIC-токен со scope `gist`.
-//   Fine-grained токены НЕ поддерживают Gist API (ограничение GitHub).
+//   Classic-токен (ghp_...) со scope `gist`. Fine-grained НЕ поддерживают Gist API.
 //
-// АРХИТЕКТУРА ХРАНЕНИЯ GIST:
-//   — Основной путь: gistId в localStorage (`neon_gist_id_<user>`).
-//   — Резервный: листинг `GET /gists` (только для classic + gist).
-//   — Восстановление: ручной ввод ID или полного URL через UI.
+// ВАЖНО: getToken() из GithubAuth — асинхронная. Все вызовы — через await.
 
 (function() {
     'use strict';
@@ -32,49 +28,48 @@
     }
 
     // ============================================================
+    // Асинхронное получение токена
+    // ============================================================
+
+    async function getAuthToken() {
+        // Приоритет: GithubAuth.getToken (async, читает sessionStorage + IndexedDB)
+        if (window.GithubAuth && typeof window.GithubAuth.getToken === 'function') {
+            try {
+                const token = await window.GithubAuth.getToken();
+                if (token) return token;
+            } catch (e) {
+                console.warn('[Storage] GithubAuth.getToken error:', e);
+            }
+        }
+        // Fallback: прямой sessionStorage
+        try { return sessionStorage.getItem('github_token') || null; }
+        catch { return null; }
+    }
+
+    // ============================================================
     // Парсинг Gist ID из строки (ID или полный URL)
     // ============================================================
 
-    /**
-     * Извлекает чистый Gist ID из строки.
-     * Поддерживает:
-     *   — чистый ID:                   `abc123def456`
-     *   — URL:                         `https://gist.github.com/user/abc123def456`
-     *   — URL с ревизией:              `https://gist.github.com/user/abc123def456/1a2b3c`
-     *   — короткий URL:                `https://gist.github.com/abc123def456`
-     *   — с якорем:                    `https://gist.github.com/user/abc123def456#file-...`
-     *
-     * @param {string} input — ID или URL
-     * @returns {string|null} — чистый Gist ID или null, если не удалось распарсить
-     */
     function normalizeGistId(input) {
         if (!input || typeof input !== 'string') return null;
         let s = input.trim();
         if (!s) return null;
 
-        // Если это уже похоже на чистый ID (hex, 8-64 символа) — возвращаем как есть
+        // Если это уже чистый ID (hex, 8-64 символа) — возвращаем как есть
         if (/^[a-f0-9]{8,64}$/i.test(s)) return s.toLowerCase();
 
-        // Убираем протокол
+        // Убираем протокол и домен
         s = s.replace(/^https?:\/\//i, '');
-        // Убираем `gist.github.com/` в начале
         s = s.replace(/^gist\.github\.com\//i, '');
-        // Убираем `www.` если был
         s = s.replace(/^www\./i, '');
 
-        // Теперь ожидаем `[user/]id[/revision][#...][?...]`
-        // Убираем query-параметры и якорь
+        // Убираем query и якорь
         s = s.split('?')[0];
         s = s.split('#')[0];
 
         const parts = s.split('/').filter(Boolean);
         if (parts.length === 0) return null;
 
-        // Случаи:
-        //   [id]                       — 1 часть
-        //   [user, id]                 — 2 части
-        //   [user, id, revision]       — 3 части
-        //   [id, revision]             — 2 части, но первая — ID
         let candidate = null;
 
         if (parts.length >= 2) {
@@ -90,7 +85,6 @@
                 }
             }
         } else {
-            // Одна часть
             const first = parts[0];
             if (/^[a-f0-9]{8,64}$/i.test(first)) {
                 candidate = first;
@@ -98,6 +92,44 @@
         }
 
         return candidate ? candidate.toLowerCase() : null;
+    }
+
+    // ============================================================
+    // Проверка scope `gist` у токена
+    // ============================================================
+
+    /**
+     * Возвращает { ok: boolean, scopes: string[], reason: string|null }.
+     * Делает GET /user и читает заголовок X-OAuth-Scopes.
+     */
+    async function checkGistScope() {
+        const token = await getAuthToken();
+        if (!token) {
+            return { ok: false, scopes: [], reason: 'not_logged_in' };
+        }
+        try {
+            const resp = await fetch('https://api.github.com/user', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'X-GitHub-Api-Version': '2022-11-28'
+                }
+            });
+            if (resp.status === 401) {
+                return { ok: false, scopes: [], reason: 'unauthorized' };
+            }
+            if (!resp.ok) {
+                return { ok: false, scopes: [], reason: `http_${resp.status}` };
+            }
+            const scopesHeader = resp.headers.get('X-OAuth-Scopes') || '';
+            const scopes = scopesHeader.split(',').map(s => s.trim()).filter(Boolean);
+            if (!scopes.includes('gist')) {
+                return { ok: false, scopes, reason: 'no_gist_scope' };
+            }
+            return { ok: true, scopes, reason: null };
+        } catch (e) {
+            return { ok: false, scopes: [], reason: 'network_error' };
+        }
     }
 
     // ---- Шифрование ----
@@ -150,23 +182,23 @@
         return JSON.parse(dec.decode(decrypted));
     }
 
-    // ---- Gist: прямые операции по ID ----
+    // ---- Gist: прямые операции ----
 
-    /**
-     * Обёртка над fetch для Gist API.
-     * При 401 различаем:
-     *   — `unauthorized` (нет токена или невалидный) → 401
-     *   — `forbidden` (токен валиден, но нет прав `gist`) → 403 или 401
-     */
     async function gistFetchById(gistId) {
         if (!gistId) return null;
+        const token = await getAuthToken();
+        if (!token) {
+            const err = new Error('No token');
+            err.status = 401;
+            err.code = 'unauthorized';
+            throw err;
+        }
         const url = `https://api.github.com/gists/${gistId}`;
-        const token = getToken();
         const headers = {
             'Accept': 'application/vnd.github.v3+json',
-            'X-GitHub-Api-Version': '2022-11-28'
+            'X-GitHub-Api-Version': '2022-11-28',
+            'Authorization': `Bearer ${token}`
         };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
         const resp = await fetch(url, { headers });
         if (resp.status === 404) return null;
         if (resp.status === 401) {
@@ -186,14 +218,15 @@
     }
 
     async function gistUpdate(gistId, content) {
+        const token = await getAuthToken();
+        if (!token) throw new Error('No token');
         const url = `https://api.github.com/gists/${gistId}`;
-        const token = getToken();
         const headers = {
             'Accept': 'application/vnd.github.v3+json',
             'Content-Type': 'application/json',
-            'X-GitHub-Api-Version': '2022-11-28'
+            'X-GitHub-Api-Version': '2022-11-28',
+            'Authorization': `Bearer ${token}`
         };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
         const resp = await fetch(url, {
             method: 'PATCH',
             headers,
@@ -216,14 +249,15 @@
     }
 
     async function gistCreate(content) {
+        const token = await getAuthToken();
+        if (!token) throw new Error('No token');
         const url = 'https://api.github.com/gists';
-        const token = getToken();
         const headers = {
             'Accept': 'application/vnd.github.v3+json',
             'Content-Type': 'application/json',
-            'X-GitHub-Api-Version': '2022-11-28'
+            'X-GitHub-Api-Version': '2022-11-28',
+            'Authorization': `Bearer ${token}`
         };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
         const resp = await fetch(url, {
             method: 'POST',
             headers,
@@ -254,13 +288,8 @@
         return gist.id;
     }
 
-    /**
-     * Резервный поиск Gist через `GET /gists`.
-     * ВНИМАНИЕ: не работает для fine-grained токенов.
-     * Используется только если gistId потерян.
-     */
     async function findGistByListing() {
-        const token = getToken();
+        const token = await getAuthToken();
         if (!token) return null;
         try {
             const url = 'https://api.github.com/gists?per_page=100';
@@ -332,6 +361,8 @@
         GIST_CACHE_TTL,
         getGistIdKey,
         normalizeGistId,
+        getAuthToken,
+        checkGistScope,
         deriveKeyFromString,
         encryptData,
         decryptData,

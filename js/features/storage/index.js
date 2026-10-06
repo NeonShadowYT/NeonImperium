@@ -1,5 +1,5 @@
 // js/features/storage/index.js
-// Точка входа для хранилища. Загружает модули, экспортирует window.BookmarkStorage.
+// Точка входа для хранилища.
 
 (function() {
     'use strict';
@@ -85,10 +85,13 @@
                         await ensureModules();
                         return window._StorageManager.ensureStorage(...args);
                     },
-                    // Диагностика и восстановление
                     getGistId: () => window._StorageManager.getGistId(),
                     getStoredGistId: () => window._StorageManager.getStoredGistId(),
                     normalizeGistId: (input) => window._StorageCore.normalizeGistId(input),
+                    checkGistScope: async () => {
+                        await ensureModules();
+                        return window._StorageCore.checkGistScope();
+                    },
                     setGistIdManually: (id) => window._StorageManager.setGistIdManually(id),
                     tryLoadByGistId: async (id) => {
                         await ensureModules();
@@ -102,7 +105,6 @@
                         await ensureModules();
                         return window._StorageUI.showRecoveryModal(onSuccess);
                     },
-                    // Экспорт/импорт
                     exportBookmarks: async () => {
                         await ensureModules();
                         const password = await window.Dialog.showPrompt({
