@@ -2,6 +2,14 @@
 // Чистые утилиты без побочных эффектов.
 // Cache-функции живут в js/core/api-cache.js, DOM-функции — в js/core/dom-utils.js.
 // Все три файла мержатся в window.Utils для обратной совместимости.
+//
+// Порядок загрузки в HTML:
+//   1. config.js
+//   2. cache-crypto.js
+//   3. token-store.js
+//   4. dom-utils.js
+//   5. api-cache.js
+//   6. utils.js  ← этот файл
 
 (function() {
     'use strict';
@@ -163,12 +171,31 @@
         return /\bgithub_token\b/i.test(str);
     }
 
+    /**
+     * Экранирует HTML-сущности.
+     * Используется как fallback, если DOMPurify не загружен.
+     */
+    function escapeHtmlFallback(html) {
+        return String(html)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    /**
+     * Санитизирует HTML.
+     *   — DOMPurify загружен: полная очистка, HTML сохраняется.
+     *   — DOMPurify не загружен: HTML экранируется (безопасный fallback),
+     *     чтобы не терять данные полностью.
+     */
     function sanitizeHtml(html) {
         if (!html) return '';
         if (typeof window.DOMPurify === 'undefined' ||
             typeof window.DOMPurify.sanitize !== 'function') {
-            console.warn('[sanitizeHtml] DOMPurify не загружен. HTML будет отброшен.');
-            return '';
+            console.warn('[sanitizeHtml] DOMPurify не загружен — используется escape-fallback.');
+            return escapeHtmlFallback(html);
         }
         return window.DOMPurify.sanitize(String(html), {
             ADD_ATTR: ['target', 'rel', 'loading', 'referrerpolicy'],
@@ -237,10 +264,8 @@
     }
 
     // ============================================================
-    // XOR — ТОЛЬКО для обфускации истории лимитов (rate-limits.js).
-    // НЕ ИСПОЛЬЗУЕТСЯ для токенов — для токена см. js/core/token-store.js
-    // (IndexedDB + AES-GCM).
-    // XOR НЕ является криптографической защитой.
+    // XOR — только для обфускации истории лимитов (rate-limits.js).
+    // НЕ используется для токенов.
     // ============================================================
 
     function xorEncrypt(data, key) {

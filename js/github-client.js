@@ -2,17 +2,11 @@
 // Универсальный клиент GitHub API.
 //   — Singleton.
 //   — Exponential backoff с jitter на 5xx/429.
-//   — Кеширование GET-запросов через ApiCache (stale-while-revalidate).
-//   — ETag / If-None-Match для минимизации трафика.
-//   — Дедупликация одновременных GET-запросов к одному URL.
-//   — Все ошибки нормализованы в Error с полями .status и .body.
-//
-// ДЕДУПЛИКАЦИЯ:
-//   Активна только для GET без signal и без ifNoneMatch.
-//
-// ФОРМАТ КЕША:
-//   { data: <response>, etag: <etag|null> }
-//   Старый формат (просто data) поддерживается для обратной совместимости.
+//   — Кэширование GET через ApiCache (stale-while-revalidate).
+//   — ETag / If-None-Match.
+//   — Дедупликация одновременных GET.
+//   — При получении 401 — dispatch 'github-api-unauthorized'
+//     (github-auth.js слушает и разлогинивает пользователя).
 
 (function() {
     'use strict';
@@ -41,24 +35,15 @@
         try { cache.cacheRemoveByPrefix(prefix); } catch (e) { /* noop */ }
     }
 
-    /**
-     * Читает кеш-запись.
-     * @returns {Promise<{data:*, etag:string|null}|null>}
-     */
     async function readCacheEntry(key) {
         const cache = window.ApiCache;
         if (!cache || typeof cache.cacheGet !== 'function') return null;
         try {
             const value = await cache.cacheGet(key, API_CACHE_TTL);
             if (value === undefined || value === null) return null;
-            // Новый формат
             if (value && typeof value === 'object' && !Array.isArray(value) && 'data' in value) {
-                return {
-                    data: value.data,
-                    etag: value.etag || null
-                };
+                return { data: value.data, etag: value.etag || null };
             }
-            // Старый формат: значение — это сразу data
             return { data: value, etag: null };
         } catch { return null; }
     }
@@ -80,6 +65,16 @@
         if (status) err.status = status;
         if (body) err.body = body;
         return err;
+    }
+
+    /**
+     * Уведомляет UI о 401 от GitHub API.
+     * github-auth.js слушает событие и вызывает handleApiUnauthorized().
+     */
+    function notifyUnauthorized() {
+        try {
+            window.dispatchEvent(new CustomEvent('github-api-unauthorized'));
+        } catch (e) { /* noop */ }
     }
 
     // ============================================================
@@ -106,19 +101,11 @@
             return null;
         }
 
-        /**
-         * Обычный запрос — возвращает только data.
-         * Используется для мутаций (POST/PATCH/DELETE) и обратной совместимости.
-         */
         async request(endpoint, options = {}, retries = DEFAULT_RETRIES) {
             const result = await this._performRequest(endpoint, options, retries);
             return result.data;
         }
 
-        /**
-         * Запрос с метаданными кеша.
-         * @returns {Promise<{data:*, etag:string|null, notModified:boolean}>}
-         */
         async requestWithETag(endpoint, options = {}, retries = DEFAULT_RETRIES) {
             return this._performRequest(endpoint, options, retries);
         }
@@ -202,13 +189,24 @@
                         options.signal.removeEventListener('abort', externalAbortHandler);
                     }
 
-                    // 304 Not Modified — кеш актуален
                     if (response.status === 304) {
                         return {
                             data: null,
                             etag: options.ifNoneMatch || null,
                             notModified: true
                         };
+                    }
+
+                    if (response.status === 401) {
+                        // Токен невалиден — уведомляем UI.
+                        notifyUnauthorized();
+                        let errorMsg = 'Unauthorized';
+                        let errorBody = null;
+                        try {
+                            errorBody = await response.json();
+                            if (errorBody && errorBody.message) errorMsg = errorBody.message;
+                        } catch { /* noop */ }
+                        throw buildError(errorMsg, 401, errorBody);
                     }
 
                     if (response.ok) {
@@ -220,7 +218,6 @@
                         return { data, etag, notModified: false };
                     }
 
-                    // 5xx и 429 — retry
                     if (response.status >= 500 || response.status === 429) {
                         lastError = buildError(`HTTP ${response.status}`, response.status);
                         if (attempt < retries) {
@@ -235,7 +232,6 @@
                         throw lastError;
                     }
 
-                    // 4xx (кроме 429) — сразу
                     let errorMsg = `HTTP ${response.status}`;
                     let errorBody = null;
                     try {
@@ -294,7 +290,6 @@
 
             const cached = await readCacheEntry(cacheKey);
             if (cached && !(signal && signal.aborted)) {
-                // SWR: отдаём кеш, обновляем в фоне с If-None-Match
                 this.client.requestWithETag(url, {
                     signal: AbortSignal.timeout(5000),
                     ifNoneMatch: cached.etag

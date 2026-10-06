@@ -2,10 +2,9 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://cdn.skypack.dev https://esm.sh; style-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://img.youtube.com https://i.ytimg.com https://static-cdn.jtvnw.net https://img.shields.io https://telegram-badge.vercel.app https://avatars.githubusercontent.com https://img.itch.zone; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; connect-src 'self' https://api.github.com https://api.rss2json.com https://api.twitchinsights.net https://noembed.com https://iframe.ly https://api.microlink.io https://openunfurl.vercel.app https://oembed.com https://api.allorigins.win https://corsproxy.io https://loader.to https://ssyoutube.com https://www.y2mate.com https://vimeo.com https://www.dailymotion.com https://www.youtube.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://player.twitch.tv https://rutube.ru https://coub.com; media-src 'self' https://img.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
-    <!-- frame-ancestors не работает через meta на GitHub Pages. Защита от clickjacking требует reverse-proxy. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://cdn.skypack.dev https://esm.sh; style-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://img.youtube.com https://*.ytimg.com https://static-cdn.jtvnw.net https://img.shields.io https://telegram-badge.vercel.app https://avatars.githubusercontent.com https://img.itch.zone; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; connect-src 'self' https://api.github.com https://api.rss2json.com https://api.twitchinsights.net https://noembed.com https://iframe.ly https://api.microlink.io https://openunfurl.vercel.app https://oembed.com https://api.allorigins.win https://corsproxy.io https://loader.to https://ssyoutube.com https://www.y2mate.com https://vimeo.com https://www.dailymotion.com https://www.youtube.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://player.twitch.tv https://rutube.ru https://coub.com; media-src 'self' https://img.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+    <!-- frame-ancestors не работает через meta на GitHub Pages. -->
     <meta charset="UTF-8">
-    <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1e1e30">
@@ -127,7 +126,7 @@
                     </h2>
                     <div class="developer-info">
                         <div class="avatar-wrapper large">
-                            <img src="images/avatar-neon-shadow.webp" alt="Аватар Neon Shadow" class="avatar" width="100" height="100" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                            <img src="images/avatar-neon-shadow.webp" alt="Аватар Neon Shadow" class="avatar" width="100" height="100" loading="lazy" data-fallback="images/default-avatar.webp">
                         </div>
                         <div class="developer-details">
                             <h3>Neon Shadow</h3>

@@ -1,23 +1,23 @@
 // js/common-init.js — централизованный bootstrap страницы.
-//   — Preconnect + DNS-подсказки для критических доменов.
+//   — Preconnect.
+//   — Глобальный fallback изображений (data-fallback).
 //   — Динамическая подгрузка page-скриптов.
-//   — marked@18.1.0 (UMD-сборка, SRI для jsdelivr).
-//   — DOMPurify@3.4.16 (SRI для jsdelivr).
-//   — Service Worker + controllerchange (reload one-time).
+//   — marked@18.1.0 (UMD, SRI).
+//   — DOMPurify@3.4.16 (SRI).
+//   — Service Worker + controllerchange.
 //   — Download consent.
 //   — Rate limits.
-//   — window.loadStorageModules — единственная точка входа для хранилища.
+//   — window.loadStorageModules.
 //
-// ВАЖНО ПРО SRI:
-//   Хеши привязаны к точному содержимому файла на конкретном CDN.
-//   При смене версии (18.1.0 → 18.x.x) — сгенерировать новый хеш https://srihash.org/:
-//     PowerShell:
-//       $url = 'https://cdn.jsdelivr.net/npm/marked@X.Y.Z/lib/marked.umd.js'
-//       $r = Invoke-WebRequest -Uri $url -UseBasicParsing
-//       $h = [System.Security.Cryptography.SHA384]::Create().ComputeHash($r.Content)
-//       "sha384-$([System.Convert]::ToBase64String($h))"
-//   Резервные CDN (unpkg) не используют SRI — это осознанный fallback,
-//   чтобы сайт не остался без библиотеки при CDN drift на jsdelivr.
+// АРХИТЕКТУРА:
+//   bootstrap() — async. Порядок:
+//     1. applyMobileClass (sync)
+//     2. addPreconnects (sync)
+//     3. initImageFallbacks (sync, глобальный error-listener)
+//     4. await initNonLanguageDependent — ждёт marked + DOMPurify
+//     5. waitForLanguageAndInit — запускает page-модули после языка
+//   Это гарантирует, что к моменту вызова sanitizeHtml()
+//   в page-модулях DOMPurify уже загружен.
 
 (function() {
     'use strict';
@@ -54,6 +54,23 @@
         });
         observer.observe(document.documentElement, { childList: true, subtree: true });
         setTimeout(() => observer.disconnect(), MOBILE_CLASS_OBSERVER_TIMEOUT);
+    }
+
+    // ============================================================
+    // Глобальный fallback изображений
+    // Заменяет inline onerror, который блокируется CSP (script-src-attr).
+    // Событие 'error' на img не всплывает, поэтому useCapture: true.
+    // ============================================================
+
+    function initImageFallbacks() {
+        document.addEventListener('error', (e) => {
+            const target = e.target;
+            if (!target || target.tagName !== 'IMG') return;
+            if (target.dataset.fallbackApplied === '1') return;
+            target.dataset.fallbackApplied = '1';
+            const fallback = target.dataset.fallback;
+            if (fallback) target.src = fallback;
+        }, true);
     }
 
     // ============================================================
@@ -145,7 +162,7 @@
 
     // ============================================================
     // Единый загрузчик скриптов.
-    // Принимает либо строку (src), либо объект { src, integrity, crossOrigin }.
+    // Принимает строку (src) или объект { src, integrity, crossOrigin }.
     // ============================================================
 
     function loadScript(item, timeout = 10000) {
@@ -171,9 +188,8 @@
     }
 
     // ============================================================
-    // marked@18.1.0
-    // UMD-сборка: lib/marked.umd.js (в 18.x файла marked.min.js в корне нет).
-    // Основной CDN (jsdelivr) — с SRI. Резерв (unpkg) — без SRI.
+    // marked@18.1.0 — UMD-сборка (lib/marked.umd.js).
+    // Основной CDN с SRI, резерв (unpkg) без SRI.
     // ============================================================
 
     const MARKED_CDNS = [
@@ -210,7 +226,6 @@
 
     // ============================================================
     // DOMPurify@3.4.16
-    // Основной CDN (jsdelivr) — с SRI. Резерв (unpkg) — без SRI.
     // ============================================================
 
     const DOMPURIFY_CDNS = [
@@ -457,7 +472,6 @@
 
     // ============================================================
     // Storage (lazy load) — единственная точка входа.
-    // Защита от параллельных вызовов через in-flight promise.
     // ============================================================
 
     let storageLoadPromise = null;
@@ -605,7 +619,7 @@
     }
 
     // ============================================================
-    // Non-language init
+    // Non-language init — возвращает Promise.
     // ============================================================
 
     function initNonLanguageDependent() {
@@ -614,22 +628,25 @@
         ensureDialog();
 
         loadPageScripts();
-        ensureMarked();
-        ensureDOMPurify();
         loadDustParticles();
         registerServiceWorker();
         initDownloadConsent();
         initRateLimits();
+
+        // Критично: дождаться загрузки marked и DOMPurify,
+        // иначе sanitizeHtml в page-модулях отработает некорректно.
+        return Promise.all([ensureMarked(), ensureDOMPurify()]);
     }
 
     // ============================================================
-    // Bootstrap
+    // Bootstrap — async, гарантирует порядок инициализации.
     // ============================================================
 
-    function bootstrap() {
+    async function bootstrap() {
         applyMobileClass();
         addPreconnects();
-        initNonLanguageDependent();
+        initImageFallbacks();
+        await initNonLanguageDependent();
         waitForLanguageAndInit();
     }
 

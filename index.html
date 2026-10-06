@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://cdn.skypack.dev https://esm.sh; style-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://img.youtube.com https://i.ytimg.com https://static-cdn.jtvnw.net https://img.shields.io https://telegram-badge.vercel.app https://avatars.githubusercontent.com https://img.itch.zone; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; connect-src 'self' https://api.github.com https://api.rss2json.com https://api.twitchinsights.net https://noembed.com https://iframe.ly https://api.microlink.io https://openunfurl.vercel.app https://oembed.com https://api.allorigins.win https://corsproxy.io https://loader.to https://ssyoutube.com https://www.y2mate.com https://vimeo.com https://www.dailymotion.com https://www.youtube.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://player.twitch.tv https://rutube.ru https://coub.com; media-src 'self' https://img.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
-    <!-- frame-ancestors не работает через meta на GitHub Pages. Защита от clickjacking требует reverse-proxy. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://cdn.skypack.dev https://esm.sh; style-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://img.youtube.com https://*.ytimg.com https://static-cdn.jtvnw.net https://img.shields.io https://telegram-badge.vercel.app https://avatars.githubusercontent.com https://img.itch.zone; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; connect-src 'self' https://api.github.com https://api.rss2json.com https://api.twitchinsights.net https://noembed.com https://iframe.ly https://api.microlink.io https://openunfurl.vercel.app https://oembed.com https://api.allorigins.win https://corsproxy.io https://loader.to https://ssyoutube.com https://www.y2mate.com https://vimeo.com https://www.dailymotion.com https://www.youtube.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://player.twitch.tv https://rutube.ru https://coub.com; media-src 'self' https://img.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+    <!-- frame-ancestors не работает через meta на GitHub Pages. -->
     <meta charset="UTF-8">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -209,7 +209,7 @@
                         <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" rel="noopener noreferrer" class="profile-card-link" aria-label="YouTube-канал Neon Shadow">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.webp" alt="Аватар Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-neon-shadow.webp" alt="Аватар Neon Shadow" class="avatar" width="80" height="80" loading="lazy" data-fallback="images/default-avatar.webp">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
@@ -217,7 +217,7 @@
                         <a href="https://www.youtube.com/@Gc567" target="_blank" rel="noopener noreferrer" class="profile-card-link" aria-label="YouTube-канал Golden Creeper">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.webp" alt="Аватар Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-golden-creeper.webp" alt="Аватар Golden Creeper" class="avatar" width="80" height="80" loading="lazy" data-fallback="images/default-avatar.webp">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
@@ -235,7 +235,7 @@
                         <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" rel="noopener noreferrer" class="profile-card-link" aria-label="YouTube-канал Neon Shadow">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-neon-shadow.webp" alt="Аватар Neon Shadow" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-neon-shadow.webp" alt="Аватар Neon Shadow" class="avatar" width="80" height="80" loading="lazy" data-fallback="images/default-avatar.webp">
                                 </div>
                                 <span class="profile-name">Neon Shadow</span>
                             </div>
@@ -243,7 +243,7 @@
                         <a href="https://www.youtube.com/@Gc567" target="_blank" rel="noopener noreferrer" class="profile-card-link" aria-label="YouTube-канал Golden Creeper">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-golden-creeper.webp" alt="Аватар Golden Creeper" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-golden-creeper.webp" alt="Аватар Golden Creeper" class="avatar" width="80" height="80" loading="lazy" data-fallback="images/default-avatar.webp">
                                 </div>
                                 <span class="profile-name">Golden Creeper</span>
                             </div>
@@ -251,7 +251,7 @@
                         <a href="https://www.youtube.com/@werewolf-play" target="_blank" rel="noopener noreferrer" class="profile-card-link" aria-label="YouTube-канал Оборотень">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-werewolf.webp" alt="Аватар Оборотень" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-werewolf.webp" alt="Аватар Оборотень" class="avatar" width="80" height="80" loading="lazy" data-fallback="images/default-avatar.webp">
                                 </div>
                                 <span class="profile-name">Оборотень</span>
                             </div>
@@ -259,7 +259,7 @@
                         <a href="https://www.youtube.com/@mitmiplayyt" target="_blank" rel="noopener noreferrer" class="profile-card-link" aria-label="YouTube-канал Mitmi">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-mitmi.webp" alt="Аватар Mitmi" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-mitmi.webp" alt="Аватар Mitmi" class="avatar" width="80" height="80" loading="lazy" data-fallback="images/default-avatar.webp">
                                 </div>
                                 <span class="profile-name">Mitmi</span>
                             </div>
@@ -267,7 +267,7 @@
                         <a href="https://www.youtube.com/@stasyimpro6287" target="_blank" rel="noopener noreferrer" class="profile-card-link" aria-label="YouTube-канал Stasy">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-stasy.webp" alt="Аватар Stasy" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-stasy.webp" alt="Аватар Stasy" class="avatar" width="80" height="80" loading="lazy" data-fallback="images/default-avatar.webp">
                                 </div>
                                 <span class="profile-name">Stasy</span>
                             </div>
@@ -275,7 +275,7 @@
                         <a href="https://www.youtube.com/@ggelita5951" target="_blank" rel="noopener noreferrer" class="profile-card-link" aria-label="YouTube-канал GGelita">
                             <div class="profile-card tilt-card">
                                 <div class="avatar-wrapper">
-                                    <img src="images/avatar-ggelita.webp" alt="Аватар GGelita" class="avatar" width="80" height="80" loading="lazy" onerror="this.src='images/default-avatar.webp'">
+                                    <img src="images/avatar-ggelita.webp" alt="Аватар GGelita" class="avatar" width="80" height="80" loading="lazy" data-fallback="images/default-avatar.webp">
                                 </div>
                                 <span class="profile-name">GGelita</span>
                             </div>

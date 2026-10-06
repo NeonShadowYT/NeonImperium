@@ -5,6 +5,8 @@
 //   — Хранение токена: TokenStore (sessionStorage + IndexedDB AES-GCM).
 //   — refreshProfileMenu: async, использует TokenStore.load().
 //   — UI-тексты: через window.DomUtils.setElementText.
+//   — При 401 от GitHub API (событие 'github-api-unauthorized')
+//     автоматически разлогинивает пользователя.
 
 (function() {
     'use strict';
@@ -76,6 +78,42 @@
     }
 
     // ============================================================
+    // 401 — централизованный разлогин
+    // ============================================================
+
+    let unauthorizedHandled = false;
+
+    function handleApiUnauthorized() {
+        // Защита от множественных вызовов (например, при параллельных запросах).
+        if (unauthorizedHandled) return;
+        if (!currentUserLogin) return; // пользователь и так не залогинен
+
+        unauthorizedHandled = true;
+        setTimeout(() => { unauthorizedHandled = false; }, 3000);
+
+        if (window.TokenStore && typeof window.TokenStore.clear === 'function') {
+            window.TokenStore.clear().catch(() => {});
+        }
+        try {
+            localStorage.removeItem(REMEMBER_ME_KEY);
+            sessionStorage.removeItem(USER_CACHE_KEY);
+            sessionStorage.removeItem(SCOPES_CACHE_KEY);
+        } catch { /* noop */ }
+
+        if (typeof cacheRemoveByPrefix === 'function') {
+            cacheRemoveByPrefix('gh_api_');
+        }
+
+        currentUserLogin = null;
+        currentScopes = [];
+        updateClientToken(null);
+        renderLoggedOutUI();
+
+        window.dispatchEvent(new CustomEvent('github-logout'));
+        showToast(getT()('sessionExpired') || 'Сессия истекла. Войдите снова.', 'warning', 6000);
+    }
+
+    // ============================================================
     // Инициализация
     // ============================================================
 
@@ -108,6 +146,7 @@
         window.addEventListener('github-login-requested', openLoginModal);
         window.addEventListener('languageChanged', onLanguageChanged);
         window.addEventListener('languageLoaded', onLanguageChanged);
+        window.addEventListener('github-api-unauthorized', handleApiUnauthorized);
 
         window.dispatchEvent(new CustomEvent('github-auth-ready'));
     }
@@ -487,7 +526,7 @@
         const avatarUrl = user.avatar_url || 'images/starve-neon-icon.webp';
 
         profileContainer.innerHTML = `
-            <img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(user.login)}" class="nav-profile-avatar" onerror="this.src='images/starve-neon-icon.webp'" width="32" height="32">
+            <img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(user.login)}" class="nav-profile-avatar" data-fallback="images/starve-neon-icon.webp" width="32" height="32">
             <span class="nav-profile-login">${escapeHtml(user.login)}</span>
             <i class="fas fa-chevron-right nav-profile-chevron"></i>
             <div class="profile-dropdown">
@@ -640,10 +679,6 @@
         window.Utils.loadModule('js/features/ui-feedback.js').catch(() => {});
     }
 
-    /**
-     * Обновляет UI профиля после смены языка.
-     * Использует TokenStore.load() для получения токена (может быть в IndexedDB).
-     */
     async function refreshProfileMenu() {
         let token = null;
         try {
@@ -672,10 +707,6 @@
     window.GithubAuth = {
         getCurrentUser: () => currentUserLogin,
 
-        /**
-         * Возвращает активный токен.
-         * @returns {Promise<string|null>}
-         */
         getToken: async () => {
             try {
                 const s = sessionStorage.getItem('github_token');
@@ -693,7 +724,8 @@
         getScopes: () => currentScopes.slice(),
         hasScope: scope => currentScopes.includes(scope),
         isAdmin: () => isAdminUser(currentUserLogin),
-        updateToken: updateClientToken
+        updateToken: updateClientToken,
+        handleApiUnauthorized
     };
 
     if (document.readyState === 'loading') {
