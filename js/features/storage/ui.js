@@ -23,7 +23,7 @@
     }
 
     // ============================================================
-    // Стили — инжектятся один раз при загрузке модуля
+    // Стили
     // ============================================================
 
     function injectStorageStyles() {
@@ -31,7 +31,6 @@
         const style = document.createElement('style');
         style.id = 'storage-styles';
         style.textContent = `
-            /* ===== Контейнер модалки ===== */
             .storage-modal-container { display: flex; flex-direction: column; gap: 20px; }
             .storage-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
             .storage-controls { display: flex; gap: 15px; flex-wrap: wrap; }
@@ -40,14 +39,12 @@
             .sort-btn.active, .cat-btn.active { background: var(--accent); color: #fff; }
             .storage-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-            /* ===== Кнопки ===== */
             .storage-btn { background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-secondary); padding: 8px 16px; border-radius: 40px; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; font-family: 'Russo One', sans-serif; text-decoration: none; line-height: 1.4; white-space: nowrap; }
             .storage-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); border-color: var(--accent); color: var(--text-primary); }
             .storage-btn:disabled { opacity: 0.6; cursor: not-allowed; }
             .storage-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
             .storage-btn.primary:hover:not(:disabled) { background: var(--accent-light); border-color: var(--accent-light); color: #fff; }
 
-            /* ===== Сетка закладок ===== */
             .bookmarks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
             .storage-add-form { background: var(--bg-inner-gradient); padding: 16px; border-radius: 20px; border: 1px solid var(--border); }
             .storage-search { padding: 6px 14px; border-radius: 40px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); font-family: var(--font-family); font-size: 14px; width: 160px; }
@@ -55,7 +52,6 @@
             .storage-url-input { flex: 1; padding: 8px 16px; border-radius: 40px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); font-family: var(--font-family); font-size: 14px; min-width: 150px; }
             .storage-url-input:focus { border-color: var(--accent); outline: none; }
 
-            /* ===== Карточка закладки ===== */
             .bookmark-card-wrapper { position: relative; transition: transform 0.2s; height: 100%; }
             .bookmark-card-wrapper:hover { transform: translateY(-4px); }
             .bookmark-delete-btn { opacity: 0; transition: opacity 0.2s; position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; width: 28px; height: 28px; color: #f44336; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; z-index: 5; }
@@ -72,14 +68,12 @@
             .bookmark-content .button.small:hover { background: var(--accent-light); transform: translateY(-2px); }
             #modal-status-mini { font-size: 12px; color: var(--text-secondary); margin-left: 16px; opacity: 0.7; font-weight: normal; }
 
-            /* ===== Футер с Gist ID ===== */
             .storage-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--glass-border); font-size: 12px; color: var(--text-secondary); }
             .storage-gist-info { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
             .storage-gist-info code { background: var(--bg-primary); padding: 3px 8px; border-radius: 6px; font-family: monospace; font-size: 11px; color: var(--accent); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text; user-select: all; }
             .storage-icon-btn { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px 6px; border-radius: 6px; transition: 0.2s; font-size: 12px; }
             .storage-icon-btn:hover { background: var(--accent); color: white; }
 
-            /* ===== Recovery-модалка ===== */
             .storage-recovery { display: flex; flex-direction: column; gap: 16px; }
             .storage-recovery-intro { font-size: 14px; color: var(--text-secondary); background: rgba(61,158,179,0.08); border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 8px; margin: 0; }
             .storage-recovery-intro i { color: var(--accent); margin-right: 6px; }
@@ -102,7 +96,6 @@
             .storage-recovery-url-example { background: var(--bg-primary); padding: 6px 12px; border-radius: 6px; margin: 6px 0; font-family: monospace; font-size: 12px; color: var(--text-secondary); }
             .storage-recovery-url-example strong { color: var(--accent); }
 
-            /* ===== Скролл recovery-модалки ===== */
             .modal-fullscreen .modal-content-full.storage-recovery-modal-content { max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; }
             .modal-fullscreen .modal-content-full.storage-recovery-modal-content .modal-body { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; }
             .modal-fullscreen .modal-content-full.storage-recovery-modal-content .modal-header h2 { font-size: 20px; }
@@ -113,7 +106,7 @@
     injectStorageStyles();
 
     // ============================================================
-    // Остальной код UI (статус, превью, карточки)
+    // Статус
     // ============================================================
 
     let statusElement = null;
@@ -132,6 +125,10 @@
         if (title.length <= maxLength) return title;
         return title.slice(0, maxLength) + '…';
     }
+
+    // ============================================================
+    // Превью / ссылки
+    // ============================================================
 
     async function ensureDownloadUrl(bm) {
         await ensureModules();
@@ -176,7 +173,7 @@
         if (!embedUrl) {
             const match = bm.url?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
             if (match) {
-                embedUrl = `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(location.origin)}`;
+                embedUrl = 'https://www.youtube-nocookie.com/embed/' + match[1] + '?rel=0&modestbranding=1&playsinline=1&origin=' + encodeURIComponent(location.origin);
             }
         }
         if (!embedUrl) { showToast('Не удалось определить ссылку для плеера', 'error'); return; }
@@ -194,6 +191,10 @@
         const overlay = mediaContainer.querySelector('.play-overlay');
         if (overlay) overlay.remove();
     }
+
+    // ============================================================
+    // Карточка закладки
+    // ============================================================
 
     function createBookmarkCardElement(bm, modal) {
         const t = (key) => window.I18n?.translate(key) || key;
@@ -250,7 +251,7 @@
             const icon = document.createElement('div');
             icon.className = 'bookmark-icon';
             const icons = { post: 'fa-newspaper', video: 'fa-video', save: 'fa-save', link: 'fa-link' };
-            icon.innerHTML = `<i class="fas ${icons[bm.type] || 'fa-link'}"></i>`;
+            icon.innerHTML = '<i class="fas ' + (icons[bm.type] || 'fa-link') + '"></i>';
             media.appendChild(icon);
         }
         card.appendChild(media);
@@ -265,7 +266,7 @@
 
         const meta = document.createElement('div');
         meta.style.cssText = 'font-size:12px;color:var(--text-secondary)';
-        meta.textContent = `${bm.type.charAt(0).toUpperCase()+bm.type.slice(1)} · ${formatDate(bm.added)}`;
+        meta.textContent = bm.type.charAt(0).toUpperCase() + bm.type.slice(1) + ' · ' + formatDate(bm.added);
         content.appendChild(meta);
 
         const downloadContainer = document.createElement('div');
@@ -323,7 +324,7 @@
                 try {
                     const binary = atob(bm.saveData.content);
                     const bytes = new Uint8Array(binary.length);
-                    for (let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
                     const blob = new Blob([bytes], { type: 'text/plain' });
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(blob); a.download = bm.saveData.fileName || 'save.dat'; a.click();
@@ -348,7 +349,7 @@
                     try {
                         const binary = atob(bm.saveData.content);
                         const bytes = new Uint8Array(binary.length);
-                        for (let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
                         const blob = new Blob([bytes], { type: 'text/plain' });
                         const a = document.createElement('a');
                         a.href = URL.createObjectURL(blob); a.download = bm.saveData.fileName || 'save.dat'; a.click();
@@ -382,7 +383,7 @@
     function addBookmarkCard(bm, modal) {
         const grid = modal?.querySelector('#bookmarks-grid');
         if (!grid) return;
-        const existing = grid.querySelector(`.bookmark-card-wrapper[data-id="${bm.id}"]`);
+        const existing = grid.querySelector('.bookmark-card-wrapper[data-id="' + bm.id + '"]');
         if (existing) existing.remove();
         const wrapper = createBookmarkCardElement(bm, modal);
         grid.prepend(wrapper);
@@ -392,7 +393,7 @@
     function removeBookmarkCard(id, modal) {
         const grid = modal?.querySelector('#bookmarks-grid');
         if (!grid) return;
-        const el = grid.querySelector(`.bookmark-card-wrapper[data-id="${id}"]`);
+        const el = grid.querySelector('.bookmark-card-wrapper[data-id="' + id + '"]');
         if (el) el.remove();
         bookmarkElements.delete(id);
     }
@@ -412,13 +413,13 @@
 
         if (category !== 'all') filtered = filtered.filter(b => b.type === category);
         if (searchQuery) filtered = filtered.filter(b => b.title.toLowerCase().includes(searchQuery));
-        if (sortOrder === 'new') filtered.sort((a,b) => new Date(b.added) - new Date(a.added));
-        else filtered.sort((a,b) => new Date(a.added) - new Date(b.added));
+        if (sortOrder === 'new') filtered.sort((a, b) => new Date(b.added) - new Date(a.added));
+        else filtered.sort((a, b) => new Date(a.added) - new Date(b.added));
 
         grid.innerHTML = '';
         bookmarkElements.clear();
         if (!filtered.length) {
-            grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>${t('noBookmarks')}</p></div>`;
+            grid.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>' + t('noBookmarks') + '</p></div>';
             return;
         }
         const fragment = document.createDocumentFragment();
@@ -435,7 +436,7 @@
                 for (const bm of videoWithoutPreview) {
                     const updated = await ensurePreview(bm);
                     if (updated && updated.thumbnail) {
-                        const wrapper = grid.querySelector(`.bookmark-card-wrapper[data-id="${bm.id}"]`);
+                        const wrapper = grid.querySelector('.bookmark-card-wrapper[data-id="' + bm.id + '"]');
                         if (wrapper) {
                             const newWrapper = createBookmarkCardElement(updated, modal);
                             wrapper.replaceWith(newWrapper);
@@ -473,13 +474,13 @@
     function arrayBufferToBase64(buffer) {
         const bytes = new Uint8Array(buffer);
         let binary = '';
-        for (let i=0; i<bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
         return btoa(binary);
     }
 
     async function hashBuffer(buffer) {
         const hash = await crypto.subtle.digest('SHA-256', buffer);
-        return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+        return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
     function addBatchActions(modal) {
@@ -496,7 +497,7 @@
             refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
             try {
                 const result = await batchUpdateVideoLinks();
-                showToast(`Обновлено: ${result.updated}, ошибок: ${result.failed}`, result.failed > 0 ? 'warning' : 'success');
+                showToast('Обновлено: ' + result.updated + ', ошибок: ' + result.failed, result.failed > 0 ? 'warning' : 'success');
                 renderBookmarks(modal);
             } catch (e) {
                 showToast('Ошибка: ' + e.message, 'error');
@@ -534,6 +535,7 @@
     function showRecoveryModal(onSuccess) {
         const t = (key) => window.I18n?.translate(key) || key;
 
+        // Избегаем бэктиков внутри template literal — используем <code>gist</code>.
         const html = `
             <div class="storage-recovery">
                 <p class="storage-recovery-intro">
@@ -543,7 +545,7 @@
 
                 <div class="storage-recovery-warn">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <strong>Требуется classic-токен (ghp_...) со scope `gist`.</strong>
+                    <strong>Требуется classic-токен (ghp_...) со scope <code>gist</code>.</strong>
                     Fine-grained токены НЕ поддерживают Gist API.
                     Проверьте: <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer">github.com/settings/tokens</a>
                     → тип <strong>Tokens (classic)</strong> → галочка <code>gist</code>.<br>
@@ -625,7 +627,7 @@
                         let msg = '';
                         if (result.reason === 'not_logged_in') msg = 'Вы не вошли в GitHub';
                         else if (result.reason === 'unauthorized') msg = 'Токен невалиден или просрочен';
-                        else if (result.reason === 'no_gist_scope') msg = 'У токена НЕТ scope `gist`. Scopes: ' + (result.scopes.join(', ') || 'нет');
+                        else if (result.reason === 'no_gist_scope') msg = 'У токена НЕТ scope gist. Scopes: ' + (result.scopes.join(', ') || 'нет');
                         else if (result.reason === 'network_error') msg = 'Ошибка сети';
                         else msg = 'HTTP ' + result.reason;
                         tokenResultEl.innerHTML = '<i class="fas fa-times-circle" style="color:#f44336;"></i> ' + msg;
@@ -660,7 +662,7 @@
         createBtn.addEventListener('click', async () => {
             const ok = await window.Dialog.showConfirm({
                 title: 'Создать новое хранилище?',
-                message: 'Создастся новый приватный Gist. Старые закладки останутся в старом Gist, но не будут видны здесь.\n\nТребуется classic-токен со scope `gist`.',
+                message: 'Создастся новый приватный Gist. Старые закладки останутся в старом Gist, но не будут видны здесь.\n\nТребуется classic-токен со scope gist.',
                 confirmText: 'Создать',
                 cancelText: 'Отмена'
             });
@@ -698,7 +700,7 @@
         const user = getCurrentUser();
         if (!user) { showToast(t('loginToGitHub'), 'error'); return; }
         if (!hasScope('gist')) {
-            showToast('Нужен scope `gist`. Создайте classic-токен.', 'error', 8000);
+            showToast('Нужен scope gist. Создайте classic-токен.', 'error', 8000);
             return;
         }
 
@@ -847,7 +849,9 @@
         toggleAddBtn.addEventListener('click', () => {
             formVisible = !formVisible;
             addForm.style.display = formVisible ? 'block' : 'none';
-            toggleAddBtn.innerHTML = formVisible ? `<i class="fas fa-times"></i> ${t('cancelButton')}` : `<i class="fas fa-plus"></i> ${t('addButton')}`;
+            toggleAddBtn.innerHTML = formVisible
+                ? '<i class="fas fa-times"></i> ' + t('cancelButton')
+                : '<i class="fas fa-plus"></i> ' + t('addButton');
         });
 
         const urlInput = modal.querySelector('#new-url');
@@ -921,7 +925,7 @@
                 const blob = new Blob([JSON.stringify(encrypted)], { type: 'application/json' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = `neon-bookmarks-${new Date().toISOString().slice(0,10)}.neonbk`;
+                a.download = 'neon-bookmarks-' + new Date().toISOString().slice(0, 10) + '.neonbk';
                 a.click();
                 URL.revokeObjectURL(a.href);
                 showToast('Экспорт выполнен', 'success');
@@ -947,7 +951,7 @@
                         });
                         if (!password) return;
                         const added = await _StorageManager.importBookmarksData(encrypted, password);
-                        showToast(`Импортировано ${added} закладок`, 'success');
+                        showToast('Импортировано ' + added + ' закладок', 'success');
                         renderBookmarks(modal);
                     } catch (err) {
                         showToast('Ошибка импорта: ' + err.message, 'error');
@@ -985,7 +989,7 @@
         updateBookmarkCard: (id, updatedBm) => {
             const modal = window._StorageUI.currentModal;
             if (!modal) return;
-            const wrapper = modal.querySelector(`.bookmark-card-wrapper[data-id="${id}"]`);
+            const wrapper = modal.querySelector('.bookmark-card-wrapper[data-id="' + id + '"]');
             if (wrapper) {
                 const newWrapper = createBookmarkCardElement(updatedBm, modal);
                 wrapper.replaceWith(newWrapper);
