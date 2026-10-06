@@ -1,5 +1,10 @@
 // js/features/storage/ui.js
 // UI хранилища. Все диалоги ввода/подтверждения — через window.Dialog.
+//
+// АРХИТЕКТУРА СТИЛЕЙ:
+//   Все storage-стили инжектятся один раз при инициализации модуля
+//   (injectStorageStyles). Это гарантирует, что recovery-модалка
+//   (которая может открыться до основной) имеет все нужные стили.
 
 (function() {
     'use strict';
@@ -22,6 +27,470 @@
         }
     }
 
+    // ============================================================
+    // Стили — инжектятся один раз при инициализации модуля
+    // ============================================================
+
+    function injectStorageStyles() {
+        if (document.getElementById('storage-styles')) return;
+        const style = document.createElement('style');
+        style.id = 'storage-styles';
+        style.textContent = `
+            /* ===== Контейнер модалки хранилища ===== */
+            .storage-modal-container {
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+            .storage-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 15px;
+            }
+            .storage-controls {
+                display: flex;
+                gap: 15px;
+                flex-wrap: wrap;
+            }
+            .storage-sort,
+            .storage-categories {
+                display: flex;
+                background: var(--bg-primary);
+                border-radius: 40px;
+                padding: 4px;
+                border: 1px solid var(--border);
+            }
+            .sort-btn,
+            .cat-btn {
+                background: 0;
+                border: 0;
+                color: var(--text-secondary);
+                padding: 8px 16px;
+                border-radius: 40px;
+                font-size: 14px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                transition: 0.2s;
+                font-family: 'Russo One', sans-serif;
+            }
+            .sort-btn.active,
+            .cat-btn.active {
+                background: var(--accent);
+                color: #fff;
+            }
+            .storage-actions {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                flex-wrap: wrap;
+            }
+
+            /* ===== Кнопки хранилища ===== */
+            .storage-btn {
+                background: var(--bg-primary);
+                border: 1px solid var(--border);
+                color: var(--text-secondary);
+                padding: 8px 16px;
+                border-radius: 40px;
+                font-size: 14px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                transition: 0.2s;
+                font-family: 'Russo One', sans-serif;
+                text-decoration: none;
+                line-height: 1.4;
+                white-space: nowrap;
+            }
+            .storage-btn:hover:not(:disabled) {
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                border-color: var(--accent);
+                color: var(--text-primary);
+            }
+            .storage-btn:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+            .storage-btn.primary {
+                background: var(--accent);
+                color: #fff;
+                border-color: var(--accent);
+            }
+            .storage-btn.primary:hover:not(:disabled) {
+                background: var(--accent-light);
+                border-color: var(--accent-light);
+                color: #fff;
+            }
+
+            /* ===== Сетка закладок ===== */
+            .bookmarks-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 20px;
+            }
+            .storage-add-form {
+                background: var(--bg-inner-gradient);
+                padding: 16px;
+                border-radius: 20px;
+                border: 1px solid var(--border);
+            }
+            .storage-search {
+                padding: 6px 14px;
+                border-radius: 40px;
+                background: var(--bg-primary);
+                border: 1px solid var(--border);
+                color: var(--text-primary);
+                font-family: var(--font-family);
+                font-size: 14px;
+                width: 160px;
+            }
+            .storage-search:focus {
+                border-color: var(--accent);
+                outline: none;
+            }
+            .storage-url-input {
+                flex: 1;
+                padding: 8px 16px;
+                border-radius: 40px;
+                background: var(--bg-primary);
+                border: 1px solid var(--border);
+                color: var(--text-primary);
+                font-family: var(--font-family);
+                font-size: 14px;
+                min-width: 150px;
+            }
+            .storage-url-input:focus {
+                border-color: var(--accent);
+                outline: none;
+            }
+
+            /* ===== Карточка закладки ===== */
+            .bookmark-card-wrapper {
+                position: relative;
+                transition: transform 0.2s;
+                height: 100%;
+            }
+            .bookmark-card-wrapper:hover {
+                transform: translateY(-4px);
+            }
+            .bookmark-delete-btn {
+                opacity: 0;
+                transition: opacity 0.2s;
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                background: rgba(0,0,0,0.6);
+                border: none;
+                border-radius: 50%;
+                width: 28px;
+                height: 28px;
+                color: #f44336;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14px;
+                z-index: 5;
+            }
+            .bookmark-card-wrapper:hover .bookmark-delete-btn {
+                opacity: 1;
+            }
+            .bookmark-card {
+                background: var(--bg-inner-gradient);
+                border-radius: 20px;
+                border: 1px solid var(--border);
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+            }
+            .bookmark-media {
+                position: relative;
+                padding-bottom: 56.25%;
+                background: var(--bg-primary);
+                border-bottom: 1px solid var(--border);
+                flex-shrink: 0;
+                overflow: hidden;
+            }
+            .bookmark-media img {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            .bookmark-media iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+                border-radius: 12px 12px 0 0;
+            }
+            .play-overlay {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0,0,0,0.3);
+                border-radius: 50%;
+                width: 60px;
+                height: 60px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 30px;
+                pointer-events: none;
+                transition: background 0.3s;
+            }
+            .bookmark-icon {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 48px;
+                padding: 20px 0;
+                background: var(--bg-primary);
+                border-bottom: 1px solid var(--border);
+                height: 100%;
+            }
+            .bookmark-content {
+                padding: 12px;
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+            }
+            .bookmark-content h4 {
+                margin: 0 0 4px;
+                font-size: 16px;
+                color: var(--text-primary);
+                word-break: break-word;
+            }
+            .bookmark-content .button.small {
+                padding: 4px 12px;
+                font-size: 12px;
+                background: var(--accent);
+                color: #fff;
+                border: none;
+                border-radius: 30px;
+                cursor: pointer;
+                font-family: var(--font-family);
+                transition: 0.2s;
+            }
+            .bookmark-content .button.small:hover {
+                background: var(--accent-light);
+                transform: translateY(-2px);
+            }
+            #modal-status-mini {
+                font-size: 12px;
+                color: var(--text-secondary);
+                margin-left: 16px;
+                opacity: 0.7;
+                font-weight: normal;
+            }
+
+            /* ===== Футер хранилища с Gist ID ===== */
+            .storage-footer {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-top: 16px;
+                padding-top: 12px;
+                border-top: 1px solid var(--glass-border);
+                font-size: 12px;
+                color: var(--text-secondary);
+            }
+            .storage-gist-info {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-wrap: wrap;
+            }
+            .storage-gist-info code {
+                background: var(--bg-primary);
+                padding: 3px 8px;
+                border-radius: 6px;
+                font-family: monospace;
+                font-size: 11px;
+                color: var(--accent);
+                max-width: 160px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                cursor: text;
+                user-select: all;
+            }
+            .storage-icon-btn {
+                background: transparent;
+                border: none;
+                color: var(--text-secondary);
+                cursor: pointer;
+                padding: 4px 6px;
+                border-radius: 6px;
+                transition: 0.2s;
+                font-size: 12px;
+            }
+            .storage-icon-btn:hover {
+                background: var(--accent);
+                color: white;
+            }
+
+            /* ===== Recovery-модалка ===== */
+            .storage-recovery {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            }
+            .storage-recovery-intro {
+                font-size: 14px;
+                color: var(--text-secondary);
+                background: rgba(61,158,179,0.08);
+                border-left: 3px solid var(--accent);
+                padding: 10px 14px;
+                border-radius: 8px;
+                margin: 0;
+            }
+            .storage-recovery-intro i {
+                color: var(--accent);
+                margin-right: 6px;
+            }
+            .storage-recovery-block {
+                background: var(--glass-bg);
+                border: 1px solid var(--glass-border);
+                border-radius: 16px;
+                padding: 16px;
+            }
+            .storage-recovery-block h4 {
+                margin: 0 0 8px;
+                font-size: 16px;
+                color: var(--accent);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .storage-recovery-block p {
+                margin: 0 0 12px;
+                font-size: 13px;
+            }
+            .storage-recovery-input {
+                display: flex;
+                gap: 8px;
+                align-items: stretch;
+                flex-wrap: wrap;
+            }
+            .storage-recovery-input input {
+                flex: 1;
+                padding: 10px 16px;
+                background: var(--bg-primary);
+                border: 1px solid var(--border);
+                border-radius: 40px;
+                color: var(--text-primary);
+                font-family: var(--font-family);
+                font-size: 14px;
+                min-width: 140px;
+            }
+            .storage-recovery-input input:focus {
+                border-color: var(--accent);
+                outline: none;
+                box-shadow: 0 0 0 3px rgba(61,158,179,0.15);
+            }
+            .storage-recovery-error {
+                margin-top: 10px;
+                padding: 8px 12px;
+                background: rgba(244,67,54,0.1);
+                border-left: 3px solid #f44336;
+                border-radius: 6px;
+                color: #f44336;
+                font-size: 13px;
+            }
+            .storage-recovery-help {
+                font-size: 13px;
+                color: var(--text-secondary);
+                background: var(--bg-inner-gradient);
+                border-radius: 12px;
+                padding: 4px 12px;
+            }
+            .storage-recovery-help summary {
+                cursor: pointer;
+                padding: 8px 0;
+                color: var(--accent);
+                font-weight: bold;
+                list-style: none;
+            }
+            .storage-recovery-help summary::-webkit-details-marker {
+                display: none;
+            }
+            .storage-recovery-help summary::before {
+                content: '▸ ';
+                display: inline-block;
+                transition: transform 0.2s;
+            }
+            .storage-recovery-help[open] summary::before {
+                transform: rotate(90deg);
+            }
+            .storage-recovery-help ol {
+                margin: 0 0 12px 0;
+                padding-left: 24px;
+                line-height: 1.8;
+            }
+            .storage-recovery-help code {
+                background: rgba(0,0,0,0.3);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-family: monospace;
+                font-size: 12px;
+            }
+            .storage-recovery-url-example {
+                background: var(--bg-primary);
+                padding: 6px 12px;
+                border-radius: 6px;
+                margin: 6px 0;
+                font-family: monospace;
+                font-size: 12px;
+                color: var(--text-secondary);
+            }
+            .storage-recovery-url-example strong {
+                color: var(--accent);
+            }
+
+            /* ===== Модалка восстановления: max-width + скролл ===== */
+            .modal-fullscreen .modal-content-full.storage-recovery-modal-content {
+                max-width: 640px;
+                max-height: 90vh;
+                display: flex;
+                flex-direction: column;
+            }
+            .modal-fullscreen .modal-content-full.storage-recovery-modal-content .modal-body {
+                flex: 1;
+                min-height: 0;
+                overflow-y: auto;
+                padding: 24px;
+            }
+            .modal-fullscreen .modal-content-full.storage-recovery-modal-content .modal-header h2 {
+                font-size: 20px;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Инжектим стили сразу при загрузке модуля
+    injectStorageStyles();
+
+    // ============================================================
+    // Статус
+    // ============================================================
+
     let statusElement = null;
     const bookmarkElements = new Map();
 
@@ -38,6 +507,10 @@
         if (title.length <= maxLength) return title;
         return title.slice(0, maxLength) + '…';
     }
+
+    // ============================================================
+    // Превью / ссылки
+    // ============================================================
 
     async function ensureDownloadUrl(bm) {
         await ensureModules();
@@ -103,6 +576,10 @@
         if (overlay) overlay.remove();
     }
 
+    // ============================================================
+    // Карточка закладки
+    // ============================================================
+
     function createBookmarkCardElement(bm, modal) {
         const t = (key) => window.I18n?.translate(key) || key;
         const wrapper = document.createElement('div');
@@ -131,7 +608,7 @@
                 const overlay = document.createElement('div');
                 overlay.className = 'play-overlay';
                 overlay.innerHTML = '<i class="fas fa-play" style="font-size:30px;color:#fff;"></i>';
-                overlay.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);pointer-events:none;transition:background 0.3s;border-radius:12px;`;
+                overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);pointer-events:none;transition:background 0.3s;border-radius:12px;';
                 media.appendChild(overlay);
                 card.addEventListener('mouseenter', () => { overlay.style.background = 'rgba(0,0,0,0.5)'; });
                 card.addEventListener('mouseleave', () => { overlay.style.background = 'rgba(0,0,0,0.3)'; });
@@ -460,7 +937,7 @@
     }
 
     // ============================================================
-    // Модалка восстановления хранилища
+    // Модалка восстановления
     // ============================================================
 
     function showRecoveryModal(onSuccess) {
@@ -509,9 +986,16 @@
             </div>
         `;
 
-        injectRecoveryStyles();
+        // size: 'full' — создаёт .modal-fullscreen + .modal-content-full
+        const { modal, closeModal } = createModal(
+            'Восстановление хранилища',
+            html,
+            { size: 'full' }
+        );
 
-        const { modal, closeModal } = createModal('Восстановление хранилища', html, { size: 'default' });
+        // Добавляем класс, который ограничивает max-width и организует скролл
+        const modalContent = modal.querySelector('.modal-content-full');
+        if (modalContent) modalContent.classList.add('storage-recovery-modal-content');
 
         const input = modal.querySelector('#recovery-gist-input');
         const loadBtn = modal.querySelector('#recovery-load-btn');
@@ -574,165 +1058,6 @@
         });
 
         setTimeout(() => input.focus(), 100);
-    }
-
-    function injectRecoveryStyles() {
-        if (document.getElementById('storage-recovery-styles')) return;
-        const style = document.createElement('style');
-        style.id = 'storage-recovery-styles';
-        style.textContent = `
-            .storage-recovery { display: flex; flex-direction: column; gap: 16px; }
-            .storage-recovery-intro {
-                font-size: 14px;
-                color: var(--text-secondary);
-                background: rgba(61,158,179,0.08);
-                border-left: 3px solid var(--accent);
-                padding: 10px 14px;
-                border-radius: 8px;
-                margin: 0;
-            }
-            .storage-recovery-intro i { color: var(--accent); margin-right: 6px; }
-            .storage-recovery-block {
-                background: var(--glass-bg);
-                border: 1px solid var(--glass-border);
-                border-radius: 16px;
-                padding: 16px;
-            }
-            .storage-recovery-block h4 {
-                margin: 0 0 8px;
-                font-size: 16px;
-                color: var(--accent);
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            .storage-recovery-block p { margin: 0 0 12px; font-size: 13px; }
-            .storage-recovery-input {
-                display: flex;
-                gap: 8px;
-                align-items: stretch;
-            }
-            .storage-recovery-input input {
-                flex: 1;
-                padding: 10px 16px;
-                background: var(--bg-primary);
-                border: 1px solid var(--border);
-                border-radius: 40px;
-                color: var(--text-primary);
-                font-family: var(--font-family);
-                font-size: 14px;
-                min-width: 0;
-            }
-            .storage-recovery-input input:focus {
-                border-color: var(--accent);
-                outline: none;
-                box-shadow: 0 0 0 3px rgba(61,158,179,0.15);
-            }
-            .storage-recovery-input .storage-btn {
-                flex-shrink: 0;
-            }
-            .storage-recovery-error {
-                margin-top: 10px;
-                padding: 8px 12px;
-                background: rgba(244,67,54,0.1);
-                border-left: 3px solid #f44336;
-                border-radius: 6px;
-                color: #f44336;
-                font-size: 13px;
-            }
-            .storage-recovery-help {
-                font-size: 13px;
-                color: var(--text-secondary);
-                background: var(--bg-inner-gradient);
-                border-radius: 12px;
-                padding: 4px 12px;
-            }
-            .storage-recovery-help summary {
-                cursor: pointer;
-                padding: 8px 0;
-                color: var(--accent);
-                font-weight: bold;
-                list-style: none;
-            }
-            .storage-recovery-help summary::-webkit-details-marker { display: none; }
-            .storage-recovery-help summary::before {
-                content: '▸ ';
-                display: inline-block;
-                transition: transform 0.2s;
-            }
-            .storage-recovery-help[open] summary::before { transform: rotate(90deg); }
-            .storage-recovery-help ol {
-                margin: 0 0 12px 0;
-                padding-left: 24px;
-                line-height: 1.8;
-            }
-            .storage-recovery-help code {
-                background: rgba(0,0,0,0.3);
-                padding: 2px 6px;
-                border-radius: 4px;
-                font-family: monospace;
-                font-size: 12px;
-            }
-            .storage-recovery-url-example {
-                background: var(--bg-primary);
-                padding: 6px 12px;
-                border-radius: 6px;
-                margin: 6px 0;
-                font-family: monospace;
-                font-size: 12px;
-                color: var(--text-secondary);
-            }
-            .storage-recovery-url-example strong { color: var(--accent); }
-
-            /* Футер хранилища с gistId */
-            .storage-footer {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 8px;
-                margin-top: 16px;
-                padding-top: 12px;
-                border-top: 1px solid var(--glass-border);
-                font-size: 12px;
-                color: var(--text-secondary);
-            }
-            .storage-gist-info {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                flex-wrap: wrap;
-            }
-            .storage-gist-info code {
-                background: var(--bg-primary);
-                padding: 3px 8px;
-                border-radius: 6px;
-                font-family: monospace;
-                font-size: 11px;
-                color: var(--accent);
-                max-width: 160px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                cursor: text;
-                user-select: all;
-            }
-            .storage-icon-btn {
-                background: transparent;
-                border: none;
-                color: var(--text-secondary);
-                cursor: pointer;
-                padding: 4px 6px;
-                border-radius: 6px;
-                transition: 0.2s;
-                font-size: 12px;
-            }
-            .storage-icon-btn:hover {
-                background: var(--accent);
-                color: white;
-            }
-        `;
-        document.head.appendChild(style);
     }
 
     // ============================================================
@@ -807,13 +1132,13 @@
         `;
 
         const { modal, closeModal } = createModal(t('storageModalTitle'), html, { size: 'full' });
+
         const header = modal.querySelector('.modal-header');
         if (header) {
             const h2 = header.querySelector('h2');
             if (h2) {
                 const statusSpan = document.createElement('span');
                 statusSpan.id = 'modal-status-mini';
-                statusSpan.style.cssText = 'font-size:12px; color:var(--text-secondary); margin-left:16px; opacity:0.7; font-weight:normal;';
                 statusSpan.textContent = 'Готово';
                 statusElement = statusSpan;
                 h2.parentNode.insertBefore(statusSpan, h2.nextSibling);
@@ -826,47 +1151,7 @@
         _StorageManager.setStatusCallback(updateStatus);
         _StorageManager.setRefreshGridCallback(() => renderBookmarks(modal));
 
-        injectRecoveryStyles();
-        if (!document.getElementById('storage-ui-styles')) {
-            const style = document.createElement('style');
-            style.id = 'storage-ui-styles';
-            style.textContent = `
-                .storage-modal-container{display:flex;flex-direction:column;gap:20px}
-                .storage-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px}
-                .storage-controls{display:flex;gap:15px;flex-wrap:wrap}
-                .storage-sort,.storage-categories{display:flex;background:var(--bg-primary);border-radius:40px;padding:4px;border:1px solid var(--border)}
-                .sort-btn,.cat-btn{background:0;border:0;color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
-                .sort-btn.active,.cat-btn.active{background:var(--accent);color:#fff}
-                .storage-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-                .storage-btn{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:8px 16px;border-radius:40px;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:0.2s;font-family:'Russo One',sans-serif}
-                .storage-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-                .storage-btn:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.2)}
-                .bookmarks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
-                .storage-add-form{background:var(--bg-inner-gradient);padding:16px;border-radius:20px;border:1px solid var(--border)}
-                .storage-search{padding:6px 14px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;width:160px}
-                .storage-search:focus{border-color:var(--accent);outline:none}
-                .storage-url-input{flex:1;padding:8px 16px;border-radius:40px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-family:var(--font-family);font-size:14px;min-width:150px}
-                .storage-url-input:focus{border-color:var(--accent);outline:none}
-                .bookmark-card-wrapper{position:relative;transition:transform 0.2s;height:100%}
-                .bookmark-card-wrapper:hover{transform:translateY(-4px)}
-                .bookmark-delete-btn{opacity:0;transition:opacity 0.2s;position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:28px;height:28px;color:#f44336;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;z-index:5}
-                .bookmark-card-wrapper:hover .bookmark-delete-btn{opacity:1}
-                .bookmark-card{background:var(--bg-inner-gradient);border-radius:20px;border:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;height:100%}
-                .bookmark-media{position:relative;padding-bottom:56.25%;background:var(--bg-primary);border-bottom:1px solid var(--border);flex-shrink:0;overflow:hidden}
-                .bookmark-media img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
-                .bookmark-media iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none;border-radius:12px 12px 0 0}
-                .play-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.3);border-radius:50%;width:60px;height:60px;display:flex;align-items:center;justify-content:center;color:white;font-size:30px;pointer-events:none;transition:background 0.3s}
-                .bookmark-icon{display:flex;align-items:center;justify-content:center;font-size:48px;padding:20px 0;background:var(--bg-primary);border-bottom:1px solid var(--border);height:100%}
-                .bookmark-content{padding:12px;flex:1;display:flex;flex-direction:column}
-                .bookmark-content h4{margin:0 0 4px;font-size:16px;color:var(--text-primary);word-break:break-word}
-                .bookmark-content .button.small{padding:4px 12px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:30px;cursor:pointer;font-family:var(--font-family);transition:0.2s}
-                .bookmark-content .button.small:hover{background:var(--accent-light);transform:translateY(-2px)}
-                #modal-status-mini{font-size:12px;color:var(--text-secondary);margin-left:16px;opacity:0.7;font-weight:normal}
-            `;
-            document.head.appendChild(style);
-        }
-
-        // Заполняем Gist ID в футере
+        // ---- Gist ID в футере ----
         const gistIdEl = modal.querySelector('#storage-gist-id');
         const copyGistBtn = modal.querySelector('#storage-copy-gist');
         const recoverGistBtn = modal.querySelector('#storage-recover-gist');
@@ -885,7 +1170,6 @@
                     await navigator.clipboard.writeText(id);
                     showToast('Gist ID скопирован', 'success');
                 } catch {
-                    // Fallback для браузеров без clipboard API
                     const ta = document.createElement('textarea');
                     ta.value = id;
                     document.body.appendChild(ta);
@@ -898,22 +1182,16 @@
         }
 
         if (recoverGistBtn) {
-            recoverGistBtn.addEventListener('click', () => {
-                const ok = window.Dialog.showConfirm({
+            recoverGistBtn.addEventListener('click', async () => {
+                const confirmed = await window.Dialog.showConfirm({
                     title: 'Сменить / восстановить Gist',
                     message: 'Откроется модалка восстановления. Текущее хранилище будет закрыто.',
                     confirmText: 'Продолжить',
                     cancelText: 'Отмена'
                 });
-                ok.then(async (confirmed) => {
-                    if (!confirmed) return;
-                    closeModal();
-                    // Сбрасываем кэш, чтобы UI восстановления мог отработать
-                    if (_StorageManager.resetStorage) {
-                        // Не удаляем Gist, только сбрасываем локальное состояние
-                    }
-                    showRecoveryModal(() => openStorageModal(gameContext));
-                });
+                if (!confirmed) return;
+                closeModal();
+                showRecoveryModal(() => openStorageModal(gameContext));
             });
         }
 
