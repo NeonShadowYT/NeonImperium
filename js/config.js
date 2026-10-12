@@ -16,7 +16,7 @@
     RELEASES_CACHE_TTL: 60 * 60 * 1000, // 1 час — GitHub Releases
 
     // ---- Администраторы (доп. права) ----
-    ALLOWED_AUTHORS: ['NeonShadowYT', 'GoldenCreeper567'],
+    ALLOWED_AUTHORS: ['NeonShadowYT'],
 
     // ---- Background Sync ----
     SYNC_TAG: 'github-queue-sync',

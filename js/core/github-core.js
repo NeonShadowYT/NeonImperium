@@ -155,7 +155,7 @@
         RELEASES_CACHE_TTL: NC.RELEASES_CACHE_TTL || 60 * 60 * 1000,
         ALLOWED_AUTHORS: Array.isArray(NC.ALLOWED_AUTHORS)
             ? Object.freeze(NC.ALLOWED_AUTHORS.slice())
-            : Object.freeze(['NeonShadowYT', 'GoldenCreeper567'])
+            : Object.freeze(['NeonShadowYT'])
     });
 
     // ============================================================

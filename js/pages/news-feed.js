@@ -142,9 +142,7 @@
     async function loadVideos(signal) {
         const YT_CHANNELS = [
             { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
-            { id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' },
-            { id: 'UCQKVSv62dLsK3QnfIke24uQ', name: 'Golden Creeper' },
-            { id: 'UCcuqf3fNtZ2UP5MO89kVKLw', name: 'Mitmi' }
+            { id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' }
         ];
 
         const all = [];
