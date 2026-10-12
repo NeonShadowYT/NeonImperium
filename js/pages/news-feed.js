@@ -141,7 +141,7 @@
 
     async function loadVideos(signal) {
         const YT_CHANNELS = [
-            { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' },
+            { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' }//,
             //{ id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' }
         ];
 
