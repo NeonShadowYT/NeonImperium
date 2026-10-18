@@ -1,6 +1,12 @@
-// js/pages/news-feed.js – единый менеджер новостей с кешированием, скелетоном и отказоустойчивостью.
-// cacheGet/cacheSet теперь асинхронные (шифрование через CacheCrypto).
-// Видео и стримы больше НЕ встраиваются: клик открывает YouTube/Twitch в новой вкладке.
+// js/pages/news-feed.js – единый менеджер новостей с кешированием, скелетоном, отказоустойчивостью
+// и авто-новостями из GitHub Releases (прогрессивная отрисовка).
+// cacheGet/cacheSet асинхронные (шифрование через CacheCrypto).
+//
+// АВТО-НОВОСТИ:
+//   Каждый репозиторий из RELEASE_SOURCES опрашивается независимо.
+//   Как только получен последний релиз — onItem(release) вызывается сразу,
+//   карточка вставляется в первое свободное место сетки (appendItemToGrid),
+//   не дожидаясь остальных источников и не перерисовывая уже показанное.
 (function() {
     const {
         cacheGet, cacheSet, cacheRemoveByPrefix,
@@ -16,15 +22,53 @@
     const SOURCE_TIMEOUT = 10000;
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 1000;
-    const MAX_DISPLAY_ITEMS = 6;
+    const MAX_DISPLAY_ITEMS = 9;
+
+    // Источники авто-новостей (GitHub Releases). Порядок = приоритет вставки при равных датах.
+    const RELEASE_SOURCES = [
+        {
+            owner: 'NeonShadowYT',
+            repo: 'WorldGenerator',
+            name: 'WorldGenerator',
+            icon: 'images/tool-world-generator.webp'
+        },
+        {
+            owner: 'NeonShadowYT',
+            repo: 'IconCreator',
+            name: 'IconCreator',
+            icon: 'images/tool-icon-creator.webp'
+        }
+    ];
 
     let currentItems = [];
     let currentUser = null;
     let isLoading = false;
     let abortController = null;
     let container = null;
+    let _onItemCallback = null;
 
-    const t = (key) => window.I18n?.translate(key) || key;
+    // Динамический переводчик: смотрит на window.I18n в момент вызова.
+    function t(key) {
+        if (window.I18n && typeof window.I18n.translate === 'function') {
+            const v = window.I18n.translate(key);
+            if (v && v !== key) return v;
+        }
+        switch (key) {
+            case 'openRelease': return 'Открыть релиз';
+            case 'newsTitle': return 'Последние новости';
+            case 'newsDesc': return 'Свежие видео и обновления';
+            case 'newsNoItems': return 'Пока нет новостей';
+            case 'newsRetryVideo': return 'Повторить загрузку видео';
+            case 'addNews': return 'Добавить новость';
+            case 'dataLoadError': return 'Ошибка загрузки данных';
+            case 'addToFavorites': return 'В избранное';
+            case 'loadError': return 'Ошибка загрузки';
+            case 'loadModulesError': return 'Ошибка загрузки модулей';
+            case 'stream': return 'Стрим';
+            case 'viewers': return 'зрителей';
+            default: return key;
+        }
+    }
 
     function normalizeItem(item) {
         let date = item.date;
@@ -44,6 +88,8 @@
             game: item.game || null,
             videoData: item.videoData || null,
             twitchData: item.twitchData || null,
+            releaseUrl: item.releaseUrl || null,
+            releaseData: item.releaseData || null
         };
     }
 
@@ -51,8 +97,8 @@
         return items.map(item => normalizeItem(item));
     }
 
-    /** Формирует ссылку «посмотреть» для элемента. */
     function buildWatchUrl(item) {
+        if (item.type === 'release' && item.releaseUrl) return item.releaseUrl;
         if (item.type === 'video') {
             return `https://www.youtube.com/watch?v=${item.id}`;
         }
@@ -65,7 +111,6 @@
         return '#';
     }
 
-    /** Открывает ссылку «посмотреть» в новой вкладке. */
     function openExternal(url) {
         if (!url || url === '#') return;
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -141,8 +186,7 @@
 
     async function loadVideos(signal) {
         const YT_CHANNELS = [
-            { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' }//,
-            //{ id: 'UCxuByf9jKs6ijiJyrMKBzdA', name: 'Оборотень' }
+            { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' }
         ];
 
         const all = [];
@@ -177,7 +221,7 @@
                     all.push(...items);
                 } catch (e) {
                     if (e.name === 'AbortError') break;
-                    console.warn(`[NewsFeed] Ошибка RSS для канала ${ch.name}:`, e);
+                    console.warn(`[NewsFeed] Ошибка RSS для канала ${ch.name}: ${e.message || e}`);
                 }
             }
             clearTimeout(timeoutId);
@@ -224,7 +268,8 @@
                     }));
                 } catch (e) {
                     if (e.name === 'AbortError') break;
-                    console.warn(`[NewsFeed] Ошибка загрузки стрима ${channel}:`, e);
+                    // NetworkError от TwitchInsights — не критично, тихо пропускаем.
+                    console.warn(`[NewsFeed] Стрим ${channel} недоступен`);
                 }
             }
             clearTimeout(timeoutId);
@@ -238,7 +283,70 @@
         }
     }
 
-    async function fetchNewsFeed({ signal, forceRefresh = false, maxAge = CACHE_TTL } = {}) {
+    // ---- Авто-новости из GitHub Releases ----
+    // Прогрессивно: onEach вызывается сразу после получения очередного релиза,
+    // не дожидаясь остальных источников.
+    async function loadReleases(onEach, signal) {
+        const results = [];
+        const tasks = RELEASE_SOURCES.map(async (source) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
+            if (signal) {
+                if (signal.aborted) {
+                    clearTimeout(timeoutId);
+                    throw new DOMException('Aborted', 'AbortError');
+                }
+                signal.addEventListener('abort', () => controller.abort(), { once: true });
+            }
+            try {
+                const url = `https://api.github.com/repos/${source.owner}/${source.repo}/releases?per_page=1`;
+                const headers = { 'Accept': 'application/vnd.github.v3+json' };
+                try {
+                    const token = sessionStorage.getItem('github_token');
+                    if (token) headers['Authorization'] = `Bearer ${token}`;
+                } catch { /* noop */ }
+                const resp = await fetch(url, { headers, signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (!resp.ok) return null;
+                const releases = await resp.json();
+                if (!Array.isArray(releases) || releases.length === 0) return null;
+                const r = releases[0];
+                const item = normalizeItem({
+                    type: 'release',
+                    id: `release:${source.repo}:${r.tag_name}`,
+                    title: `${source.name} ${r.name || r.tag_name}`,
+                    body: r.body || '',
+                    author: source.name,
+                    date: new Date(r.published_at || r.created_at || Date.now()),
+                    thumbnail: source.icon,
+                    releaseUrl: r.html_url,
+                    releaseData: {
+                        owner: source.owner,
+                        repo: source.repo,
+                        tag: r.tag_name,
+                        url: r.html_url
+                    },
+                    labels: ['type:release', `repo:${source.repo}`]
+                });
+                if (typeof onEach === 'function') {
+                    try { onEach(item); } catch (e) { console.warn('[NewsFeed] onEach error:', e); }
+                }
+                return item;
+            } catch (e) {
+                clearTimeout(timeoutId);
+                if (e.name === 'AbortError') throw e;
+                console.warn(`[NewsFeed] Ошибка загрузки релизов ${source.repo}: ${e.message || e}`);
+                return null;
+            }
+        });
+        const settled = await Promise.allSettled(tasks);
+        for (const s of settled) {
+            if (s.status === 'fulfilled' && s.value) results.push(s.value);
+        }
+        return results;
+    }
+
+    async function fetchNewsFeed({ signal, forceRefresh = false, maxAge = CACHE_TTL, onItem } = {}) {
         const cached = await cacheGet(CACHE_KEY, maxAge);
         if (cached && !forceRefresh) {
             const items = normalizeItems(cached.items || []);
@@ -266,6 +374,7 @@
         }
 
         isLoading = true;
+        _onItemCallback = typeof onItem === 'function' ? onItem : null;
         if (abortController) {
             abortController.abort();
         }
@@ -279,21 +388,31 @@
             const postsPromise = fetchWithRetry(() => loadPosts(abortController.signal), 'posts');
             const videosPromise = fetchWithRetry(() => loadVideos(abortController.signal), 'videos');
             const twitchPromise = fetchWithRetry(() => loadTwitchStreams(abortController.signal), 'twitch');
+            // Релизы — прогрессивные: onEach будет вызван для каждого полученного релиза,
+            // чтобы можно было отрисовать его ДО завершения остальных запросов.
+            const releasesPromise = loadReleases(
+                (releaseItem) => {
+                    if (_onItemCallback) {
+                        try { _onItemCallback(releaseItem); } catch (e) { console.warn(e); }
+                    }
+                },
+                abortController.signal
+            );
 
-            const results = await Promise.allSettled([postsPromise, videosPromise, twitchPromise]);
+            const results = await Promise.allSettled([postsPromise, videosPromise, twitchPromise, releasesPromise]);
 
             let allItems = [];
             results.forEach((result, index) => {
                 if (result.status === 'fulfilled') {
                     allItems = allItems.concat(result.value);
                 } else {
-                    const source = ['посты', 'видео', 'стримы'][index];
+                    const source = ['посты', 'видео', 'стримы', 'релизы'][index];
                     console.warn(`[NewsFeed] Не удалось загрузить ${source}:`, result.reason);
                 }
             });
 
             allItems.sort((a, b) => b.date - a.date);
-            const limited = allItems.slice(0, 20);
+            const limited = allItems.slice(0, MAX_DISPLAY_ITEMS);
 
             await cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
 
@@ -313,6 +432,7 @@
         } finally {
             isLoading = false;
             abortController = null;
+            _onItemCallback = null;
         }
     }
 
@@ -333,11 +453,36 @@
         return grid;
     }
 
+    // Прогрессивная вставка одного элемента в сетку (для авто-релизов).
+    // Не перерисовывает уже показанные карточки.
+    function appendItemToGrid(item) {
+        if (!container) return;
+        if (!item || !item.id) return;
+
+        let grid = container.querySelector('.projects-grid:not(.skeleton-grid)');
+        if (!grid) {
+            const skeleton = container.querySelector('.skeleton-grid');
+            if (skeleton) skeleton.remove();
+            const empty = container.querySelector('.empty-state');
+            if (empty) empty.remove();
+            grid = createElement('div', 'projects-grid');
+            container.appendChild(grid);
+        }
+
+        if (grid.children.length >= MAX_DISPLAY_ITEMS) return;
+        if (grid.querySelector(`[data-item-id="${item.id}"]`)) return;
+
+        const card = createNewsCard(item);
+        card.dataset.itemId = item.id;
+        grid.appendChild(card);
+    }
+
     function renderNewsFeed(items) {
         if (!container) return;
 
         const displayItems = items.slice(0, MAX_DISPLAY_ITEMS);
 
+        // Заголовок
         let header = container.parentNode?.querySelector('.news-header');
         if (!header) {
             header = createElement('div', 'news-header', {
@@ -377,7 +522,12 @@
             existingBtn.remove();
         }
 
-        if (displayItems.length === 0) {
+        let grid = container.querySelector('.projects-grid:not(.skeleton-grid)');
+
+        // Если пусто и сетки ещё нет — показать empty state
+        if (displayItems.length === 0 && (!grid || grid.children.length === 0)) {
+            const skeleton = container.querySelector('.skeleton-grid');
+            if (skeleton) skeleton.remove();
             container.innerHTML = sanitizeHtml(`
                 <div class="empty-state">
                     <i class="fas fa-newspaper"></i>
@@ -390,18 +540,35 @@
             return;
         }
 
-        const grid = createElement('div', 'projects-grid');
+        // Собрать существующие id (прогрессивно добавленные карточки)
+        const existingIds = new Set();
+        if (grid) {
+            grid.querySelectorAll('[data-item-id]').forEach(el => existingIds.add(el.dataset.itemId));
+        }
+
+        if (!grid) {
+            const skeleton = container.querySelector('.skeleton-grid');
+            if (skeleton) skeleton.remove();
+            const empty = container.querySelector('.empty-state');
+            if (empty) empty.remove();
+            grid = createElement('div', 'projects-grid');
+            container.appendChild(grid);
+        }
+
+        // Дозаполнить недостающее (не перерисовываем!)
         const fragment = document.createDocumentFragment();
-
-        displayItems.forEach(item => {
+        let currentCount = grid.children.length;
+        for (const item of displayItems) {
+            if (currentCount >= MAX_DISPLAY_ITEMS) break;
+            if (existingIds.has(item.id)) continue;
             const card = createNewsCard(item);
+            card.dataset.itemId = item.id;
             fragment.appendChild(card);
-        });
-
+            currentCount++;
+        }
         grid.appendChild(fragment);
-        container.innerHTML = '';
-        container.appendChild(grid);
 
+        // Локализация
         container.querySelectorAll('[data-lang]').forEach(el => {
             const key = el.getAttribute('data-lang');
             if (key) el.textContent = t(key);
@@ -409,7 +576,7 @@
     }
 
     function createNewsCard(item) {
-        const cardWrapper = createElement('div', 'project-card-link card-interactive');
+        const cardWrapper = createElement('div', 'project-card-link card-interactive tilt-card');
 
         const card = createElement('div', 'project-card');
         const imgWrapper = createElement('div', 'image-wrapper');
@@ -432,9 +599,12 @@
         if (item.type === 'twitch' && item.twitchData) {
             meta.innerHTML += sanitizeHtml(` · 🎮 ${escapeHtml(item.twitchData.game)}`);
         }
+        if (item.type === 'release' && item.releaseData?.tag) {
+            meta.innerHTML += sanitizeHtml(` · <i class="fas fa-tag"></i> ${escapeHtml(item.releaseData.tag)}`);
+        }
         card.appendChild(meta);
 
-        if (item.type === 'post' && item.body) {
+        if ((item.type === 'post' || item.type === 'release') && item.body) {
             const summary = window.GithubCore.extractSummary(item.body) || item.body.replace(/\n/g, ' ').substring(0, 120) + '…';
             const preview = createElement('p', 'text-secondary', {
                 fontSize: '13px',
@@ -447,8 +617,28 @@
             card.appendChild(preview);
         }
 
+        // Кнопка "Открыть релиз" для GitHub-релизов
+        if (item.type === 'release' && item.releaseUrl) {
+            const releaseLink = createElement('a', 'button small', {
+                marginTop: '8px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                width: '100%'
+            }, {
+                href: item.releaseUrl,
+                target: '_blank',
+                rel: 'noopener noreferrer'
+            });
+            releaseLink.innerHTML = sanitizeHtml(`<i class="fab fa-github" aria-hidden="true"></i> <span>${t('openRelease')}</span>`);
+            releaseLink.addEventListener('click', (e) => e.stopPropagation());
+            card.appendChild(releaseLink);
+        }
+
+        // Кнопка "избранное" (только для авторизованных с gist, не для релизов)
         const currentUser = getCurrentUser();
-        if (currentUser && hasScope('gist')) {
+        if (currentUser && hasScope('gist') && item.type !== 'release') {
             const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: t('addToFavorites') });
             favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
             favBtn.addEventListener('click', async (e) => {
@@ -501,9 +691,9 @@
 
         cardWrapper.appendChild(card);
 
-        // Клик: пост → модалка, видео/стрим → открытие на внешнем сайте
+        // Клик: пост → модалка, релиз → openExternal, видео/стрим → openExternal
         cardWrapper.addEventListener('click', (e) => {
-            if (e.target.closest('button') || e.target.closest('.news-bookmark-btn')) return;
+            if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.news-bookmark-btn')) return;
 
             if (item.type === 'post') {
                 if (!window.UIFeedback) {
@@ -520,8 +710,9 @@
                     game: item.game,
                     labels: item.labels
                 });
+            } else if (item.type === 'release' && item.releaseUrl) {
+                openExternal(item.releaseUrl);
             } else {
-                // Видео/стрим: открываем в новой вкладке — никаких iframe, никаких cookies.
                 openExternal(buildWatchUrl(item));
             }
         });
@@ -537,10 +728,13 @@
         currentUser = getCurrentUser();
 
         container.innerHTML = '';
-        container.appendChild(renderSkeleton(MAX_DISPLAY_ITEMS));
+        container.appendChild(renderSkeleton(6));
 
         try {
-            const result = await fetchNewsFeed({ forceRefresh: false });
+            const result = await fetchNewsFeed({
+                forceRefresh: false,
+                onItem: (item) => appendItemToGrid(item)
+            });
             if (result) {
                 renderNewsFeed(result.items);
                 if (result.isStale) {
@@ -594,8 +788,11 @@
     function refreshNewsFeed() {
         if (!container) return;
         container.innerHTML = '';
-        container.appendChild(renderSkeleton(MAX_DISPLAY_ITEMS));
-        fetchNewsFeed({ forceRefresh: true })
+        container.appendChild(renderSkeleton(6));
+        fetchNewsFeed({
+            forceRefresh: true,
+            onItem: (item) => appendItemToGrid(item)
+        })
             .then(result => {
                 if (result) renderNewsFeed(result.items);
                 else renderNewsFeed([]);

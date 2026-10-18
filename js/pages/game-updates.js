@@ -1,5 +1,6 @@
-// js/pages/game-updates.js – использует общий кэш и DocumentFragment, с локализацией
-// cacheGet/cacheSet теперь асинхронные (шифрование через CacheCrypto).
+// js/pages/game-updates.js – использует общий кэш и DocumentFragment, с локализацией.
+// cacheGet/cacheSet асинхронные (шифрование через CacheCrypto).
+// tilt-card + project-image → 3D-вращение и параллакс картинки при hover.
 (function() {
   const { cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, CONFIG, deduplicateByNumber, createAbortable, stripHtml, extractSummary, loadModule, createElement, sanitizeHtml } = window.GithubCore;
   const { loadIssues } = window.GithubAPI;
@@ -8,6 +9,21 @@
 
   let currentAbort = null, currentGame = null;
   const UPDATES_CACHE_TTL = 15 * 60 * 1000;
+
+  function t(key) {
+    if (window.I18n && typeof window.I18n.translate === 'function') {
+      const v = window.I18n.translate(key);
+      if (v && v !== key) return v;
+    }
+    switch (key) {
+      case 'loading': return 'Загрузка...';
+      case 'noUpdates': return 'Нет обновлений';
+      case 'updatesTitle': return 'Обновления';
+      case 'addUpdate': return 'Добавить обновление';
+      case 'updatesLoadError': return 'Ошибка загрузки обновлений';
+      default: return key;
+    }
+  }
 
   window.initGameUpdates = function() {
     const container = document.getElementById('game-updates');
@@ -42,7 +58,6 @@
       if (header) {
         const btn = header.querySelector('.admin-update-btn');
         if (btn) {
-          const t = window.I18n?.translate || (k => k);
           btn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addUpdate')}`);
         }
       }
@@ -55,7 +70,6 @@
   };
 
   async function loadGameUpdates(container, game) {
-    const t = window.I18n?.translate || (k => k);
     container.innerHTML = sanitizeHtml(`<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="loading">${t('loading')}</p></div>`);
     if (currentAbort) {
       currentAbort.controller.abort();
@@ -84,7 +98,7 @@
       }));
       posts.sort((a, b) => b.date - a.date);
       if (posts.length === 0) {
-        container.innerHTML = sanitizeHtml('<p class="text-secondary" data-lang="noUpdates"></p>');
+        container.innerHTML = sanitizeHtml(`<p class="text-secondary" data-lang="noUpdates">${t('noUpdates')}</p>`);
         return;
       }
       container.innerHTML = '';
@@ -115,16 +129,18 @@
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error('Update load error:', err);
-      container.innerHTML = sanitizeHtml(`<p class="error-message" data-lang="updatesLoadError"></p>`);
+      container.innerHTML = sanitizeHtml(`<p class="error-message" data-lang="updatesLoadError">${t('updatesLoadError')}</p>`);
     } finally { clearTimeout(timeoutId); if (currentAbort?.controller === controller) currentAbort = null; }
   }
 
   function createUpdateCard(post) {
     let previewBody = post.body;
-    const card = createElement('div', 'project-card-link no-tilt tilt-card', { cursor: 'pointer' });
+    // tilt-card (без no-tilt!) — включает 3D-вращение через effects.js
+    const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
     const inner = createElement('div', 'project-card');
     const imgMatch = previewBody.match(/!\[.*?\]\((.*?)\)/);
     const imgW = createElement('div', 'image-wrapper');
+    // project-image — включает parallax картинки в effects.js
     const img = createElement('img', 'project-image', {}, { src: imgMatch?.[1] || 'images/default-news.webp', alt: post.title, loading: 'lazy' });
     img.onerror = () => img.src = 'images/default-news.webp';
     imgW.appendChild(img);

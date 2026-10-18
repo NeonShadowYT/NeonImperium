@@ -1,10 +1,18 @@
 /* layout.css — сетки, раскладки, карточки небольших проектов.
    .download-card живёт в style.css (не относится к grid-раскладкам). */
 
+/* ========== Единая сетка карточек проектов / новостей / обновлений ==========
+   minmax(280px, 380px) + justify-content: center:
+   - Карточки НИКОГДА не шире 380px — нет «грамостких» на всю ширину
+   - 3 в ряд на широком экране (1200px → 3×380 + 2×gap = 1196)
+   - 2 в среднем — центрируются
+   - 1 на узком
+   ============================================================ */
 .projects-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 28px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 380px));
+    justify-content: center;
+    gap: 24px;
     margin-top: 20px;
     align-items: start;
 }
@@ -86,12 +94,7 @@
     padding-bottom: 100%;
 }
 
-/* ========== Инструменты (WorldGenerator, IconCreator и др.) ==========
-   auto-fit + minmax(280px, 380px):
-   - Карточки НИКОГДА не шире 380px → нет «грамоздких» на всю ширину
-   - 3+ карточки в ряд на широком экране, 2 в среднем, 1 на мобильном
-   - justify-content: center → 2 карточки центрируются, а не растягиваются
-   ============================================================ */
+/* ========== Инструменты ========== */
 .tools-container {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 380px));
@@ -188,7 +191,7 @@
     border-radius: 4px;
 }
 
-/* ========== Адаптивность инструментов ========== */
+/* ========== Адаптивность ========== */
 @media (max-width: 700px) {
     .tools-container {
         grid-template-columns: 1fr;

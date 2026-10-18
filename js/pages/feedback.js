@@ -1,5 +1,8 @@
 // js/pages/feedback.js – обратная связь с performAction, улучшенная обработка ошибок
-// cacheGet/cacheSet теперь асинхронные (шифрование через CacheCrypto).
+// cacheGet/cacheSet асинхронные (шифрование через CacheCrypto).
+//
+// ВАЖНО: файл грузится ДО js/lang.js. t() должен быть динамическим:
+// проверять window.I18n.translate в момент вызова, а не при init модуля.
 (function() {
   const {
     cacheGet, cacheSet, cacheRemoveByPrefix, escapeHtml, deduplicateByNumber,
@@ -24,6 +27,36 @@
       );
     });
     return;
+  }
+
+  function t(key) {
+    if (window.I18n && typeof window.I18n.translate === 'function') {
+      const v = window.I18n.translate(key);
+      if (v && v !== key) return v;
+    }
+    switch (key) {
+      case 'feedbackTitle': return 'Идеи, баги и отзывы';
+      case 'feedbackNewBtn': return 'Оставить сообщение';
+      case 'feedbackDesc': return 'Делитесь мыслями, сообщайте об ошибках или предлагайте улучшения.';
+      case 'tabAll': return 'Все';
+      case 'tabIdeas': return 'Идеи';
+      case 'tabBugs': return 'Баги';
+      case 'tabReviews': return 'Отзывы';
+      case 'feedbackNoItems': return 'Пока нет сообщений. Будьте первым!';
+      case 'loadError': return 'Ошибка загрузки';
+      case 'dataLoadError': return 'Ошибка загрузки данных';
+      case 'loadModulesError': return 'Ошибка загрузки модулей';
+      case 'feedbackLoadFailed': return 'Не удалось загрузить отзывы';
+      case 'tryRefresh': return 'Попробуйте обновить страницу';
+      case 'viewerNotAvailable': return 'Модуль просмотра недоступен';
+      case 'postNotFound': return 'Пост не найден или закрыт';
+      case 'postLoadError': return 'Ошибка загрузки поста';
+      case 'editorNotLoaded': return 'Модуль редактора не загружен';
+      case 'feedbackLoginPrompt': return 'Войдите через GitHub, чтобы участвовать в обсуждениях';
+      case 'githubTokenNote': return 'токен хранится в вашем браузере и передаётся только в GitHub API.';
+      case 'feedbackLoginBtn': return 'Войти';
+      default: return key;
+    }
   }
 
   const ITEMS_PER_PAGE = 10, MAX_DISPLAY = 30, CACHE_TTL = 10 * 60 * 1000;
@@ -114,7 +147,6 @@
   }
 
   function updateTextsOnly() {
-    const t = window.I18n?.translate || (k => k);
     if (headerElement) {
       const titleSpan = headerElement.querySelector('h2 span');
       if (titleSpan) titleSpan.textContent = t('feedbackTitle');
@@ -151,7 +183,6 @@
     }
     const { controller, timeoutId } = createAbortable(15000);
     currentAbort = { controller };
-    const t = window.I18n?.translate || (k => k);
     try {
       const key = `game_issues_${currentGame}`;
       let issues = await cacheGet(key);
@@ -203,7 +234,6 @@
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     const pageItems = filtered.slice(start, start + ITEMS_PER_PAGE);
     if (pageItems.length === 0 && reset) {
-      const t = window.I18n?.translate || (k => k);
       grid.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p data-lang="feedbackNoItems">${t('feedbackNoItems')}</p></div>`;
       hasMore = false;
       return;
@@ -226,7 +256,6 @@
 
   function renderLoginPrompt() {
     if (!container) return;
-    const t = window.I18n?.translate || (k => k);
     container.innerHTML = '';
     const prompt = createElement('div', 'login-prompt');
     loginPromptContainer = prompt;
@@ -251,7 +280,6 @@
 
   async function renderInterface() {
     if (!container) return;
-    const t = window.I18n?.translate || (k => k);
     if (!window.UIFeedback) {
       try {
         await loadModule('js/features/ui-feedback.js');
@@ -328,11 +356,11 @@
     grid = document.getElementById('feedback-panel');
     sentinel = document.getElementById('sentinel');
 
-    tabs.querySelectorAll('.feedback-tab').forEach(t => {
-      t.addEventListener('click', e => {
+    tabs.querySelectorAll('.feedback-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
         tabs.querySelectorAll('.feedback-tab').forEach(tt => { tt.classList.remove('active'); tt.setAttribute('aria-selected','false'); });
-        t.classList.add('active'); t.setAttribute('aria-selected','true');
-        currentTab = t.dataset.tab;
+        tab.classList.add('active'); tab.setAttribute('aria-selected','true');
+        currentTab = tab.dataset.tab;
         currentPage = 1;
         filterAndDisplay(true);
       });
@@ -354,6 +382,7 @@
     const type = issue.labels.find(l=>l.name.startsWith('type:'))?.name.split(':')[1] || 'idea';
     const icon = type === 'idea' ? '💡' : type === 'bug' ? '🐛' : '⭐';
     let summary = extractSummary(issue.body) || (issue.body||'').substring(0,120)+'…';
+    // tilt-card — 3D-вращение. project-image нет (там эмодзи-иконка), поэтому только tilt.
     const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
     card.dataset.issueNumber = issue.number;
     const inner = createElement('div', 'project-card');
@@ -395,7 +424,6 @@
   }
 
   async function openPostFromUrl(id) {
-    const t = window.I18n?.translate || (k => k);
     try {
       if (!window.GithubAPI) await loadModule('js/core/github-api.js');
       const issue = await window.GithubAPI.loadIssue(id);
