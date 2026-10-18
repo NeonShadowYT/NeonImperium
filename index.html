@@ -1,18 +1,20 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    connect-src 'self' https://api.github.com https://api.rss2json.com https://api.twitchinsights.net https://noembed.com https://iframe.ly https://api.microlink.io https://openunfurl.vercel.app https://oembed.com https://api.allorigins.win https://everyorigin.jwvbremen.nl https://api.cors.lol https://api.codetabs.com https://cloudflare-cors-anywhere.queakchannel42.workers.dev https://corsproxy.io https://loader.to https://ssyoutube.com https://www.y2mate.com https://vimeo.com https://www.dailymotion.com https://www.youtube.com    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://cdn.skypack.dev https://esm.sh; style-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://img.youtube.com https://*.ytimg.com https://i.ytimg.com https://static-cdn.jtvnw.net https://img.shields.io https://telegram-badge.vercel.app https://avatars.githubusercontent.com https://img.itch.zone https://files.catbox.moe https://i.imgur.com https://i.ibb.co; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; connect-src 'self' https://api.github.com https://api.rss2json.com https://api.twitchinsights.net https://noembed.com https://iframe.ly https://api.microlink.io https://openunfurl.vercel.app https://oembed.com https://api.allorigins.win https://everyorigin.jwvbremen.nl https://api.cors.lol https://api.codetabs.com https://cloudflare-cors-anywhere.queakchannel42.workers.dev https://corsproxy.io https://loader.to https://ssyoutube.com https://www.y2mate.com https://vimeo.com https://www.dailymotion.com https://www.youtube.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://player.twitch.tv https://rutube.ru https://coub.com; media-src 'self' https://img.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1e1e30">
-    <title data-lang="siteTitle">Neon Imperium - официальный сайт игр</title>
-    <meta name="description" content="Neon Imperium - официальный сайт игр Starve Neon, Alpha 01, ГК Адвенчур. Скачать, трейлеры, обновления.">
-    <meta name="keywords" content="Neon Imperium, Starve Neon, Alpha 01, ГК Адвенчур, игры, выживание, шутер, приключение, скачать">
-    <link rel="canonical" href="https://neonshadowyt.github.io/NeonImperium/">
-    <meta property="og:title" content="Neon Imperium">
-    <meta property="og:description" content="Официальный сайт игр Neon Imperium: Starve Neon, Alpha 01, ГК Адвенчур.">
-    <meta property="og:image" content="images/logo-neon-imperium.webp">
-    <meta property="og:url" content="https://neonshadowyt.github.io/NeonImperium/">
+    <title data-lang="siteTitle">Neon Imperium</title>
+    <meta name="description" content="Neon Imperium - портал игр: Starve Neon. Скачивайте игры, смотрите новости, делитесь идеями и багрепортами.">
+    <meta name="keywords" content="Neon Imperium, Starve Neon, игры, портал, скачать, новости">
+    <link rel="canonical" href="https://neonshadowyt.github.io/NeonImperium/index.html">
+    <meta property="og:title" content="Neon Imperium - Портал игр">
+    <meta property="og:description" content="Игры Neon Imperium: Starve Neon, Alpha 01, ГК Адвенчур. Скачивайте, смотрите новости, участвуйте в сообществе.">
+    <meta property="og:image" content="images/neon-imperium-header.webp">
+    <meta property="og:url" content="https://neonshadowyt.github.io/NeonImperium/index.html">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="images/logo-neon-imperium.webp" type="image/webp">
@@ -20,10 +22,10 @@
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://api.github.com" crossorigin>
-    <link rel="preconnect" href="https://api.rss2json.com" crossorigin>
     <link rel="preconnect" href="https://img.youtube.com">
     <link rel="preconnect" href="https://i.ytimg.com">
-    <link rel="preconnect" href="https://static-cdn.jtvnw.net">
+    <link rel="preconnect" href="https://img.shields.io">
+    <link rel="preconnect" href="https://telegram-badge.vercel.app">
 
     <link rel="preload" as="font" type="font/woff2" href="fonts/RussoOne.woff2" crossorigin>
     <link rel="preload" as="style" href="css/variables.css">
@@ -44,6 +46,7 @@
     <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer">
+
     <script src="js/config.js" defer></script>
     <script src="js/core/cache-crypto.js" defer></script>
     <script src="js/core/token-store.js" defer></script>
@@ -59,15 +62,9 @@
     <script src="js/features/ui-feedback.js" defer></script>
     <script src="js/lang.js" defer></script>
     <script src="js/effects.js" defer></script>
-    <script src="js/common-init.js" defer></script>
     <script src="js/pages/news-feed.js" defer></script>
+    <script src="js/common-init.js" defer></script>
     <script src="js/dust-particles.js" defer></script>
-    <style>
-        body { margin:0; background:#0f0f1a; font-family: 'Russo One', sans-serif; }
-        .nav-bar { background:#1e1e30; border-radius:40px; padding:6px 20px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
-        .page { max-width:1200px; margin:0 auto; width:100%; }
-        .loading-spinner { text-align:center; padding:30px; color:#c0c0d0; }
-    </style>
 </head>
 <body>
     <div class="page">
@@ -85,61 +82,56 @@
                     <div class="game-icon-circle">
                         <img src="images/logo-neon-imperium.webp" alt="Логотип Neon Imperium" class="game-icon" width="80" height="80">
                     </div>
-                    <h1 class="game-title" data-lang="siteTitle">Neon Imperium</h1>
-                    <div class="social-icons">
-                        <a href="https://discord.com/invite/9gv5sRhk9R" target="_blank" rel="noopener noreferrer" class="social-icon" aria-label="Присоединиться к Discord">
-                            <i class="fab fa-discord" aria-hidden="true"></i>
-                        </a>
-                        <a href="https://t.me/voididea" target="_blank" rel="noopener noreferrer" class="social-icon" aria-label="Перейти в Telegram">
-                            <i class="fab fa-telegram" aria-hidden="true"></i>
-                        </a>
+                    <div class="header-text">
+                        <h1 class="game-title">Neon Imperium</h1>
+                        <div class="version-row">
+                            <div class="social-icons small">
+                                <a href="https://t.me/voididea" target="_blank" rel="noopener noreferrer" class="social-icon" aria-label="Telegram">
+                                    <i class="fab fa-telegram" aria-hidden="true"></i>
+                                </a>
+                                <a href="https://www.youtube.com/@NeonShadow-neon" target="_blank" rel="noopener noreferrer" class="social-icon" aria-label="YouTube">
+                                    <i class="fab fa-youtube" aria-hidden="true"></i>
+                                </a>
+                                <a href="https://www.twitch.tv/neoncyndows" target="_blank" rel="noopener noreferrer" class="social-icon" aria-label="Twitch">
+                                    <i class="fab fa-twitch" aria-hidden="true"></i>
+                                </a>
+                                <a href="https://discord.com/invite/9gv5sRhk9R" target="_blank" rel="noopener noreferrer" class="social-icon" aria-label="Discord">
+                                    <i class="fab fa-discord" aria-hidden="true"></i>
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </header>
 
         <main role="main">
-            <section class="card">
+            <!-- ═══════════════════════════════════════════════════════
+                 ГЛАВНЫЕ ПРОЕКТЫ
+                 ═══════════════════════════════════════════════════════ -->
+            <section class="card" aria-label="Главные проекты">
                 <h2>
-                    <i class="fas fa-rocket" aria-hidden="true"></i>
+                    <i class="fas fa-gamepad" aria-hidden="true"></i>
                     <span data-lang="mainProjectsTitle">Главные проекты</span>
                 </h2>
                 <p class="text-secondary" data-lang="mainProjectsDesc">Игры с приоритетом разработки</p>
                 <div class="projects-grid">
-                    <a href="starve-neon.html" class="project-card-link" aria-label="Starve Neon — подробнее">
-                        <div class="project-card tilt-card">
+                    <a href="starve-neon.html" class="project-card-link tilt-card" aria-label="Открыть страницу Starve Neon">
+                        <div class="project-card">
                             <div class="image-wrapper">
-                                <img src="images/starve-neon-preview2.webp" alt="Обложка игры Starve Neon" class="project-image" width="300" height="180" loading="lazy">
+                                <img src="images/starve-neon-preview2.webp" alt="Starve Neon" class="project-image" loading="lazy" data-fallback="images/default-news.webp">
                             </div>
                             <h3>Starve Neon</h3>
-                            <p data-lang="starveDesc">💀 F***ING RUST + TARKOV (STARVE 2 3D)</p>
+                            <p class="text-secondary" data-lang="starveDesc">💀 F***ING RUST + TARKOV (STARVE 2 3D)</p>
                             <span class="button" data-lang="detailsBtn">Подробнее</span>
-                        </div>
-                    </a>
-                    <a href="javascript:void(0)" class="project-card-link disabled" aria-label="Скоро...">
-                        <div class="project-card tilt-card">
-                            <div class="image-wrapper">
-                                <img src="images/neon-imperium-header.webp" alt="Заглушка" class="project-image" width="300" height="180" loading="lazy">
-                            </div>
-                            <h3>???</h3>
-                            <span class="button disabled" data-lang="comingSoon">Скоро</span>
-                        </div>
-                    </a>
-                    <a href="javascript:void(0)" class="project-card-link disabled" aria-label="Скоро...">
-                        <div class="project-card tilt-card">
-                            <div class="image-wrapper">
-                                <img src="images/neon-imperium-header.webp" alt="Заглушка" class="project-image" width="300" height="180" loading="lazy">
-                            </div>
-                            <h3>???</h3>
-                            <span class="button disabled" data-lang="comingSoon">Скоро</span>
                         </div>
                     </a>
                 </div>
             </section>
 
             <!-- ═══════════════════════════════════════════════════════
-            ИНСТРУМЕНТЫ (WorldGenerator, IconCreator)
-            ═══════════════════════════════════════════════════════ -->
+                 ИНСТРУМЕНТЫ (WorldGenerator, IconCreator)
+                 ═══════════════════════════════════════════════════════ -->
             <section class="card" aria-label="Инструменты">
                 <h2>
                     <i class="fas fa-tools" aria-hidden="true"></i>
@@ -158,8 +150,6 @@
                                      alt="WorldGenerator"
                                      class="project-image"
                                      loading="lazy"
-                                     width="560"
-                                     height="315"
                                      data-fallback="images/default-news.webp">
                             </div>
                             <h3 data-lang="toolWorldGeneratorTitle">WorldGenerator</h3>
@@ -170,7 +160,6 @@
                             </span>
                         </div>
                     </a>
-
                     <a href="https://github.com/NeonShadowYT/IconCreator"
                        target="_blank"
                        rel="noopener noreferrer"
@@ -182,8 +171,6 @@
                                      alt="IconCreator"
                                      class="project-image"
                                      loading="lazy"
-                                     width="560"
-                                     height="315"
                                      data-fallback="images/default-news.webp">
                             </div>
                             <h3 data-lang="toolIconCreatorTitle">IconCreator</h3>
@@ -197,16 +184,25 @@
                 </div>
             </section>
 
-            <section class="card" id="news-section" aria-label="Лента новостей">
-                <div id="news-feed" class="video-grid">
-                    <div class="loading-spinner" style="grid-column: 1/-1; text-align: center; padding: 40px;">
-                        <i class="fas fa-circle-notch fa-spin" style="font-size: 32px; color: var(--accent);" aria-hidden="true"></i>
-                        <p style="margin-top: 10px;" data-lang="newsLoading">Загрузка новостей...</p>
+            <!-- ═══════════════════════════════════════════════════════
+                 НОВОСТИ (заголовок .news-header создаётся JS)
+                 ═══════════════════════════════════════════════════════ -->
+            <section class="card" aria-label="Последние новости">
+                <div id="news-feed">
+                    <div class="loading-spinner">
+                        <i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i>
+                        <p data-lang="newsLoading">Загрузка новостей...</p>
                     </div>
                 </div>
             </section>
-            </div>
         </main>
+
+        <footer class="license-footer" role="contentinfo" style="margin-top: 24px;">
+            <p style="text-align:center; color: var(--text-secondary); font-size: 13px;">
+                &copy; 2024–2026 Neon Imperium ·
+                <a href="license.html" data-lang="licenseLink">лицензионное соглашение</a>
+            </p>
+        </footer>
     </div>
 </body>
 </html>
