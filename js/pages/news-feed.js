@@ -1,12 +1,10 @@
 // js/pages/news-feed.js – единый менеджер новостей с кешированием, скелетоном, отказоустойчивостью
 // и авто-новостями из GitHub Releases (прогрессивная отрисовка).
-// cacheGet/cacheSet асинхронные (шифрование через CacheCrypto).
 //
-// АВТО-НОВОСТИ:
-//   Каждый репозиторий из RELEASE_SOURCES опрашивается независимо.
-//   Как только получен последний релиз — onItem(release) вызывается сразу,
-//   карточка вставляется в первое свободное место сетки (appendItemToGrid),
-//   не дожидаясь остальных источников и не перерисовывая уже показанное.
+// ВАЖНО про abort: refreshNewsFeed может быть вызван во время initNewsFeed
+// (например, github-login-success при restoreSession). Предыдущий fetch
+// отменяется через abortController.abort(), что в Firefox даёт TypeError:
+// NetworkError. Такие ошибки НЕ логируем — это ожидаемый abort.
 (function() {
     const {
         cacheGet, cacheSet, cacheRemoveByPrefix,
@@ -24,7 +22,6 @@
     const RETRY_DELAY = 1000;
     const MAX_DISPLAY_ITEMS = 9;
 
-    // Источники авто-новостей (GitHub Releases). Порядок = приоритет вставки при равных датах.
     const RELEASE_SOURCES = [
         {
             owner: 'NeonShadowYT',
@@ -47,7 +44,6 @@
     let container = null;
     let _onItemCallback = null;
 
-    // Динамический переводчик: смотрит на window.I18n в момент вызова.
     function t(key) {
         if (window.I18n && typeof window.I18n.translate === 'function') {
             const v = window.I18n.translate(key);
@@ -68,6 +64,18 @@
             case 'viewers': return 'зрителей';
             default: return key;
         }
+    }
+
+    // Тихая проверка: был ли abort. В Firefox abort body-read даёт NetworkError,
+    // не AbortError. Оба случая — ожидаемые, не логируем.
+    function isAborted(err, signal) {
+        if (!err) return false;
+        if (signal && signal.aborted) return true;
+        if (err.name === 'AbortError') return true;
+        const msg = String(err.message || '');
+        if (msg.includes('Aborted')) return true;
+        if (msg.includes('NetworkError') && signal && signal.aborted) return true;
+        return false;
     }
 
     function normalizeItem(item) {
@@ -99,15 +107,9 @@
 
     function buildWatchUrl(item) {
         if (item.type === 'release' && item.releaseUrl) return item.releaseUrl;
-        if (item.type === 'video') {
-            return `https://www.youtube.com/watch?v=${item.id}`;
-        }
-        if (item.type === 'twitch') {
-            return `https://www.twitch.tv/${item.id}`;
-        }
-        if (item.type === 'post') {
-            return `${location.origin}${location.pathname}?post=${item.id}`;
-        }
+        if (item.type === 'video') return `https://www.youtube.com/watch?v=${item.id}`;
+        if (item.type === 'twitch') return `https://www.twitch.tv/${item.id}`;
+        if (item.type === 'post') return `${location.origin}${location.pathname}?post=${item.id}`;
         return '#';
     }
 
@@ -123,6 +125,10 @@
                 return await fn();
             } catch (err) {
                 lastError = err;
+                // Abort / NetworkError — не retry, сразу пробрасываем
+                if (err && (err.name === 'AbortError' || String(err.message || '').includes('Aborted'))) {
+                    throw err;
+                }
                 if (attempt < retries) {
                     const delay = RETRY_DELAY * Math.pow(2, attempt);
                     await new Promise(r => setTimeout(r, delay));
@@ -141,7 +147,8 @@
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
         if (signal) {
-            signal.addEventListener('abort', () => controller.abort());
+            if (signal.aborted) { clearTimeout(timeoutId); return []; }
+            signal.addEventListener('abort', () => controller.abort(), { once: true });
         }
 
         try {
@@ -178,13 +185,14 @@
             });
         } catch (err) {
             clearTimeout(timeoutId);
-            if (err.name === 'AbortError') throw err;
+            if (isAborted(err, signal) || isAborted(err, controller.signal)) return [];
             console.warn('[NewsFeed] Ошибка загрузки постов:', err);
             throw err;
         }
     }
 
     async function loadVideos(signal) {
+        // YouTube RSS через allorigins напрямую (rss2json периодически отдаёт 422).
         const YT_CHANNELS = [
             { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' }
         ];
@@ -193,35 +201,47 @@
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
         if (signal) {
-            signal.addEventListener('abort', () => controller.abort());
+            if (signal.aborted) { clearTimeout(timeoutId); return []; }
+            signal.addEventListener('abort', () => controller.abort(), { once: true });
         }
 
         try {
             for (const ch of YT_CHANNELS) {
                 if (controller.signal.aborted) break;
-                const url = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(`https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`)}`;
                 try {
-                    const resp = await fetch(url, { signal: controller.signal });
+                    const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`;
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`;
+                    const resp = await fetch(proxyUrl, { signal: controller.signal });
                     if (!resp.ok) continue;
-                    const data = await resp.json();
-                    if (data.status !== 'ok') continue;
-                    const items = data.items.slice(0, 3).map(item => {
-                        const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
-                        if (!vid) return null;
+                    const xmlText = await resp.text();
+                    // Простой regex-парсинг: DOMParser с namespace у XML часто глючит.
+                    const entryBlocks = xmlText.split('<entry>').slice(1);
+                    const items = entryBlocks.slice(0, 3).map(block => {
+                        const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+                        const titleMatch = block.match(/<title>([^<]*)<\/title>/);
+                        const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
+                        const thumbMatch = block.match(/<media:thumbnail\s+url=["']([^"']+)["']/);
+                        if (!videoIdMatch) return null;
+                        const videoId = videoIdMatch[1];
                         return normalizeItem({
                             type: 'video',
-                            id: vid,
-                            title: item.title,
+                            id: videoId,
+                            title: (titleMatch ? titleMatch[1] : 'Untitled')
+                                .replace(/&amp;/g, '&')
+                                .replace(/&lt;/g, '<')
+                                .replace(/&gt;/g, '>')
+                                .replace(/&quot;/g, '"')
+                                .replace(/&#39;/g, "'"),
                             author: ch.name,
-                            date: new Date(item.pubDate),
-                            thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
-                            videoData: { service: 'youtube', id: vid }
+                            date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
+                            thumbnail: thumbMatch ? thumbMatch[1] : `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                            videoData: { service: 'youtube', id: videoId }
                         });
                     }).filter(v => v);
                     all.push(...items);
                 } catch (e) {
-                    if (e.name === 'AbortError') break;
-                    console.warn(`[NewsFeed] Ошибка RSS для канала ${ch.name}: ${e.message || e}`);
+                    if (isAborted(e, signal) || e.name === 'AbortError') break;
+                    console.warn(`[NewsFeed] Ошибка RSS ${ch.name}: ${e.message || e}`);
                 }
             }
             clearTimeout(timeoutId);
@@ -229,7 +249,7 @@
             return all.slice(0, 12);
         } catch (err) {
             clearTimeout(timeoutId);
-            if (err.name === 'AbortError') throw err;
+            if (isAborted(err, signal) || isAborted(err, controller.signal)) return [];
             console.warn('[NewsFeed] Ошибка загрузки видео:', err);
             throw err;
         }
@@ -241,7 +261,8 @@
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
         if (signal) {
-            signal.addEventListener('abort', () => controller.abort());
+            if (signal.aborted) { clearTimeout(timeoutId); return []; }
+            signal.addEventListener('abort', () => controller.abort(), { once: true });
         }
 
         try {
@@ -267,9 +288,8 @@
                         twitchData: { channel, game, viewers }
                     }));
                 } catch (e) {
-                    if (e.name === 'AbortError') break;
-                    // NetworkError от TwitchInsights — не критично, тихо пропускаем.
-                    console.warn(`[NewsFeed] Стрим ${channel} недоступен`);
+                    if (isAborted(e, signal) || e.name === 'AbortError') break;
+                    // Тихая ошибка TwitchInsights — не критично
                 }
             }
             clearTimeout(timeoutId);
@@ -277,15 +297,12 @@
             return streams;
         } catch (err) {
             clearTimeout(timeoutId);
-            if (err.name === 'AbortError') throw err;
+            if (isAborted(err, signal) || isAborted(err, controller.signal)) return [];
             console.warn('[NewsFeed] Ошибка загрузки стримов:', err);
             throw err;
         }
     }
 
-    // ---- Авто-новости из GitHub Releases ----
-    // Прогрессивно: onEach вызывается сразу после получения очередного релиза,
-    // не дожидаясь остальных источников.
     async function loadReleases(onEach, signal) {
         const results = [];
         const tasks = RELEASE_SOURCES.map(async (source) => {
@@ -294,7 +311,7 @@
             if (signal) {
                 if (signal.aborted) {
                     clearTimeout(timeoutId);
-                    throw new DOMException('Aborted', 'AbortError');
+                    return null;
                 }
                 signal.addEventListener('abort', () => controller.abort(), { once: true });
             }
@@ -329,12 +346,15 @@
                     labels: ['type:release', `repo:${source.repo}`]
                 });
                 if (typeof onEach === 'function') {
-                    try { onEach(item); } catch (e) { console.warn('[NewsFeed] onEach error:', e); }
+                    try { onEach(item); } catch (e) { /* noop */ }
                 }
                 return item;
             } catch (e) {
                 clearTimeout(timeoutId);
-                if (e.name === 'AbortError') throw e;
+                // Abort / NetworkError при abort — тихо
+                if (isAborted(e, signal) || isAborted(e, controller.signal) || e.name === 'AbortError') {
+                    return null;
+                }
                 console.warn(`[NewsFeed] Ошибка загрузки релизов ${source.repo}: ${e.message || e}`);
                 return null;
             }
@@ -375,12 +395,18 @@
 
         isLoading = true;
         _onItemCallback = typeof onItem === 'function' ? onItem : null;
+        // Тихий abort предыдущего fetch — ожидаемо при refresh во время init.
         if (abortController) {
-            abortController.abort();
+            try { abortController.abort(); } catch { /* noop */ }
         }
         abortController = new AbortController();
         if (signal) {
-            signal.addEventListener('abort', () => abortController.abort());
+            if (signal.aborted) {
+                isLoading = false;
+                abortController = null;
+                return { items: [], fromCache: false, isStale: false };
+            }
+            signal.addEventListener('abort', () => abortController.abort(), { once: true });
         }
 
         try {
@@ -388,12 +414,10 @@
             const postsPromise = fetchWithRetry(() => loadPosts(abortController.signal), 'posts');
             const videosPromise = fetchWithRetry(() => loadVideos(abortController.signal), 'videos');
             const twitchPromise = fetchWithRetry(() => loadTwitchStreams(abortController.signal), 'twitch');
-            // Релизы — прогрессивные: onEach будет вызван для каждого полученного релиза,
-            // чтобы можно было отрисовать его ДО завершения остальных запросов.
             const releasesPromise = loadReleases(
                 (releaseItem) => {
                     if (_onItemCallback) {
-                        try { _onItemCallback(releaseItem); } catch (e) { console.warn(e); }
+                        try { _onItemCallback(releaseItem); } catch (e) { /* noop */ }
                     }
                 },
                 abortController.signal
@@ -407,7 +431,10 @@
                     allItems = allItems.concat(result.value);
                 } else {
                     const source = ['посты', 'видео', 'стримы', 'релизы'][index];
-                    console.warn(`[NewsFeed] Не удалось загрузить ${source}:`, result.reason);
+                    // Тихий abort — не логируем
+                    if (!isAborted(result.reason, abortController.signal)) {
+                        console.warn(`[NewsFeed] Не удалось загрузить ${source}:`, result.reason);
+                    }
                 }
             });
 
@@ -421,6 +448,9 @@
             currentItems = limited;
             return { items: limited, fromCache: false, isStale: false };
         } catch (err) {
+            if (isAborted(err, abortController.signal)) {
+                return { items: [], fromCache: false, isStale: false };
+            }
             console.error('[NewsFeed] Критическая ошибка загрузки:', err);
             const stale = await cacheGet(CACHE_KEY, Infinity);
             if (stale) {
@@ -453,8 +483,6 @@
         return grid;
     }
 
-    // Прогрессивная вставка одного элемента в сетку (для авто-релизов).
-    // Не перерисовывает уже показанные карточки.
     function appendItemToGrid(item) {
         if (!container) return;
         if (!item || !item.id) return;
@@ -482,7 +510,6 @@
 
         const displayItems = items.slice(0, MAX_DISPLAY_ITEMS);
 
-        // Заголовок
         let header = container.parentNode?.querySelector('.news-header');
         if (!header) {
             header = createElement('div', 'news-header', {
@@ -524,7 +551,6 @@
 
         let grid = container.querySelector('.projects-grid:not(.skeleton-grid)');
 
-        // Если пусто и сетки ещё нет — показать empty state
         if (displayItems.length === 0 && (!grid || grid.children.length === 0)) {
             const skeleton = container.querySelector('.skeleton-grid');
             if (skeleton) skeleton.remove();
@@ -540,7 +566,6 @@
             return;
         }
 
-        // Собрать существующие id (прогрессивно добавленные карточки)
         const existingIds = new Set();
         if (grid) {
             grid.querySelectorAll('[data-item-id]').forEach(el => existingIds.add(el.dataset.itemId));
@@ -555,7 +580,6 @@
             container.appendChild(grid);
         }
 
-        // Дозаполнить недостающее (не перерисовываем!)
         const fragment = document.createDocumentFragment();
         let currentCount = grid.children.length;
         for (const item of displayItems) {
@@ -568,7 +592,6 @@
         }
         grid.appendChild(fragment);
 
-        // Локализация
         container.querySelectorAll('[data-lang]').forEach(el => {
             const key = el.getAttribute('data-lang');
             if (key) el.textContent = t(key);
@@ -617,7 +640,6 @@
             card.appendChild(preview);
         }
 
-        // Кнопка "Открыть релиз" для GitHub-релизов
         if (item.type === 'release' && item.releaseUrl) {
             const releaseLink = createElement('a', 'button small', {
                 marginTop: '8px',
@@ -636,7 +658,6 @@
             card.appendChild(releaseLink);
         }
 
-        // Кнопка "избранное" (только для авторизованных с gist, не для релизов)
         const currentUser = getCurrentUser();
         if (currentUser && hasScope('gist') && item.type !== 'release') {
             const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: t('addToFavorites') });
@@ -691,7 +712,6 @@
 
         cardWrapper.appendChild(card);
 
-        // Клик: пост → модалка, релиз → openExternal, видео/стрим → openExternal
         cardWrapper.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.news-bookmark-btn')) return;
 

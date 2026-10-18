@@ -3,9 +3,7 @@
 //   1. Баннеры с плавным появлением (.feature-banner[data-gif]).
 //   2. Переключаемый фон скачивания (#download-section).
 //   3. Ленивая загрузка видео в .desc-image (описание Starve Neon).
-//      - Видео грузятся только когда попадают в viewport.
-//      - Проигрывание останавливается, когда видео уходит из viewport.
-//      - На мобильных (window.isMobile) видео НЕ грузятся вообще — показывается poster.
+//   4. Превью YouTube-плейлистов (.video-preview--youtube[data-playlist-id] img без src).
 
 (function() {
     // ---------- 1. Баннеры с видео / гифками ----------
@@ -84,7 +82,6 @@
 
         if (section.querySelector('.bg-gif-layer')) return;
 
-        // На мобильных не запускаем фоновые видео скачивания
         const isMobile = window.isMobile === true;
 
         gifSources.forEach((src, index) => {
@@ -118,7 +115,7 @@
         mask.className = 'bg-gif-mask';
         section.appendChild(mask);
 
-        if (isMobile) return; // На мобильных не переключаем слои
+        if (isMobile) return;
 
         const layers = section.querySelectorAll('.bg-gif-layer');
         let currentIndex = 0;
@@ -130,27 +127,20 @@
     }
 
     // ---------- 3. Ленивая загрузка видео в .desc-image ----------
-    // Видео в описании Starve Neon: не грузятся, пока не видны.
-    // На мобильных не грузятся вообще — используется poster.
     function initDescriptionVideos() {
         const videos = document.querySelectorAll('.desc-image video[data-src]');
         if (videos.length === 0) return;
 
         const isMobile = window.isMobile === true;
 
-        // На мобильных: не загружаем видео вообще. Poster остаётся как фон.
         if (isMobile) {
             videos.forEach(video => {
-                // Убеждаемся, что src не установлен
                 video.removeAttribute('src');
-                // Обнуляем возможные <source> внутри
                 video.querySelectorAll('source').forEach(s => s.remove());
             });
             return;
         }
 
-        // Поддержка IntersectionObserver обязательна; при отсутствии — просто ничего не делаем,
-        // чтобы не ломать страницу (в этом случае видео останется с poster и без src).
         if (!('IntersectionObserver' in window)) {
             console.warn('[background-gifs] IntersectionObserver не поддерживается — видео в описании не будут загружены.');
             return;
@@ -160,7 +150,6 @@
             entries.forEach(entry => {
                 const video = entry.target;
                 if (entry.isIntersecting) {
-                    // Загружаем и запускаем видео, если оно ещё не загружено
                     if (!video.dataset.loadedOnce) {
                         const src = video.dataset.src;
                         if (src) {
@@ -169,7 +158,7 @@
                             video.dataset.loadedOnce = 'true';
                             const playPromise = video.play();
                             if (playPromise && typeof playPromise.catch === 'function') {
-                                playPromise.catch(() => { /* автоплей может быть запрещён политикой браузера */ });
+                                playPromise.catch(() => { /* автоплей может быть запрещён */ });
                             }
                         }
                     } else if (video.paused) {
@@ -179,7 +168,6 @@
                         }
                     }
                 } else {
-                    // Останавливаем воспроизведение, когда уходит из viewport
                     if (!video.paused) {
                         try { video.pause(); } catch (e) { /* noop */ }
                     }
@@ -189,7 +177,6 @@
 
         videos.forEach(video => observer.observe(video));
 
-        // При уходе со страницы останавливаем воспроизведение (экономия ресурсов)
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 videos.forEach(video => {
@@ -201,11 +188,84 @@
         });
     }
 
+    // ---------- 4. Превью YouTube-плейлистов ----------
+    // Ищем .video-preview--youtube[data-playlist-id] с пустым <img>,
+    // грузим превью через noembed → allorigins → fallback.
+    async function fetchPlaylistThumbnail(playlistId) {
+        if (!playlistId) return null;
+
+        // 1. noembed.com (поддерживает YouTube-плейлисты, возвращает thumbnail первого видео)
+        try {
+            const url = `https://noembed.com/embed?url=${encodeURIComponent(`https://www.youtube.com/playlist?list=${playlistId}`)}`;
+            const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data && data.thumbnail_url && typeof data.thumbnail_url === 'string') {
+                    return data.thumbnail_url;
+                }
+            }
+        } catch (e) { /* noop */ }
+
+        // 2. allorigins — тянем HTML страницы плейлиста, вытаскиваем og:image
+        try {
+            const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.youtube.com/playlist?list=${playlistId}`)}`;
+            const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (resp.ok) {
+                const html = await resp.text();
+                // og:image — самый надёжный источник
+                const ogMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+                if (ogMatch && ogMatch[1] && ogMatch[1].startsWith('http')) {
+                    return ogMatch[1];
+                }
+                // twitter:image
+                const twMatch = html.match(/<meta\s+name=["']twitter:image["']\s+content=["']([^"']+)["']/i);
+                if (twMatch && twMatch[1] && twMatch[1].startsWith('http')) {
+                    return twMatch[1];
+                }
+                // Первый ytimg из JSON-LD или inline-данных
+                const ytimgMatch = html.match(/https:\/\/i\.ytimg\.com\/vi\/([a-zA-Z0-9_-]+)\/(?:mq|hq|maxres)default\.jpg/);
+                if (ytimgMatch && ytimgMatch[1]) {
+                    return `https://i.ytimg.com/vi/${ytimgMatch[1]}/mqdefault.jpg`;
+                }
+            }
+        } catch (e) { /* noop */ }
+
+        return null;
+    }
+
+    function initPlaylistThumbnails() {
+        const previews = document.querySelectorAll('.video-preview--youtube[data-playlist-id]');
+        if (!previews.length) return;
+
+        previews.forEach(async (link) => {
+            const img = link.querySelector('img');
+            if (!img) return;
+            if (img.dataset.thumbProcessed === 'true') return;
+            img.dataset.thumbProcessed = 'true';
+
+            const playlistId = link.dataset.playlistId;
+            if (!playlistId) return;
+
+            const thumb = await fetchPlaylistThumbnail(playlistId);
+            if (thumb) {
+                img.src = thumb;
+                img.alt = link.getAttribute('aria-label') || 'YouTube playlist';
+                img.loading = 'lazy';
+                img.onerror = () => { img.style.display = 'none'; };
+                img.style.display = '';
+            } else {
+                // Fallback: скрываем пустой img — останется тёмный фон + play-иконка
+                img.style.display = 'none';
+            }
+        });
+    }
+
     // ---------- Инициализация ----------
     function initAll() {
         initFeatureBanners();
         initDownloadBackground();
         initDescriptionVideos();
+        initPlaylistThumbnails();
     }
 
     if (document.readyState === 'loading') {

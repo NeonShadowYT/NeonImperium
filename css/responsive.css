@@ -4,6 +4,7 @@
      — @media (pointer: coarse) — тач-устройства
      — @media (hover: hover) and (pointer: fine) — desktop
      — отключение backdrop-filter на мобильных
+   ВАЖНО: .projects-grid НЕ переопределяется здесь — см. layout.css.
 */
 
 /* ===========================================
@@ -177,10 +178,6 @@
         margin-left: auto;
     }
 
-    .projects-grid {
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 16px;
-    }
     .video-grid {
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 16px;
@@ -255,10 +252,6 @@
     .avatar-wrapper { width: 48px; height: 48px; }
     .profile-name { font-size: 13px; }
 
-    .projects-grid {
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 12px;
-    }
     .video-grid {
         grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
         gap: 12px;
@@ -405,10 +398,6 @@
     .avatar-wrapper { width: 40px; height: 40px; }
     .profile-name { font-size: 12px; }
 
-    .projects-grid {
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        gap: 10px;
-    }
     .video-grid {
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
         gap: 10px;
@@ -465,10 +454,6 @@
     }
     .game-title { font-size: 28px; }
 
-    .projects-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-    }
     .video-grid {
         grid-template-columns: 1fr 1fr;
         gap: 8px;
@@ -514,10 +499,6 @@
     h2 { font-size: 20px; }
     .project-card h3 { font-size: 18px; }
 
-    .projects-grid {
-        grid-template-columns: 1fr;
-        gap: 10px;
-    }
     .video-grid {
         grid-template-columns: 1fr;
         gap: 10px;
@@ -532,8 +513,6 @@
 
 /* ===========================================
    Мобильная навигация: горизонтальный скролл ТОЛЬКО у .nav-links
-   ВАЖНО: overflow у .nav-bar ОТКЛЮЧЁН, чтобы выпадающий список языка
-   и меню профиля не обрезались (не «залипали» под навбаром).
    =========================================== */
 @media (max-width: 900px) {
     .nav-bar {
@@ -574,7 +553,6 @@
         max-width: 90vw;
     }
 
-    /* Принудительно поднимаем выпадающее меню языка поверх контента */
     .lang-dropdown-menu {
         z-index: 2000;
     }
