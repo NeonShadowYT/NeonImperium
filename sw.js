@@ -76,6 +76,9 @@ const PRECACHE_URLS = [
     'images/logo-neon-imperium.webp',
     'images/default-avatar.webp',
     'images/default-news.webp',
+    'images/starve-neon-preview2.webp',
+    'images/tool-world-generator.webp',
+    'images/tool-icon-creator.webp',
     // Шрифты
     'fonts/RussoOne.woff2',
     // HTML
