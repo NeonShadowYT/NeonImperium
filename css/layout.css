@@ -86,14 +86,19 @@
     padding-bottom: 100%;
 }
 
-/* ========== Инструменты (WorldGenerator, IconCreator и др.) ========== */
-
+/* ========== Инструменты (WorldGenerator, IconCreator и др.) ==========
+   auto-fit + minmax(280px, 380px):
+   - Карточки НИКОГДА не шире 380px → нет «грамоздких» на всю ширину
+   - 3+ карточки в ряд на широком экране, 2 в среднем, 1 на мобильном
+   - justify-content: center → 2 карточки центрируются, а не растягиваются
+   ============================================================ */
 .tools-container {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(280px, 380px));
+    justify-content: center;
     gap: 24px;
     margin-top: 20px;
-    align-items: stretch;
+    align-items: start;
 }
 .tools-container .project-card-link {
     height: 100%;
@@ -101,18 +106,8 @@
 .tools-container .project-card {
     width: 100%;
 }
-.tools-container .project-card h3 {
-    margin: 8px 0 4px;
-    font-size: 20px;
-    color: var(--text-primary);
-}
-.tools-container .project-card p {
-    flex-grow: 1;
-    margin-bottom: 12px;
-}
-.tools-container .project-card .button i.fa-github,
-.tools-container .project-card .button i.fab.fa-github {
-    margin-right: 6px;
+.tools-container .project-card .button {
+    gap: 6px;
 }
 
 .loading-spinner {
@@ -194,16 +189,10 @@
 }
 
 /* ========== Адаптивность инструментов ========== */
-
-@media (max-width: 900px) {
-    .tools-container {
-        gap: 18px;
-    }
-}
-
 @media (max-width: 700px) {
     .tools-container {
         grid-template-columns: 1fr;
         gap: 16px;
+        justify-content: stretch;
     }
 }

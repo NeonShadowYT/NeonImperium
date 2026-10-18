@@ -531,24 +531,27 @@
 }
 
 /* ===========================================
-   Мобильная навигация: горизонтальный скролл nav-links
+   Мобильная навигация: горизонтальный скролл ТОЛЬКО у .nav-links
+   ВАЖНО: overflow у .nav-bar ОТКЛЮЧЁН, чтобы выпадающий список языка
+   и меню профиля не обрезались (не «залипали» под навбаром).
    =========================================== */
 @media (max-width: 900px) {
     .nav-bar {
         flex-wrap: nowrap !important;
         padding: 6px 8px;
         gap: 4px;
+        overflow: visible;
+    }
+    .nav-links {
+        flex: 1 1 auto;
+        min-width: 0;
+        flex-wrap: nowrap !important;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
-    }
-    .nav-bar::-webkit-scrollbar { display: none; }
-    .nav-links {
-        flex: 0 1 auto;
-        flex-wrap: nowrap !important;
-        overflow: visible;
         gap: 2px;
     }
+    .nav-links::-webkit-scrollbar { display: none; }
     .nav-link {
         flex-shrink: 0;
         padding: 6px 10px;
@@ -569,6 +572,11 @@
         left: auto;
         min-width: 160px;
         max-width: 90vw;
+    }
+
+    /* Принудительно поднимаем выпадающее меню языка поверх контента */
+    .lang-dropdown-menu {
+        z-index: 2000;
     }
 }
 

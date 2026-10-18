@@ -7,6 +7,13 @@
 //   — Дедупликация одновременных GET.
 //   — При получении 401 — dispatch 'github-api-unauthorized'
 //     (github-auth.js слушает и разлогинивает пользователя).
+//
+// АНОНИМНЫЙ ДОСТУП (важно для новостей/обновлений):
+//   GET-запросы к публичным репозиториям выполняются БЕЗ токена,
+//   если токен не задан. GitHub разрешает чтение публичных ресурсов
+//   без Authorization (rate limit 60/час на IP). Это позволяет ленте
+//   новостей и списку обновлений работать до входа пользователя.
+//   Мутации (POST/PATCH/DELETE) по-прежнему требуют токен.
 
 (function() {
     'use strict';
@@ -145,14 +152,23 @@
         }
 
         async _doRequestWithMeta(url, options, retries) {
+            const method = (options.method || 'GET').toUpperCase();
             const token = this.getToken();
-            if (!token) throw buildError('No GitHub token provided', 401);
+
+            // Мутации без токена выполнять нельзя — сразу 401.
+            // GET-запросы к публичным репозиториям разрешены анонимно
+            // (rate limit ниже, но новости/обновления грузятся без логина).
+            if (!token && method !== 'GET') {
+                throw buildError('No GitHub token provided', 401);
+            }
 
             const headers = Object.assign(
                 { 'Accept': 'application/vnd.github.v3+json' },
                 options.headers || {}
             );
-            headers['Authorization'] = `Bearer ${token}`;
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
 
             if (options.ifNoneMatch) {
                 headers['If-None-Match'] = options.ifNoneMatch;
@@ -199,6 +215,9 @@
 
                     if (response.status === 401) {
                         // Токен невалиден — уведомляем UI.
+                        // Анонимные GET-запросы 401 не должны получать,
+                        // так что этот путь актуален только для реального 401
+                        // от GitHub при наличии/истечении токена.
                         notifyUnauthorized();
                         let errorMsg = 'Unauthorized';
                         let errorBody = null;
