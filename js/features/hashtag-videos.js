@@ -1,45 +1,65 @@
 // js/features/hashtag-videos.js
-// Автоматическая загрузка видео по хештегу #starveneon со страницы YouTube.
-// Без API-ключа. Использует ytInitialData из HTML и несколько CORS-прокси.
+// Загрузка видео по хештегу #starveneon.
+// Несколько CORS-прокси опрашиваются ПАРАЛЛЕЛЬНО (Promise.any).
+// Первый успешный результат кешируется в localStorage на 30 минут.
 //
-// Поддерживаемые компоненты YouTube:
-//   videoRenderer, gridVideoRenderer, compactVideoRenderer (классические)
-//   lockupViewModel (новые страницы каналов/хештегов)
-//   shortsLockupViewModel (Shorts)
-//
-// Прокси перебираются по очереди: allorigins → corsproxy.io → codetabs → cloudflare-cors-anywhere.
-// Первый успешный ответ используется.
+// CSP: требует разрешения для всех доменов из PROXIES в connect-src.
 
 (function() {
     'use strict';
 
     const HASHTAG = 'starveneon';
     const YT_HASHTAG_URL = `https://www.youtube.com/hashtag/${HASHTAG}`;
+    const CACHE_KEY = `hashtag_videos_cache_${HASHTAG}`;
+    const CACHE_TTL = 30 * 60 * 1000; // 30 минут
     const MAX_VIDEOS = 9;
-    const REQUEST_TIMEOUT = 20000;
+    const REQUEST_TIMEOUT = 12000;
 
-    // Список CORS-прокси (в порядке приоритета).
-    // Формат: функция, принимающая targetUrl, возвращает прокси-URL.
-    const CORS_PROXIES = [
-        {
-            name: 'allorigins',
-            build: (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-        },
-        {
-            name: 'corsproxy.io',
-            build: (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`
-        },
-        {
-            name: 'codetabs',
-            build: (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
-        },
-        {
-            name: 'cloudflare-cors-anywhere',
-            build: (url) => `https://cloudflare-cors-anywhere.voor.nu/?${url}`
-        }
+    // ---- Список CORS-прокси ----
+    // Порядок не важен: все запускаются одновременно, побеждает самый быстрый.
+    // Каждый прокси — функция, принимающая targetUrl и возвращающая URL запроса.
+    const PROXIES = [
+        // 1. allorigins (raw) — иногда падает с 522, но пробуем
+        (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        // 2. allorigins (get) — другой endpoint, может работать, когда raw падает
+        (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+        // 3. everyorigin — бесплатный, без ключа
+        (url) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(url)}`,
+        // 4. cors.lol — бесплатный, простой
+        (url) => `https://api.cors.lol/?url=${encodeURIComponent(url)}`,
+        // 5. codetabs — бесплатный (требует разрешения в CSP)
+        (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+        // 6. cloudflare-cors-anywhere — worker (требует разрешения в CSP)
+        (url) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${url}`
     ];
 
-    // ---- Извлечение ytInitialData из HTML ----
+    // ---- Кеш ----
+    function readCache() {
+        try {
+            const raw = localStorage.getItem(CACHE_KEY);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            if (!data || !data.timestamp || !Array.isArray(data.videos)) return null;
+            if (Date.now() - data.timestamp > CACHE_TTL) {
+                localStorage.removeItem(CACHE_KEY);
+                return null;
+            }
+            return data.videos;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function writeCache(videos) {
+        try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify({
+                timestamp: Date.now(),
+                videos
+            }));
+        } catch (e) { /* noop */ }
+    }
+
+    // ---- Извлечение ytInitialData ----
     function extractYtInitialData(html) {
         const patterns = [
             /var ytInitialData = ({[\s\S]+?});/,
@@ -52,12 +72,9 @@
                 try {
                     return JSON.parse(m[1]);
                 } catch (e) {
-                    // Попробуем найти более точную границу JSON (до "</script>")
                     const end = m[1].lastIndexOf('}');
                     if (end !== -1) {
-                        try {
-                            return JSON.parse(m[1].slice(0, end + 1));
-                        } catch (e2) { /* noop */ }
+                        try { return JSON.parse(m[1].slice(0, end + 1)); } catch (e2) { /* noop */ }
                     }
                 }
             }
@@ -65,7 +82,7 @@
         return null;
     }
 
-    // ---- Рекурсивный обход JSON и сбор видео ----
+    // ---- Парсинг видео ----
     function collectVideos(obj, out, seen) {
         if (!obj || typeof obj !== 'object') return;
         if (Array.isArray(obj)) {
@@ -73,23 +90,21 @@
             return;
         }
 
-        // 1. Классические videoRenderer / gridVideoRenderer / compactVideoRenderer
+        // Классические компоненты
         const classic = obj.videoRenderer || obj.gridVideoRenderer || obj.compactVideoRenderer;
-        if (classic && classic.videoId) {
-            addClassicVideo(classic, out, seen);
+        if (classic && classic.videoId) addClassicVideo(classic, out, seen);
+
+        // Новый lockupViewModel (страницы каналов/хештегов)
+        if (obj.lockupViewModel) addLockupVideo(obj.lockupViewModel, out, seen);
+
+        // Shorts
+        if (obj.shortsLockupViewModel) addShortsVideo(obj.shortsLockupViewModel, out, seen);
+
+        // richItemRenderer (обёртка для hashtag-страниц)
+        if (obj.richItemRenderer && obj.richItemRenderer.content) {
+            collectVideos(obj.richItemRenderer.content, out, seen);
         }
 
-        // 2. lockupViewModel (новые страницы каналов/хештегов)
-        if (obj.lockupViewModel) {
-            addLockupVideo(obj.lockupViewModel, out, seen);
-        }
-
-        // 3. shortsLockupViewModel (Shorts)
-        if (obj.shortsLockupViewModel) {
-            addShortsVideo(obj.shortsLockupViewModel, out, seen);
-        }
-
-        // Рекурсивно обходим все ключи
         for (const key of Object.keys(obj)) {
             collectVideos(obj[key], out, seen);
         }
@@ -109,8 +124,7 @@
 
         let thumbnail = '';
         if (r.thumbnail && Array.isArray(r.thumbnail.thumbnails) && r.thumbnail.thumbnails.length) {
-            const thumbs = r.thumbnail.thumbnails;
-            thumbnail = thumbs[thumbs.length - 1].url;
+            thumbnail = r.thumbnail.thumbnails[r.thumbnail.thumbnails.length - 1].url;
         }
         if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${r.videoId}/mqdefault.jpg`;
 
@@ -134,15 +148,15 @@
         }
         if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
 
-        // Автор в lockupViewModel обычно отсутствует, но может быть в metadataRows
         let author = '';
         const rows = l.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows;
         if (Array.isArray(rows)) {
             for (const row of rows) {
                 if (Array.isArray(row.metadataParts)) {
                     for (const part of row.metadataParts) {
-                        if (part.text?.content && !part.text.content.includes('view') && !part.text.content.includes('ago')) {
-                            author = part.text.content;
+                        const txt = part.text?.content;
+                        if (txt && !/\d+\s*(view|ago)/i.test(txt)) {
+                            author = txt;
                             break;
                         }
                     }
@@ -160,17 +174,16 @@
             const m = s.entityId.match(/shorts-shelf-item-(.+)/);
             if (m) videoId = m[1];
         }
-        if (!videoId) return;
-        if (seen.has(videoId)) return;
+        if (!videoId || seen.has(videoId)) return;
         seen.add(videoId);
 
         let title = '';
         if (s.overlayMetadata?.primaryText?.content) title = s.overlayMetadata.primaryText.content;
 
         let thumbnail = '';
-        const thumbSources = s.thumbnailViewModel?.thumbnailViewModel?.image?.sources;
-        if (Array.isArray(thumbSources) && thumbSources.length) {
-            thumbnail = thumbSources[thumbSources.length - 1].url;
+        const sources = s.thumbnailViewModel?.thumbnailViewModel?.image?.sources;
+        if (Array.isArray(sources) && sources.length) {
+            thumbnail = sources[sources.length - 1].url;
         }
         if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
 
@@ -184,30 +197,74 @@
         return out.slice(0, MAX_VIDEOS);
     }
 
-    // ---- Загрузка через прокси ----
-    async function fetchHashtagHtml() {
-        let lastError = null;
-        for (const proxy of CORS_PROXIES) {
-            const proxyUrl = proxy.build(YT_HASHTAG_URL);
-            try {
-                const resp = await fetch(proxyUrl, {
-                    signal: AbortSignal.timeout(REQUEST_TIMEOUT)
-                });
-                if (!resp.ok) {
-                    lastError = new Error(`${proxy.name}: HTTP ${resp.status}`);
-                    continue;
-                }
-                const html = await resp.text();
-                if (!html || html.length < 1000) {
-                    lastError = new Error(`${proxy.name}: слишком короткий ответ`);
-                    continue;
-                }
-                return html;
-            } catch (e) {
-                lastError = new Error(`${proxy.name}: ${e.message || e}`);
+    // ---- Загрузка через один прокси ----
+    async function fetchViaProxy(proxyFn, signal) {
+        const proxyUrl = proxyFn(YT_HASHTAG_URL);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+        if (signal) {
+            if (signal.aborted) {
+                clearTimeout(timeoutId);
+                throw new DOMException('Aborted', 'AbortError');
             }
+            signal.addEventListener('abort', () => controller.abort(), { once: true });
         }
-        throw lastError || new Error('Все CORS-прокси недоступны');
+
+        try {
+            const resp = await fetch(proxyUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
+
+            const text = await resp.text();
+            if (!text || text.length < 500) {
+                throw new Error('Response too short');
+            }
+
+            // allorigins /get возвращает JSON { contents: "..." }
+            // Нужно распаковать, если это так.
+            let html = text;
+            if (text.trim().startsWith('{')) {
+                try {
+                    const json = JSON.parse(text);
+                    if (json.contents && typeof json.contents === 'string') {
+                        html = json.contents;
+                    }
+                } catch (e) { /* не JSON, оставляем как есть */ }
+            }
+
+            const data = extractYtInitialData(html);
+            if (!data) {
+                throw new Error('ytInitialData not found');
+            }
+
+            const videos = parseVideos(data);
+            if (!videos.length) {
+                throw new Error('No videos parsed');
+            }
+
+            return videos;
+        } catch (err) {
+            clearTimeout(timeoutId);
+            throw err;
+        }
+    }
+
+    // ---- Параллельная гонка прокси ----
+    async function raceProxies(signal) {
+        const promises = PROXIES.map(proxyFn =>
+            fetchViaProxy(proxyFn, signal).catch(err => {
+                // Возвращаем rejected promise, чтобы Promise.any его проигнорировал
+                throw err;
+            })
+        );
+
+        // Promise.any вернёт первый успешный результат, остальные будут проигнорированы.
+        // Если все упадут — AggregateError.
+        return await Promise.any(promises);
     }
 
     // ---- Отрисовка ----
@@ -282,20 +339,28 @@
     }
 
     // ---- Основная функция ----
-    async function loadHashtagVideos(containerId) {
+    async function loadHashtagVideos(containerId, forceRefresh = false) {
         const container = document.getElementById(containerId);
         if (!container) return;
 
+        // 1. Кеш
+        if (!forceRefresh) {
+            const cached = readCache();
+            if (cached && cached.length) {
+                renderVideos(cached, container);
+                return;
+            }
+        }
+
+        // 2. Скелетон загрузки
         container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка видео по #${HASHTAG}...</p></div>`;
 
         try {
-            const html = await fetchHashtagHtml();
-            const data = extractYtInitialData(html);
-            if (!data) throw new Error('ytInitialData не найден');
-            const videos = parseVideos(data);
+            const videos = await raceProxies();
+            writeCache(videos);
             renderVideos(videos, container);
         } catch (e) {
-            console.warn('[HashtagVideos] Ошибка:', e.message || e);
+            console.warn('[HashtagVideos] Все прокси недоступны:', e.message || e);
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-exclamation-triangle"></i>
@@ -306,7 +371,7 @@
                 </div>
             `;
             const retry = container.querySelector('#hashtag-videos-retry');
-            if (retry) retry.addEventListener('click', () => loadHashtagVideos(containerId));
+            if (retry) retry.addEventListener('click', () => loadHashtagVideos(containerId, true));
         }
     }
 
