@@ -1,10 +1,5 @@
-// js/pages/news-feed.js – единый менеджер новостей с кешированием, скелетоном, отказоустойчивостью
-// и авто-новостями из GitHub Releases (прогрессивная отрисовка).
-//
-// ВАЖНО про abort: refreshNewsFeed может быть вызван во время initNewsFeed
-// (например, github-login-success при restoreSession). Предыдущий fetch
-// отменяется через abortController.abort(), что в Firefox даёт TypeError:
-// NetworkError. Такие ошибки НЕ логируем — это ожидаемый abort.
+// js/pages/news-feed.js – лента новостей с авто-релизами и видео с канала Neon Shadow.
+// cacheGet/cacheSet асинхронные. Abort предыдущего запроса НЕ логируется.
 (function() {
     const {
         cacheGet, cacheSet, cacheRemoveByPrefix,
@@ -17,25 +12,19 @@
 
     const CACHE_KEY = 'news_feed_data_v2';
     const CACHE_TTL = 5 * 60 * 1000;
-    const SOURCE_TIMEOUT = 10000;
+    const SOURCE_TIMEOUT = 15000;
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 1000;
     const MAX_DISPLAY_ITEMS = 9;
 
     const RELEASE_SOURCES = [
-        {
-            owner: 'NeonShadowYT',
-            repo: 'WorldGenerator',
-            name: 'WorldGenerator',
-            icon: 'images/tool-world-generator.webp'
-        },
-        {
-            owner: 'NeonShadowYT',
-            repo: 'IconCreator',
-            name: 'IconCreator',
-            icon: 'images/tool-icon-creator.webp'
-        }
+        { owner: 'NeonShadowYT', repo: 'WorldGenerator', name: 'WorldGenerator', icon: 'images/tool-world-generator.webp' },
+        { owner: 'NeonShadowYT', repo: 'IconCreator', name: 'IconCreator', icon: 'images/tool-icon-creator.webp' }
     ];
+
+    // Канал Neon Shadow на YouTube
+    const YT_CHANNEL_ID = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
+    const YT_CHANNEL_NAME = 'Neon Shadow';
 
     let currentItems = [];
     let currentUser = null;
@@ -66,8 +55,6 @@
         }
     }
 
-    // Тихая проверка: был ли abort. В Firefox abort body-read даёт NetworkError,
-    // не AbortError. Оба случая — ожидаемые, не логируем.
     function isAborted(err, signal) {
         if (!err) return false;
         if (signal && signal.aborted) return true;
@@ -125,7 +112,6 @@
                 return await fn();
             } catch (err) {
                 lastError = err;
-                // Abort / NetworkError — не retry, сразу пробрасываем
                 if (err && (err.name === 'AbortError' || String(err.message || '').includes('Aborted'))) {
                     throw err;
                 }
@@ -153,16 +139,10 @@
 
         try {
             const news = await window.GithubAPI.loadIssues({
-                labels: 'type:news',
-                state: 'open',
-                per_page: 10,
-                signal: controller.signal
+                labels: 'type:news', state: 'open', per_page: 10, signal: controller.signal
             });
             const updates = await window.GithubAPI.loadIssues({
-                labels: 'type:update',
-                state: 'open',
-                per_page: 10,
-                signal: controller.signal
+                labels: 'type:update', state: 'open', per_page: 10, signal: controller.signal
             });
             clearTimeout(timeoutId);
 
@@ -172,13 +152,8 @@
             return all.map(i => {
                 const labels = i.labels.map(l => l.name);
                 return normalizeItem({
-                    type: 'post',
-                    number: i.number,
-                    title: i.title,
-                    body: i.body,
-                    author: i.user.login,
-                    date: new Date(i.created_at),
-                    labels: labels,
+                    type: 'post', number: i.number, title: i.title, body: i.body,
+                    author: i.user.login, date: new Date(i.created_at), labels: labels,
                     game: labels.find(l => l.startsWith('game:'))?.split(':')[1] || null,
                     thumbnail: null
                 });
@@ -191,13 +166,8 @@
         }
     }
 
+    // ---- Видео с канала Neon Shadow ----
     async function loadVideos(signal) {
-        // YouTube RSS через allorigins напрямую (rss2json периодически отдаёт 422).
-        const YT_CHANNELS = [
-            { id: 'UC2pH2qNfh2sEAeYEGs1k_Lg', name: 'Neon Shadow' }
-        ];
-
-        const all = [];
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
         if (signal) {
@@ -206,52 +176,69 @@
         }
 
         try {
-            for (const ch of YT_CHANNELS) {
-                if (controller.signal.aborted) break;
-                try {
-                    const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`;
-                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`;
-                    const resp = await fetch(proxyUrl, { signal: controller.signal });
-                    if (!resp.ok) continue;
-                    const xmlText = await resp.text();
-                    // Простой regex-парсинг: DOMParser с namespace у XML часто глючит.
-                    const entryBlocks = xmlText.split('<entry>').slice(1);
-                    const items = entryBlocks.slice(0, 3).map(block => {
-                        const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
-                        const titleMatch = block.match(/<title>([^<]*)<\/title>/);
-                        const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
-                        const thumbMatch = block.match(/<media:thumbnail\s+url=["']([^"']+)["']/);
-                        if (!videoIdMatch) return null;
-                        const videoId = videoIdMatch[1];
-                        return normalizeItem({
-                            type: 'video',
-                            id: videoId,
-                            title: (titleMatch ? titleMatch[1] : 'Untitled')
-                                .replace(/&amp;/g, '&')
-                                .replace(/&lt;/g, '<')
-                                .replace(/&gt;/g, '>')
-                                .replace(/&quot;/g, '"')
-                                .replace(/&#39;/g, "'"),
-                            author: ch.name,
-                            date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
-                            thumbnail: thumbMatch ? thumbMatch[1] : `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-                            videoData: { service: 'youtube', id: videoId }
-                        });
-                    }).filter(v => v);
-                    all.push(...items);
-                } catch (e) {
-                    if (isAborted(e, signal) || e.name === 'AbortError') break;
-                    console.warn(`[NewsFeed] Ошибка RSS ${ch.name}: ${e.message || e}`);
+            const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`;
+
+            // 1. Основной путь: rss2json (стабильнее для YouTube RSS)
+            try {
+                const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+                const resp = await fetch(apiUrl, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.status === 'ok' && Array.isArray(data.items)) {
+                        return data.items.slice(0, 6).map(item => {
+                            const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
+                            if (!vid) return null;
+                            return normalizeItem({
+                                type: 'video', id: vid,
+                                title: item.title,
+                                author: YT_CHANNEL_NAME,
+                                date: new Date(item.pubDate),
+                                thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
+                                videoData: { service: 'youtube', id: vid }
+                            });
+                        }).filter(v => v);
+                    }
                 }
+            } catch (e) {
+                if (isAborted(e, signal) || e.name === 'AbortError') throw e;
+                console.warn('[NewsFeed] rss2json недоступен, пробуем allorigins');
             }
+
+            // 2. Fallback: allorigins + ручной парсинг XML
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`;
+            const resp = await fetch(proxyUrl, { signal: controller.signal });
             clearTimeout(timeoutId);
-            all.sort((a, b) => b.date - a.date);
-            return all.slice(0, 12);
+            if (!resp.ok) return [];
+
+            const xmlText = await resp.text();
+            const entryBlocks = xmlText.split('<entry>').slice(1);
+            return entryBlocks.slice(0, 6).map(block => {
+                const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+                const titleMatch = block.match(/<title>([^<]*)<\/title>/);
+                const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
+                const thumbMatch = block.match(/<media:thumbnail\s+url=["']([^"']+)["']/);
+                if (!videoIdMatch) return null;
+                const videoId = videoIdMatch[1];
+                return normalizeItem({
+                    type: 'video', id: videoId,
+                    title: (titleMatch ? titleMatch[1] : 'Untitled')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&gt;/g, '>')
+                        .replace(/&quot;/g, '"')
+                        .replace(/&#39;/g, "'"),
+                    author: YT_CHANNEL_NAME,
+                    date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
+                    thumbnail: thumbMatch ? thumbMatch[1] : `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                    videoData: { service: 'youtube', id: videoId }
+                });
+            }).filter(v => v);
         } catch (err) {
             clearTimeout(timeoutId);
             if (isAborted(err, signal) || isAborted(err, controller.signal)) return [];
             console.warn('[NewsFeed] Ошибка загрузки видео:', err);
-            throw err;
+            return [];
         }
     }
 
@@ -276,30 +263,23 @@
                     if (data.online !== 1) continue;
                     const info = data.streams[0];
                     if (!info) continue;
-                    const game = info[2] || 'Игра';
-                    const viewers = info[1] || 0;
                     streams.push(normalizeItem({
-                        type: 'twitch',
-                        id: channel,
-                        title: `${t('stream')}: ${channel}${viewers ? ` (${viewers} ${t('viewers')})` : ''}`,
-                        author: channel,
-                        date: new Date(),
+                        type: 'twitch', id: channel,
+                        title: `${t('stream')}: ${channel}${info[1] ? ` (${info[1]} ${t('viewers')})` : ''}`,
+                        author: channel, date: new Date(),
                         thumbnail: `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel}-320x180.jpg`,
-                        twitchData: { channel, game, viewers }
+                        twitchData: { channel, game: info[2] || 'Игра', viewers: info[1] || 0 }
                     }));
                 } catch (e) {
                     if (isAborted(e, signal) || e.name === 'AbortError') break;
-                    // Тихая ошибка TwitchInsights — не критично
                 }
             }
             clearTimeout(timeoutId);
-            streams.sort((a, b) => b.date - a.date);
             return streams;
         } catch (err) {
             clearTimeout(timeoutId);
             if (isAborted(err, signal) || isAborted(err, controller.signal)) return [];
-            console.warn('[NewsFeed] Ошибка загрузки стримов:', err);
-            throw err;
+            return [];
         }
     }
 
@@ -309,10 +289,7 @@
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
             if (signal) {
-                if (signal.aborted) {
-                    clearTimeout(timeoutId);
-                    return null;
-                }
+                if (signal.aborted) { clearTimeout(timeoutId); return null; }
                 signal.addEventListener('abort', () => controller.abort(), { once: true });
             }
             try {
@@ -337,12 +314,7 @@
                     date: new Date(r.published_at || r.created_at || Date.now()),
                     thumbnail: source.icon,
                     releaseUrl: r.html_url,
-                    releaseData: {
-                        owner: source.owner,
-                        repo: source.repo,
-                        tag: r.tag_name,
-                        url: r.html_url
-                    },
+                    releaseData: { owner: source.owner, repo: source.repo, tag: r.tag_name, url: r.html_url },
                     labels: ['type:release', `repo:${source.repo}`]
                 });
                 if (typeof onEach === 'function') {
@@ -351,10 +323,7 @@
                 return item;
             } catch (e) {
                 clearTimeout(timeoutId);
-                // Abort / NetworkError при abort — тихо
-                if (isAborted(e, signal) || isAborted(e, controller.signal) || e.name === 'AbortError') {
-                    return null;
-                }
+                if (isAborted(e, signal) || isAborted(e, controller.signal) || e.name === 'AbortError') return null;
                 console.warn(`[NewsFeed] Ошибка загрузки релизов ${source.repo}: ${e.message || e}`);
                 return null;
             }
@@ -380,8 +349,7 @@
                     if (!isLoading) {
                         const fresh = await cacheGet(CACHE_KEY, maxAge);
                         if (fresh) {
-                            const items = normalizeItems(fresh.items || []);
-                            resolve({ items, fromCache: true, isStale: false });
+                            resolve({ items: normalizeItems(fresh.items || []), fromCache: true, isStale: false });
                         } else {
                             resolve({ items: [], fromCache: false, isStale: false });
                         }
@@ -395,7 +363,6 @@
 
         isLoading = true;
         _onItemCallback = typeof onItem === 'function' ? onItem : null;
-        // Тихий abort предыдущего fetch — ожидаемо при refresh во время init.
         if (abortController) {
             try { abortController.abort(); } catch { /* noop */ }
         }
@@ -431,7 +398,6 @@
                     allItems = allItems.concat(result.value);
                 } else {
                     const source = ['посты', 'видео', 'стримы', 'релизы'][index];
-                    // Тихий abort — не логируем
                     if (!isAborted(result.reason, abortController.signal)) {
                         console.warn(`[NewsFeed] Не удалось загрузить ${source}:`, result.reason);
                     }
@@ -454,9 +420,8 @@
             console.error('[NewsFeed] Критическая ошибка загрузки:', err);
             const stale = await cacheGet(CACHE_KEY, Infinity);
             if (stale) {
-                const items = normalizeItems(stale.items || []);
                 console.warn('[NewsFeed] Возвращаем устаревший кеш');
-                return { items, fromCache: true, isStale: true };
+                return { items: normalizeItems(stale.items || []), fromCache: true, isStale: true };
             }
             throw err;
         } finally {
@@ -484,8 +449,7 @@
     }
 
     function appendItemToGrid(item) {
-        if (!container) return;
-        if (!item || !item.id) return;
+        if (!container || !item || !item.id) return;
 
         let grid = container.querySelector('.projects-grid:not(.skeleton-grid)');
         if (!grid) {
@@ -513,19 +477,13 @@
         let header = container.parentNode?.querySelector('.news-header');
         if (!header) {
             header = createElement('div', 'news-header', {
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '20px',
-                flexWrap: 'wrap',
-                gap: '15px'
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: '20px', flexWrap: 'wrap', gap: '15px'
             });
             const titleDiv = createElement('div');
             titleDiv.innerHTML = sanitizeHtml(`
-                <h2>
-                    <i class="fas fa-newspaper" style="color: var(--accent); margin-right: 8px;"></i>
-                    <span data-lang="newsTitle">${t('newsTitle')}</span>
-                </h2>
+                <h2><i class="fas fa-newspaper" style="color: var(--accent); margin-right: 8px;"></i>
+                <span data-lang="newsTitle">${t('newsTitle')}</span></h2>
                 <p class="text-secondary" data-lang="newsDesc">${t('newsDesc')}</p>
             `);
             header.appendChild(titleDiv);
@@ -567,9 +525,7 @@
         }
 
         const existingIds = new Set();
-        if (grid) {
-            grid.querySelectorAll('[data-item-id]').forEach(el => existingIds.add(el.dataset.itemId));
-        }
+        if (grid) grid.querySelectorAll('[data-item-id]').forEach(el => existingIds.add(el.dataset.itemId));
 
         if (!grid) {
             const skeleton = container.querySelector('.skeleton-grid');
@@ -605,8 +561,7 @@
         const imgWrapper = createElement('div', 'image-wrapper');
         const img = createElement('img', 'project-image', {}, {
             src: item.thumbnail || 'images/default-news.webp',
-            alt: item.title,
-            loading: 'lazy'
+            alt: item.title, loading: 'lazy'
         });
         img.onerror = () => img.src = 'images/default-news.webp';
         imgWrapper.appendChild(img);
@@ -617,8 +572,7 @@
         card.appendChild(title);
 
         const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
-        const dateStr = item.date.toLocaleDateString();
-        meta.innerHTML = sanitizeHtml(`<i class="fas fa-user"></i> ${escapeHtml(item.author)} · <i class="fas fa-calendar-alt"></i> ${dateStr}`);
+        meta.innerHTML = sanitizeHtml(`<i class="fas fa-user"></i> ${escapeHtml(item.author)} · <i class="fas fa-calendar-alt"></i> ${item.date.toLocaleDateString()}`);
         if (item.type === 'twitch' && item.twitchData) {
             meta.innerHTML += sanitizeHtml(` · 🎮 ${escapeHtml(item.twitchData.game)}`);
         }
@@ -630,11 +584,8 @@
         if ((item.type === 'post' || item.type === 'release') && item.body) {
             const summary = window.GithubCore.extractSummary(item.body) || item.body.replace(/\n/g, ' ').substring(0, 120) + '…';
             const preview = createElement('p', 'text-secondary', {
-                fontSize: '13px',
-                overflow: 'hidden',
-                display: '-webkit-box',
-                WebkitLineClamp: '2',
-                WebkitBoxOrient: 'vertical'
+                fontSize: '13px', overflow: 'hidden', display: '-webkit-box',
+                WebkitLineClamp: '2', WebkitBoxOrient: 'vertical'
             });
             preview.textContent = summary;
             card.appendChild(preview);
@@ -642,17 +593,9 @@
 
         if (item.type === 'release' && item.releaseUrl) {
             const releaseLink = createElement('a', 'button small', {
-                marginTop: '8px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                width: '100%'
-            }, {
-                href: item.releaseUrl,
-                target: '_blank',
-                rel: 'noopener noreferrer'
-            });
+                marginTop: '8px', display: 'inline-flex', alignItems: 'center',
+                justifyContent: 'center', gap: '6px', width: '100%'
+            }, { href: item.releaseUrl, target: '_blank', rel: 'noopener noreferrer' });
             releaseLink.innerHTML = sanitizeHtml(`<i class="fab fa-github" aria-hidden="true"></i> <span>${t('openRelease')}</span>`);
             releaseLink.addEventListener('click', (e) => e.stopPropagation());
             card.appendChild(releaseLink);
@@ -666,22 +609,15 @@
                 e.stopPropagation();
                 if (!window.BookmarkStorage) {
                     try {
-                        if (window.loadStorageModules) {
-                            await window.loadStorageModules();
-                        } else {
+                        if (window.loadStorageModules) await window.loadStorageModules();
+                        else {
                             const modules = [
-                                'js/features/storage/core.js',
-                                'js/features/storage/metadata.js',
-                                'js/features/storage/manager.js',
-                                'js/features/storage/ui.js',
+                                'js/features/storage/core.js', 'js/features/storage/metadata.js',
+                                'js/features/storage/manager.js', 'js/features/storage/ui.js',
                                 'js/features/storage/index.js'
                             ];
-                            for (const src of modules) {
-                                await window.Utils.loadModule(src);
-                            }
-                            if (typeof window._StorageEnsure === 'function') {
-                                await window._StorageEnsure();
-                            }
+                            for (const src of modules) await window.Utils.loadModule(src);
+                            if (typeof window._StorageEnsure === 'function') await window._StorageEnsure();
                         }
                     } catch (err) {
                         showToast(t('loadModulesError'), 'error');
@@ -693,12 +629,10 @@
                     return;
                 }
                 const bookmark = {
-                    url: buildWatchUrl(item),
-                    title: item.title,
+                    url: buildWatchUrl(item), title: item.title,
                     type: item.type === 'post' ? 'post' : 'video',
                     thumbnail: item.thumbnail || 'images/default-news.webp',
-                    author: item.author,
-                    date: item.date,
+                    author: item.author, date: item.date,
                     postData: item.type === 'post' ? { id: item.id, title: item.title, body: item.body, author: item.author, date: item.date.toISOString(), labels: item.labels, game: item.game } : undefined,
                     videoData: item.type === 'video' ? { id: item.id, service: 'youtube' } : undefined,
                     twitchData: item.type === 'twitch' ? { channel: item.id } : undefined
@@ -716,19 +650,10 @@
             if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.news-bookmark-btn')) return;
 
             if (item.type === 'post') {
-                if (!window.UIFeedback) {
-                    loadModule('js/features/ui-feedback.js').catch(() => {});
-                    return;
-                }
+                if (!window.UIFeedback) { loadModule('js/features/ui-feedback.js').catch(() => {}); return; }
                 window.UIFeedback.openFullModal({
-                    type: 'post',
-                    id: item.id,
-                    title: item.title,
-                    body: item.body,
-                    author: item.author,
-                    date: item.date,
-                    game: item.game,
-                    labels: item.labels
+                    type: 'post', id: item.id, title: item.title, body: item.body,
+                    author: item.author, date: item.date, game: item.game, labels: item.labels
                 });
             } else if (item.type === 'release' && item.releaseUrl) {
                 openExternal(item.releaseUrl);
@@ -746,7 +671,6 @@
         if (!container) return;
 
         currentUser = getCurrentUser();
-
         container.innerHTML = '';
         container.appendChild(renderSkeleton(6));
 
@@ -757,9 +681,7 @@
             });
             if (result) {
                 renderNewsFeed(result.items);
-                if (result.isStale) {
-                    showToast('Данные могут быть устаревшими. Попробуйте обновить.', 'warning', 5000);
-                }
+                if (result.isStale) showToast('Данные могут быть устаревшими. Попробуйте обновить.', 'warning', 5000);
             } else {
                 renderNewsFeed([]);
             }

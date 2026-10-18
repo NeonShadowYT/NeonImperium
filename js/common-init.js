@@ -134,8 +134,7 @@
             'js/pages/game-updates.js',
             'js/platform.js',
             'js/features/background-gifs.js',
-            'js/features/hashtag-videos.js'   // ← ДОБАВЛЕНО
-        ],
+            'js/features/hashtag-videos.js'],
         'alpha-01': ['js/pages/feedback.js', 'js/pages/game-updates.js'],
         'gc-adven': ['js/pages/feedback.js', 'js/pages/game-updates.js'],
         'license': []

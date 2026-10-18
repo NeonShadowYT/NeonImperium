@@ -1,22 +1,43 @@
 // js/features/hashtag-videos.js
 // Автоматическая загрузка видео по хештегу #starveneon со страницы YouTube.
-// Использует ytInitialData (JSON внутри HTML страницы хештега) через CORS-прокси allorigins.
-// Без YouTube API-ключа.
+// Без API-ключа. Использует ytInitialData из HTML и несколько CORS-прокси.
 //
-// Рендерит карточки в контейнер #hashtag-videos:
-//   - превью (thumbnail) — самое важное
-//   - название видео
-//   - автор (канал) — если удалось извлечь
-//   - клик открывает видео на YouTube в новой вкладке
+// Поддерживаемые компоненты YouTube:
+//   videoRenderer, gridVideoRenderer, compactVideoRenderer (классические)
+//   lockupViewModel (новые страницы каналов/хештегов)
+//   shortsLockupViewModel (Shorts)
+//
+// Прокси перебираются по очереди: allorigins → corsproxy.io → codetabs → cloudflare-cors-anywhere.
+// Первый успешный ответ используется.
 
 (function() {
     'use strict';
 
     const HASHTAG = 'starveneon';
     const YT_HASHTAG_URL = `https://www.youtube.com/hashtag/${HASHTAG}`;
-    const PROXY_URL = `https://api.allorigins.win/raw?url=${encodeURIComponent(YT_HASHTAG_URL)}`;
     const MAX_VIDEOS = 9;
-    const REQUEST_TIMEOUT = 15000;
+    const REQUEST_TIMEOUT = 20000;
+
+    // Список CORS-прокси (в порядке приоритета).
+    // Формат: функция, принимающая targetUrl, возвращает прокси-URL.
+    const CORS_PROXIES = [
+        {
+            name: 'allorigins',
+            build: (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+        },
+        {
+            name: 'corsproxy.io',
+            build: (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`
+        },
+        {
+            name: 'codetabs',
+            build: (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+        },
+        {
+            name: 'cloudflare-cors-anywhere',
+            build: (url) => `https://cloudflare-cors-anywhere.voor.nu/?${url}`
+        }
+    ];
 
     // ---- Извлечение ytInitialData из HTML ----
     function extractYtInitialData(html) {
@@ -31,69 +52,162 @@
                 try {
                     return JSON.parse(m[1]);
                 } catch (e) {
-                    console.warn('[HashtagVideos] JSON parse error:', e.message);
+                    // Попробуем найти более точную границу JSON (до "</script>")
+                    const end = m[1].lastIndexOf('}');
+                    if (end !== -1) {
+                        try {
+                            return JSON.parse(m[1].slice(0, end + 1));
+                        } catch (e2) { /* noop */ }
+                    }
                 }
             }
         }
         return null;
     }
 
-    // ---- Рекурсивный сбор videoRenderer ----
-    function collectVideoRenderers(obj, out) {
+    // ---- Рекурсивный обход JSON и сбор видео ----
+    function collectVideos(obj, out, seen) {
         if (!obj || typeof obj !== 'object') return;
         if (Array.isArray(obj)) {
-            obj.forEach(item => collectVideoRenderers(item, out));
+            obj.forEach(item => collectVideos(item, out, seen));
             return;
         }
-        if (obj.videoRenderer) {
-            out.push(obj.videoRenderer);
+
+        // 1. Классические videoRenderer / gridVideoRenderer / compactVideoRenderer
+        const classic = obj.videoRenderer || obj.gridVideoRenderer || obj.compactVideoRenderer;
+        if (classic && classic.videoId) {
+            addClassicVideo(classic, out, seen);
         }
+
+        // 2. lockupViewModel (новые страницы каналов/хештегов)
+        if (obj.lockupViewModel) {
+            addLockupVideo(obj.lockupViewModel, out, seen);
+        }
+
+        // 3. shortsLockupViewModel (Shorts)
+        if (obj.shortsLockupViewModel) {
+            addShortsVideo(obj.shortsLockupViewModel, out, seen);
+        }
+
+        // Рекурсивно обходим все ключи
         for (const key of Object.keys(obj)) {
-            collectVideoRenderers(obj[key], out);
+            collectVideos(obj[key], out, seen);
         }
     }
 
-    // ---- Парсинг видео ----
-    function parseVideos(data) {
-        const renderers = [];
-        collectVideoRenderers(data, renderers);
+    function addClassicVideo(r, out, seen) {
+        if (!r.videoId || seen.has(r.videoId)) return;
+        seen.add(r.videoId);
 
-        const videos = [];
-        const seen = new Set();
+        let title = '';
+        if (r.title && r.title.runs && r.title.runs[0]) title = r.title.runs[0].text;
+        else if (r.title && r.title.simpleText) title = r.title.simpleText;
 
-        for (const r of renderers) {
-            const videoId = r.videoId;
-            if (!videoId || seen.has(videoId)) continue;
-            seen.add(videoId);
+        let author = '';
+        if (r.ownerText && r.ownerText.runs && r.ownerText.runs[0]) author = r.ownerText.runs[0].text;
+        else if (r.longBylineText && r.longBylineText.runs && r.longBylineText.runs[0]) author = r.longBylineText.runs[0].text;
 
-            let title = '';
-            if (r.title && r.title.runs && r.title.runs[0]) {
-                title = r.title.runs[0].text;
-            } else if (r.title && r.title.simpleText) {
-                title = r.title.simpleText;
-            }
+        let thumbnail = '';
+        if (r.thumbnail && Array.isArray(r.thumbnail.thumbnails) && r.thumbnail.thumbnails.length) {
+            const thumbs = r.thumbnail.thumbnails;
+            thumbnail = thumbs[thumbs.length - 1].url;
+        }
+        if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${r.videoId}/mqdefault.jpg`;
 
-            let author = '';
-            if (r.ownerText && r.ownerText.runs && r.ownerText.runs[0]) {
-                author = r.ownerText.runs[0].text;
-            } else if (r.longBylineText && r.longBylineText.runs && r.longBylineText.runs[0]) {
-                author = r.longBylineText.runs[0].text;
-            }
+        out.push({ videoId: r.videoId, title, author, thumbnail });
+    }
 
-            let thumbnail = '';
-            if (r.thumbnail && Array.isArray(r.thumbnail.thumbnails) && r.thumbnail.thumbnails.length) {
-                const thumbs = r.thumbnail.thumbnails;
-                thumbnail = thumbs[thumbs.length - 1].url; // самая большая
-            }
-            if (!thumbnail) {
-                thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
-            }
+    function addLockupVideo(l, out, seen) {
+        const videoId = l.contentId;
+        if (!videoId || seen.has(videoId)) return;
+        seen.add(videoId);
 
-            videos.push({ videoId, title, author, thumbnail });
-            if (videos.length >= MAX_VIDEOS) break;
+        let title = '';
+        if (l.metadata?.lockupMetadataViewModel?.title?.content) {
+            title = l.metadata.lockupMetadataViewModel.title.content;
         }
 
-        return videos;
+        let thumbnail = '';
+        if (l.contentImage?.thumbnailViewModel?.image?.sources?.length) {
+            const sources = l.contentImage.thumbnailViewModel.image.sources;
+            thumbnail = sources[sources.length - 1].url;
+        }
+        if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+
+        // Автор в lockupViewModel обычно отсутствует, но может быть в metadataRows
+        let author = '';
+        const rows = l.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows;
+        if (Array.isArray(rows)) {
+            for (const row of rows) {
+                if (Array.isArray(row.metadataParts)) {
+                    for (const part of row.metadataParts) {
+                        if (part.text?.content && !part.text.content.includes('view') && !part.text.content.includes('ago')) {
+                            author = part.text.content;
+                            break;
+                        }
+                    }
+                }
+                if (author) break;
+            }
+        }
+
+        out.push({ videoId, title, author, thumbnail });
+    }
+
+    function addShortsVideo(s, out, seen) {
+        let videoId = '';
+        if (s.entityId) {
+            const m = s.entityId.match(/shorts-shelf-item-(.+)/);
+            if (m) videoId = m[1];
+        }
+        if (!videoId) return;
+        if (seen.has(videoId)) return;
+        seen.add(videoId);
+
+        let title = '';
+        if (s.overlayMetadata?.primaryText?.content) title = s.overlayMetadata.primaryText.content;
+
+        let thumbnail = '';
+        const thumbSources = s.thumbnailViewModel?.thumbnailViewModel?.image?.sources;
+        if (Array.isArray(thumbSources) && thumbSources.length) {
+            thumbnail = thumbSources[thumbSources.length - 1].url;
+        }
+        if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+
+        out.push({ videoId, title, author: '', thumbnail });
+    }
+
+    function parseVideos(data) {
+        const out = [];
+        const seen = new Set();
+        collectVideos(data, out, seen);
+        return out.slice(0, MAX_VIDEOS);
+    }
+
+    // ---- Загрузка через прокси ----
+    async function fetchHashtagHtml() {
+        let lastError = null;
+        for (const proxy of CORS_PROXIES) {
+            const proxyUrl = proxy.build(YT_HASHTAG_URL);
+            try {
+                const resp = await fetch(proxyUrl, {
+                    signal: AbortSignal.timeout(REQUEST_TIMEOUT)
+                });
+                if (!resp.ok) {
+                    lastError = new Error(`${proxy.name}: HTTP ${resp.status}`);
+                    continue;
+                }
+                const html = await resp.text();
+                if (!html || html.length < 1000) {
+                    lastError = new Error(`${proxy.name}: слишком короткий ответ`);
+                    continue;
+                }
+                return html;
+            } catch (e) {
+                lastError = new Error(`${proxy.name}: ${e.message || e}`);
+            }
+        }
+        throw lastError || new Error('Все CORS-прокси недоступны');
     }
 
     // ---- Отрисовка ----
@@ -101,10 +215,12 @@
         container.innerHTML = '';
 
         if (!videos.length) {
-            const empty = document.createElement('div');
-            empty.className = 'empty-state';
-            empty.innerHTML = `<i class="fas fa-video"></i><p>Видео по хештегу #${HASHTAG} не найдены</p>`;
-            container.appendChild(empty);
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-video"></i>
+                    <p>Видео по хештегу #${HASHTAG} не найдены</p>
+                </div>
+            `;
             return;
         }
 
@@ -132,14 +248,11 @@
             play.innerHTML = '<i class="fas fa-play"></i>';
             a.appendChild(play);
 
-            // Подпись: название + автор поверх нижней части превью
             const caption = document.createElement('div');
             caption.className = 'video-caption';
             caption.style.cssText = `
                 position: absolute;
-                bottom: 0;
-                left: 0;
-                right: 0;
+                bottom: 0; left: 0; right: 0;
                 padding: 8px 10px;
                 background: linear-gradient(transparent, rgba(0,0,0,0.85));
                 color: #fff;
@@ -168,25 +281,21 @@
         container.appendChild(grid);
     }
 
-    // ---- Загрузка ----
+    // ---- Основная функция ----
     async function loadHashtagVideos(containerId) {
         const container = document.getElementById(containerId);
         if (!container) return;
 
-        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка видео...</p></div>`;
+        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка видео по #${HASHTAG}...</p></div>`;
 
         try {
-            const resp = await fetch(PROXY_URL, {
-                signal: AbortSignal.timeout(REQUEST_TIMEOUT)
-            });
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const html = await resp.text();
+            const html = await fetchHashtagHtml();
             const data = extractYtInitialData(html);
-            if (!data) throw new Error('ytInitialData not found');
+            if (!data) throw new Error('ytInitialData не найден');
             const videos = parseVideos(data);
             renderVideos(videos, container);
         } catch (e) {
-            console.warn('[HashtagVideos] Ошибка загрузки:', e.message || e);
+            console.warn('[HashtagVideos] Ошибка:', e.message || e);
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-exclamation-triangle"></i>
