@@ -3,7 +3,7 @@
 //   1. Баннеры с плавным появлением (.feature-banner[data-gif]).
 //   2. Переключаемый фон скачивания (#download-section).
 //   3. Ленивая загрузка видео в .desc-image (описание Starve Neon).
-//   4. Превью YouTube-плейлистов (.video-preview--youtube[data-playlist-id] img без src).
+//   4. Превью YouTube-плейлистов — УДАЛЕНО (заменено на hashtag-videos.js).
 
 (function() {
     // ---------- 1. Баннеры с видео / гифками ----------
@@ -188,84 +188,11 @@
         });
     }
 
-    // ---------- 4. Превью YouTube-плейлистов ----------
-    // Ищем .video-preview--youtube[data-playlist-id] с пустым <img>,
-    // грузим превью через noembed → allorigins → fallback.
-    async function fetchPlaylistThumbnail(playlistId) {
-        if (!playlistId) return null;
-
-        // 1. noembed.com (поддерживает YouTube-плейлисты, возвращает thumbnail первого видео)
-        try {
-            const url = `https://noembed.com/embed?url=${encodeURIComponent(`https://www.youtube.com/playlist?list=${playlistId}`)}`;
-            const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
-            if (resp.ok) {
-                const data = await resp.json();
-                if (data && data.thumbnail_url && typeof data.thumbnail_url === 'string') {
-                    return data.thumbnail_url;
-                }
-            }
-        } catch (e) { /* noop */ }
-
-        // 2. allorigins — тянем HTML страницы плейлиста, вытаскиваем og:image
-        try {
-            const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.youtube.com/playlist?list=${playlistId}`)}`;
-            const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-            if (resp.ok) {
-                const html = await resp.text();
-                // og:image — самый надёжный источник
-                const ogMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
-                if (ogMatch && ogMatch[1] && ogMatch[1].startsWith('http')) {
-                    return ogMatch[1];
-                }
-                // twitter:image
-                const twMatch = html.match(/<meta\s+name=["']twitter:image["']\s+content=["']([^"']+)["']/i);
-                if (twMatch && twMatch[1] && twMatch[1].startsWith('http')) {
-                    return twMatch[1];
-                }
-                // Первый ytimg из JSON-LD или inline-данных
-                const ytimgMatch = html.match(/https:\/\/i\.ytimg\.com\/vi\/([a-zA-Z0-9_-]+)\/(?:mq|hq|maxres)default\.jpg/);
-                if (ytimgMatch && ytimgMatch[1]) {
-                    return `https://i.ytimg.com/vi/${ytimgMatch[1]}/mqdefault.jpg`;
-                }
-            }
-        } catch (e) { /* noop */ }
-
-        return null;
-    }
-
-    function initPlaylistThumbnails() {
-        const previews = document.querySelectorAll('.video-preview--youtube[data-playlist-id]');
-        if (!previews.length) return;
-
-        previews.forEach(async (link) => {
-            const img = link.querySelector('img');
-            if (!img) return;
-            if (img.dataset.thumbProcessed === 'true') return;
-            img.dataset.thumbProcessed = 'true';
-
-            const playlistId = link.dataset.playlistId;
-            if (!playlistId) return;
-
-            const thumb = await fetchPlaylistThumbnail(playlistId);
-            if (thumb) {
-                img.src = thumb;
-                img.alt = link.getAttribute('aria-label') || 'YouTube playlist';
-                img.loading = 'lazy';
-                img.onerror = () => { img.style.display = 'none'; };
-                img.style.display = '';
-            } else {
-                // Fallback: скрываем пустой img — останется тёмный фон + play-иконка
-                img.style.display = 'none';
-            }
-        });
-    }
-
     // ---------- Инициализация ----------
     function initAll() {
         initFeatureBanners();
         initDownloadBackground();
         initDescriptionVideos();
-        initPlaylistThumbnails();
     }
 
     if (document.readyState === 'loading') {
