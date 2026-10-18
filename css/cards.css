@@ -521,10 +521,23 @@
     font-weight: 900;
 }
 
-/* ========== Tilt-карточки (только desktop) ========== */
+/* ========== Tilt-карточки (только desktop) ==========
+   will-change + transform-style + backface-visibility нужны,
+   чтобы браузер гарантированно промоутил слой и показывал
+   3D-поворот, даже если у карточки внутри есть contain: paint.
+   ============================================================ */
 
 .tilt-card {
     transition:
         transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
         box-shadow 0.2s var(--ease-out);
+    will-change: transform;
+    transform-style: preserve-3d;
+}
+
+.tilt-card .project-card,
+.tilt-card.project-card {
+    will-change: transform;
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
 }

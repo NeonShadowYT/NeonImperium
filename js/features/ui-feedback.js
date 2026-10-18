@@ -1,5 +1,8 @@
 // js/features/ui-feedback.js – с локализацией, обновление при смене языка
 // cacheGet/cacheSet теперь асинхронные (шифрование через CacheCrypto).
+//
+// ВАЖНО: файл грузится ДО js/lang.js, поэтому t() должен быть динамическим:
+// проверять window.I18n.translate в момент вызова, а не при init модуля.
 (function() {
   const {
     createElement, escapeHtml, renderMarkdown, loadModule,
@@ -34,7 +37,28 @@
   let currentModalAbortController = null;
   let currentModalLoading = null;
 
-  const t = window.I18n?.translate || (k => k);
+  // Динамический переводчик: смотрит на window.I18n в момент вызова.
+  // Fallback на встроенные русские тексты для критичных ключей.
+  function t(key) {
+    if (window.I18n && typeof window.I18n.translate === 'function') {
+      const val = window.I18n.translate(key);
+      if (val && val !== key) return val;
+    }
+    switch (key) {
+      case 'noComments': return 'Нет комментариев';
+      case 'loginToComment': return 'Войдите, чтобы комментировать';
+      case 'comments': return 'Комментарии';
+      case 'send': return 'Отправить';
+      case 'enterText': return 'Введите текст';
+      case 'postsRemaining': return 'Осталось постов';
+      case 'title': return 'Заголовок';
+      case 'createPost': return 'Создать пост';
+      case 'editPost': return 'Редактировать пост';
+      case 'update': return 'Обновить';
+      case 'publish': return 'Опубликовать';
+      default: return key;
+    }
+  }
 
   function validateTextContent(text, minLength, fieldName = 'Текст') {
     if (containsGitHubToken(text)) {
@@ -257,7 +281,9 @@
   function renderComments(comments, container) {
     container.innerHTML = '';
     if (comments.length === 0) {
-      container.innerHTML = sanitizeHtml(`<p class="text-secondary" style="text-align:center;">${t('noComments') || 'Нет комментариев'}</p>`);
+      const ncText = t('noComments');
+      const finalText = (ncText && ncText !== 'noComments') ? ncText : 'Нет комментариев';
+      container.innerHTML = sanitizeHtml(`<p class="text-secondary" style="text-align:center;">${finalText}</p>`);
       return;
     }
     const currentUser = getCurrentUser();
@@ -438,6 +464,14 @@
     const canDelete = isOwner || isAdmin();
     const canBookmark = currentUser && hasScope('gist');
 
+    // Защищённый перевод для loginToComment
+    const ltcRaw = t('loginToComment');
+    const loginPromptText = (ltcRaw && ltcRaw !== 'loginToComment') ? ltcRaw : 'Войдите, чтобы комментировать';
+    const commentsHeaderText = (() => {
+      const v = t('comments');
+      return (v && v !== 'comments') ? v : 'Комментарии';
+    })();
+
     const html = sanitizeHtml(`
       <div style="margin-bottom: 16px;">
         <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
@@ -449,7 +483,7 @@
       <div class="markdown-body post-content" style="margin-bottom: 24px;"></div>
       <div class="reactions-container" id="modal-reactions"></div>
       <div class="comments-section">
-        <h3>${t('comments') || 'Комментарии'}</h3>
+        <h3>${commentsHeaderText}</h3>
         <div id="modal-comments-list" class="comments-list"></div>
         ${currentUser ? `<div class="comment-form" style="display:flex; gap:8px; margin-top:16px; align-items:center; flex-wrap:wrap;">
           <input type="text" id="new-comment-input" placeholder="${t('enterText')}" class="comment-input-field" style="flex:1; padding:8px 16px; border-radius:40px; background:var(--bg-primary); border:1px solid var(--border); min-width:150px;">
@@ -458,7 +492,7 @@
           <span class="rate-indicator-wrapper" style="font-size:12px; color:var(--text-secondary); margin-left:8px;">
             ${t('postsRemaining')}: <span class="rate-indicator" data-action="comments">${window.RateLimits ? window.RateLimits.getRemaining('comments') : '?'}</span>
           </span>
-        </div>` : `<p class="text-secondary">${t('loginToComment')}</p>`}
+        </div>` : `<p class="text-secondary">${loginPromptText}</p>`}
       </div>
     `);
 
@@ -580,11 +614,13 @@
 
     const langHandler = () => {
       if (!activeFullModal || activeFullModal.modal !== modal) return;
-      const t = window.I18n?.translate || (k => k);
       const headerTitle = modal.querySelector('.modal-header h2');
       if (headerTitle) headerTitle.textContent = title;
       const commentsHeader = modal.querySelector('.comments-section h3');
-      if (commentsHeader) commentsHeader.textContent = t('comments') || 'Комментарии';
+      if (commentsHeader) {
+        const v = t('comments');
+        commentsHeader.textContent = (v && v !== 'comments') ? v : 'Комментарии';
+      }
       const inputField = modal.querySelector('#new-comment-input');
       if (inputField) inputField.placeholder = t('enterText');
       const sendBtn = modal.querySelector('#submit-comment-btn');
@@ -838,7 +874,6 @@
 
     const langHandler = () => {
       if (!activeEditorModal || activeEditorModal.modal !== modal) return;
-      const t = window.I18n?.translate || (k => k);
       const headerTitle = modal.querySelector('.modal-header h2');
       if (headerTitle) headerTitle.textContent = mode === 'new' ? t('createPost') : t('editPost');
       titleInput.placeholder = t('title');

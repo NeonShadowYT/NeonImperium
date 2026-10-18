@@ -1,6 +1,19 @@
 /* animations.css — все @keyframes + @media prefers-reduced-motion.
    Все анимации используют ТОЛЬКО transform / opacity (кроме glowPulse — box-shadow). */
 
+/* ============================================================
+   Убираем "загрузочный" shimmer вверху модалок.
+   Полоска выглядела как индикатор загрузки — скрываем полностью
+   во всех типах модальных окон (feedback, auth, dialog).
+   ============================================================ */
+.modal-fullscreen .modal-content-full::before,
+.auth-modal-top-bar::after,
+.custom-dialog::before {
+    display: none !important;
+    animation: none !important;
+    background: none !important;
+}
+
 /* ===== Появление (fade-in up) ===== */
 @keyframes fadeInUp {
     0% { opacity: 0; transform: translateY(30px); }
@@ -228,7 +241,8 @@
     /* Отключаем декоративные shimmer */
     .req-item::before,
     .modal-fullscreen .modal-content-full::before,
-    .auth-modal-top-bar::after {
+    .auth-modal-top-bar::after,
+    .custom-dialog::before {
         animation: none !important;
     }
 }
