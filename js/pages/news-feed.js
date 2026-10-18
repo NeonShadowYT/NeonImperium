@@ -1,5 +1,13 @@
 // js/pages/news-feed.js – лента новостей с авто-релизами и видео с канала Neon Shadow.
 // cacheGet/cacheSet асинхронные. Abort предыдущего запроса НЕ логируется.
+//
+// ВИДЕО С YOUTUBE (канал Neon Shadow):
+//   - Несколько источников опрашиваются ПАРАЛЛЕЛЬНО через Promise.any:
+//       a) rss2json (быстрый, но иногда 422)
+//       b) RSS через CORS-прокси (allorigins/everyorigin/cors.lol/codetabs/cf-worker)
+//       c) HTML страницы канала через те же прокси (парсим ytInitialData)
+//   - Первый успешный результат кешируется в localStorage на 30 минут.
+//   - При повторном визите видео отдаются мгновенно из кеша.
 (function() {
     const {
         cacheGet, cacheSet, cacheRemoveByPrefix,
@@ -12,19 +20,36 @@
 
     const CACHE_KEY = 'news_feed_data_v2';
     const CACHE_TTL = 5 * 60 * 1000;
+    const VIDEOS_CACHE_KEY = 'yt_videos_cache_neonshadow';
+    const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
     const SOURCE_TIMEOUT = 15000;
+    const VIDEO_PROXY_TIMEOUT = 12000;
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 1000;
     const MAX_DISPLAY_ITEMS = 9;
+    const MAX_VIDEOS = 6;
 
     const RELEASE_SOURCES = [
         { owner: 'NeonShadowYT', repo: 'WorldGenerator', name: 'WorldGenerator', icon: 'images/tool-world-generator.webp' },
         { owner: 'NeonShadowYT', repo: 'IconCreator', name: 'IconCreator', icon: 'images/tool-icon-creator.webp' }
     ];
 
-    // Канал Neon Shadow на YouTube
+    // ---- YouTube ----
     const YT_CHANNEL_ID = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
     const YT_CHANNEL_NAME = 'Neon Shadow';
+    const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`;
+    const YT_CHANNEL_URL = `https://www.youtube.com/channel/${YT_CHANNEL_ID}/videos`;
+
+    // CORS-прокси. Все запускаются параллельно, побеждает самый быстрый успешный.
+    // ВАЖНО: домены должны быть разрешены в connect-src CSP.
+    const VIDEO_PROXIES = [
+        (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+        (url) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(url)}`,
+        (url) => `https://api.cors.lol/?url=${encodeURIComponent(url)}`,
+        (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+        (url) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${url}`
+    ];
 
     let currentItems = [];
     let currentUser = null;
@@ -124,6 +149,306 @@
         throw lastError;
     }
 
+    // ============================================================
+    // Видео с канала Neon Shadow — кеш
+    // ============================================================
+
+    function readVideosCache() {
+        try {
+            const raw = localStorage.getItem(VIDEOS_CACHE_KEY);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            if (!data || !data.timestamp || !Array.isArray(data.videos)) return null;
+            if (Date.now() - data.timestamp > VIDEOS_CACHE_TTL) {
+                localStorage.removeItem(VIDEOS_CACHE_KEY);
+                return null;
+            }
+            return normalizeItems(data.videos);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function writeVideosCache(videos) {
+        try {
+            localStorage.setItem(VIDEOS_CACHE_KEY, JSON.stringify({
+                timestamp: Date.now(),
+                videos
+            }));
+        } catch (e) { /* noop */ }
+    }
+
+    // ============================================================
+    // Видео — парсинг RSS XML
+    // ============================================================
+
+    function decodeXmlEntities(s) {
+        return String(s || '')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&apos;/g, "'");
+    }
+
+    function parseYoutubeRssXml(xmlText) {
+        if (!xmlText || typeof xmlText !== 'string') return [];
+        const entryBlocks = xmlText.split('<entry>').slice(1);
+        return entryBlocks.slice(0, MAX_VIDEOS).map(block => {
+            const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+            const titleMatch = block.match(/<title>([^<]*)<\/title>/);
+            const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
+            const thumbMatch = block.match(/<media:thumbnail\s+url=["']([^"']+)["']/);
+            if (!videoIdMatch) return null;
+            const videoId = videoIdMatch[1];
+            return normalizeItem({
+                type: 'video', id: videoId,
+                title: decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled'),
+                author: YT_CHANNEL_NAME,
+                date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
+                thumbnail: thumbMatch ? thumbMatch[1] : `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                videoData: { service: 'youtube', id: videoId }
+            });
+        }).filter(v => v);
+    }
+
+    // ============================================================
+    // Видео — парсинг HTML канала (ytInitialData)
+    // ============================================================
+
+    function extractYtInitialData(html) {
+        const patterns = [
+            /var ytInitialData = ({[\s\S]+?});/,
+            /window\["ytInitialData"\]\s*=\s*({[\s\S]+?});/,
+            /ytInitialData\s*=\s*({[\s\S]+?});/
+        ];
+        for (const re of patterns) {
+            const m = html.match(re);
+            if (m && m[1]) {
+                try {
+                    return JSON.parse(m[1]);
+                } catch (e) {
+                    const end = m[1].lastIndexOf('}');
+                    if (end !== -1) {
+                        try { return JSON.parse(m[1].slice(0, end + 1)); } catch (e2) { /* noop */ }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    function collectVideosFromData(obj, out, seen) {
+        if (!obj || typeof obj !== 'object') return;
+        if (Array.isArray(obj)) {
+            obj.forEach(item => collectVideosFromData(item, out, seen));
+            return;
+        }
+
+        // Классические videoRenderer / gridVideoRenderer / compactVideoRenderer
+        const classic = obj.videoRenderer || obj.gridVideoRenderer || obj.compactVideoRenderer;
+        if (classic && classic.videoId && !seen.has(classic.videoId)) {
+            seen.add(classic.videoId);
+            let title = '';
+            if (classic.title?.runs?.[0]) title = classic.title.runs[0].text;
+            else if (classic.title?.simpleText) title = classic.title.simpleText;
+            let thumbnail = '';
+            if (classic.thumbnail?.thumbnails?.length) {
+                thumbnail = classic.thumbnail.thumbnails[classic.thumbnail.thumbnails.length - 1].url;
+            }
+            if (!thumbnail) thumbnail = `https://img.youtube.com/vi/${classic.videoId}/mqdefault.jpg`;
+            out.push(normalizeItem({
+                type: 'video', id: classic.videoId,
+                title, author: YT_CHANNEL_NAME,
+                date: new Date(),
+                thumbnail,
+                videoData: { service: 'youtube', id: classic.videoId }
+            }));
+        }
+
+        // Новый lockupViewModel
+        if (obj.lockupViewModel) {
+            const l = obj.lockupViewModel;
+            const videoId = l.contentId;
+            if (videoId && !seen.has(videoId)) {
+                seen.add(videoId);
+                let title = '';
+                if (l.metadata?.lockupMetadataViewModel?.title?.content) {
+                    title = l.metadata.lockupMetadataViewModel.title.content;
+                }
+                let thumbnail = '';
+                if (l.contentImage?.thumbnailViewModel?.image?.sources?.length) {
+                    const s = l.contentImage.thumbnailViewModel.image.sources;
+                    thumbnail = s[s.length - 1].url;
+                }
+                if (!thumbnail) thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                out.push(normalizeItem({
+                    type: 'video', id: videoId,
+                    title, author: YT_CHANNEL_NAME,
+                    date: new Date(),
+                    thumbnail,
+                    videoData: { service: 'youtube', id: videoId }
+                }));
+            }
+        }
+
+        // richItemRenderer — обёртка
+        if (obj.richItemRenderer?.content) {
+            collectVideosFromData(obj.richItemRenderer.content, out, seen);
+        }
+
+        for (const key of Object.keys(obj)) {
+            if (out.length >= MAX_VIDEOS) break;
+            collectVideosFromData(obj[key], out, seen);
+        }
+    }
+
+    // ============================================================
+    // Видео — один прокси-запрос
+    // ============================================================
+
+    async function fetchViaProxy(proxyFn, targetUrl, signal) {
+        const proxyUrl = proxyFn(targetUrl);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), VIDEO_PROXY_TIMEOUT);
+
+        if (signal) {
+            if (signal.aborted) {
+                clearTimeout(timeoutId);
+                throw new DOMException('Aborted', 'AbortError');
+            }
+            signal.addEventListener('abort', () => controller.abort(), { once: true });
+        }
+
+        try {
+            const resp = await fetch(proxyUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            let text = await resp.text();
+            if (!text || text.length < 200) throw new Error('too short');
+            // allorigins /get возвращает JSON { contents: "..." }
+            if (text.trim().startsWith('{')) {
+                try {
+                    const json = JSON.parse(text);
+                    if (typeof json.contents === 'string') text = json.contents;
+                } catch (e) { /* не JSON — оставляем как есть */ }
+            }
+            return text;
+        } catch (err) {
+            clearTimeout(timeoutId);
+            throw err;
+        }
+    }
+
+    // ============================================================
+    // Видео — гонка прокси по RSS
+    // ============================================================
+
+    async function fetchVideosViaRssProxies(signal) {
+        const promises = VIDEO_PROXIES.map(proxyFn =>
+            fetchViaProxy(proxyFn, YT_RSS_URL, signal).then(text => {
+                const videos = parseYoutubeRssXml(text);
+                if (!videos.length) throw new Error('no videos');
+                return videos;
+            })
+        );
+        return await Promise.any(promises);
+    }
+
+    // ============================================================
+    // Видео — гонка прокси по HTML канала
+    // ============================================================
+
+    async function fetchVideosViaHtmlProxies(signal) {
+        const promises = VIDEO_PROXIES.map(proxyFn =>
+            fetchViaProxy(proxyFn, YT_CHANNEL_URL, signal).then(text => {
+                const data = extractYtInitialData(text);
+                if (!data) throw new Error('no ytInitialData');
+                const out = [];
+                const seen = new Set();
+                collectVideosFromData(data, out, seen);
+                const videos = out.slice(0, MAX_VIDEOS);
+                if (!videos.length) throw new Error('no videos');
+                return videos;
+            })
+        );
+        return await Promise.any(promises);
+    }
+
+    // ============================================================
+    // Видео — быстрый источник rss2json
+    // ============================================================
+
+    async function fetchVideosViaRss2Json(signal) {
+        const url = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(YT_RSS_URL)}`;
+        const resp = await fetch(url, {
+            signal: signal || AbortSignal.timeout(VIDEO_PROXY_TIMEOUT)
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (data.status !== 'ok' || !Array.isArray(data.items)) throw new Error('not ok');
+        return data.items.slice(0, MAX_VIDEOS).map(item => {
+            const vid = (item.link || '').match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
+            if (!vid) return null;
+            return normalizeItem({
+                type: 'video', id: vid,
+                title: item.title || 'Untitled',
+                author: YT_CHANNEL_NAME,
+                date: new Date(item.pubDate || Date.now()),
+                thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
+                videoData: { service: 'youtube', id: vid }
+            });
+        }).filter(v => v);
+    }
+
+    // ============================================================
+    // Видео — главная функция с кешем и Promise.any
+    // ============================================================
+
+    async function loadVideos(signal) {
+        // 1. Кеш
+        const cached = readVideosCache();
+        if (cached && cached.length) {
+            console.log(`[NewsFeed] Видео из кеша: ${cached.length}`);
+            return cached;
+        }
+
+        // 2. Параллельный опрос трёх стратегий
+        const strategies = [
+            fetchVideosViaRss2Json(signal).catch(e => {
+                if (isAborted(e, signal)) throw e;
+                throw e;
+            }),
+            fetchVideosViaRssProxies(signal).catch(e => {
+                if (isAborted(e, signal)) throw e;
+                throw e;
+            }),
+            fetchVideosViaHtmlProxies(signal).catch(e => {
+                if (isAborted(e, signal)) throw e;
+                throw e;
+            })
+        ];
+
+        try {
+            const videos = await Promise.any(strategies);
+            if (videos && videos.length) {
+                writeVideosCache(videos);
+                console.log(`[NewsFeed] Видео из сети: ${videos.length}`);
+                return videos;
+            }
+            return [];
+        } catch (e) {
+            if (isAborted(e, signal)) return [];
+            console.warn('[NewsFeed] Все источники видео недоступны');
+            return [];
+        }
+    }
+
+    // ============================================================
+    // Посты и обновления (без изменений)
+    // ============================================================
+
     async function loadPosts(signal) {
         if (window.RateLimits && !window.RateLimits.checkLimit('posts')) {
             console.warn('[NewsFeed] Лимит постов исчерпан, пропускаем запрос');
@@ -166,81 +491,9 @@
         }
     }
 
-    // ---- Видео с канала Neon Shadow ----
-    async function loadVideos(signal) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
-        if (signal) {
-            if (signal.aborted) { clearTimeout(timeoutId); return []; }
-            signal.addEventListener('abort', () => controller.abort(), { once: true });
-        }
-
-        try {
-            const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`;
-
-            // 1. Основной путь: rss2json (стабильнее для YouTube RSS)
-            try {
-                const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
-                const resp = await fetch(apiUrl, { signal: controller.signal });
-                clearTimeout(timeoutId);
-                if (resp.ok) {
-                    const data = await resp.json();
-                    if (data.status === 'ok' && Array.isArray(data.items)) {
-                        return data.items.slice(0, 6).map(item => {
-                            const vid = item.link.match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
-                            if (!vid) return null;
-                            return normalizeItem({
-                                type: 'video', id: vid,
-                                title: item.title,
-                                author: YT_CHANNEL_NAME,
-                                date: new Date(item.pubDate),
-                                thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
-                                videoData: { service: 'youtube', id: vid }
-                            });
-                        }).filter(v => v);
-                    }
-                }
-            } catch (e) {
-                if (isAborted(e, signal) || e.name === 'AbortError') throw e;
-                console.warn('[NewsFeed] rss2json недоступен, пробуем allorigins');
-            }
-
-            // 2. Fallback: allorigins + ручной парсинг XML
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`;
-            const resp = await fetch(proxyUrl, { signal: controller.signal });
-            clearTimeout(timeoutId);
-            if (!resp.ok) return [];
-
-            const xmlText = await resp.text();
-            const entryBlocks = xmlText.split('<entry>').slice(1);
-            return entryBlocks.slice(0, 6).map(block => {
-                const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
-                const titleMatch = block.match(/<title>([^<]*)<\/title>/);
-                const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
-                const thumbMatch = block.match(/<media:thumbnail\s+url=["']([^"']+)["']/);
-                if (!videoIdMatch) return null;
-                const videoId = videoIdMatch[1];
-                return normalizeItem({
-                    type: 'video', id: videoId,
-                    title: (titleMatch ? titleMatch[1] : 'Untitled')
-                        .replace(/&amp;/g, '&')
-                        .replace(/&lt;/g, '<')
-                        .replace(/&gt;/g, '>')
-                        .replace(/&quot;/g, '"')
-                        .replace(/&#39;/g, "'"),
-                    author: YT_CHANNEL_NAME,
-                    date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
-                    thumbnail: thumbMatch ? thumbMatch[1] : `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-                    videoData: { service: 'youtube', id: videoId }
-                });
-            }).filter(v => v);
-        } catch (err) {
-            clearTimeout(timeoutId);
-            if (isAborted(err, signal) || isAborted(err, controller.signal)) return [];
-            console.warn('[NewsFeed] Ошибка загрузки видео:', err);
-            return [];
-        }
-    }
+    // ============================================================
+    // Twitch (без изменений)
+    // ============================================================
 
     async function loadTwitchStreams(signal) {
         const TWITCH_CHANNELS = ['sk0l3ra1', 'neoncyndows'];
@@ -282,6 +535,10 @@
             return [];
         }
     }
+
+    // ============================================================
+    // Релизы (без изменений)
+    // ============================================================
 
     async function loadReleases(onEach, signal) {
         const results = [];
@@ -335,6 +592,10 @@
         return results;
     }
 
+    // ============================================================
+    // Основной агрегатор
+    // ============================================================
+
     async function fetchNewsFeed({ signal, forceRefresh = false, maxAge = CACHE_TTL, onItem } = {}) {
         const cached = await cacheGet(CACHE_KEY, maxAge);
         if (cached && !forceRefresh) {
@@ -379,7 +640,7 @@
         try {
             console.log('[NewsFeed] Загрузка из сети...');
             const postsPromise = fetchWithRetry(() => loadPosts(abortController.signal), 'posts');
-            const videosPromise = fetchWithRetry(() => loadVideos(abortController.signal), 'videos');
+            const videosPromise = loadVideos(abortController.signal);
             const twitchPromise = fetchWithRetry(() => loadTwitchStreams(abortController.signal), 'twitch');
             const releasesPromise = loadReleases(
                 (releaseItem) => {
@@ -731,6 +992,8 @@
         if (!container) return;
         container.innerHTML = '';
         container.appendChild(renderSkeleton(6));
+        // При ручном обновлении сбрасываем и кеш видео, чтобы получить свежие данные
+        try { localStorage.removeItem(VIDEOS_CACHE_KEY); } catch { /* noop */ }
         fetchNewsFeed({
             forceRefresh: true,
             onItem: (item) => appendItemToGrid(item)
