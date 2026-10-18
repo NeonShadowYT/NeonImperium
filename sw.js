@@ -17,7 +17,6 @@
 
 importScripts('js/config.js');
 
-// ---- Конфигурация (с fallback) ----
 const NC = (typeof self !== 'undefined' && self.NeonConfig) || {};
 
 const SW_CACHE_NAMES = NC.SW_CACHE_NAMES || {
@@ -46,15 +45,12 @@ const API_CACHE_MAX_AGE = SW_CACHE_MAX_AGE.API;
 const IMAGES_CACHE_MAX_AGE = SW_CACHE_MAX_AGE.IMAGES;
 const RSS_CACHE_MAX_AGE = SW_CACHE_MAX_AGE.RSS;
 
-// ---- LRU-лимит для изображений ----
 const MAX_IMAGES_CACHE_ENTRIES = 200;
-const MAX_IMAGES_CACHE_SIZE = 50 * 1024 * 1024; // 50 MB (задел)
+const MAX_IMAGES_CACHE_SIZE = 50 * 1024 * 1024;
 const BACKGROUND_FETCH_TIMEOUT = 5000;
 
-// ---- Precache (critical only) ----
 const PRECACHE_URLS = [
     'style.css',
-    // Core JS
     'js/config.js',
     'js/core/cache-crypto.js',
     'js/core/dom-utils.js',
@@ -69,19 +65,12 @@ const PRECACHE_URLS = [
     'js/features/rate-limits.js',
     'js/lang.js',
     'js/common-init.js',
-    // Локализации
     'locales/ru.json',
     'locales/en.json',
-    // Изображения по умолчанию
     'images/logo-neon-imperium.webp',
     'images/default-avatar.webp',
     'images/default-news.webp',
-    'images/starve-neon-preview2.webp',
-    'images/tool-world-generator.webp',
-    'images/tool-icon-creator.webp',
-    // Шрифты
     'fonts/RussoOne.woff2',
-    // HTML
     'index.html',
     './',
     'starve-neon.html',
@@ -100,12 +89,6 @@ function isValidResponse(response) {
     return false;
 }
 
-/**
- * Сохраняет response в кеш с меткой времени.
- * Для opaque-ответов (cross-origin без CORS) — сохраняем клон как есть,
- * т.к. тело нечитаемо, а заголовки недоступны. Метка sw-cached-time
- * в этом случае не ставится → isFresh() вернёт false для таких записей.
- */
 async function cacheWithTimestamp(cache, request, response) {
     if (response.type === 'opaque') {
         await cache.put(request, response.clone());
@@ -167,7 +150,6 @@ async function cacheFirst(request, cacheName) {
 
     try {
         const response = await fetch(request);
-        // Opaque для CSS/JS не кешируем: невозможно проверить SRI-целостность.
         if (response.ok && response.type !== 'opaque') {
             cache.put(request, response.clone()).catch(() => {});
         }
@@ -182,7 +164,6 @@ async function networkFirstWithTTL(request, cacheName, maxAge) {
     const cached = await cache.match(request);
 
     if (cached && isFresh(cached, maxAge)) {
-        // Фоновое обновление с таймаутом — не тратим сеть, если страница уже ушла.
         fetch(request, { signal: AbortSignal.timeout(BACKGROUND_FETCH_TIMEOUT) })
             .then(response => {
                 if (isValidResponse(response)) {
@@ -211,8 +192,6 @@ async function cacheFirstImages(request, cacheName, maxAge) {
 
     if (cached) {
         const ts = cached.headers.get('sw-cached-time');
-        // Opaque-записи (без ts) — отдаём как есть (CacheFirst без TTL).
-        // Обычные записи — проверяем свежесть.
         if (!ts || isFresh(cached, maxAge)) return cached;
     }
 
@@ -233,7 +212,6 @@ async function enforceImagesLRU(cache) {
     try {
         const keys = await cache.keys();
         if (keys.length < MAX_IMAGES_CACHE_ENTRIES) return;
-        // FIFO: удаляем самые старые (первые в keys()).
         const overflow = keys.length - MAX_IMAGES_CACHE_ENTRIES + 1;
         const toDelete = keys.slice(0, overflow);
         for (const req of toDelete) {
@@ -304,6 +282,19 @@ self.addEventListener('fetch', event => {
     // Пропускаем сам SW.
     if (url.pathname.endsWith('/sw.js') || url.pathname === '/sw.js') return;
 
+    // *** ГЛАВНОЕ ИСПРАВЛЕНИЕ ***
+    // Не перехватываем cross-origin запросы, КРОМЕ api.github.com и api.rss2json.com.
+    // Это позволяет браузеру напрямую обращаться к CORS-прокси (allorigins, codetabs и т.п.)
+    // и избежать NS_ERROR_INTERCEPTION_FAILED.
+    const isSameOrigin = url.hostname === self.location.hostname;
+    const isGithubApi = url.hostname === 'api.github.com';
+    const isRss2Json = url.hostname === 'api.rss2json.com';
+
+    if (!isSameOrigin && !isGithubApi && !isRss2Json) {
+        // Пропускаем без перехвата — браузер сделает запрос сам.
+        return;
+    }
+
     // Не кешируем Authorization, кроме api.github.com.
     const hasAuth = req.headers && typeof req.headers.get === 'function'
         ? req.headers.get('Authorization')
@@ -317,24 +308,24 @@ self.addEventListener('fetch', event => {
     }
 
     // 2. GitHub API.
-    if (url.hostname === 'api.github.com') {
+    if (isGithubApi) {
         event.respondWith(networkFirstWithTTL(req, API_CACHE, API_CACHE_MAX_AGE));
         return;
     }
 
     // 3. RSS.
-    if (url.hostname === 'api.rss2json.com') {
+    if (isRss2Json) {
         event.respondWith(networkFirstWithTTL(req, RSS_CACHE, RSS_CACHE_MAX_AGE));
         return;
     }
 
-    // 4. Изображения.
+    // 4. Изображения (same-origin).
     if (/\.(webp|png|jpg|jpeg|gif|svg|ico|avif)$/i.test(url.pathname)) {
         event.respondWith(cacheFirstImages(req, IMAGES_CACHE, IMAGES_CACHE_MAX_AGE));
         return;
     }
 
-    // 5. CSS / JS / шрифты — immutable, без opaque.
+    // 5. CSS / JS / шрифты (same-origin или CDN).
     if (/\.(css|js|woff2?|ttf|otf|eot)$/i.test(url.pathname) ||
         url.hostname === 'cdnjs.cloudflare.com' ||
         url.hostname === 'cdn.jsdelivr.net') {

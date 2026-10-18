@@ -43,12 +43,14 @@
     // CORS-прокси. Все запускаются параллельно, побеждает самый быстрый успешный.
     // ВАЖНО: домены должны быть разрешены в connect-src CSP.
     const VIDEO_PROXIES = [
+        // allorigins — обычно самый стабильный
         (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-        (url) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(url)}`,
-        (url) => `https://api.cors.lol/?url=${encodeURIComponent(url)}`,
+        // codetabs — резерв
         (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-        (url) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${url}`
+        // corsproxy.io — иногда работает без ключа
+        (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+        // everyorigin — ещё один запасной
+        (url) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(url)}`
     ];
 
     let currentItems = [];
