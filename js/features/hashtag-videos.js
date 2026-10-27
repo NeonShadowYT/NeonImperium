@@ -1,10 +1,14 @@
 // js/features/hashtag-videos.js
+// Хэштег #starveneon.
+//
 // Стратегия:
-//  1) Пытаемся получить видео по хэштегу #starveneon через Piped (api.piped.private.coffee)
-//     и Invidious (inv.nadeko.net) — они отвечают 200.
-//  2) Если по хэштегу ничего нет — fallback: последние видео с канала,
-//     отфильтрованные по 'starve' или 'neon'.
-//  3) Если и это не сработало — показываем сообщение, но секция не пустая.
+//   1) Invidious /api/v1/hashtag/starveneon — 3 инстанса параллельно, allSettled.
+//   2) Piped /search?q=%23starveneon — с cache: 'no-store', чтобы SW не отдавал пустой кэш.
+//   3) Если по хэштегу пусто — fallback на Invidious /api/v1/channels/{id}/videos
+//      (последние видео канала), фильтр по 'starve' / 'neon'.
+//   4) Если и там пусто — сообщение «Видео не найдены», но секция не ломается.
+//
+// Timeout: 25 секунд на каждый запрос (Invidious медленный — 2+ сек на ответ).
 
 (function() {
     'use strict';
@@ -12,17 +16,22 @@
     const HASHTAG = 'starveneon';
     const YT_CHANNEL_ID = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
     const YT_CHANNEL_NAME = 'Neon Shadow';
-    const CACHE_KEY = `hashtag_videos_cache_v9_${HASHTAG}`;
+    const CACHE_KEY = `hashtag_videos_cache_v10_${HASHTAG}`;
     const CACHE_TTL = 30 * 60 * 1000;
     const MAX_VIDEOS = 12;
     const MIN_DURATION_SEC = 60;
+    const REQUEST_TIMEOUT = 25000;
 
-    // ---- Рабочие источники (из логов 200) ----
+    // ---- Invidious-инстансы (по убыванию надёжности) ----
+    const INVIDIOUS_INSTANCES = [
+        'https://inv.nadeko.net',
+        'https://invidious.nerdvpn.de',
+        'https://yewtu.be'
+    ];
+
+    // ---- Piped-инстансы (только те, что реально отвечают) ----
     const PIPED_INSTANCES = [
         'https://api.piped.private.coffee'
-    ];
-    const INVIDIOUS_INSTANCES = [
-        'https://inv.nadeko.net'
     ];
 
     // ---- Ключевые слова для fallback с канала ----
@@ -67,13 +76,16 @@
         } catch { /* noop */ }
     }
 
-    function fetchWithTimeout(url, timeout = 20000) {
+    function fetchWithTimeout(url, timeout = REQUEST_TIMEOUT) {
         return new Promise((resolve, reject) => {
             const controller = new AbortController();
             const timer = setTimeout(() => {
                 try { controller.abort(new Error('timeout')); } catch { controller.abort(); }
             }, timeout);
-            fetch(url, { signal: controller.signal })
+            fetch(url, {
+                signal: controller.signal,
+                cache: 'no-store' // важно: SW не должен отдавать пустой кэш
+            })
                 .then(res => {
                     clearTimeout(timer);
                     if (!res.ok) reject(new Error(`HTTP ${res.status}`));
@@ -108,100 +120,75 @@
     }
 
     // ============================================================
-    // ИСТОЧНИК 1: Piped Search (основной)
+    // Invidious: хэштег (основной путь)
     // ============================================================
 
-    async function fetchViaPipedSearch() {
-        const promises = PIPED_INSTANCES.map(async (base) => {
-            const url = `${base}/search?q=%23${HASHTAG}&filter=videos`;
-            const res = await fetchWithTimeout(url);
-            const data = await res.json();
-            if (!data || !Array.isArray(data.items)) throw new Error('bad response');
-            const videos = data.items.map(item => {
-                const videoId = (item.url || '').replace('/watch?v=', '');
-                if (!videoId) return null;
-                const duration = toNumber(item.duration);
-                if (duration !== null && duration > 0 && duration < MIN_DURATION_SEC) return null;
-                return normalizeVideo({
-                    videoId,
-                    title: item.title || '',
-                    author: item.uploaderName || '',
-                    description: item.shortDescription || ''
-                });
-            }).filter(Boolean);
-            if (!videos.length) throw new Error('empty');
-            return videos;
-        });
-        try {
-            return await Promise.any(promises);
-        } catch {
-            return [];
-        }
+    async function fetchHashtagFromInvidious(base) {
+        const url = `${base}/api/v1/hashtag/${HASHTAG}`;
+        const res = await fetchWithTimeout(url);
+        const data = await res.json();
+        const items = Array.isArray(data) ? data : (data.results || []);
+        const videos = items.map(item => {
+            const videoId = item.videoId;
+            if (!videoId) return null;
+            const length = toNumber(item.lengthSeconds);
+            if (length !== null && length > 0 && length < MIN_DURATION_SEC) return null;
+            return normalizeVideo({
+                videoId,
+                title: item.title || '',
+                author: item.author || '',
+                description: item.description || ''
+            });
+        }).filter(Boolean);
+        return videos;
     }
 
     // ============================================================
-    // ИСТОЧНИК 2: Invidious Hashtag (резерв)
+    // Invidious: канал (fallback)
     // ============================================================
 
-    async function fetchViaInvidiousHashtag() {
-        const promises = INVIDIOUS_INSTANCES.map(async (base) => {
-            const url = `${base}/api/v1/hashtag/${HASHTAG}`;
-            const res = await fetchWithTimeout(url);
-            const data = await res.json();
-            // Invidious может вернуть массив или объект с полем results
-            const items = Array.isArray(data) ? data : (data.results || []);
-            const videos = items.map(item => {
-                const videoId = item.videoId;
-                if (!videoId) return null;
-                const length = toNumber(item.lengthSeconds);
-                if (length !== null && length > 0 && length < MIN_DURATION_SEC) return null;
-                return normalizeVideo({
-                    videoId,
-                    title: item.title || '',
-                    author: item.author || '',
-                    description: item.description || ''
-                });
-            }).filter(Boolean);
-            if (!videos.length) throw new Error('empty');
-            return videos;
-        });
-        try {
-            return await Promise.any(promises);
-        } catch {
-            return [];
-        }
+    async function fetchChannelFromInvidious(base) {
+        const url = `${base}/api/v1/channels/${YT_CHANNEL_ID}/videos`;
+        const res = await fetchWithTimeout(url);
+        const data = await res.json();
+        const items = Array.isArray(data) ? data : (data.videos || []);
+        const videos = items.map(item => {
+            const videoId = item.videoId;
+            if (!videoId) return null;
+            const length = toNumber(item.lengthSeconds);
+            if (length !== null && length > 0 && length < MIN_DURATION_SEC) return null;
+            return normalizeVideo({
+                videoId,
+                title: item.title || '',
+                author: item.author || YT_CHANNEL_NAME,
+                description: item.description || ''
+            });
+        }).filter(Boolean);
+        return videos;
     }
 
     // ============================================================
-    // FALLBACK: последние видео с канала
+    // Piped: хэштег
     // ============================================================
 
-    async function fetchChannelVideosFallback() {
-        const promises = PIPED_INSTANCES.map(async (base) => {
-            const url = `${base}/channel/${YT_CHANNEL_ID}`;
-            const res = await fetchWithTimeout(url);
-            const data = await res.json();
-            const streams = data.relatedStreams || data.items || [];
-            const videos = streams.map(item => {
-                const videoId = (item.url || '').replace('/watch?v=', '');
-                if (!videoId) return null;
-                const duration = toNumber(item.duration);
-                if (duration !== null && duration > 0 && duration < MIN_DURATION_SEC) return null;
-                return normalizeVideo({
-                    videoId,
-                    title: item.title || '',
-                    author: item.uploaderName || YT_CHANNEL_NAME,
-                    description: item.shortDescription || ''
-                });
-            }).filter(Boolean);
-            if (!videos.length) throw new Error('empty');
-            return videos;
-        });
-        try {
-            return await Promise.any(promises);
-        } catch {
-            return [];
-        }
+    async function fetchHashtagFromPiped(base) {
+        const url = `${base}/search?q=%23${HASHTAG}&filter=videos`;
+        const res = await fetchWithTimeout(url);
+        const data = await res.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        const videos = items.map(item => {
+            const videoId = (item.url || '').replace('/watch?v=', '');
+            if (!videoId) return null;
+            const duration = toNumber(item.duration);
+            if (duration !== null && duration > 0 && duration < MIN_DURATION_SEC) return null;
+            return normalizeVideo({
+                videoId,
+                title: item.title || '',
+                author: item.uploaderName || '',
+                description: item.shortDescription || ''
+            });
+        }).filter(Boolean);
+        return videos;
     }
 
     // ============================================================
@@ -209,25 +196,53 @@
     // ============================================================
 
     async function loadHashtagVideosFromNetwork() {
-        // 1) Пытаемся получить видео по хэштегу
-        const [pipedResult, invidiousResult] = await Promise.allSettled([
-            fetchViaPipedSearch(),
-            fetchViaInvidiousHashtag()
+        // 1) Пытаемся получить по хэштегу — параллельно, ждём ВСЕ ответы
+        const hashtagResults = await Promise.allSettled([
+            ...INVIDIOUS_INSTANCES.map(base => fetchHashtagFromInvidious(base)),
+            ...PIPED_INSTANCES.map(base => fetchHashtagFromPiped(base))
         ]);
 
         let collected = [];
-        if (pipedResult.status === 'fulfilled') collected = collected.concat(pipedResult.value);
-        if (invidiousResult.status === 'fulfilled') collected = collected.concat(invidiousResult.value);
+        hashtagResults.forEach((r, idx) => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+                console.log(`[HashtagVideos] hashtag #${HASHTAG} → источник ${idx}: ${r.value.length} видео`);
+                collected.push(...r.value);
+            } else if (r.status === 'rejected') {
+                console.warn(`[HashtagVideos] hashtag источник ${idx} ошибка:`, r.reason?.message || r.reason);
+            }
+        });
 
         let filtered = filterVideos(collected, [HASHTAG]);
-
-        // 2) Если по хэштегу пусто — fallback на канал
-        if (!filtered.length) {
-            const channelVideos = await fetchChannelVideosFallback();
-            filtered = filterVideos(channelVideos, FALLBACK_KEYWORDS);
+        if (filtered.length) {
+            console.log(`[HashtagVideos] По хэштегу найдено: ${filtered.length}`);
+            return filtered;
         }
 
-        return filtered; // может быть пустым — это нормально, отрисуем сообщение
+        // 2) Хэштег пуст — fallback на канал через Invidious
+        console.log('[HashtagVideos] По хэштегу пусто, fallback на канал…');
+        const channelResults = await Promise.allSettled(
+            INVIDIOUS_INSTANCES.map(base => fetchChannelFromInvidious(base))
+        );
+
+        const channelVideos = [];
+        channelResults.forEach((r, idx) => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+                console.log(`[HashtagVideos] канал → источник ${idx}: ${r.value.length} видео`);
+                channelVideos.push(...r.value);
+            } else if (r.status === 'rejected') {
+                console.warn(`[HashtagVideos] канал источник ${idx} ошибка:`, r.reason?.message || r.reason);
+            }
+        });
+
+        filtered = filterVideos(channelVideos, FALLBACK_KEYWORDS);
+        if (filtered.length) {
+            console.log(`[HashtagVideos] Fallback на канал: ${filtered.length} видео`);
+            return filtered;
+        }
+
+        // 3) Ничего нет
+        console.warn('[HashtagVideos] Ни по хэштегу, ни по каналу видео не найдено');
+        return [];
     }
 
     // ============================================================
