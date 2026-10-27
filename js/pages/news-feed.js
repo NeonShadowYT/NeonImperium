@@ -1,22 +1,9 @@
-// js/pages/news-feed.js — лента новостей с Stale-While-Revalidate.
-//
-// АРХИТЕКТУРА:
-//   1. fetchNewsFeed() проверяет агрегированный кэш (news_feed_data_v3).
-//      → если есть: возвращает кэш СРАЗУ, параллельно запускает фоновый
-//        рефреш всех источников; по завершении вызывает onUpdate(freshItems),
-//        чтобы UI перерисовался.
-//      → если нет: ждёт сеть, делает синхронный fetch.
-//   2. Каждый источник (YouTube / itch.io) также имеет свой кэш.
-//      В режиме forceRefresh=true кэш источника игнорируется (свежие данные).
-//   3. Внутри источника все стратегии запускаются ПАРАЛЛЕЛЬНО через Promise.any().
-//      Побеждает тот, кто первым вернёт валидные данные — «кто быстрее».
-//
-// ПРЕВЬЮ ITCH.IO:
-//   1. Из RSS: <img src="..."> внутри <description> (мгновенно, без доп. запросов).
-//   2. Fallback: og:image / twitter:image со страницы поста (лениво, в фоне,
-//      после рендера — только для постов без thumbnail).
+// js/pages/news-feed.js — лента новостей с SWR, YouTube (Invidious/Piped/RSS/HTML) и itch.io.
 //
 // ИКОНКИ АВТОРА: release → fa-cube, itch-post → fa-itch-io, остальные → fa-user.
+// ПРЕВЬЮ ITCH.IO: приоритет — <img> из <description> RSS; fallback — og:image;
+// если og:image указывает на обложку проекта (известная проблема itch.io),
+// всё равно используем его, но в первую очередь стараемся взять картинку из поста.
 
 (function() {
     'use strict';
@@ -59,14 +46,18 @@
         'https://invidious.privacyredirect.com',
         'https://iv.melmac.space',
         'https://invidious.f5.si',
-        'https://yt.artemislena.eu'
+        'https://yt.artemislena.eu',
+        'https://invidious.jing.rocks',
+        'https://invidious.perennialte.ch'
     ];
 
     const PIPED_INSTANCES = [
         'https://pipedapi.kavin.rocks',
         'https://pipedapi.adminforge.de',
         'https://pipedapi.leptons.xyz',
-        'https://api.piped.private.coffee'
+        'https://api.piped.private.coffee',
+        'https://pipedapi.drgns.space',
+        'https://pipedapi.ducks.party'
     ];
 
     const ITCH_DEVLOG_SOURCES = [
@@ -80,22 +71,16 @@
     const CORS_PROXIES = [
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
         (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
         (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
         (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
-        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
-        (u) => `https://cors-anywhere.herokuapp.com/${u}`,
-        (u) => `https://proxy.cors.sh/${u}`,
-        (u) => `https://cors.bridged.cc/${u}`,
-        (u) => `https://test.cors.workers.dev/?${u}`,
-        (u) => `https://cors-anywhere.homely8896.workers.dev/${u}`,
         (u) => `https://cors.eu.org/${u}`,
         (u) => `https://cors.x2u.in/${u}`,
         (u) => `https://yacdn.org/proxy/${u}`,
-        (u) => `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://corsproxy.org/?${encodeURIComponent(u)}`,
-        (u) => `https://thebugging.com/proxy?url=${encodeURIComponent(u)}`
+        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
+        (u) => `https://test.cors.workers.dev/?${u}`,
+        (u) => `https://corsproxy.org/?${encodeURIComponent(u)}`
     ];
 
     const RSS2JSON = (rssUrl) =>
@@ -136,18 +121,19 @@
             .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'");
     }
 
+    function normalizeDate(d) {
+        if (d instanceof Date && !isNaN(d.getTime())) return d;
+        const nd = new Date(d);
+        return isNaN(nd.getTime()) ? new Date() : nd;
+    }
+
     function normalizeItem(item) {
-        let date = item.date;
-        if (!(date instanceof Date)) {
-            date = new Date(date);
-            if (isNaN(date.getTime())) date = new Date();
-        }
         return {
             type: item.type || 'post',
             id: item.id || item.number || item.videoId || item.channel || item.link || '',
             title: item.title || 'Без названия',
             author: item.author || 'Unknown',
-            date: date,
+            date: normalizeDate(item.date),
             thumbnail: item.thumbnail || null,
             body: item.body || null,
             labels: item.labels || [],
@@ -165,6 +151,7 @@
         return arr.slice().sort((a, b) => b.date - a.date);
     }
 
+    // ---- Кэш ----
     function readCache(key, ttl) {
         try {
             const raw = localStorage.getItem(key);
@@ -185,6 +172,7 @@
         } catch { /* noop */ }
     }
 
+    // ---- Сеть ----
     function fetchWithTimeout(url, signal, timeout = REQUEST_TIMEOUT) {
         return new Promise((resolve, reject) => {
             const controller = new AbortController();
@@ -257,11 +245,75 @@
                 title: decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled'),
                 author: YT_CHANNEL_NAME,
                 date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
-                thumbnail: thumbMatch ? thumbMatch[1] : `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                thumbnail: thumbMatch ? thumbMatch[1] : `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
                 videoData: { service: 'youtube', id: videoId }
             });
         }).filter(Boolean);
         return sortByDateDesc(items).slice(0, MAX_VIDEOS);
+    }
+
+    function parseInvidiousResponse(data) {
+        if (!data || !Array.isArray(data.videos)) return null;
+        const items = data.videos.map(v => {
+            if (!v.videoId) return null;
+            return normalizeItem({
+                type: 'video', id: v.videoId,
+                title: v.title || 'Untitled',
+                author: v.author || YT_CHANNEL_NAME,
+                date: new Date((v.published || 0) * 1000 || Date.now()),
+                thumbnail: v.videoThumbnails?.[v.videoThumbnails.length - 1]?.url
+                    || `https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg`,
+                videoData: { service: 'youtube', id: v.videoId }
+            });
+        }).filter(Boolean);
+        return sortByDateDesc(items).slice(0, MAX_VIDEOS);
+    }
+
+    function parsePipedResponse(data) {
+        if (!data || !Array.isArray(data.relatedStreams)) return null;
+        const items = data.relatedStreams.map(s => {
+            const vid = (s.url || '').match(/[?&]v=([^&]+)/)?.[1];
+            if (!vid) return null;
+            return normalizeItem({
+                type: 'video', id: vid,
+                title: s.title || 'Untitled',
+                author: s.uploaderName || YT_CHANNEL_NAME,
+                date: new Date(s.uploaded || Date.now()),
+                thumbnail: s.thumbnail || `https://img.youtube.com/vi/${vid}/hqdefault.jpg`,
+                videoData: { service: 'youtube', id: vid }
+            });
+        }).filter(Boolean);
+        return sortByDateDesc(items).slice(0, MAX_VIDEOS);
+    }
+
+    async function fetchYoutubeViaInvidious(signal) {
+        const promises = INVIDIOUS_INSTANCES.map(instance =>
+            fetchWithTimeout(`${instance}/api/v1/channels/${YT_CHANNEL_ID}/videos?sort_by=newest`, signal)
+                .then(res => res.json())
+                .then(data => {
+                    const videos = parseInvidiousResponse(data);
+                    if (!videos || !videos.length) throw new Error('no videos');
+                    return videos;
+                })
+        );
+        return await Promise.any(promises);
+    }
+
+    async function fetchYoutubeViaPiped(signal) {
+        const promises = PIPED_INSTANCES.map(instance =>
+            fetchWithTimeout(`${instance}/channel/${YT_CHANNEL_ID}`, signal)
+                .then(res => res.json())
+                .then(data => {
+                    const videos = parsePipedResponse(data);
+                    if (!videos || !videos.length) throw new Error('no videos');
+                    return videos;
+                })
+        );
+        return await Promise.any(promises);
+    }
+
+    async function fetchYoutubeViaRss(signal) {
+        return await raceProxies(YT_RSS_URL, parseYoutubeRssXml, signal);
     }
 
     function extractYtInitialData(html) {
@@ -299,7 +351,7 @@
             if (classic.thumbnail?.thumbnails?.length) {
                 thumbnail = classic.thumbnail.thumbnails[classic.thumbnail.thumbnails.length - 1].url;
             }
-            if (!thumbnail) thumbnail = `https://img.youtube.com/vi/${classic.videoId}/mqdefault.jpg`;
+            if (!thumbnail) thumbnail = `https://img.youtube.com/vi/${classic.videoId}/hqdefault.jpg`;
             out.push(normalizeItem({
                 type: 'video', id: classic.videoId, title, author: YT_CHANNEL_NAME,
                 date: new Date(), thumbnail,
@@ -321,7 +373,7 @@
                     const s = l.contentImage.thumbnailViewModel.image.sources;
                     thumbnail = s[s.length - 1].url;
                 }
-                if (!thumbnail) thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                if (!thumbnail) thumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
                 out.push(normalizeItem({
                     type: 'video', id: videoId, title, author: YT_CHANNEL_NAME,
                     date: new Date(), thumbnail,
@@ -347,8 +399,14 @@
         return out.slice(0, MAX_VIDEOS);
     }
 
-    function parseRss2JsonYoutube(data) {
-        if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return null;
+    async function fetchYoutubeViaHtml(signal) {
+        return await raceProxies(YT_CHANNEL_URL, parseYoutubeHtml, signal);
+    }
+
+    async function fetchYoutubeViaRss2Json(signal) {
+        const res = await fetchWithTimeout(RSS2JSON(YT_RSS_URL), signal);
+        const data = await res.json();
+        if (!data || data.status !== 'ok' || !Array.isArray(data.items)) throw new Error('not ok');
         const items = data.items.map(item => {
             const vid = (item.link || '').match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
             if (!vid) return null;
@@ -357,86 +415,12 @@
                 title: item.title || 'Untitled',
                 author: YT_CHANNEL_NAME,
                 date: new Date(item.pubDate || Date.now()),
-                thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
+                thumbnail: item.thumbnail || `https://img.youtube.com/vi/${vid}/hqdefault.jpg`,
                 videoData: { service: 'youtube', id: vid }
             });
         }).filter(Boolean);
+        if (!items.length) throw new Error('no videos');
         return sortByDateDesc(items).slice(0, MAX_VIDEOS);
-    }
-
-    function parseInvidiousResponse(data) {
-        if (!data || !Array.isArray(data.videos)) return null;
-        const items = data.videos.map(v => {
-            if (!v.videoId) return null;
-            return normalizeItem({
-                type: 'video', id: v.videoId,
-                title: v.title || 'Untitled',
-                author: v.author || YT_CHANNEL_NAME,
-                date: new Date((v.published || 0) * 1000 || Date.now()),
-                thumbnail: v.videoThumbnails?.[0]?.url || `https://img.youtube.com/vi/${v.videoId}/mqdefault.jpg`,
-                videoData: { service: 'youtube', id: v.videoId }
-            });
-        }).filter(Boolean);
-        return sortByDateDesc(items).slice(0, MAX_VIDEOS);
-    }
-
-    function parsePipedResponse(data) {
-        if (!data || !Array.isArray(data.relatedStreams)) return null;
-        const items = data.relatedStreams.map(s => {
-            const vid = (s.url || '').match(/[?&]v=([^&]+)/)?.[1];
-            if (!vid) return null;
-            return normalizeItem({
-                type: 'video', id: vid,
-                title: s.title || 'Untitled',
-                author: s.uploaderName || YT_CHANNEL_NAME,
-                date: new Date(s.uploaded || Date.now()),
-                thumbnail: s.thumbnail || `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
-                videoData: { service: 'youtube', id: vid }
-            });
-        }).filter(Boolean);
-        return sortByDateDesc(items).slice(0, MAX_VIDEOS);
-    }
-
-    async function fetchYoutubeViaInvidious(signal) {
-        const promises = INVIDIOUS_INSTANCES.map(instance =>
-            fetchWithTimeout(`${instance}/api/v1/channels/${YT_CHANNEL_ID}/videos?sort_by=newest`, signal)
-                .then(res => res.json())
-                .then(data => {
-                    const videos = parseInvidiousResponse(data);
-                    if (!videos || !videos.length) throw new Error('no videos');
-                    return videos;
-                })
-        );
-        return await Promise.any(promises);
-    }
-
-    async function fetchYoutubeViaPiped(signal) {
-        const promises = PIPED_INSTANCES.map(instance =>
-            fetchWithTimeout(`${instance}/channel/${YT_CHANNEL_ID}`, signal)
-                .then(res => res.json())
-                .then(data => {
-                    const videos = parsePipedResponse(data);
-                    if (!videos || !videos.length) throw new Error('no videos');
-                    return videos;
-                })
-        );
-        return await Promise.any(promises);
-    }
-
-    async function fetchYoutubeViaRss(signal) {
-        return await raceProxies(YT_RSS_URL, parseYoutubeRssXml, signal);
-    }
-
-    async function fetchYoutubeViaHtml(signal) {
-        return await raceProxies(YT_CHANNEL_URL, parseYoutubeHtml, signal);
-    }
-
-    async function fetchYoutubeViaRss2Json(signal) {
-        const res = await fetchWithTimeout(RSS2JSON(YT_RSS_URL), signal);
-        const data = await res.json();
-        const videos = parseRss2JsonYoutube(data);
-        if (!videos || !videos.length) throw new Error('no videos');
-        return videos;
     }
 
     async function fetchYoutubeVideos(signal, forceRefresh = false) {
@@ -472,8 +456,23 @@
     }
 
     // ============================================================
-    // ITCH.IO (с превью из RSS и fallback через og:image)
+    // ITCH.IO (превью из RSS → og:image → imageurl)
     // ============================================================
+
+    function extractItchThumbnail(rawHtml, source) {
+        if (!rawHtml) return null;
+        // 1. Первый <img> в описании — самое точное превью поста
+        const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (imgMatch) {
+            let url = imgMatch[1];
+            if (url.startsWith('//')) url = 'https:' + url;
+            else if (url.startsWith('/')) url = 'https://img.itch.zone' + url;
+            return url;
+        }
+        // 2. <media:content url="..."> или <enclosure url="..."> (иногда встречаются)
+        // Этот парсинг уже на уровне XML, поэтому здесь пропускаем.
+        return null;
+    }
 
     function parseItchDevlogXml(xmlText, source) {
         if (!xmlText || typeof xmlText !== 'string') return [];
@@ -496,15 +495,7 @@
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = rawHtml;
                 description = (tempDiv.textContent || tempDiv.innerText || '').trim();
-
-                // Приоритет: <img> из описания в RSS
-                const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
-                if (imgMatch) {
-                    let url = imgMatch[1];
-                    if (url.startsWith('//')) url = 'https:' + url;
-                    else if (url.startsWith('/')) url = 'https://img.itch.zone' + url;
-                    thumbnail = url;
-                }
+                thumbnail = extractItchThumbnail(rawHtml, source);
             }
 
             return normalizeItem({
@@ -556,14 +547,7 @@
         if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return null;
         const items = data.items.map(item => {
             const rawHtml = item.description || '';
-            let thumbnail = null;
-            const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
-            if (imgMatch) {
-                let url = imgMatch[1];
-                if (url.startsWith('//')) url = 'https:' + url;
-                else if (url.startsWith('/')) url = 'https://img.itch.zone' + url;
-                thumbnail = url;
-            }
+            const thumbnail = extractItchThumbnail(rawHtml, source);
             return normalizeItem({
                 type: 'itch-post',
                 id: `itch-rss2json-${item.link}`,
@@ -627,7 +611,6 @@
     }
 
     // ---- Fallback: og:image со страницы поста ----
-
     async function fetchItchPostThumbnail(postUrl, signal) {
         if (!postUrl) return null;
         try {

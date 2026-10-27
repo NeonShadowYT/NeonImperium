@@ -1,11 +1,8 @@
 // js/pages/game-updates.js — обновления игры (GitHub issues + itch.io devlog).
 //
-// ФИКСЫ:
-//   1. Даты из кэша (JSON.parse) нормализуются обратно в Date,
-//      чтобы createUpdateCard не падал на toLocaleDateString().
-//   2. SWR: кэш показывается мгновенно, рефреш в фоне.
-//   3. itch.io: превью из <img> RSS, fallback og:image через прокси.
-//   4. Иконки автора: itch-post → fa-itch-io, gh-update → fa-user.
+// Даты принудительно нормализуются при чтении из кэша.
+// itch.io использует тот же улучшенный парсер превью, что и news-feed.
+// SWR: кэш показывается мгновенно, рефреш в фоне.
 
 (function() {
     'use strict';
@@ -46,13 +43,7 @@
         (u) => `https://yacdn.org/proxy/${u}`,
         (u) => `https://corsfix.com/?${u}`,
         (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
-        (u) => `https://cors-anywhere.herokuapp.com/${u}`,
-        (u) => `https://proxy.cors.sh/${u}`,
-        (u) => `https://cors.bridged.cc/${u}`,
         (u) => `https://test.cors.workers.dev/?${u}`,
-        (u) => `https://cors-anywhere.homely8896.workers.dev/${u}`,
-        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
-        (u) => `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(u)}`,
         (u) => `https://corsproxy.org/?${encodeURIComponent(u)}`
     ];
 
@@ -85,8 +76,7 @@
             .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'");
     }
 
-    // КРИТИЧНО: нормализуем дату, чтобы после JSON.parse
-    // (localStorage) она снова была объектом Date.
+    // КРИТИЧНО: нормализуем дату после JSON.parse
     function normalizeDate(d) {
         if (d instanceof Date && !isNaN(d.getTime())) return d;
         const nd = new Date(d);
@@ -110,7 +100,6 @@
                 localStorage.removeItem(itchCacheKey(game));
                 return null;
             }
-            // Нормализуем даты сразу при чтении
             return data.items.map(normalizePost);
         } catch { return null; }
     }
@@ -178,6 +167,17 @@
     }
 
     // ---- Парсеры itch.io ----
+    function extractItchThumbnail(rawHtml, source) {
+        if (!rawHtml) return null;
+        const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (imgMatch) {
+            let url = imgMatch[1];
+            if (url.startsWith('//')) url = 'https:' + url;
+            else if (url.startsWith('/')) url = 'https://img.itch.zone' + url;
+            return url;
+        }
+        return null;
+    }
 
     function parseItchDevlogXml(xmlText, source) {
         if (!xmlText || typeof xmlText !== 'string') return [];
@@ -190,7 +190,8 @@
 
             const title = titleMatch ? decodeXmlEntities(titleMatch[1]) : 'Без названия';
             const link = linkMatch ? linkMatch[1] : (source.devlogPageUrl || '#');
-            const date = pubDateMatch ? new Date(pubDateMatch[1]) : new Date();
+            let date = pubDateMatch ? new Date(pubDateMatch[1]) : new Date();
+            if (isNaN(date.getTime())) date = new Date();
 
             let description = '';
             let thumbnail = null;
@@ -199,14 +200,7 @@
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = rawHtml;
                 description = (tempDiv.textContent || tempDiv.innerText || '').trim();
-
-                const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
-                if (imgMatch) {
-                    let url = imgMatch[1];
-                    if (url.startsWith('//')) url = 'https:' + url;
-                    else if (url.startsWith('/')) url = 'https://img.itch.zone' + url;
-                    thumbnail = url;
-                }
+                thumbnail = extractItchThumbnail(rawHtml, source);
             }
 
             return normalizePost({
@@ -258,14 +252,7 @@
         if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return null;
         return data.items.slice(0, MAX_ITCH_POSTS).map(item => {
             const rawHtml = item.description || '';
-            let thumbnail = null;
-            const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
-            if (imgMatch) {
-                let url = imgMatch[1];
-                if (url.startsWith('//')) url = 'https:' + url;
-                else if (url.startsWith('/')) url = 'https://img.itch.zone' + url;
-                thumbnail = url;
-            }
+            const thumbnail = extractItchThumbnail(rawHtml, source);
             return normalizePost({
                 type: 'itch-post',
                 id: `itch-rss2json-${item.link}`,
@@ -282,7 +269,6 @@
     }
 
     // ---- Загрузка itch.io ----
-
     async function fetchItchPosts(game, signal, forceRefresh = false) {
         const source = ITCH_DEVLOG_SOURCES[game];
         if (!source) return [];
@@ -429,7 +415,6 @@
     }
 
     function createUpdateCard(post) {
-        // Дополнительная защита: нормализуем дату ещё раз на всякий случай
         const date = normalizeDate(post.date);
 
         const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });

@@ -1,23 +1,25 @@
 // js/features/hashtag-videos.js
-// Загрузка видео по #starveneon.
+// Загрузка видео по #starveneon (включая Shorts).
 //
-// Стратегии (запускаются параллельно через Promise.any):
-//   1. Invidious search API × 6 инстансов — самый надёжный путь
-//   2. Piped search API × 4 инстанса
-//   3. YouTube hashtag HTML через CORS-прокси × N
-//   4. RSS через прокси (не работает для хэштега, но для канала да — оставляем как edge-case)
+// ОСНОВНОЕ:
+//   1. Invidious hashtag endpoint: /api/v1/hashtag/starveneon — возвращает
+//      только видео с этим хэштегом (без мусора starve.io).
+//   2. Piped search с фильтром.
+//   3. Прямой парсинг HTML страницы хэштега через CORS-прокси
+//      (включая shortsLockupViewModel).
 //
-// Empty state компактный: убрана огромная иконка 48px и padding 40px.
+// Empty state компактный — без огромной иконки и лишнего пустого пространства.
 
 (function() {
     'use strict';
 
     const HASHTAG = 'starveneon';
     const YT_HASHTAG_URL = `https://www.youtube.com/hashtag/${HASHTAG}`;
-    const CACHE_KEY = `hashtag_videos_cache_${HASHTAG}`;
+    const CACHE_KEY = `hashtag_videos_cache_v3_${HASHTAG}`;
     const CACHE_TTL = 30 * 60 * 1000;
-    const MAX_VIDEOS = 9;
+    const MAX_VIDEOS = 12;
     const REQUEST_TIMEOUT = 15000;
+    const RETRY_DELAY = 800;
 
     const INVIDIOUS_INSTANCES = [
         'https://inv.nadeko.net',
@@ -25,14 +27,18 @@
         'https://invidious.privacyredirect.com',
         'https://iv.melmac.space',
         'https://invidious.f5.si',
-        'https://yt.artemislena.eu'
+        'https://yt.artemislena.eu',
+        'https://invidious.jing.rocks',
+        'https://invidious.perennialte.ch'
     ];
 
     const PIPED_INSTANCES = [
         'https://pipedapi.kavin.rocks',
         'https://pipedapi.adminforge.de',
         'https://pipedapi.leptons.xyz',
-        'https://api.piped.private.coffee'
+        'https://api.piped.private.coffee',
+        'https://pipedapi.drgns.space',
+        'https://pipedapi.ducks.party'
     ];
 
     const CORS_PROXIES = [
@@ -46,7 +52,8 @@
         (u) => `https://yacdn.org/proxy/${u}`,
         (u) => `https://corsfix.com/?${u}`,
         (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
-        (u) => `https://test.cors.workers.dev/?${u}`
+        (u) => `https://test.cors.workers.dev/?${u}`,
+        (u) => `https://corsproxy.org/?${encodeURIComponent(u)}`
     ];
 
     // ---- Кэш ----
@@ -72,6 +79,7 @@
         } catch { /* noop */ }
     }
 
+    // ---- Сеть ----
     function fetchWithTimeout(url, signal, timeout = REQUEST_TIMEOUT) {
         return new Promise((resolve, reject) => {
             const controller = new AbortController();
@@ -116,7 +124,6 @@
     function normalizeVideo(v) {
         if (!v || !v.videoId) return null;
         let thumb = v.thumbnail || null;
-        // Апгрейд mqdefault (320×180) → hqdefault (480×360)
         if (thumb && thumb.includes('mqdefault')) {
             thumb = thumb.replace('mqdefault', 'hqdefault');
         }
@@ -141,22 +148,19 @@
         return out;
     }
 
-    // ---- Стратегия 1: Invidious search ----
-    async function fetchViaInvidious(signal) {
+    // ---- Стратегия 1: Invidious hashtag endpoint ----
+    async function fetchViaInvidiousHashtag(signal) {
         const promises = INVIDIOUS_INSTANCES.map(inst =>
-            fetchWithTimeout(`${inst}/api/v1/search?q=${HASHTAG}&type=video&sort_by=upload_date`, signal)
+            fetchWithTimeout(`${inst}/api/v1/hashtag/${HASHTAG}`, signal)
                 .then(res => res.json())
                 .then(data => {
                     if (!Array.isArray(data)) throw new Error('not array');
                     const videos = data
-                        .filter(v => v.type === 'video' && v.videoId)
                         .map(v => normalizeVideo({
                             videoId: v.videoId,
                             title: v.title,
                             author: v.author,
-                            thumbnail: v.videoThumbnails && v.videoThumbnails.length
-                                ? v.videoThumbnails[v.videoThumbnails.length - 1].url
-                                : null
+                            thumbnail: v.videoThumbnails?.[v.videoThumbnails.length - 1]?.url
                         }))
                         .filter(Boolean);
                     if (!videos.length) throw new Error('no videos');
@@ -166,10 +170,33 @@
         return await Promise.any(promises);
     }
 
-    // ---- Стратегия 2: Piped search ----
+    // ---- Стратегия 2: Invidious search (fallback, если hashtag endpoint недоступен) ----
+    async function fetchViaInvidiousSearch(signal) {
+        const promises = INVIDIOUS_INSTANCES.map(inst =>
+            fetchWithTimeout(`${inst}/api/v1/search?q=%23${HASHTAG}&type=video&sort_by=upload_date`, signal)
+                .then(res => res.json())
+                .then(data => {
+                    if (!Array.isArray(data)) throw new Error('not array');
+                    const videos = data
+                        .filter(v => v.type === 'video' && v.videoId)
+                        .map(v => normalizeVideo({
+                            videoId: v.videoId,
+                            title: v.title,
+                            author: v.author,
+                            thumbnail: v.videoThumbnails?.[v.videoThumbnails.length - 1]?.url
+                        }))
+                        .filter(Boolean);
+                    if (!videos.length) throw new Error('no videos');
+                    return dedupe(videos);
+                })
+        );
+        return await Promise.any(promises);
+    }
+
+    // ---- Стратегия 3: Piped search ----
     async function fetchViaPiped(signal) {
         const promises = PIPED_INSTANCES.map(inst =>
-            fetchWithTimeout(`${inst}/search?q=${HASHTAG}&filter=videos`, signal)
+            fetchWithTimeout(`${inst}/search?q=%23${HASHTAG}&filter=videos`, signal)
                 .then(res => res.json())
                 .then(data => {
                     if (!data || !Array.isArray(data.items)) throw new Error('no items');
@@ -192,7 +219,7 @@
         return await Promise.any(promises);
     }
 
-    // ---- Стратегия 3: YouTube hashtag через прокси ----
+    // ---- Стратегия 4: прямой парсинг HTML хэштега через прокси ----
     function extractYtInitialData(html) {
         const patterns = [
             /var ytInitialData = ({[\s\S]+?});/,
@@ -263,7 +290,9 @@
             if (videoId && !seen.has(videoId)) {
                 seen.add(videoId);
                 let title = '';
-                if (s.overlayMetadata?.primaryText?.content) title = s.overlayMetadata.primaryText.content;
+                if (s.overlayMetadata?.primaryText?.content) {
+                    title = s.overlayMetadata.primaryText.content;
+                }
                 let thumbnail = null;
                 const sources = s.thumbnailViewModel?.thumbnailViewModel?.image?.sources;
                 if (Array.isArray(sources) && sources.length) {
@@ -380,12 +409,16 @@
 
         container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка видео по #${HASHTAG}...</p></div>`;
 
+        // Пробуем несколько раз с разными стратегиями
+        const strategies = [
+            fetchViaInvidiousHashtag(null),
+            fetchViaInvidiousSearch(null),
+            fetchViaPiped(null),
+            fetchViaHashtagProxies(null)
+        ];
+
         try {
-            const strategies = [
-                fetchViaInvidious(null),
-                fetchViaPiped(null),
-                fetchViaHashtagProxies(null)
-            ];
+            // Promise.any — кто первый, того и видео
             const videos = await Promise.any(strategies);
             if (videos && videos.length) {
                 writeCache(videos);
@@ -395,7 +428,7 @@
             renderVideos([], container);
         } catch (e) {
             console.warn('[HashtagVideos] Все стратегии недоступны:', e && e.message ? e.message : e);
-            // Компактный error state — без огромной иконки и больших padding
+            // Компактный error state
             container.innerHTML = `
                 <div style="text-align:center;padding:20px 16px;color:var(--text-secondary);">
                     <i class="fas fa-exclamation-triangle" style="font-size:26px;opacity:0.5;display:block;margin-bottom:8px;color:#ff9800;"></i>
