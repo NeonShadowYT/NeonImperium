@@ -1,8 +1,9 @@
 // js/features/hashtag-videos.js
 // Хэштег #starveneon.
-// Основной источник: Piped Search (leptons, nosebs, libre).
-// Резерв: прямой парсинг ytInitialData через corsproxy.dev / cors.lol / cloudflare-cors-anywhere.
-// Фильтр по 'starveneon' проверяет и заголовок, и описание.
+// Основной источник: прямой парсинг ytInitialData через corsfix.com (единственный рабочий прокси в логах).
+// Резерв 1: Invidious /api/v1/hashtag/:tag (inv.nadeko.net) — с мягким фильтром.
+// Резерв 2: Piped /search?q=%23starveneon&filter=videos (api.piped.private.coffee).
+// Фильтр: видео считается релевантным, если в заголовке ИЛИ описании есть 'starveneon' (без #).
 
 (function() {
     'use strict';
@@ -15,11 +16,12 @@
     const MIN_DURATION_SEC = 60;
     const REQUEST_TIMEOUT = 20000;
 
-    const CORS_PROXIES = [
-        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
-        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
-        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
-        (u) => `https://corsfix.com/?${u}`
+    // ---- Прокси, которые реально работают для HTML ----
+    // corsfix.com — единственный, кто в логах стабильно отдавал 200 на страницу хэштега.
+    const HTML_PROXIES = [
+        (u) => `https://corsfix.com/?${u}`,
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`, // резерв (требует CSP)
+        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,   // резерв (rate-limit)
     ];
 
     function parseDurationToSec(text) {
@@ -31,10 +33,14 @@
         return parts[0] || 0;
     }
 
+    /**
+     * Мягкий фильтр: ищем 'starveneon' в заголовке или описании.
+     * Не требуем '#', так как YouTube в ytInitialData часто убирает решётку.
+     */
     function isRelevantVideo(v) {
         if (!v) return false;
         const text = ((v.title || '') + ' ' + (v.description || '')).toLowerCase();
-        return text.includes('starveneon') || text.includes('#starveneon');
+        return text.includes('starveneon');
     }
 
     function readCache() {
@@ -107,6 +113,10 @@
         return out;
     }
 
+    // ============================================================
+    // ПАРСИНГ ytInitialData (основной путь)
+    // ============================================================
+
     function extractYtInitialData(html) {
         const patterns = [
             /var ytInitialData = ({[\s\S]+?});/,
@@ -153,6 +163,7 @@
             out.push(normalizeVideo({ videoId: classic.videoId, title, author, description }));
         }
 
+        // Новый формат lockupViewModel (Shorts отсекаются по длительности)
         if (obj.lockupViewModel) {
             const l = obj.lockupViewModel;
             const videoId = l.contentId;
@@ -200,6 +211,7 @@
         const res = await fetchWithTimeout(url, signal);
         let text = await res.text();
 
+        // corsfix.com может вернуть JSON-обёртку (contents) для некоторых запросов
         if (text.trim().startsWith('{')) {
             try {
                 const json = JSON.parse(text);
@@ -216,12 +228,48 @@
         return videos;
     }
 
-    // Piped Search — основной источник
+    // ============================================================
+    // INVIDIOUS (резерв)
+    // ============================================================
+
+    async function fetchViaInvidiousHashtag(signal) {
+        const instances = [
+            'https://inv.nadeko.net', // в логах отвечал 200
+        ];
+        const promises = instances.map(async (base) => {
+            const url = `${base}/api/v1/hashtag/${HASHTAG}`;
+            const res = await fetchWithTimeout(url, signal);
+            const data = await res.json();
+            const videos = (Array.isArray(data) ? data : []).map(item => {
+                const videoId = item.videoId;
+                if (!videoId) return null;
+                const length = typeof item.lengthSeconds === 'number' ? item.lengthSeconds : null;
+                if (length !== null && length > 0 && length < MIN_DURATION_SEC) return null;
+                return normalizeVideo({
+                    videoId,
+                    title: item.title || '',
+                    author: item.author || '',
+                    description: item.description || ''
+                });
+            }).filter(Boolean);
+            if (!videos.length) throw new Error('empty');
+            return videos;
+        });
+        try {
+            return await Promise.any(promises);
+        } catch {
+            throw new Error('all invidious hashtag failed');
+        }
+    }
+
+    // ============================================================
+    // PIPED (резерв)
+    // ============================================================
+
     async function fetchViaPipedSearch(signal) {
         const instances = [
+            'https://api.piped.private.coffee', // в логах отвечал 200
             'https://pipedapi.leptons.xyz',
-            'https://pipedapi.nosebs.ru',
-            'https://pipedapi-libre.kavin.rocks'
         ];
         const promises = instances.map(async (base) => {
             const url = `${base}/search?q=%23${HASHTAG}&filter=videos`;
@@ -250,10 +298,16 @@
         }
     }
 
+    // ============================================================
+    // АГРЕГАЦИЯ
+    // ============================================================
+
     async function loadHashtagVideosFromNetwork(signal) {
+        // Запускаем все стратегии параллельно, собираем ВСЕ результаты.
         const strategies = [
-            fetchViaPipedSearch(signal),
-            ...CORS_PROXIES.map(p => fetchViaHtmlProxy(p, signal))
+            ...HTML_PROXIES.map(p => fetchViaHtmlProxy(p, signal)),
+            fetchViaInvidiousHashtag(signal),
+            fetchViaPipedSearch(signal)
         ];
 
         const results = await Promise.allSettled(strategies);
@@ -271,6 +325,10 @@
 
         return filtered;
     }
+
+    // ============================================================
+    // РЕНДЕР
+    // ============================================================
 
     function renderVideos(videos, container) {
         container.innerHTML = '';
