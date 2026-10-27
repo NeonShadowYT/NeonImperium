@@ -1,5 +1,5 @@
 // js/pages/news-feed.js — лента новостей (index.html).
-// YouTube: RSS UULF через прокси + Piped (опционально).
+// YouTube: RSS UULF через прокси (основной) + Piped (резерв).
 // itch.io: RSS через прокси (общий кэш с game-updates.js).
 
 (function() {
@@ -45,14 +45,13 @@
         }
     ];
 
-    // ---- Рабочие прокси ----
+    // ---- Рабочие CORS-прокси (2026) ----
     const CORS_PROXIES = [
-        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-        (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-        (u) => `https://cors.eu.org/${u}`
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
+        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsfix.com/?${u}`
     ];
 
     let currentUser = null;
@@ -201,7 +200,7 @@
     }
 
     // ============================================================
-    // YOUTUBE — RSS через прокси
+    // YOUTUBE
     // ============================================================
 
     function filterYoutubeVideos(videos) {
@@ -245,32 +244,6 @@
             if (isAborted(e, signal)) throw e;
             console.warn('[NewsFeed] YouTube RSS прокси не сработали:', e.message || e);
         }
-
-        try {
-            const res = await fetchWithTimeout(
-                `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(YT_RSS_URL)}`,
-                signal
-            );
-            const data = await res.json();
-            if (data.status === 'ok' && Array.isArray(data.items)) {
-                return data.items.map(item => {
-                    const vid = (item.link || '').match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
-                    if (!vid) return null;
-                    return normalizeItem({
-                        type: 'video', id: vid,
-                        title: item.title || 'Untitled',
-                        author: YT_CHANNEL_NAME,
-                        date: new Date(item.pubDate || Date.now()),
-                        thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
-                        videoData: { service: 'youtube', id: vid }
-                    });
-                }).filter(Boolean);
-            }
-        } catch (e) {
-            if (isAborted(e, signal)) throw e;
-            console.warn('[NewsFeed] YouTube RSS2JSON fallback:', e.message || e);
-        }
-
         return [];
     }
 
@@ -280,16 +253,7 @@
             if (cached && cached.length) return cached.map(normalizeItem);
         }
 
-        const results = await Promise.allSettled([
-            fetchYoutubeRss(signal)
-        ]);
-
-        let videos = [];
-        for (const r of results) {
-            if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
-                videos = videos.concat(r.value);
-            }
-        }
+        const videos = await fetchYoutubeRss(signal);
 
         if (!videos.length) {
             const stale = readCache(VIDEOS_CACHE_KEY, Infinity);
@@ -371,42 +335,6 @@
             } catch (e) {
                 if (isAborted(e, signal)) return [];
                 console.warn(`[NewsFeed] itch.io ${source.name}:`, e.message || e);
-            }
-        }
-
-        if (allPosts.length === 0) {
-            // fallback RSS2JSON
-            for (const source of ITCH_DEVLOG_SOURCES) {
-                try {
-                    const res = await fetchWithTimeout(
-                        `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.rssUrl)}`,
-                        signal
-                    );
-                    const data = await res.json();
-                    if (data.status === 'ok' && Array.isArray(data.items)) {
-                        const posts = data.items.map(item => {
-                            const rawHtml = item.description || '';
-                            let thumbnail = null;
-                            const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
-                            if (imgMatch) thumbnail = normalizeItchUrl(imgMatch[1]);
-                            return normalizeItem({
-                                type: 'itch-post',
-                                id: `itch-${item.link}`,
-                                title: item.title || 'Пост',
-                                author: source.name,
-                                date: new Date(item.pubDate || Date.now()),
-                                body: rawHtml.replace(/<[^>]*>/g, ''),
-                                thumbnail,
-                                itchLink: item.link,
-                                itchSource: source.name,
-                                labels: ['type:itch-post']
-                            });
-                        });
-                        if (posts.length) allPosts.push(...posts);
-                    }
-                } catch (e) {
-                    if (isAborted(e, signal)) return [];
-                }
             }
         }
 

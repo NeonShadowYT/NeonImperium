@@ -1,7 +1,8 @@
 // js/features/hashtag-videos.js
-// Хэштег #starveneon: прямой парсинг ytInitialData через corsproxy.io (основной путь).
-// Дополнительно: Invidious /api/v1/hashtag/:tag и Piped /search (если доступны).
-// Все стратегии запускаются параллельно, Shorts отсекаются по длительности.
+// Хэштег #starveneon.
+// Основные источники: Invidious (inv.nadeko.net) и Piped (leptons, private.coffee).
+// Резерв: прямой парсинг ytInitialData через everyorigin (без лимитов).
+// Фильтр по 'starveneon' сделан мягче: проверяется и заголовок, и описание.
 
 (function() {
     'use strict';
@@ -14,14 +15,11 @@
     const MIN_DURATION_SEC = 60;
     const REQUEST_TIMEOUT = 20000;
 
-    // ---- Прокси, которые отдают сырой HTML ----
     const CORS_PROXIES = [
-        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-        (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, // JSON {contents}
-        (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-        (u) => `https://cors.eu.org/${u}`
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
+        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`
     ];
 
     function parseDurationToSec(text) {
@@ -36,7 +34,7 @@
     function isRelevantVideo(v) {
         if (!v) return false;
         const text = ((v.title || '') + ' ' + (v.description || '')).toLowerCase();
-        return text.includes('starveneon');
+        return text.includes('starveneon') || text.includes('#starveneon');
     }
 
     function readCache() {
@@ -197,13 +195,11 @@
         return filterRelevant(out);
     }
 
-    // ---- Стратегия 1: парсинг HTML через CORS-прокси ----
     async function fetchViaHtmlProxy(proxyFn, signal) {
         const url = proxyFn(YT_HASHTAG_URL);
         const res = await fetchWithTimeout(url, signal);
         let text = await res.text();
 
-        // allorigins/get возвращает JSON {contents}
         if (text.trim().startsWith('{')) {
             try {
                 const json = JSON.parse(text);
@@ -220,14 +216,11 @@
         return videos;
     }
 
-    // ---- Стратегия 2: Invidious /api/v1/hashtag/:tag ----
+    // Invidious: inv.nadeko.net (в логах отвечал 200)
     async function fetchViaInvidiousHashtag(signal) {
         const instances = [
             'https://inv.nadeko.net',
-            'https://invidious.nerdvpn.de',
-            'https://invidious.privacyredirect.com',
-            'https://iv.melmac.space',
-            'https://invidious.f5.si'
+            'https://invidious.nerdvpn.de'
         ];
         const promises = instances.map(async (base) => {
             const url = `${base}/api/v1/hashtag/${HASHTAG}`;
@@ -255,11 +248,11 @@
         }
     }
 
-    // ---- Стратегия 3: Piped /search?q=%23tag ----
+    // Piped: leptons и private.coffee
     async function fetchViaPipedSearch(signal) {
         const instances = [
-            'https://pipedapi.kavin.rocks',
-            'https://pipedapi.adminforge.de'
+            'https://pipedapi.leptons.xyz',
+            'https://api.piped.private.coffee'
         ];
         const promises = instances.map(async (base) => {
             const url = `${base}/search?q=%23${HASHTAG}&filter=videos`;
@@ -290,9 +283,9 @@
 
     async function loadHashtagVideosFromNetwork(signal) {
         const strategies = [
-            ...CORS_PROXIES.map(p => fetchViaHtmlProxy(p, signal)),
             fetchViaInvidiousHashtag(signal),
-            fetchViaPipedSearch(signal)
+            fetchViaPipedSearch(signal),
+            ...CORS_PROXIES.map(p => fetchViaHtmlProxy(p, signal))
         ];
 
         const results = await Promise.allSettled(strategies);
