@@ -1,6 +1,6 @@
 // js/pages/news-feed.js — лента новостей (index.html).
-// YouTube: только RSS канала (без Invidious/Piped — они мертвы).
-// itch.io: RSS через проверенные CORS-прокси.
+// YouTube: RSS канала через rss2json.com (server-side fetch, всегда CORS).
+// itch.io: RSS через rss2json.com + corsfix.com.
 // Превью всегда i.ytimg.com.
 
 (function() {
@@ -14,15 +14,15 @@
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const { showToast } = window.UIUtils;
 
-    const CACHE_KEY = 'news_feed_data_v6';
+    const CACHE_KEY = 'news_feed_data_v7';
     const CACHE_TTL = 5 * 60 * 1000;
-    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v6';
+    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v7';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
-    const ITCH_CACHE_KEY = 'itch_posts_news_v6';
+    const ITCH_CACHE_KEY = 'itch_posts_news_v7';
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
 
     const SOURCE_TIMEOUT = 15000;
-    const REQUEST_TIMEOUT = 12000;
+    const REQUEST_TIMEOUT = 15000;
     const MAX_DISPLAY_ITEMS = 9;
     const MAX_VIDEOS = 6;
     const MAX_ITCH_POSTS = 3;
@@ -44,13 +44,13 @@
         }
     ];
 
-    // Проверенные CORS-прокси (без corsproxy.io — он требует ключ)
+    // rss2json.com — server-side fetch, всегда CORS.
+    const RSS2JSON = (rssUrl) => `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+
+    // Резервные CORS-прокси (только проверенные)
     const CORS_PROXIES = [
-        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://cors.lol/?${encodeURIComponent(u)}`
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
     ];
 
     let currentUser = null;
@@ -192,25 +192,21 @@
     }
 
     // ============================================================
-    // YOUTUBE — только RSS канала
+    // YOUTUBE — RSS канала через rss2json.com
     // ============================================================
 
-    function parseYoutubeRssXml(xmlText) {
-        if (!xmlText || typeof xmlText !== 'string') return [];
-        const entryBlocks = xmlText.split('<entry>').slice(1);
-        const items = entryBlocks.map(block => {
-            const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
-            const titleMatch = block.match(/<title>([^<]*)<\/title>/);
-            const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
-            if (!videoIdMatch) return null;
-            const videoId = videoIdMatch[1];
+    function parseYoutubeRssJson(data) {
+        if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return null;
+        const items = data.items.map(item => {
+            const vid = (item.link || '').match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
+            if (!vid) return null;
             return normalizeItem({
-                type: 'video', id: videoId,
-                title: decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled'),
+                type: 'video', id: vid,
+                title: item.title || 'Untitled',
                 author: YT_CHANNEL_NAME,
-                date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
-                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                videoData: { service: 'youtube', id: videoId }
+                date: new Date(item.pubDate || Date.now()),
+                thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+                videoData: { service: 'youtube', id: vid }
             });
         }).filter(Boolean);
         return sortByDateDesc(items).slice(0, MAX_VIDEOS);
@@ -219,16 +215,40 @@
     async function fetchYoutubeVideos(signal, forceRefresh = false) {
         if (!forceRefresh) {
             const cached = readCache(VIDEOS_CACHE_KEY, VIDEOS_CACHE_TTL);
-            if (cached && cached.length) {
-                return cached.map(normalizeItem);
-            }
+            if (cached && cached.length) return cached.map(normalizeItem);
         }
 
         try {
-            const videos = await raceProxies(YT_RSS_URL, parseYoutubeRssXml, signal);
+            const res = await fetchWithTimeout(RSS2JSON(YT_RSS_URL), signal);
+            const data = await res.json();
+            const videos = parseYoutubeRssJson(data);
             if (videos && videos.length) {
                 writeCache(VIDEOS_CACHE_KEY, videos);
                 return videos;
+            }
+            // Fallback: corsfix
+            const fallback = await raceProxies(YT_RSS_URL, (text) => {
+                const entryBlocks = text.split('<entry>').slice(1);
+                const items = entryBlocks.map(block => {
+                    const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+                    const titleMatch = block.match(/<title>([^<]*)<\/title>/);
+                    const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
+                    if (!videoIdMatch) return null;
+                    const videoId = videoIdMatch[1];
+                    return normalizeItem({
+                        type: 'video', id: videoId,
+                        title: decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled'),
+                        author: YT_CHANNEL_NAME,
+                        date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
+                        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                        videoData: { service: 'youtube', id: videoId }
+                    });
+                }).filter(Boolean);
+                return sortByDateDesc(items).slice(0, MAX_VIDEOS);
+            }, signal);
+            if (fallback && fallback.length) {
+                writeCache(VIDEOS_CACHE_KEY, fallback);
+                return fallback;
             }
             return [];
         } catch (e) {
@@ -239,7 +259,7 @@
     }
 
     // ============================================================
-    // ITCH.IO
+    // ITCH.IO — RSS через rss2json.com
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -265,36 +285,26 @@
         return null;
     }
 
-    function parseItchDevlogXml(xmlText, source) {
-        if (!xmlText || typeof xmlText !== 'string') return [];
-        const itemBlocks = xmlText.split('<item>').slice(1);
-        const items = itemBlocks.map(block => {
-            const titleMatch = block.match(/<title>([^<]*)<\/title>/);
-            const linkMatch = block.match(/<link>([^<]*)<\/link>/);
-            const pubDateMatch = block.match(/<pubDate>([^<]*)<\/pubDate>/);
-            const descriptionMatch = block.match(/<description>([\s\S]*?)<\/description>/);
-
-            const title = titleMatch ? decodeXmlEntities(titleMatch[1]) : 'Без названия';
-            const link = linkMatch ? linkMatch[1] : (source.devlogPageUrl || '#');
-            let date = pubDateMatch ? new Date(pubDateMatch[1]) : new Date();
-            if (isNaN(date.getTime())) date = new Date();
-
-            let description = '';
-            if (descriptionMatch) {
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = descriptionMatch[1];
-                description = (tempDiv.textContent || tempDiv.innerText || '').trim();
-            }
-
+    function parseItchRssJson(data, source) {
+        if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return null;
+        const items = data.items.map(item => {
+            const rawHtml = item.description || '';
+            let thumbnail = null;
+            const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+            if (imgMatch) thumbnail = normalizeItchUrl(imgMatch[1]);
             return normalizeItem({
                 type: 'itch-post',
-                id: `itch-${link}`,
-                title, author: source.name, date, body: description,
-                thumbnail: extractItchThumbnail(block),
-                itchLink: link, itchSource: source.name,
+                id: `itch-${item.link}`,
+                title: item.title || 'Пост',
+                author: source.name,
+                date: new Date(item.pubDate || Date.now()),
+                body: rawHtml.replace(/<[^>]*>/g, ''),
+                thumbnail,
+                itchLink: item.link,
+                itchSource: source.name,
                 labels: ['type:itch-post']
             });
-        }).filter(Boolean);
+        });
         return sortByDateDesc(items).slice(0, MAX_ITCH_POSTS);
     }
 
@@ -307,11 +317,52 @@
         const allPosts = [];
         for (const source of ITCH_DEVLOG_SOURCES) {
             try {
-                const posts = await raceProxies(source.rssUrl, (text) => parseItchDevlogXml(text, source), signal);
+                const res = await fetchWithTimeout(RSS2JSON(source.rssUrl), signal);
+                const data = await res.json();
+                const posts = parseItchRssJson(data, source);
                 if (posts && posts.length) allPosts.push(...posts);
             } catch (e) {
                 if (isAborted(e, signal)) return [];
                 console.warn(`[NewsFeed] itch.io ${source.name}:`, e.message || e);
+            }
+        }
+
+        if (allPosts.length === 0) {
+            // Fallback: corsfix
+            for (const source of ITCH_DEVLOG_SOURCES) {
+                try {
+                    const posts = await raceProxies(source.rssUrl, (text) => {
+                        const itemBlocks = text.split('<item>').slice(1);
+                        const items = itemBlocks.map(block => {
+                            const titleMatch = block.match(/<title>([^<]*)<\/title>/);
+                            const linkMatch = block.match(/<link>([^<]*)<\/link>/);
+                            const pubDateMatch = block.match(/<pubDate>([^<]*)<\/pubDate>/);
+                            const descriptionMatch = block.match(/<description>([\s\S]*?)<\/description>/);
+                            const title = titleMatch ? decodeXmlEntities(titleMatch[1]) : 'Без названия';
+                            const link = linkMatch ? linkMatch[1] : (source.devlogPageUrl || '#');
+                            let date = pubDateMatch ? new Date(pubDateMatch[1]) : new Date();
+                            if (isNaN(date.getTime())) date = new Date();
+                            let description = '';
+                            if (descriptionMatch) {
+                                const tempDiv = document.createElement('div');
+                                tempDiv.innerHTML = descriptionMatch[1];
+                                description = (tempDiv.textContent || tempDiv.innerText || '').trim();
+                            }
+                            return normalizeItem({
+                                type: 'itch-post',
+                                id: `itch-${link}`,
+                                title, author: source.name, date, body: description,
+                                thumbnail: extractItchThumbnail(block),
+                                itchLink: link, itchSource: source.name,
+                                labels: ['type:itch-post']
+                            });
+                        }).filter(Boolean);
+                        return sortByDateDesc(items).slice(0, MAX_ITCH_POSTS);
+                    }, signal);
+                    if (posts && posts.length) allPosts.push(...posts);
+                } catch (e) {
+                    if (isAborted(e, signal)) return [];
+                }
             }
         }
 
@@ -489,10 +540,10 @@
                             const limited = freshItems.slice(0, MAX_DISPLAY_ITEMS);
                             await cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
                             if (typeof onUpdate === 'function') {
-                                try { onUpdate(limited); } catch (e) { /* noop */ }
+                                try { onUpdate(limited); } catch { /* noop */ }
                             }
                         }
-                    } catch (e) { /* noop */ }
+                    } catch { /* noop */ }
                     finally { backgroundRefreshInFlight = false; }
                 })();
             }

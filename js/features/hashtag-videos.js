@@ -1,7 +1,7 @@
 // js/features/hashtag-videos.js
 // Хэштег #starveneon через прямой парсинг HTML страницы YouTube.
-// Invidious и Piped удалены — публичные инстансы не работают.
 // r.jina.ai используется как reader-прокси: отдаёт чистый HTML без CORS-блокировок.
+// Invidious и Piped удалены — публичные инстансы не работают.
 // Строгий фильтр: только видео, где в title/description есть "starveneon".
 
 (function() {
@@ -9,21 +9,18 @@
 
     const HASHTAG = 'starveneon';
     const YT_HASHTAG_URL = `https://www.youtube.com/hashtag/${HASHTAG}`;
-    const CACHE_KEY = `hashtag_videos_cache_v6_${HASHTAG}`;
+    const CACHE_KEY = `hashtag_videos_cache_v7_${HASHTAG}`;
     const CACHE_TTL = 30 * 60 * 1000;
     const MAX_VIDEOS = 12;
-    const REQUEST_TIMEOUT = 15000;
+    const REQUEST_TIMEOUT = 20000;
 
-    // r.jina.ai — reader-прокси, отдаёт чистый HTML без CORS-ограничений.
-    // Работает с youtube.com/hashtag без ключей.
+    // r.jina.ai — reader-прокси, отдаёт HTML без CORS-ограничений.
     const READER_PROXY = (url) => `https://r.jina.ai/${url}`;
 
-    // Дополнительные прокси как fallback
+    // Резервные CORS-прокси (только проверенные)
     const CORS_PROXIES = [
-        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
     ];
 
     function isRelevantVideo(v) {
