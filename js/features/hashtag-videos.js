@@ -1,8 +1,6 @@
 // js/features/hashtag-videos.js
-// Хэштег #starveneon через прямой парсинг HTML страницы YouTube (r.jina.ai).
-// Shorts полностью исключены: shortsLockupViewModel не собирается,
-// у videoRenderer проверяется длина < 60 сек.
-// Строгий фильтр: только title/description содержит "starveneon".
+// Хэштег #starveneon: r.jina.ai + CORS-прокси + Invidious Search + Piped Search.
+// Все стратегии запускаются параллельно (Promise.any), Shorts отсекаются по длительности.
 
 (function() {
     'use strict';
@@ -15,10 +13,34 @@
     const MIN_DURATION_SEC = 60;
     const REQUEST_TIMEOUT = 20000;
 
+    const PIPED_INSTANCES = [
+        'https://pipedapi.kavin.rocks',
+        'https://pipedapi.adminforge.de',
+        'https://pipedapi.leptons.xyz',
+        'https://api.piped.private.coffee',
+        'https://pipedapi.drgns.space',
+        'https://pipedapi.ducks.party'
+    ];
+    const INVIDIOUS_INSTANCES = [
+        'https://inv.nadeko.net',
+        'https://invidious.nerdvpn.de',
+        'https://invidious.privacyredirect.com',
+        'https://iv.melmac.space',
+        'https://invidious.f5.si',
+        'https://yt.artemislena.eu',
+        'https://invidious.jing.rocks',
+        'https://invidious.perennialte.ch'
+    ];
+
     const READER_PROXY = (url) => `https://r.jina.ai/${url}`;
     const CORS_PROXIES = [
         (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+        (u) => `https://cors.x2u.in/${u}`,
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://cors.eu.org/${u}`
     ];
 
     function parseDurationToSec(text) {
@@ -196,6 +218,7 @@
         return filterRelevant(out);
     }
 
+    // ---- Стратегия 1: r.jina.ai ----
     async function fetchViaReaderProxy(signal) {
         const url = READER_PROXY(YT_HASHTAG_URL);
         const res = await fetchWithTimeout(url, signal);
@@ -206,6 +229,7 @@
         return videos;
     }
 
+    // ---- Стратегия 2: CORS-прокси ----
     async function fetchViaCorsProxy(proxyFn, signal) {
         const url = proxyFn(YT_HASHTAG_URL);
         const res = await fetchWithTimeout(url, signal);
@@ -221,12 +245,85 @@
         return videos;
     }
 
+    // ---- Стратегия 3: Invidious Search ----
+    async function fetchViaInvidious(signal) {
+        const promises = INVIDIOUS_INSTANCES.map(async (base) => {
+            const url = `${base}/api/v1/search?q=%23${HASHTAG}&type=video`;
+            const res = await fetchWithTimeout(url, signal);
+            const data = await res.json();
+            const videos = (Array.isArray(data) ? data : []).map(item => {
+                const videoId = item.videoId;
+                if (!videoId) return null;
+                const length = typeof item.lengthSeconds === 'number' ? item.lengthSeconds : null;
+                if (length !== null && length > 0 && length < MIN_DURATION_SEC) return null;
+                return normalizeVideo({
+                    videoId,
+                    title: item.title || '',
+                    author: item.author || '',
+                    description: item.description || ''
+                });
+            }).filter(Boolean);
+            if (!videos.length) throw new Error('empty');
+            return videos;
+        });
+        try {
+            return await Promise.any(promises);
+        } catch {
+            throw new Error('all invidious failed');
+        }
+    }
+
+    // ---- Стратегия 4: Piped Search ----
+    async function fetchViaPiped(signal) {
+        const promises = PIPED_INSTANCES.map(async (base) => {
+            const url = `${base}/search?q=%23${HASHTAG}&filter=videos`;
+            const res = await fetchWithTimeout(url, signal);
+            const data = await res.json();
+            const streams = data.items || [];
+            const videos = streams.map(item => {
+                const videoId = (item.url || '').replace('/watch?v=', '');
+                if (!videoId) return null;
+                const duration = typeof item.duration === 'number' ? item.duration : null;
+                if (duration !== null && duration > 0 && duration < MIN_DURATION_SEC) return null;
+                return normalizeVideo({
+                    videoId,
+                    title: item.title || '',
+                    author: item.uploaderName || '',
+                    description: item.shortDescription || ''
+                });
+            }).filter(Boolean);
+            if (!videos.length) throw new Error('empty');
+            return videos;
+        });
+        try {
+            return await Promise.any(promises);
+        } catch {
+            throw new Error('all piped failed');
+        }
+    }
+
     async function loadHashtagVideosFromNetwork(signal) {
         const strategies = [
             fetchViaReaderProxy(signal),
-            ...CORS_PROXIES.map(p => fetchViaCorsProxy(p, signal))
+            ...CORS_PROXIES.map(p => fetchViaCorsProxy(p, signal)),
+            fetchViaInvidious(signal),
+            fetchViaPiped(signal)
         ];
-        return await Promise.any(strategies);
+
+        const results = await Promise.allSettled(strategies);
+        const collected = [];
+        for (const r of results) {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+                collected.push(...r.value);
+            }
+        }
+
+        if (!collected.length) throw new Error('No strategy returned videos');
+
+        const filtered = filterRelevant(collected);
+        if (!filtered.length) throw new Error('No relevant videos');
+
+        return filtered;
     }
 
     function renderVideos(videos, container) {

@@ -1,7 +1,6 @@
 // js/pages/news-feed.js — лента новостей (index.html).
-// YouTube: UULF-плейлист (Shorts исключены).
-// Кнопка "Смотреть" добавлена для видео — как на starve-neon.html.
-// Заголовки отображаются полностью, без "…".
+// YouTube: RSS UULF + Piped + Invidious (параллельно).
+// itch.io: общий кэш с game-updates.js (ключ itch_posts_v9_{game}).
 
 (function() {
     'use strict';
@@ -18,7 +17,7 @@
     const CACHE_TTL = 5 * 60 * 1000;
     const VIDEOS_CACHE_KEY = 'yt_videos_cache_v9';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
-    const ITCH_CACHE_KEY = 'itch_posts_news_v9';
+    const ITCH_CACHE_KEY = 'itch_posts_v9_starve-neon'; // общий с game-updates.js
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
 
     const SOURCE_TIMEOUT = 15000;
@@ -26,6 +25,7 @@
     const MAX_DISPLAY_ITEMS = 9;
     const MAX_VIDEOS = 6;
     const MAX_ITCH_POSTS = 3;
+    const MIN_YT_DURATION = 60;
 
     const RELEASE_SOURCES = [
         { owner: 'NeonShadowYT', repo: 'WorldGenerator', name: 'WorldGenerator', icon: 'images/tool-world-generator.webp' },
@@ -45,10 +45,34 @@
         }
     ];
 
+    const PIPED_INSTANCES = [
+        'https://pipedapi.kavin.rocks',
+        'https://pipedapi.adminforge.de',
+        'https://pipedapi.leptons.xyz',
+        'https://api.piped.private.coffee',
+        'https://pipedapi.drgns.space',
+        'https://pipedapi.ducks.party'
+    ];
+    const INVIDIOUS_INSTANCES = [
+        'https://inv.nadeko.net',
+        'https://invidious.nerdvpn.de',
+        'https://invidious.privacyredirect.com',
+        'https://iv.melmac.space',
+        'https://invidious.f5.si',
+        'https://yt.artemislena.eu',
+        'https://invidious.jing.rocks',
+        'https://invidious.perennialte.ch'
+    ];
+
     const RSS2JSON = (rssUrl) => `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
     const CORS_PROXIES = [
         (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+        (u) => `https://cors.x2u.in/${u}`,
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://cors.eu.org/${u}`
     ];
 
     let currentUser = null;
@@ -191,24 +215,127 @@
     }
 
     // ============================================================
-    // YOUTUBE — UULF-плейлист (без Shorts)
+    // YOUTUBE — RSS + Piped + Invidious
     // ============================================================
 
-    function parseYoutubeRssJson(data) {
-        if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return null;
-        const items = data.items.map(item => {
-            const vid = (item.link || '').match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
-            if (!vid) return null;
-            return normalizeItem({
-                type: 'video', id: vid,
-                title: item.title || 'Untitled',
-                author: YT_CHANNEL_NAME,
-                date: new Date(item.pubDate || Date.now()),
-                thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
-                videoData: { service: 'youtube', id: vid }
-            });
-        }).filter(Boolean);
-        return sortByDateDesc(items).slice(0, MAX_VIDEOS);
+    function filterYoutubeVideos(videos) {
+        const seen = new Set();
+        return videos
+            .filter(v => v && v.videoId && !seen.has(v.videoId) && (seen.add(v.videoId), true))
+            .filter(v => {
+                if (typeof v.duration === 'number' && v.duration > 0 && v.duration < MIN_YT_DURATION) {
+                    return false;
+                }
+                return true;
+            })
+            .sort((a, b) => b.date - a.date)
+            .slice(0, MAX_VIDEOS);
+    }
+
+    async function fetchYoutubeRss(signal) {
+        try {
+            const res = await fetchWithTimeout(RSS2JSON(YT_RSS_URL), signal);
+            const data = await res.json();
+            if (data.status !== 'ok' || !Array.isArray(data.items)) throw new Error('bad rss');
+            const items = data.items.map(item => {
+                const vid = (item.link || '').match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
+                if (!vid) return null;
+                return normalizeItem({
+                    type: 'video', id: vid,
+                    title: item.title || 'Untitled',
+                    author: YT_CHANNEL_NAME,
+                    date: new Date(item.pubDate || Date.now()),
+                    thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+                    videoData: { service: 'youtube', id: vid }
+                });
+            }).filter(Boolean);
+            if (!items.length) throw new Error('empty');
+            return items;
+        } catch (e) {
+            if (isAborted(e, signal)) throw e;
+            try {
+                return await raceProxies(YT_RSS_URL, (text) => {
+                    const entryBlocks = text.split('<entry>').slice(1);
+                    const items = entryBlocks.map(block => {
+                        const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+                        const titleMatch = block.match(/<title>([^<]*)<\/title>/);
+                        const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
+                        if (!videoIdMatch) return null;
+                        const videoId = videoIdMatch[1];
+                        return normalizeItem({
+                            type: 'video', id: videoId,
+                            title: decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled'),
+                            author: YT_CHANNEL_NAME,
+                            date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
+                            thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                            videoData: { service: 'youtube', id: videoId }
+                        });
+                    }).filter(Boolean);
+                    return items;
+                }, signal);
+            } catch {
+                return [];
+            }
+        }
+    }
+
+    async function fetchYoutubePiped(signal) {
+        const promises = PIPED_INSTANCES.map(async (base) => {
+            const url = `${base}/channel/${YT_CHANNEL_ID}`;
+            const res = await fetchWithTimeout(url, signal);
+            const data = await res.json();
+            const streams = data.relatedStreams || data.items || [];
+            const videos = streams.map(item => {
+                const videoId = (item.url || '').replace('/watch?v=', '');
+                if (!videoId) return null;
+                const duration = typeof item.duration === 'number' ? item.duration : null;
+                if (duration !== null && duration > 0 && duration < MIN_YT_DURATION) return null;
+                return normalizeItem({
+                    type: 'video', id: videoId,
+                    title: item.title || 'Untitled',
+                    author: YT_CHANNEL_NAME,
+                    date: item.uploaded ? new Date(item.uploaded) : new Date(),
+                    thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                    videoData: { service: 'youtube', id: videoId }
+                });
+            }).filter(Boolean);
+            if (!videos.length) throw new Error('empty');
+            return videos;
+        });
+        try {
+            return await Promise.any(promises);
+        } catch {
+            return [];
+        }
+    }
+
+    async function fetchYoutubeInvidious(signal) {
+        const promises = INVIDIOUS_INSTANCES.map(async (base) => {
+            const url = `${base}/api/v1/channels/${YT_CHANNEL_ID}/videos`;
+            const res = await fetchWithTimeout(url, signal);
+            const data = await res.json();
+            const videos = (Array.isArray(data) ? data : []).map(item => {
+                const videoId = item.videoId;
+                if (!videoId) return null;
+                const length = typeof item.lengthSeconds === 'number' ? item.lengthSeconds : null;
+                if (length !== null && length > 0 && length < MIN_YT_DURATION) return null;
+                return normalizeItem({
+                    type: 'video', id: videoId,
+                    title: item.title || 'Untitled',
+                    author: item.author || YT_CHANNEL_NAME,
+                    date: new Date(item.published ? item.published * 1000 : Date.now()),
+                    thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                    videoData: { service: 'youtube', id: videoId }
+                });
+            }).filter(Boolean);
+            if (!videos.length) throw new Error('empty');
+            return videos;
+        });
+        try {
+            return await Promise.any(promises);
+        } catch {
+            return [];
+        }
     }
 
     async function fetchYoutubeVideos(signal, forceRefresh = false) {
@@ -217,43 +344,27 @@
             if (cached && cached.length) return cached.map(normalizeItem);
         }
 
-        try {
-            const res = await fetchWithTimeout(RSS2JSON(YT_RSS_URL), signal);
-            const data = await res.json();
-            const videos = parseYoutubeRssJson(data);
-            if (videos && videos.length) {
-                writeCache(VIDEOS_CACHE_KEY, videos);
-                return videos;
+        const results = await Promise.allSettled([
+            fetchYoutubeRss(signal),
+            fetchYoutubePiped(signal),
+            fetchYoutubeInvidious(signal)
+        ]);
+
+        let videos = [];
+        for (const r of results) {
+            if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
+                videos = videos.concat(r.value);
             }
-            const fallback = await raceProxies(YT_RSS_URL, (text) => {
-                const entryBlocks = text.split('<entry>').slice(1);
-                const items = entryBlocks.map(block => {
-                    const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
-                    const titleMatch = block.match(/<title>([^<]*)<\/title>/);
-                    const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
-                    if (!videoIdMatch) return null;
-                    const videoId = videoIdMatch[1];
-                    return normalizeItem({
-                        type: 'video', id: videoId,
-                        title: decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled'),
-                        author: YT_CHANNEL_NAME,
-                        date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
-                        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                        videoData: { service: 'youtube', id: videoId }
-                    });
-                }).filter(Boolean);
-                return sortByDateDesc(items).slice(0, MAX_VIDEOS);
-            }, signal);
-            if (fallback && fallback.length) {
-                writeCache(VIDEOS_CACHE_KEY, fallback);
-                return fallback;
-            }
-            return [];
-        } catch (e) {
-            if (isAborted(e, signal)) return [];
+        }
+
+        if (!videos.length) {
             const stale = readCache(VIDEOS_CACHE_KEY, Infinity);
             return stale ? stale.map(normalizeItem) : [];
         }
+
+        const filtered = filterYoutubeVideos(videos);
+        if (filtered.length) writeCache(VIDEOS_CACHE_KEY, filtered);
+        return filtered;
     }
 
     // ============================================================
@@ -727,13 +838,11 @@
         card.appendChild(imgWrapper);
 
         const title = createElement('h3');
-        // Заголовок полностью, без обрезки и "…"
         title.textContent = item.title;
         card.appendChild(title);
 
         const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
         const icon = getAuthorIcon(item.type);
-        // Без лишней "·" между автором и датой
         meta.innerHTML = sanitizeHtml(
             `<i class="${icon}"></i> ${escapeHtml(item.author)} <i class="fas fa-calendar-alt"></i> ${item.date.toLocaleDateString()}`
         );
@@ -756,7 +865,6 @@
             card.appendChild(preview);
         }
 
-        // Кнопка для YouTube-видео — единая с game-updates.js
         if (item.type === 'video' && item.id) {
             const a = createElement('a', 'button small', {
                 marginTop: '8px', display: 'inline-flex', alignItems: 'center',
