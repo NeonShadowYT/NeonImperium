@@ -1,0 +1,200 @@
+/* css/social-badges.css — Красивые соц-бейджи в стиле "web-заглушки".
+   Градиенты, анимация блика при hover, shimmer-загрузка счётчиков, LIVE-пульс. */
+
+.social-badges-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin: 20px 0 10px;
+}
+
+.social-badges-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.social-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 15px;
+    border-radius: 10px;
+    font-family: var(--font-family);
+    font-weight: 700;
+    font-size: 12.5px;
+    color: #fff;
+    text-decoration: none;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    transition:
+        transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.25s ease,
+        filter 0.25s ease;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+        0 2px 12px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.social-badge::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.22) 50%, transparent 70%);
+    transform: translateX(-120%);
+    transition: transform 0.7s ease;
+    pointer-events: none;
+}
+.social-badge:hover {
+    transform: translateY(-3px);
+    filter: brightness(1.12);
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.social-badge:hover::before {
+    transform: translateX(120%);
+}
+.social-badge:active {
+    transform: translateY(-1px) scale(0.98);
+}
+
+.social-badge svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+    fill: currentColor;
+}
+
+.social-badge .count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 18px;
+    margin-left: 6px;
+    padding: 0 7px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.30);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    color: #fff;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+    transition: background 0.25s ease;
+    font-variant-numeric: tabular-nums;
+    text-transform: none;
+    text-shadow: none;
+    position: relative;
+    overflow: hidden;
+}
+.social-badge:hover .count {
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.count.is-loading {
+    color: transparent;
+    background: rgba(255, 255, 255, 0.10);
+}
+.count.is-loading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.28) 50%, transparent 100%);
+    transform: translateX(-100%);
+    animation: socialBadgeShimmer 1.4s ease-in-out infinite;
+}
+@keyframes socialBadgeShimmer {
+    100% { transform: translateX(100%); }
+}
+
+/* ===== Платформенные градиенты ===== */
+.badge-youtube  { background: linear-gradient(135deg, #ff3535, #c40000); }
+.badge-discord  { background: linear-gradient(135deg, #6d78f7, #4752c4); }
+.badge-telegram { background: linear-gradient(135deg, #37b3ee, #1c8dc7); }
+.badge-twitch   { background: linear-gradient(135deg, #9146ff, #6021b0); }
+.badge-boosty   { background: linear-gradient(135deg, #ff7a2f, #d65300); }
+.badge-github   { background: linear-gradient(135deg, #4a4f5e, #24292f); }
+.badge-site     { background: linear-gradient(135deg, #4a5072, #23263b); }
+
+/* ===== DM-бейджи (компактные, контурные) ===== */
+.social-badge.dm {
+    background: rgba(255, 255, 255, 0.03);
+    box-shadow:
+        0 2px 10px rgba(0, 0, 0, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    font-size: 11.5px;
+    padding: 6px 13px;
+}
+.social-badge.dm:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+.badge-telegram-dm { border-color: rgba(55, 179, 238, 0.55); color: #5cc4f0; }
+.badge-discord-dm  { border-color: rgba(109, 120, 247, 0.55); color: #8b94ff; }
+
+/* ===== Twitch LIVE-индикатор ===== */
+.badge-twitch .count.is-live {
+    background: #ff3b3b;
+    color: #fff;
+    min-width: 36px;
+    animation: socialLivePulse 1.5s ease-in-out infinite;
+}
+.badge-twitch .count.is-offline {
+    background: rgba(0, 0, 0, 0.30);
+    color: rgba(255, 255, 255, 0.55);
+    min-width: 36px;
+}
+@keyframes socialLivePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 60, 60, 0.55); }
+    50%      { box-shadow: 0 0 0 6px rgba(255, 60, 60, 0); }
+}
+
+/* ===== Мобильная адаптация ===== */
+@media (max-width: 600px) {
+    .social-badge {
+        font-size: 11.5px;
+        padding: 6px 12px;
+        letter-spacing: 0.4px;
+    }
+    .social-badge.dm {
+        font-size: 10.5px;
+        padding: 5px 10px;
+    }
+    .social-badge svg {
+        width: 12px;
+        height: 12px;
+    }
+    .social-badge .count {
+        font-size: 9.5px;
+        padding: 0 5px;
+        margin-left: 3px;
+        min-width: 26px;
+        height: 16px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .social-badge,
+    .social-badge::before,
+    .social-badge .count {
+        transition: none !important;
+    }
+    .social-badge:hover,
+    .social-badge:hover::before {
+        transform: none !important;
+    }
+    .count.is-loading::after,
+    .badge-twitch .count.is-live {
+        animation: none !important;
+    }
+}

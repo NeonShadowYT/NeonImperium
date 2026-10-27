@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://cdn.skypack.dev https://esm.sh; style-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://img.youtube.com https://*.ytimg.com https://static-cdn.jtvnw.net https://img.shields.io https://telegram-badge.vercel.app https://avatars.githubusercontent.com https://img.itch.zone https://files.catbox.moe https://i.imgur.com https://i.ibb.co; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; connect-src 'self' https://api.github.com https://api.rss2json.com https://api.twitchinsights.net https://noembed.com https://iframe.ly https://api.microlink.io https://openunfurl.vercel.app https://oembed.com https://api.allorigins.win https://corsproxy.io https://loader.to https://ssyoutube.com https://www.y2mate.com https://vimeo.com https://www.dailymotion.com https://www.youtube.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://player.twitch.tv https://rutube.ru https://coub.com; media-src 'self' https://img.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">    <!-- frame-ancestors не работает через meta на GitHub Pages. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://cdn.skypack.dev https://esm.sh; style-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://img.youtube.com https://*.ytimg.com https://static-cdn.jtvnw.net https://img.shields.io https://telegram-badge.vercel.app https://avatars.githubusercontent.com https://img.itch.zone https://files.catbox.moe https://i.imgur.com https://i.ibb.co; font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; connect-src 'self' https://api.github.com https://api.rss2json.com https://api.twitchinsights.net https://noembed.com https://iframe.ly https://api.microlink.io https://openunfurl.vercel.app https://oembed.com https://api.allorigins.win https://everyorigin.jwvbremen.nl https://api.cors.lol https://api.codetabs.com https://cloudflare-cors-anywhere.queakchannel42.workers.dev https://corsproxy.io https://img.shields.io https://telegram-badge.vercel.app https://api.socialcounts.org https://mixerno.space https://yt.lemnoslife.com https://discord.com https://loader.to https://ssyoutube.com https://www.y2mate.com https://vimeo.com https://www.dailymotion.com https://www.youtube.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://player.twitch.tv https://rutube.ru https://coub.com; media-src 'self' https://img.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
     <meta charset="UTF-8">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -40,6 +40,7 @@
     <link rel="stylesheet" href="css/feedback.css">
     <link rel="stylesheet" href="css/auth.css">
     <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/social-badges.css">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer">
     <script src="js/config.js" defer></script>
@@ -55,10 +56,11 @@
     <script src="js/core/github-auth.js" defer></script>
     <script src="js/lang.js" defer></script>
     <script src="js/dust-particles.js" defer></script>
+    <script src="js/features/social-badges.js" defer></script>
     <script src="js/pages/404-bg.js" defer></script>
     <script src="js/common-init.js" defer></script>
 
-    <!-- Стили только для 404-страницы: page-404-wrapper, bg-gif-слои, social-links-404 -->
+    <!-- Стили только для 404-страницы: bg-gif-слои -->
     <style>
         body { margin:0; background:#0f0f1a; font-family: 'Russo One', sans-serif; }
         .nav-bar { background:#1e1e30; border-radius:40px; padding:6px 20px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
@@ -72,31 +74,23 @@
         }
         .bg-gif-layer {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             z-index: 0;
             opacity: 0;
             transition: opacity 1.5s ease-in-out;
             pointer-events: none;
         }
-        .bg-gif-layer.active {
-            opacity: 1;
-        }
+        .bg-gif-layer.active { opacity: 1; }
         .bg-gif-layer img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
+            width: 100%; height: 100%;
+            object-fit: cover; display: block;
             filter: blur(4px) brightness(0.6);
         }
         .bg-gif-mask {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             background: linear-gradient(to bottom, rgba(30,30,48,0.2) 0%, rgba(30,30,48,0.9) 70%, var(--bg-card) 100%);
             z-index: 1;
             pointer-events: none;
@@ -106,40 +100,9 @@
             z-index: 2;
             background: rgba(30,30,48,0.65);
         }
-        .nav-bar {
-            position: relative;
-            z-index: 10;
-        }
+        .nav-bar { position: relative; z-index: 10; }
 
-        .button,
-        .button:hover {
-            color: white !important;
-        }
-
-        .social-links-404 {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 30px;
-        }
-        .social-links-404 a {
-            display: inline-block;
-            transition: transform 0.2s;
-        }
-        .social-links-404 a:hover {
-            transform: translateY(-3px);
-        }
-        .social-links-404 img {
-            height: 28px;
-            width: auto;
-            border-radius: 4px;
-        }
-        @media (max-width: 600px) {
-            .social-links-404 img {
-                height: 24px;
-            }
-        }
+        .button, .button:hover { color: white !important; }
     </style>
 </head>
 <body>
@@ -164,32 +127,7 @@
                     <p class="text-secondary" data-lang="notFoundDesc" style="font-size: 18px; margin-bottom: 30px;"></p>
                     <a href="index.html" class="button wide" data-lang="backHome" aria-label="Вернуться на главную страницу">Вернуться на главную</a>
 
-                    <div class="social-links-404">
-                        <a target="_blank" rel="noopener noreferrer" href="https://www.youtube.com/@NeonShadow-neon" aria-label="YouTube-канал Neon Shadow">
-                            <img alt="YouTube" src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white">
-                        </a>
-                        <a target="_blank" rel="noopener noreferrer" href="https://www.twitch.tv/neoncyndows" aria-label="Twitch-канал Neon Shadow">
-                            <img alt="Twitch" src="https://img.shields.io/twitch/status/neoncyndows?style=for-the-badge&logo=twitch&logoColor=white&label=Twitch&labelColor=9146FF&color=282c34">
-                        </a>
-                        <a target="_blank" rel="noopener noreferrer" href="https://discord.com/invite/9gv5sRhk9R" aria-label="Discord-сервер Neon Imperium">
-                            <img alt="Discord" src="https://img.shields.io/discord/1033727594467704842?style=for-the-badge&logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=282c34">
-                        </a>
-                        <a target="_blank" rel="noopener noreferrer" href="https://t.me/voididea" aria-label="Telegram-канал Neon Imperium">
-                            <img alt="Telegram" src="https://telegram-badge.vercel.app/api/telegram-badge?channelId=@voididea&style=for-the-badge&logo=telegram&logoColor=white&label=Telegram&labelColor=26A5E4&color=282c34">
-                        </a>
-                        <a target="_blank" rel="noopener noreferrer" href="https://boosty.to/neoncyndows" aria-label="Boosty Neon Shadow">
-                            <img alt="Boosty" src="https://img.shields.io/badge/Boosty-FF5E00?style=for-the-badge&logo=boosty&logoColor=white">
-                        </a>
-                        <a target="_blank" rel="noopener noreferrer" href="https://t.me/NeonCyndows" aria-label="Telegram-личка Neon Shadow">
-                            <img alt="Telegram DM" src="https://img.shields.io/badge/Telegram-Личка-26A5E4?style=for-the-badge&logo=telegram&logoColor=white">
-                        </a>
-                        <a target="_blank" rel="noopener noreferrer" href="https://discord.com/users/857872869949177896" aria-label="Discord-личка Neon Shadow">
-                            <img alt="Discord DM" src="https://img.shields.io/badge/Discord-Личка-5865F2?style=for-the-badge&logo=discord&logoColor=white">
-                        </a>
-                        <a target="_blank" rel="noopener noreferrer" href="https://github.com/NeonShadowYT" aria-label="GitHub Neon Shadow">
-                            <img alt="GitHub" src="https://img.shields.io/badge/GitHub-2d2f48?style=for-the-badge&logo=github&logoColor=white">
-                        </a>
-                    </div>
+                    <div data-social-badges="all"></div>
                 </div>
             </main>
         </div>
