@@ -1,8 +1,11 @@
-// js/pages/game-updates.js — обновления игры: GitHub issues + itch.io devlog.
-// itch.io: RSS через 20 CORS-прокси, HTML через прокси, rss2json — параллельно.
-// Иконка автора:
-//   itch-post → fab fa-itch-io
-//   остальные (GitHub type:update) → fas fa-user (автор — реальный ник)
+// js/pages/game-updates.js — обновления игры (GitHub issues + itch.io devlog).
+//
+// ПАТТЕРН:
+//   1. Параллельная загрузка GitHub + itch.io через Promise.allSettled.
+//   2. Если оба источника есть в кэше — рендерим СРАЗУ, рефреш в фоне.
+//   3. itch.io: RSS (с превью из <description><img>), HTML-парсинг, rss2json —
+//      все три стратегии параллельно через Promise.any.
+//   4. Fallback превью itch.io — og:image через прокси (лениво, после рендера).
 
 (function() {
     'use strict';
@@ -18,6 +21,7 @@
 
     let currentAbort = null;
     let currentGame = null;
+    let backgroundRefreshInFlight = false;
 
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
     const REQUEST_TIMEOUT = 12000;
@@ -81,7 +85,7 @@
             .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'");
     }
 
-    // ---- Кэш ----
+    // ---- Кэш itch.io ----
     function itchCacheKey(game) { return `itch_posts_updates_v3_${game}`; }
 
     function readItchCache(game) {
@@ -160,7 +164,8 @@
         return await Promise.any(promises);
     }
 
-    // ---- Парсеры itch.io ----
+    // ---- Парсеры itch.io с превью ----
+
     function parseItchDevlogXml(xmlText, source) {
         if (!xmlText || typeof xmlText !== 'string') return [];
         const itemBlocks = xmlText.split('<item>').slice(1);
@@ -176,16 +181,27 @@
             if (isNaN(date.getTime())) date = new Date();
 
             let description = '';
+            let thumbnail = null;
             if (descriptionMatch) {
+                const rawHtml = descriptionMatch[1];
                 const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = descriptionMatch[1];
+                tempDiv.innerHTML = rawHtml;
                 description = (tempDiv.textContent || tempDiv.innerText || '').trim();
+
+                const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+                if (imgMatch) {
+                    let url = imgMatch[1];
+                    if (url.startsWith('//')) url = 'https:' + url;
+                    else if (url.startsWith('/')) url = 'https://img.itch.zone' + url;
+                    thumbnail = url;
+                }
             }
 
             return {
                 type: 'itch-post',
                 id: `itch-${link}`,
                 title, author: source.name, date, body: description,
+                thumbnail,
                 itchLink: link, itchSource: source.name,
                 labels: ['type:itch-post']
             };
@@ -204,6 +220,8 @@
                 const titleEl = el.querySelector('h2, h3, .post_title');
                 const linkEl = el.querySelector('a[href*="/devlog/"]') || el.querySelector('a');
                 const dateEl = el.querySelector('time, .post_date, .date');
+                const imgEl = el.querySelector('img');
+
                 const title = titleEl ? titleEl.textContent.trim() : 'Пост';
                 const link = linkEl ? linkEl.href : source.devlogPageUrl;
                 let date = new Date();
@@ -211,10 +229,12 @@
                     const parsed = new Date(dateEl.getAttribute('datetime') || dateEl.textContent);
                     if (!isNaN(parsed.getTime())) date = parsed;
                 }
+                const thumbnail = imgEl ? imgEl.src : null;
+
                 return {
                     type: 'itch-post',
                     id: `itch-html-${link}`,
-                    title, author: source.name, date, body: '',
+                    title, author: source.name, date, body: '', thumbnail,
                     itchLink: link, itchSource: source.name,
                     labels: ['type:itch-post']
                 };
@@ -224,28 +244,43 @@
 
     function parseRss2JsonItch(data, source) {
         if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return null;
-        return data.items.slice(0, MAX_ITCH_POSTS).map(item => ({
-            type: 'itch-post',
-            id: `itch-rss2json-${item.link}`,
-            title: item.title || 'Пост',
-            author: source.name,
-            date: new Date(item.pubDate || Date.now()),
-            body: (item.description || '').replace(/<[^>]*>/g, ''),
-            itchLink: item.link,
-            itchSource: source.name,
-            labels: ['type:itch-post']
-        }));
+        return data.items.slice(0, MAX_ITCH_POSTS).map(item => {
+            const rawHtml = item.description || '';
+            let thumbnail = null;
+            const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+            if (imgMatch) {
+                let url = imgMatch[1];
+                if (url.startsWith('//')) url = 'https:' + url;
+                else if (url.startsWith('/')) url = 'https://img.itch.zone' + url;
+                thumbnail = url;
+            }
+            return {
+                type: 'itch-post',
+                id: `itch-rss2json-${item.link}`,
+                title: item.title || 'Пост',
+                author: source.name,
+                date: new Date(item.pubDate || Date.now()),
+                body: rawHtml.replace(/<[^>]*>/g, ''),
+                thumbnail,
+                itchLink: item.link,
+                itchSource: source.name,
+                labels: ['type:itch-post']
+            };
+        });
     }
 
     // ---- Загрузка itch.io ----
-    async function fetchItchPosts(game, signal) {
+
+    async function fetchItchPosts(game, signal, forceRefresh = false) {
         const source = ITCH_DEVLOG_SOURCES[game];
         if (!source) return [];
 
-        const cached = readItchCache(game);
-        if (cached && cached.length) {
-            console.log(`[GameUpdates] itch.io из кеша: ${cached.length}`);
-            return cached;
+        if (!forceRefresh) {
+            const cached = readItchCache(game);
+            if (cached && cached.length) {
+                console.log(`[GameUpdates] itch.io из кеша: ${cached.length}`);
+                return cached;
+            }
         }
 
         const strategies = [
@@ -270,151 +305,117 @@
             return [];
         } catch (e) {
             if (isAborted(e, signal)) return [];
-            console.warn(`[GameUpdates] itch.io ${source.name}: все стратегии провалились`);
+            const stale = readItchCache(game);
+            if (stale) return stale;
+            console.warn(`[GameUpdates] itch.io ${source.name}: все стратегии упали`);
             return [];
         }
     }
 
-    // ============================================================
-    // Публичные точки входа
-    // ============================================================
-
-    window.initGameUpdates = function() {
-        const container = document.getElementById('game-updates');
-        if (container?.dataset.game) {
-            currentGame = container.dataset.game;
-            window.currentGame = currentGame;
-            loadGameUpdates(container, currentGame);
-        }
-        window.addEventListener('github-issue-created', e => {
-            const issue = e.detail;
-            if (!currentGame) return;
-            if (!issue.labels.some(l => l.name === 'type:update' && l.name === `game:${currentGame}`)) return;
-            if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
-            cacheRemoveByPrefix(`game_issues_${currentGame}`);
-            const cont = document.getElementById('game-updates');
-            if (!cont) return;
-            const newPost = {
-                number: issue.number, title: issue.title, body: issue.body,
-                date: new Date(issue.created_at), author: issue.user.login,
-                game: currentGame, labels: issue.labels.map(l => l.name)
-            };
-            let grid = cont.querySelector('.projects-grid');
-            if (!grid) {
-                grid = createElement('div', 'projects-grid');
-                cont.innerHTML = '';
-                cont.appendChild(grid);
-            }
-            const fragment = document.createDocumentFragment();
-            fragment.appendChild(createUpdateCard(newPost));
-            grid.insertBefore(fragment, grid.firstChild);
-        });
-        window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
-        window.addEventListener('github-logout', () => { if (currentGame) refreshGameUpdates(currentGame); });
-
-        window.addEventListener('languageChanged', () => {
-            const container = document.getElementById('game-updates');
-            if (!container) return;
-            const parent = container.parentNode;
-            const header = parent?.querySelector('.updates-header');
-            if (header) {
-                const btn = header.querySelector('.admin-update-btn');
-                if (btn) btn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addUpdate')}`);
-            }
-        });
-    };
-
-    window.refreshGameUpdates = (game) => {
-        const cont = document.getElementById('game-updates');
-        if (cont && cont.dataset.game === game) loadGameUpdates(cont, game);
-    };
-
-    async function loadGameUpdates(container, game) {
-        container.innerHTML = sanitizeHtml(
-            `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="loading">${t('loading')}</p></div>`
-        );
-        if (currentAbort) { currentAbort.controller.abort(); currentAbort = null; }
-        const { controller, timeoutId } = createAbortable(15000);
-        currentAbort = { controller };
-
+    async function fetchItchPostThumbnail(postUrl, signal) {
+        if (!postUrl) return null;
         try {
-            const cacheKey = `game_issues_${game}`;
-            let issues = await cacheGet(cacheKey);
-            if (!issues) {
-                issues = await loadIssues({ labels: `game:${game}`, state: 'open', per_page: 100, signal: controller.signal });
-                await cacheSet(cacheKey, issues);
-            }
+            const html = await raceProxies(postUrl, (text) => text.length > 500 ? text : null, signal);
+            if (!html) return null;
+            let match = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
+            if (match) return match[1];
+            match = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
+            if (match) return match[1];
+            return null;
+        } catch { return null; }
+    }
 
-            const ghPosts = issues.filter(i =>
-                i.labels.some(l => l.name === 'type:update') &&
-                CONFIG.ALLOWED_AUTHORS.includes(i.user.login)
-            ).map(i => ({
-                type: 'gh-update',
-                number: i.number,
-                id: `gh-${i.number}`,
-                title: i.title,
-                body: i.body,
-                date: new Date(i.created_at),
-                author: i.user.login,
-                game,
-                labels: i.labels.map(l => l.name)
-            }));
+    async function enrichItchThumbnails(posts, signal, onEnriched) {
+        if (!posts || !posts.length) return;
+        const without = posts.filter(p => !p.thumbnail && p.itchLink);
+        if (!without.length) return;
 
-            const itchPosts = await fetchItchPosts(game, controller.signal);
-
-            const allPosts = [...itchPosts, ...ghPosts].sort((a, b) => b.date - a.date);
-
-            if (allPosts.length === 0) {
-                container.innerHTML = sanitizeHtml(`<p class="text-secondary" data-lang="noUpdates">${t('noUpdates')}</p>`);
-                return;
-            }
-
-            container.innerHTML = '';
-            const grid = createElement('div', 'projects-grid');
-            const fragment = document.createDocumentFragment();
-            allPosts.forEach(p => fragment.appendChild(createUpdateCard(p)));
-            grid.appendChild(fragment);
-            container.appendChild(grid);
-
-            const parent = container.parentNode;
-            let header = parent.querySelector('.updates-header');
-            if (!header) {
-                header = createElement('div', 'updates-header', {
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    marginBottom: '20px'
-                });
-                header.innerHTML = sanitizeHtml(
-                    `<div style="display:flex;align-items:center;gap:8px;">` +
-                    `<i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);"></i>` +
-                    `<h2 style="margin:0;" data-lang="updatesTitle">${t('updatesTitle')}</h2></div>`
-                );
-                parent.insertBefore(header, container);
-            }
-            const existing = header.querySelector('.admin-update-btn');
-            if (isAdmin() && hasScope('repo')) {
-                if (!existing) {
-                    const btn = createElement('button', 'button admin-update-btn');
-                    btn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addUpdate')}`);
-                    btn.addEventListener('click', async () => {
-                        if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
-                        window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update');
-                    });
-                    header.appendChild(btn);
-                } else {
-                    existing.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addUpdate')}`);
+        let enriched = 0;
+        await Promise.allSettled(without.map(async (p) => {
+            const thumb = await fetchItchPostThumbnail(p.itchLink, signal);
+            if (thumb) {
+                p.thumbnail = thumb;
+                enriched++;
+                if (typeof onEnriched === 'function') {
+                    try { onEnriched(p); } catch { /* noop */ }
                 }
-            } else if (existing) existing.remove();
-        } catch (err) {
-            if (controller.signal.aborted) return;
-            console.error('Update load error:', err);
-            container.innerHTML = sanitizeHtml(
-                `<p class="error-message" data-lang="updatesLoadError">${t('updatesLoadError')}</p>`
-            );
-        } finally {
-            clearTimeout(timeoutId);
-            if (currentAbort?.controller === controller) currentAbort = null;
+            }
+        }));
+
+        if (enriched > 0 && currentGame) {
+            try {
+                const cached = readItchCache(currentGame);
+                if (cached) {
+                    let changed = false;
+                    for (const c of cached) {
+                        const updated = posts.find(p => p.id === c.id && p.thumbnail);
+                        if (updated && !c.thumbnail) {
+                            c.thumbnail = updated.thumbnail;
+                            changed = true;
+                        }
+                    }
+                    if (changed) writeItchCache(currentGame, cached);
+                }
+            } catch { /* noop */ }
         }
     }
+
+    // ============================================================
+    // GitHub issues
+    // ============================================================
+
+    async function fetchGithubUpdates(game, signal, forceRefresh = false) {
+        const cacheKey = `game_issues_${game}`;
+        let issues = null;
+
+        if (!forceRefresh) {
+            issues = await cacheGet(cacheKey);
+        }
+
+        if (!issues) {
+            issues = await loadIssues({ labels: `game:${game}`, state: 'open', per_page: 100, signal });
+            await cacheSet(cacheKey, issues);
+        }
+
+        return issues.filter(i =>
+            i.labels.some(l => l.name === 'type:update') &&
+            CONFIG.ALLOWED_AUTHORS.includes(i.user.login)
+        ).map(i => ({
+            type: 'gh-update',
+            number: i.number,
+            id: `gh-${i.number}`,
+            title: i.title,
+            body: i.body,
+            date: new Date(i.created_at),
+            author: i.user.login,
+            game,
+            labels: i.labels.map(l => l.name),
+            thumbnail: null
+        }));
+    }
+
+    async function fetchAllUpdates(game, signal, forceRefresh = false) {
+        const results = await Promise.allSettled([
+            fetchGithubUpdates(game, signal, forceRefresh),
+            fetchItchPosts(game, signal, forceRefresh)
+        ]);
+
+        const gh = results[0].status === 'fulfilled' ? results[0].value : [];
+        const itch = results[1].status === 'fulfilled' ? results[1].value : [];
+
+        if (results[0].status === 'rejected' && !isAborted(results[0].reason, signal)) {
+            console.warn('[GameUpdates] GitHub issues error:', results[0].reason);
+        }
+        if (results[1].status === 'rejected' && !isAborted(results[1].reason, signal)) {
+            console.warn('[GameUpdates] itch.io error:', results[1].reason);
+        }
+
+        return [...itch, ...gh].sort((a, b) => b.date - a.date);
+    }
+
+    // ============================================================
+    // Рендер
+    // ============================================================
 
     function getAuthorIcon(type) {
         return type === 'itch-post' ? 'fab fa-itch-io' : 'fas fa-user';
@@ -424,10 +425,15 @@
         const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
         const inner = createElement('div', 'project-card');
 
-        const imgMatch = (post.body || '').match(/!\[.*?\]\((.*?)\)/);
+        // Превью: сначала пытаемся взять thumbnail, потом — картинка из markdown body
+        let imgSrc = post.thumbnail || null;
+        if (!imgSrc && post.body) {
+            const mdMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
+            if (mdMatch) imgSrc = mdMatch[1];
+        }
         const imgW = createElement('div', 'image-wrapper');
         const img = createElement('img', 'project-image', {}, {
-            src: imgMatch?.[1] || 'images/default-news.webp',
+            src: imgSrc || 'images/default-news.webp',
             alt: post.title, loading: 'lazy'
         });
         img.onerror = () => { img.src = 'images/default-news.webp'; };
@@ -483,5 +489,196 @@
         });
 
         return card;
+    }
+
+    function renderUpdates(container, game, posts) {
+        if (!posts.length) {
+            container.innerHTML = sanitizeHtml(
+                `<p class="text-secondary" data-lang="noUpdates">${t('noUpdates')}</p>`
+            );
+            return;
+        }
+
+        const scrollY = window.scrollY;
+        container.innerHTML = '';
+        const grid = createElement('div', 'projects-grid');
+        const fragment = document.createDocumentFragment();
+        posts.forEach(p => fragment.appendChild(createUpdateCard(p)));
+        grid.appendChild(fragment);
+        container.appendChild(grid);
+
+        // Заголовок «Обновления» + кнопка «Добавить» для админов
+        const parent = container.parentNode;
+        let header = parent.querySelector('.updates-header');
+        if (!header) {
+            header = createElement('div', 'updates-header', {
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: '20px'
+            });
+            header.innerHTML = sanitizeHtml(
+                `<div style="display:flex;align-items:center;gap:8px;">` +
+                `<i class="fas fa-clock-rotate-left" style="font-size:24px;color:var(--accent);"></i>` +
+                `<h2 style="margin:0;" data-lang="updatesTitle">${t('updatesTitle')}</h2></div>`
+            );
+            parent.insertBefore(header, container);
+        }
+        const existing = header.querySelector('.admin-update-btn');
+        if (isAdmin() && hasScope('repo')) {
+            if (!existing) {
+                const btn = createElement('button', 'button admin-update-btn');
+                btn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addUpdate')}`);
+                btn.addEventListener('click', async () => {
+                    if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
+                    window.UIFeedback.openEditorModal('new', { game: currentGame }, 'update');
+                });
+                header.appendChild(btn);
+            } else {
+                existing.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addUpdate')}`);
+            }
+        } else if (existing) existing.remove();
+
+        window.scrollTo({ top: scrollY, behavior: 'instant' });
+
+        // Ленивая подгрузка превью itch-постов, у которых нет thumbnail
+        const withoutThumb = posts.filter(p => p.type === 'itch-post' && !p.thumbnail);
+        if (withoutThumb.length) {
+            enrichItchThumbnails(withoutThumb, null, (updated) => {
+                const img = container.querySelector(`[data-item-id="${updated.id}"] img.project-image`);
+                if (img && updated.thumbnail) img.src = updated.thumbnail;
+            });
+        }
+    }
+
+    // ============================================================
+    // Публичные точки входа
+    // ============================================================
+
+    window.initGameUpdates = function() {
+        const container = document.getElementById('game-updates');
+        if (container?.dataset.game) {
+            currentGame = container.dataset.game;
+            window.currentGame = currentGame;
+            loadGameUpdates(container, currentGame, false);
+        }
+        window.addEventListener('github-issue-created', e => {
+            const issue = e.detail;
+            if (!currentGame) return;
+            if (!issue.labels.some(l => l.name === 'type:update' && l.name === `game:${currentGame}`)) return;
+            if (!CONFIG.ALLOWED_AUTHORS.includes(issue.user.login)) return;
+            cacheRemoveByPrefix(`game_issues_${currentGame}`);
+            const cont = document.getElementById('game-updates');
+            if (!cont) return;
+            const newPost = {
+                type: 'gh-update',
+                number: issue.number, id: `gh-${issue.number}`,
+                title: issue.title, body: issue.body,
+                date: new Date(issue.created_at), author: issue.user.login,
+                game: currentGame, labels: issue.labels.map(l => l.name),
+                thumbnail: null
+            };
+            let grid = cont.querySelector('.projects-grid');
+            if (!grid) {
+                grid = createElement('div', 'projects-grid');
+                cont.innerHTML = '';
+                cont.appendChild(grid);
+            }
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(createUpdateCard(newPost));
+            grid.insertBefore(fragment, grid.firstChild);
+        });
+        window.addEventListener('github-login-success', () => { if (currentGame) refreshGameUpdates(currentGame); });
+        window.addEventListener('github-logout', () => { if (currentGame) refreshGameUpdates(currentGame); });
+
+        window.addEventListener('languageChanged', () => {
+            const container = document.getElementById('game-updates');
+            if (!container) return;
+            const parent = container.parentNode;
+            const header = parent?.querySelector('.updates-header');
+            if (header) {
+                const btn = header.querySelector('.admin-update-btn');
+                if (btn) btn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addUpdate')}`);
+            }
+        });
+    };
+
+    window.refreshGameUpdates = (game) => {
+        const cont = document.getElementById('game-updates');
+        if (cont && cont.dataset.game === game) loadGameUpdates(cont, game, true);
+    };
+
+    async function loadGameUpdates(container, game, forceRefresh = false) {
+        if (currentAbort) { currentAbort.controller.abort(); currentAbort = null; }
+        const { controller, timeoutId } = createAbortable(15000);
+        currentAbort = { controller };
+
+        try {
+            // SWR: если есть кэш и не forceRefresh — рендерим сразу
+            if (!forceRefresh) {
+                const [cachedGh, cachedItch] = await Promise.all([
+                    cacheGet(`game_issues_${game}`),
+                    Promise.resolve(readItchCache(game))
+                ]);
+
+                if (cachedGh || cachedItch) {
+                    const ghPosts = (cachedGh || []).filter(i =>
+                        i.labels.some(l => l.name === 'type:update') &&
+                        CONFIG.ALLOWED_AUTHORS.includes(i.user.login)
+                    ).map(i => ({
+                        type: 'gh-update',
+                        number: i.number, id: `gh-${i.number}`,
+                        title: i.title, body: i.body,
+                        date: new Date(i.created_at),
+                        author: i.user.login, game,
+                        labels: i.labels.map(l => l.name),
+                        thumbnail: null
+                    }));
+                    const itchPosts = cachedItch || [];
+                    const combined = [...itchPosts, ...ghPosts].sort((a, b) => b.date - a.date);
+
+                    if (combined.length) {
+                        renderUpdates(container, game, combined);
+                        console.log('[GameUpdates] SWR: показан кэш, рефреш в фоне');
+
+                        if (!backgroundRefreshInFlight) {
+                            backgroundRefreshInFlight = true;
+                            (async () => {
+                                try {
+                                    const fresh = await fetchAllUpdates(game, null, true);
+                                    if (fresh.length) {
+                                        const cont = document.getElementById('game-updates');
+                                        if (cont && cont.dataset.game === game) {
+                                            renderUpdates(cont, game, fresh);
+                                            console.log('[GameUpdates] SWR: фон обновил данные');
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.warn('[GameUpdates] SWR: фон упал:', e);
+                                } finally {
+                                    backgroundRefreshInFlight = false;
+                                }
+                            })();
+                        }
+                        return;
+                    }
+                }
+            }
+
+            // Нет кэша или forceRefresh: показываем скелетон и ждём сеть
+            container.innerHTML = sanitizeHtml(
+                `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="loading">${t('loading')}</p></div>`
+            );
+
+            const posts = await fetchAllUpdates(game, controller.signal, forceRefresh);
+            renderUpdates(container, game, posts);
+        } catch (err) {
+            if (controller.signal.aborted) return;
+            console.error('[GameUpdates] load error:', err);
+            container.innerHTML = sanitizeHtml(
+                `<p class="error-message" data-lang="updatesLoadError">${t('updatesLoadError')}</p>`
+            );
+        } finally {
+            clearTimeout(timeoutId);
+            if (currentAbort?.controller === controller) currentAbort = null;
+        }
     }
 })();
