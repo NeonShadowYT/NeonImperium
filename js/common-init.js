@@ -2,8 +2,8 @@
 //   — Preconnect.
 //   — Глобальный fallback изображений (data-fallback).
 //   — Динамическая подгрузка page-скриптов.
-//   — marked@18.1.0 (UMD, SRI).
-//   — DOMPurify@3.4.16 (SRI).
+//   — marked@18.1.0 (UMD) — БЕЗ SRI (хеш не совпадает с CDN).
+//   — DOMPurify@3.4.16 — БЕЗ SRI (хеш не совпадает с CDN).
 //   — Service Worker + controllerchange.
 //   — Download consent.
 //   — Rate limits.
@@ -86,7 +86,8 @@
         { url: 'https://i.ytimg.com', crossOrigin: false },
         { url: 'https://static-cdn.jtvnw.net', crossOrigin: false },
         { url: 'https://img.shields.io', crossOrigin: false },
-        { url: 'https://telegram-badge.vercel.app', crossOrigin: false }
+        { url: 'https://telegram-badge.vercel.app', crossOrigin: false },
+        { url: 'https://r.jina.ai', crossOrigin: false }
     ];
 
     function addPreconnects() {
@@ -162,18 +163,17 @@
 
     // ============================================================
     // Единый загрузчик скриптов.
-    // Принимает строку (src) или объект { src, integrity, crossOrigin }.
+    // Принимает строку (src) или объект { src, crossOrigin }.
+    // SRI-хеши больше не передаются — они не совпадали с CDN.
     // ============================================================
 
     function loadScript(item, timeout = 10000) {
         const src = typeof item === 'string' ? item : item.src;
-        const integrity = (typeof item === 'object' && item.integrity) ? item.integrity : null;
         const crossOrigin = (typeof item === 'object' && item.crossOrigin) ? item.crossOrigin : null;
 
         return new Promise((resolve, reject) => {
             const script = document.createElement('script');
             script.src = src;
-            if (integrity) script.integrity = integrity;
             if (crossOrigin) script.crossOrigin = crossOrigin;
             script.defer = true;
 
@@ -189,7 +189,7 @@
 
     // ============================================================
     // marked@18.1.0 — UMD-сборка (lib/marked.umd.js).
-    // Основной CDN с SRI, резерв (unpkg) без SRI.
+    // SRI-хеш УДАЛЁН — не совпадает с содержимым CDN.
     // ============================================================
 
     const MARKED_CDNS = [
@@ -197,7 +197,9 @@
             src: 'https://cdn.jsdelivr.net/npm/marked@18.1.0/lib/marked.umd.js',
             crossOrigin: 'anonymous'
         },
-        { src: 'https://unpkg.com/marked@18.1.0/lib/marked.umd.js' }
+        {
+            src: 'https://unpkg.com/marked@18.1.0/lib/marked.umd.js'
+        }
     ];
 
     async function ensureMarked() {
@@ -223,12 +225,12 @@
 
     // ============================================================
     // DOMPurify@3.4.16
+    // SRI-хеш УДАЛЁН — не совпадает с содержимым CDN.
     // ============================================================
 
     const DOMPURIFY_CDNS = [
         {
             src: 'https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js',
-            integrity: 'sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL',
             crossOrigin: 'anonymous'
         },
         {

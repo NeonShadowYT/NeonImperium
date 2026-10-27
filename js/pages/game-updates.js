@@ -1,5 +1,6 @@
-// js/pages/game-updates.js — обновления игры (GitHub + itch.io + YouTube-канал разработчика).
-// YouTube: только канал (RSS), без shorts, превью всегда i.ytimg.com.
+// js/pages/game-updates.js — обновления (GitHub + itch.io + YouTube-канал).
+// YouTube — только RSS канала (без Invidious/Piped). itch.io — через CORS-прокси.
+// Превью всегда i.ytimg.com.
 
 (function() {
     'use strict';
@@ -22,7 +23,6 @@
     const REQUEST_TIMEOUT = 12000;
     const MAX_ITCH_POSTS = 3;
     const MAX_YT_VIDEOS = 3;
-    const MIN_SHORT_DURATION = 60;
 
     const YT_CHANNEL_ID = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
     const YT_CHANNEL_NAME = 'Neon Shadow';
@@ -42,10 +42,10 @@
 
     const CORS_PROXIES = [
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsfix.com/?${u}`,
         (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-        (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsfix.com/?${u}`
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://cors.lol/?${encodeURIComponent(u)}`
     ];
 
     function t(key) {
@@ -85,9 +85,8 @@
         return { ...p, date: normalizeDate(p.date) };
     }
 
-    // ---- Кэш ----
-    function itchCacheKey(game) { return `itch_posts_updates_v5_${game}`; }
-    function ytCacheKey(game) { return `yt_updates_v5_${game}`; }
+    function itchCacheKey(game) { return `itch_posts_updates_v6_${game}`; }
+    function ytCacheKey(game) { return `yt_updates_v6_${game}`; }
 
     function readCacheWithDates(key, ttl) {
         try {
@@ -109,7 +108,6 @@
         } catch { /* noop */ }
     }
 
-    // ---- Сеть ----
     function fetchWithTimeout(url, signal, timeout = REQUEST_TIMEOUT) {
         return new Promise((resolve, reject) => {
             const controller = new AbortController();
@@ -145,7 +143,7 @@
             try {
                 const json = JSON.parse(text);
                 if (typeof json.contents === 'string') text = json.contents;
-            } catch { /* не JSON */ }
+            } catch { /* noop */ }
         }
         return text;
     }
@@ -164,7 +162,7 @@
     }
 
     // ============================================================
-    // ITCH.IO (без изменений — превью из media:content/enclosure/img)
+    // ITCH.IO
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -249,36 +247,8 @@
         }
     }
 
-    async function fetchItchPostThumbnail(postUrl, signal) {
-        if (!postUrl) return null;
-        try {
-            const html = await raceProxies(postUrl, (text) => text.length > 500 ? text : null, signal);
-            if (!html) return null;
-            let match = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
-            if (match) return match[1];
-            match = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
-            if (match) return match[1];
-            return null;
-        } catch { return null; }
-    }
-
-    async function enrichItchThumbnails(posts, signal, onEnriched) {
-        if (!posts || !posts.length) return;
-        const without = posts.filter(p => !p.thumbnail && p.itchLink);
-        if (!without.length) return;
-        await Promise.allSettled(without.map(async (p) => {
-            const thumb = await fetchItchPostThumbnail(p.itchLink, signal);
-            if (thumb) {
-                p.thumbnail = thumb;
-                if (typeof onEnriched === 'function') {
-                    try { onEnriched(p); } catch { /* noop */ }
-                }
-            }
-        }));
-    }
-
     // ============================================================
-    // YOUTUBE — только канал, без shorts, превью i.ytimg.com
+    // YOUTUBE — только RSS канала
     // ============================================================
 
     function parseYoutubeRssForGame(xmlText, game) {
@@ -303,7 +273,7 @@
                 title,
                 author: YT_CHANNEL_NAME,
                 date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
-                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`, // всегда i.ytimg.com
+                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                 labels: ['type:yt-video']
             });
         }).filter(Boolean);
@@ -372,18 +342,8 @@
         const itch = results[1].status === 'fulfilled' ? results[1].value : [];
         const yt = results[2].status === 'fulfilled' ? results[2].value : [];
 
-        ['GitHub', 'itch.io', 'YouTube'].forEach((name, i) => {
-            if (results[i].status === 'rejected' && !isAborted(results[i].reason, signal)) {
-                console.warn(`[GameUpdates] ${name} error:`, results[i].reason);
-            }
-        });
-
         return [...yt, ...itch, ...gh].sort((a, b) => b.date - a.date);
     }
-
-    // ============================================================
-    // Рендер
-    // ============================================================
 
     function getAuthorIcon(type) {
         if (type === 'itch-post') return 'fab fa-itch-io';
@@ -493,7 +453,6 @@
         }
 
         const scrollY = window.scrollY;
-
         const grid = createElement('div', 'projects-grid');
         const fragment = document.createDocumentFragment();
         posts.forEach(p => fragment.appendChild(createUpdateCard(p)));
@@ -528,19 +487,7 @@
         } else if (existing) existing.remove();
 
         window.scrollTo({ top: scrollY, behavior: 'instant' });
-
-        const withoutThumb = posts.filter(p => p.type === 'itch-post' && !p.thumbnail);
-        if (withoutThumb.length) {
-            enrichItchThumbnails(withoutThumb, null, (updated) => {
-                const img = container.querySelector(`[data-item-id="${updated.id}"] img.project-image`);
-                if (img && updated.thumbnail) img.src = updated.thumbnail;
-            });
-        }
     }
-
-    // ============================================================
-    // Публичные функции
-    // ============================================================
 
     window.initGameUpdates = function() {
         const container = document.getElementById('game-updates');
@@ -637,11 +584,8 @@
                                             renderUpdates(cont, game, fresh);
                                         }
                                     }
-                                } catch (e) {
-                                    console.warn('[GameUpdates] SWR: фон упал:', e);
-                                } finally {
-                                    backgroundRefreshInFlight = false;
-                                }
+                                } catch (e) { /* noop */ }
+                                finally { backgroundRefreshInFlight = false; }
                             })();
                         }
                         return;

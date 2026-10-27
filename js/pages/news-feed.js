@@ -1,7 +1,7 @@
 // js/pages/news-feed.js — лента новостей (index.html).
-// YouTube — ТОЛЬКО канал (RSS + Invidious channel + Piped channel).
-// Piped: правильный endpoint /channels/{id}/videos, превью всегда i.ytimg.com.
-// Shorts отбрасываются: duration <= 60 или lengthSeconds <= 60.
+// YouTube: только RSS канала (без Invidious/Piped — они мертвы).
+// itch.io: RSS через проверенные CORS-прокси.
+// Превью всегда i.ytimg.com.
 
 (function() {
     'use strict';
@@ -14,11 +14,11 @@
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const { showToast } = window.UIUtils;
 
-    const CACHE_KEY = 'news_feed_data_v5';
+    const CACHE_KEY = 'news_feed_data_v6';
     const CACHE_TTL = 5 * 60 * 1000;
-    const VIDEOS_CACHE_KEY = 'yt_videos_cache_neonshadow_v5';
+    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v6';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
-    const ITCH_CACHE_KEY = 'itch_posts_news_v5';
+    const ITCH_CACHE_KEY = 'itch_posts_news_v6';
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
 
     const SOURCE_TIMEOUT = 15000;
@@ -26,7 +26,6 @@
     const MAX_DISPLAY_ITEMS = 9;
     const MAX_VIDEOS = 6;
     const MAX_ITCH_POSTS = 3;
-    const MIN_SHORT_DURATION = 60;
 
     const RELEASE_SOURCES = [
         { owner: 'NeonShadowYT', repo: 'WorldGenerator', name: 'WorldGenerator', icon: 'images/tool-world-generator.webp' },
@@ -37,26 +36,6 @@
     const YT_CHANNEL_NAME = 'Neon Shadow';
     const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`;
 
-    const INVIDIOUS_INSTANCES = [
-        'https://inv.nadeko.net',
-        'https://invidious.nerdvpn.de',
-        'https://invidious.privacyredirect.com',
-        'https://iv.melmac.space',
-        'https://invidious.f5.si',
-        'https://yt.artemislena.eu',
-        'https://invidious.jing.rocks',
-        'https://invidious.perennialte.ch'
-    ];
-
-    const PIPED_INSTANCES = [
-        'https://pipedapi.kavin.rocks',
-        'https://pipedapi.adminforge.de',
-        'https://pipedapi.leptons.xyz',
-        'https://api.piped.private.coffee',
-        'https://pipedapi.drgns.space',
-        'https://pipedapi.ducks.party'
-    ];
-
     const ITCH_DEVLOG_SOURCES = [
         {
             name: 'Starve Neon',
@@ -65,12 +44,13 @@
         }
     ];
 
+    // Проверенные CORS-прокси (без corsproxy.io — он требует ключ)
     const CORS_PROXIES = [
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsfix.com/?${u}`,
         (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-        (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsfix.com/?${u}`
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://cors.lol/?${encodeURIComponent(u)}`
     ];
 
     let currentUser = null;
@@ -138,20 +118,6 @@
         return arr.slice().sort((a, b) => b.date - a.date);
     }
 
-    // ---- Фильтр Shorts ----
-    function isShort(video) {
-        const len = video.lengthSeconds ?? video.duration ?? 0;
-        // Если длительность неизвестна (0) — считаем НЕ short, но для Piped
-        // duration=0 часто означает "неизвестно", поэтому отбрасываем только если
-        // duration > 0 && duration <= 60.
-        return len > 0 && len <= MIN_SHORT_DURATION;
-    }
-
-    function filterNoShorts(videos) {
-        return videos.filter(v => !isShort(v));
-    }
-
-    // ---- Кэш ----
     function readCache(key, ttl) {
         try {
             const raw = localStorage.getItem(key);
@@ -172,7 +138,6 @@
         } catch { /* noop */ }
     }
 
-    // ---- Сеть ----
     function fetchWithTimeout(url, signal, timeout = REQUEST_TIMEOUT) {
         return new Promise((resolve, reject) => {
             const controller = new AbortController();
@@ -208,7 +173,7 @@
             try {
                 const json = JSON.parse(text);
                 if (typeof json.contents === 'string') text = json.contents;
-            } catch { /* не JSON */ }
+            } catch { /* noop */ }
         }
         return text;
     }
@@ -227,7 +192,7 @@
     }
 
     // ============================================================
-    // YOUTUBE — RSS канала (не содержит Shorts)
+    // YOUTUBE — только RSS канала
     // ============================================================
 
     function parseYoutubeRssXml(xmlText) {
@@ -237,7 +202,6 @@
             const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
             const titleMatch = block.match(/<title>([^<]*)<\/title>/);
             const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
-            const thumbMatch = block.match(/<media:thumbnail\s+url=["']([^"']+)["']/);
             if (!videoIdMatch) return null;
             const videoId = videoIdMatch[1];
             return normalizeItem({
@@ -245,128 +209,37 @@
                 title: decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled'),
                 author: YT_CHANNEL_NAME,
                 date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
-                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`, // всегда i.ytimg.com
+                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                 videoData: { service: 'youtube', id: videoId }
             });
         }).filter(Boolean);
         return sortByDateDesc(items).slice(0, MAX_VIDEOS);
     }
 
-    // ============================================================
-    // YOUTUBE — Invidious канал (lengthSeconds)
-    // ============================================================
-
-    function parseInvidiousResponse(data) {
-        if (!data || !Array.isArray(data.videos)) return null;
-        const items = data.videos
-            .filter(v => v.videoId)
-            .filter(v => {
-                const len = v.lengthSeconds ?? 0;
-                return len === 0 || len > MIN_SHORT_DURATION; // отбрасываем 0 < len <= 60
-            })
-            .map(v => normalizeItem({
-                type: 'video', id: v.videoId,
-                title: v.title || 'Untitled',
-                author: v.author || YT_CHANNEL_NAME,
-                date: new Date((v.published || 0) * 1000 || Date.now()),
-                thumbnail: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`, // игнорируем прокси
-                videoData: { service: 'youtube', id: v.videoId }
-            }));
-        return sortByDateDesc(items).slice(0, MAX_VIDEOS);
-    }
-
-    async function fetchYoutubeViaInvidious(signal) {
-        const promises = INVIDIOUS_INSTANCES.map(instance =>
-            fetchWithTimeout(`${instance}/api/v1/channels/${YT_CHANNEL_ID}/videos?sort_by=newest`, signal)
-                .then(res => res.json())
-                .then(data => {
-                    const videos = parseInvidiousResponse(data);
-                    if (!videos || !videos.length) throw new Error('no videos');
-                    return videos;
-                })
-        );
-        return await Promise.any(promises);
-    }
-
-    // ============================================================
-    // YOUTUBE — Piped канал (правильный endpoint /channels/{id}/videos)
-    // ============================================================
-
-    function parsePipedResponse(data) {
-        if (!data || !Array.isArray(data.relatedStreams)) return null;
-        const items = data.relatedStreams
-            .filter(s => {
-                const dur = s.duration ?? 0;
-                // Отбрасываем shorts: duration > 0 && duration <= 60
-                if (dur > 0 && dur <= MIN_SHORT_DURATION) return false;
-                return true;
-            })
-            .map(s => {
-                const vid = (s.url || '').match(/[?&]v=([^&]+)/)?.[1];
-                if (!vid) return null;
-                return normalizeItem({
-                    type: 'video', id: vid,
-                    title: s.title || 'Untitled',
-                    author: s.uploaderName || YT_CHANNEL_NAME,
-                    date: new Date(s.uploaded || Date.now()),
-                    thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`, // всегда i.ytimg.com
-                    videoData: { service: 'youtube', id: vid }
-                });
-            })
-            .filter(Boolean);
-        return sortByDateDesc(items).slice(0, MAX_VIDEOS);
-    }
-
-    async function fetchYoutubeViaPiped(signal) {
-        const promises = PIPED_INSTANCES.map(instance =>
-            fetchWithTimeout(`${instance}/channels/${YT_CHANNEL_ID}/videos`, signal)
-                .then(res => res.json())
-                .then(data => {
-                    const videos = parsePipedResponse(data);
-                    if (!videos || !videos.length) throw new Error('no videos');
-                    return videos;
-                })
-        );
-        return await Promise.any(promises);
-    }
-
-    async function fetchYoutubeViaRss(signal) {
-        return await raceProxies(YT_RSS_URL, parseYoutubeRssXml, signal);
-    }
-
     async function fetchYoutubeVideos(signal, forceRefresh = false) {
         if (!forceRefresh) {
             const cached = readCache(VIDEOS_CACHE_KEY, VIDEOS_CACHE_TTL);
             if (cached && cached.length) {
-                return filterNoShorts(cached.map(normalizeItem));
+                return cached.map(normalizeItem);
             }
         }
 
-        const strategies = [
-            fetchYoutubeViaRss(signal),
-            fetchYoutubeViaInvidious(signal),
-            fetchYoutubeViaPiped(signal)
-        ];
-
         try {
-            const videos = await Promise.any(strategies);
+            const videos = await raceProxies(YT_RSS_URL, parseYoutubeRssXml, signal);
             if (videos && videos.length) {
-                const filtered = filterNoShorts(videos);
-                if (filtered.length) {
-                    writeCache(VIDEOS_CACHE_KEY, filtered);
-                    return filtered;
-                }
+                writeCache(VIDEOS_CACHE_KEY, videos);
+                return videos;
             }
             return [];
         } catch (e) {
             if (isAborted(e, signal)) return [];
             const stale = readCache(VIDEOS_CACHE_KEY, Infinity);
-            return stale ? filterNoShorts(stale.map(normalizeItem)) : [];
+            return stale ? stale.map(normalizeItem) : [];
         }
     }
 
     // ============================================================
-    // ITCH.IO (без изменений — превью из media:content/enclosure/img)
+    // ITCH.IO
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -581,10 +454,6 @@
         return results;
     }
 
-    // ============================================================
-    // Агрегатор
-    // ============================================================
-
     async function loadAllSources(signal, forceRefresh, onItem) {
         const results = await Promise.allSettled([
             loadPosts(signal),
@@ -611,7 +480,6 @@
 
         if (hasCache && !forceRefresh) {
             const items = cached.items.map(normalizeItem);
-
             if (!backgroundRefreshInFlight) {
                 backgroundRefreshInFlight = true;
                 (async () => {
@@ -621,17 +489,13 @@
                             const limited = freshItems.slice(0, MAX_DISPLAY_ITEMS);
                             await cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
                             if (typeof onUpdate === 'function') {
-                                try { onUpdate(limited); } catch (e) { console.warn('[NewsFeed] onUpdate error:', e); }
+                                try { onUpdate(limited); } catch (e) { /* noop */ }
                             }
                         }
-                    } catch (e) {
-                        console.warn('[NewsFeed] SWR: фон упал:', e);
-                    } finally {
-                        backgroundRefreshInFlight = false;
-                    }
+                    } catch (e) { /* noop */ }
+                    finally { backgroundRefreshInFlight = false; }
                 })();
             }
-
             return { items, fromCache: true, isStale: false };
         }
 
@@ -670,7 +534,6 @@
             return { items: limited, fromCache: false, isStale: false };
         } catch (err) {
             if (isAborted(err, abortController.signal)) return { items: [], fromCache: false, isStale: false };
-            console.error('[NewsFeed] Критическая ошибка:', err);
             const stale = await cacheGet(CACHE_KEY, Infinity);
             if (stale && stale.items) return { items: stale.items.map(normalizeItem), fromCache: true, isStale: true };
             throw err;
@@ -679,10 +542,6 @@
             abortController = null;
         }
     }
-
-    // ============================================================
-    // UI (без изменений, но с атомарной заменой)
-    // ============================================================
 
     function renderSkeleton(count = 6) {
         const grid = createElement('div', 'projects-grid skeleton-grid');
@@ -939,48 +798,6 @@
         return cardWrapper;
     }
 
-    function enrichVisibleItchThumbs(items) {
-        if (!container || !items || !items.length) return;
-        const without = items.filter(i => i.type === 'itch-post' && !i.thumbnail);
-        if (!without.length) return;
-        enrichItchThumbnails(without, null, (updated) => {
-            const img = container.querySelector(`[data-item-id="${updated.id}"] img.project-image`);
-            if (img && updated.thumbnail) img.src = updated.thumbnail;
-        });
-    }
-
-    async function enrichItchThumbnails(posts, signal, onEnriched) {
-        if (!posts || !posts.length) return;
-        const without = posts.filter(p => !p.thumbnail && p.itchLink);
-        if (!without.length) return;
-        await Promise.allSettled(without.map(async (p) => {
-            const thumb = await fetchItchPostThumbnail(p.itchLink, signal);
-            if (thumb) {
-                p.thumbnail = thumb;
-                if (typeof onEnriched === 'function') {
-                    try { onEnriched(p); } catch { /* noop */ }
-                }
-            }
-        }));
-    }
-
-    async function fetchItchPostThumbnail(postUrl, signal) {
-        if (!postUrl) return null;
-        try {
-            const html = await raceProxies(postUrl, (text) => text.length > 500 ? text : null, signal);
-            if (!html) return null;
-            let match = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
-            if (match) return match[1];
-            match = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
-            if (match) return match[1];
-            return null;
-        } catch { return null; }
-    }
-
-    // ============================================================
-    // Init
-    // ============================================================
-
     async function initNewsFeed() {
         if (container) return;
         container = document.getElementById('news-feed');
@@ -995,13 +812,11 @@
                 onItem: (item) => appendItemToGrid(item),
                 onUpdate: (freshItems) => {
                     renderNewsFeed(freshItems, { replace: true });
-                    enrichVisibleItchThumbs(freshItems);
                 }
             });
             if (result) {
                 renderNewsFeed(result.items, { replace: true });
                 if (result.isStale) showToast('Данные могут быть устаревшими', 'warning', 5000);
-                enrichVisibleItchThumbs(result.items);
             } else {
                 renderNewsFeed([], { replace: true });
             }
@@ -1060,16 +875,11 @@
             onItem: (it) => appendItemToGrid(it),
             onUpdate: (freshItems) => {
                 renderNewsFeed(freshItems, { replace: true });
-                enrichVisibleItchThumbs(freshItems);
             }
         })
             .then(r => {
-                if (r) {
-                    renderNewsFeed(r.items, { replace: true });
-                    enrichVisibleItchThumbs(r.items);
-                } else {
-                    renderNewsFeed([], { replace: true });
-                }
+                if (r) renderNewsFeed(r.items, { replace: true });
+                else renderNewsFeed([], { replace: true });
             })
             .catch(err => {
                 console.error('[NewsFeed] Ошибка обновления:', err);

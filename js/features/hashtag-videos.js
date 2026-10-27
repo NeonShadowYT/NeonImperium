@@ -1,35 +1,29 @@
 // js/features/hashtag-videos.js
-// Видео по #starveneon. Только Invidious hashtag endpoint + строгий фильтр.
-// Piped search и HTML-парсинг УДАЛЕНЫ — они возвращали рекомендованные видео.
-// Фильтр: в title или description должна быть подстрока "starveneon".
+// Хэштег #starveneon через прямой парсинг HTML страницы YouTube.
+// Invidious и Piped удалены — публичные инстансы не работают.
+// r.jina.ai используется как reader-прокси: отдаёт чистый HTML без CORS-блокировок.
+// Строгий фильтр: только видео, где в title/description есть "starveneon".
 
 (function() {
     'use strict';
 
     const HASHTAG = 'starveneon';
-    const CACHE_KEY = `hashtag_videos_cache_v5_${HASHTAG}`;
+    const YT_HASHTAG_URL = `https://www.youtube.com/hashtag/${HASHTAG}`;
+    const CACHE_KEY = `hashtag_videos_cache_v6_${HASHTAG}`;
     const CACHE_TTL = 30 * 60 * 1000;
     const MAX_VIDEOS = 12;
     const REQUEST_TIMEOUT = 15000;
 
-    // Только инстансы, которые реально отдают /api/v1/hashtag/:tag
-    const INVIDIOUS_INSTANCES = [
-        'https://inv.nadeko.net',
-        'https://invidious.nerdvpn.de',
-        'https://invidious.privacyredirect.com',
-        'https://iv.melmac.space',
-        'https://invidious.f5.si',
-        'https://yt.artemislena.eu',
-        'https://invidious.jing.rocks',
-        'https://invidious.perennialte.ch'
-    ];
+    // r.jina.ai — reader-прокси, отдаёт чистый HTML без CORS-ограничений.
+    // Работает с youtube.com/hashtag без ключей.
+    const READER_PROXY = (url) => `https://r.jina.ai/${url}`;
 
-    // CORS-прокси для fallback, если инстанс не отдаёт CORS напрямую
+    // Дополнительные прокси как fallback
     const CORS_PROXIES = [
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`,
         (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`
     ];
 
     function isRelevantVideo(v) {
@@ -86,20 +80,12 @@
 
     function normalizeVideo(v) {
         if (!v || !v.videoId) return null;
-        let thumb = v.thumbnail || null;
-        if (thumb && thumb.includes('mqdefault')) {
-            thumb = thumb.replace('mqdefault', 'hqdefault');
-        }
-        // КРИТИЧНО: всегда используем i.ytimg.com, а не прокси Piped
-        if (!thumb || thumb.includes('piped-proxy') || thumb.includes('proxy.piped')) {
-            thumb = `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`;
-        }
         return {
             videoId: v.videoId,
             title: v.title || '',
             author: v.author || '',
             description: v.description || '',
-            thumbnail: thumb
+            thumbnail: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`
         };
     }
 
@@ -116,48 +102,136 @@
         return out;
     }
 
-    async function fetchViaInvidiousHashtag(signal) {
-        const promises = INVIDIOUS_INSTANCES.map(inst =>
-            fetchWithTimeout(`${inst}/api/v1/hashtag/${HASHTAG}`, signal)
-                .then(res => res.json())
-                .then(data => {
-                    if (!Array.isArray(data)) throw new Error('not array');
-                    const videos = filterRelevant(data.map(v => normalizeVideo({
-                        videoId: v.videoId,
-                        title: v.title,
-                        author: v.author,
-                        description: v.description || '',
-                        thumbnail: v.videoThumbnails?.[v.videoThumbnails.length - 1]?.url
-                    })));
-                    if (!videos.length) throw new Error('no relevant videos');
-                    return videos;
-                })
-        );
+    // ---- Парсинг HTML страницы хэштега ----
+    function extractYtInitialData(html) {
+        const patterns = [
+            /var ytInitialData = ({[\s\S]+?});/,
+            /window\["ytInitialData"\]\s*=\s*({[\s\S]+?});/,
+            /ytInitialData\s*=\s*({[\s\S]+?});/
+        ];
+        for (const re of patterns) {
+            const m = html.match(re);
+            if (m && m[1]) {
+                try { return JSON.parse(m[1]); }
+                catch {
+                    const end = m[1].lastIndexOf('}');
+                    if (end !== -1) {
+                        try { return JSON.parse(m[1].slice(0, end + 1)); } catch { /* noop */ }
+                    }
+                }
+            }
+        }
+        return null;
+    }
 
-        // Если прямой запрос не удался (CORS), пробуем через прокси
-        const proxyPromises = [];
-        for (const inst of INVIDIOUS_INSTANCES) {
-            for (const proxyFn of CORS_PROXIES) {
-                proxyPromises.push(
-                    fetchWithTimeout(proxyFn(`${inst}/api/v1/hashtag/${HASHTAG}`), signal)
-                        .then(res => res.json())
-                        .then(data => {
-                            if (!Array.isArray(data)) throw new Error('not array');
-                            const videos = filterRelevant(data.map(v => normalizeVideo({
-                                videoId: v.videoId,
-                                title: v.title,
-                                author: v.author,
-                                description: v.description || '',
-                                thumbnail: v.videoThumbnails?.[v.videoThumbnails.length - 1]?.url
-                            })));
-                            if (!videos.length) throw new Error('no relevant videos');
-                            return videos;
-                        })
-                );
+    function collectFromData(obj, out, seen) {
+        if (!obj || typeof obj !== 'object') return;
+        if (Array.isArray(obj)) { obj.forEach(i => collectFromData(i, out, seen)); return; }
+        if (out.length >= MAX_VIDEOS * 2) return;
+
+        const classic = obj.videoRenderer || obj.gridVideoRenderer || obj.compactVideoRenderer;
+        if (classic && classic.videoId && !seen.has(classic.videoId)) {
+            seen.add(classic.videoId);
+            let title = '';
+            if (classic.title?.runs?.[0]) title = classic.title.runs[0].text;
+            else if (classic.title?.simpleText) title = classic.title.simpleText;
+            let author = '';
+            if (classic.ownerText?.runs?.[0]) author = classic.ownerText.runs[0].text;
+            else if (classic.longBylineText?.runs?.[0]) author = classic.longBylineText.runs[0].text;
+            let description = '';
+            if (classic.descriptionSnippet?.runs?.[0]) description = classic.descriptionSnippet.runs[0].text;
+            out.push(normalizeVideo({ videoId: classic.videoId, title, author, description }));
+        }
+
+        if (obj.lockupViewModel) {
+            const l = obj.lockupViewModel;
+            const videoId = l.contentId;
+            if (videoId && !seen.has(videoId)) {
+                seen.add(videoId);
+                let title = '';
+                if (l.metadata?.lockupMetadataViewModel?.title?.content) {
+                    title = l.metadata.lockupMetadataViewModel.title.content;
+                }
+                let description = '';
+                if (l.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows) {
+                    const rows = l.metadata.lockupMetadataViewModel.metadata.contentMetadataViewModel.metadataRows;
+                    for (const row of rows) {
+                        if (row.metadataParts) {
+                            for (const part of row.metadataParts) {
+                                if (part.text?.content) description += part.text.content + ' ';
+                            }
+                        }
+                    }
+                }
+                out.push(normalizeVideo({ videoId, title, author: '', description }));
             }
         }
 
-        return await Promise.any([...promises, ...proxyPromises]);
+        if (obj.shortsLockupViewModel) {
+            const s = obj.shortsLockupViewModel;
+            let videoId = '';
+            if (s.entityId) {
+                const m = s.entityId.match(/shorts-shelf-item-(.+)/);
+                if (m) videoId = m[1];
+            }
+            if (videoId && !seen.has(videoId)) {
+                seen.add(videoId);
+                let title = '';
+                if (s.overlayMetadata?.primaryText?.content) {
+                    title = s.overlayMetadata.primaryText.content;
+                }
+                out.push(normalizeVideo({ videoId, title, author: '', description: '' }));
+            }
+        }
+
+        if (obj.richItemRenderer?.content) collectFromData(obj.richItemRenderer.content, out, seen);
+
+        for (const key of Object.keys(obj)) {
+            if (out.length >= MAX_VIDEOS * 2) break;
+            collectFromData(obj[key], out, seen);
+        }
+    }
+
+    function parseHashtagHtml(html) {
+        const data = extractYtInitialData(html);
+        if (!data) return null;
+        const out = [];
+        const seen = new Set();
+        collectFromData(data, out, seen);
+        return filterRelevant(out);
+    }
+
+    async function fetchViaReaderProxy(signal) {
+        const url = READER_PROXY(YT_HASHTAG_URL);
+        const res = await fetchWithTimeout(url, signal);
+        const html = await res.text();
+        if (!html || html.length < 1000) throw new Error('too short');
+        const videos = parseHashtagHtml(html);
+        if (!videos || !videos.length) throw new Error('no relevant videos');
+        return videos;
+    }
+
+    async function fetchViaCorsProxy(proxyFn, signal) {
+        const url = proxyFn(YT_HASHTAG_URL);
+        const res = await fetchWithTimeout(url, signal);
+        let text = await res.text();
+        if (text.trim().startsWith('{')) {
+            try {
+                const json = JSON.parse(text);
+                if (typeof json.contents === 'string') text = json.contents;
+            } catch { /* noop */ }
+        }
+        const videos = parseHashtagHtml(text);
+        if (!videos || !videos.length) throw new Error('no relevant videos');
+        return videos;
+    }
+
+    async function loadHashtagVideosFromNetwork(signal) {
+        const strategies = [
+            fetchViaReaderProxy(signal),
+            ...CORS_PROXIES.map(p => fetchViaCorsProxy(p, signal))
+        ];
+        return await Promise.any(strategies);
     }
 
     function renderVideos(videos, container) {
@@ -237,7 +311,7 @@
         container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка видео по #${HASHTAG}...</p></div>`;
 
         try {
-            const videos = await fetchViaInvidiousHashtag(null);
+            const videos = await loadHashtagVideosFromNetwork(null);
             if (videos && videos.length) {
                 writeCache(videos);
                 renderVideos(videos, container);
