@@ -1,7 +1,8 @@
 // js/features/social-badges.js
 // Рендер красивых соц-бейджей + загрузка счётчиков.
-// Источники счётчиков: несколько резервных API + CORS-прокси.
-// Кэш: localStorage, TTL 10 минут.
+// Прямой fetch к t.me НЕ используется (CSP). Все запросы к t.me идут через прокси.
+// telegram-badge.vercel.app отдаёт 200 без Access-Control-Allow-Origin —
+// поэтому напрямую тоже не читается; только через прокси.
 
 (function() {
     'use strict';
@@ -11,10 +12,9 @@
     const TG_USERNAME = 'voididea';
     const TWITCH_CHANNEL = 'neoncyndows';
     const CACHE_TTL = 10 * 60 * 1000;
-    const REQUEST_TIMEOUT = 12000;
+    const REQUEST_TIMEOUT = 15000;
     const CACHE_PREFIX = 'social-badge-';
 
-    // ---- SVG-иконки (совместимы с fill: currentColor) ----
     const ICONS = {
         youtube: '<svg viewBox="0 0 24 24"><path d="M23.5 6.2c-.3-1-1.1-1.8-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5c-1 .3-1.8 1.1-2.1 2.1C0 8.1 0 12 0 12s0 3.9.5 5.8c.3 1 1.1 1.8 2.1 2.1 1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5c1-.3 1.8-1.1 2.1-2.1.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.5 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg>',
         discord: '<svg viewBox="0 0 24 24"><path d="M20.3 4.4A19.7 19.7 0 0 0 15.4 3l-.2.5c1.7.4 2.5 1 2.5 1a13.9 13.9 0 0 0-11.4 0s.8-.6 2.5-1L8.6 3a19.7 19.7 0 0 0-4.9 1.4A20.4 20.4 0 0 0 .2 18s3.7 1.9 6.8 1.9c0 0 .5-.6.9-1.1-1.5-.4-2.1-1.3-2.1-1.3l.5.3c1.3.6 2.4 1 3.6 1.3 1.9.4 3.7.4 5.5 0 1.2-.3 2.3-.7 3.6-1.3l.5-.3s-.6.9-2.1 1.3c.4.5.9 1.1.9 1.1 3.1 0 6.8-1.9 6.8-1.9a20.4 20.4 0 0 0-3.4-13.6zM8.7 14.5c-.7 0-1.3-.7-1.3-1.5s.6-1.5 1.3-1.5 1.3.7 1.3 1.5-.6 1.5-1.3 1.5zm6.6 0c-.7 0-1.3-.7-1.3-1.5s.6-1.5 1.3-1.5 1.3.7 1.3 1.5-.6 1.5-1.3 1.5z"/></svg>',
@@ -24,14 +24,17 @@
         github: '<svg viewBox="0 0 24 24"><path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.1-.4-.6-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3"/></svg>'
     };
 
-    // ---- CORS-прокси (все домены разрешены в CSP) ----
+    // Порядок важен: сначала те, что точно работают (allorigins — надёжный, хоть и медленный).
     const CORS_PROXIES = [
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
         (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
         (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
         (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
-        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`
+        (u) => `https://cors.eu.org/${u}`,
+        (u) => `https://cors.x2u.in/${u}`,
+        (u) => `https://yacdn.org/proxy/${u}`,
+        (u) => `https://corsfix.com/?${u}`
     ];
 
     // ============================================================
@@ -112,10 +115,6 @@
         });
     }
 
-    // ============================================================
-    // Кэш
-    // ============================================================
-
     function readCache(key) {
         try {
             const raw = localStorage.getItem(CACHE_PREFIX + key);
@@ -133,7 +132,7 @@
     }
 
     // ============================================================
-    // Загрузка счётчика: перебираем источники, первый успешный — побеждает.
+    // Загрузка счётчика с гонкой источников
     // ============================================================
 
     async function raceSources(sources) {
@@ -179,7 +178,7 @@
     }
 
     // ============================================================
-    // Счётчики по платформам
+    // Источники по платформам
     // ============================================================
 
     function ytSources() {
@@ -189,8 +188,8 @@
             const matches = [...text.matchAll(/>([\d][\d.,]*[KMBкмб]?)<\/text>/gi)];
             return matches.length ? matches[matches.length - 1][1] : null;
         };
-        const base = [
-            { url: svgUrl, parse: parseSvg },
+        // 1. Прямые API с CORS
+        const sources = [
             {
                 url: `https://api.socialcounts.org/youtube-live-subscriber-count/${YT_CHANNEL_ID}`,
                 parse: async (res) => {
@@ -206,18 +205,11 @@
                     return sub ? sub.count : null;
                 }
             },
-            {
-                url: `https://yt.lemnoslife.com/channels?part=statistics&id=${YT_CHANNEL_ID}`,
-                parse: async (res) => {
-                    const d = await res.json();
-                    return d && d.items && d.items[0] && d.items[0].statistics
-                        ? d.items[0].statistics.subscriberCount : null;
-                }
-            }
+            // 2. Shields.io через прокси (shields.io отдаёт CORS, но на всякий случай)
+            { url: svgUrl, parse: parseSvg }
         ];
-        // Fallback: SVG через прокси
-        CORS_PROXIES.forEach(proxyFn => base.push({ url: proxyFn(svgUrl), parse: parseSvg }));
-        return base;
+        CORS_PROXIES.forEach(p => sources.push({ url: p(svgUrl), parse: parseSvg }));
+        return sources;
     }
 
     function discordSources() {
@@ -240,29 +232,35 @@
     }
 
     function telegramSources() {
+        // ТОЛЬКО через прокси — t.me и telegram-badge.vercel.app не отдают CORS
         const badgeUrl = `https://telegram-badge.vercel.app/api/telegram-badge?channelId=@${TG_USERNAME}`;
+        const tgPageUrl = `https://t.me/${TG_USERNAME}`;
+        const tgPublicUrl = `https://t.me/s/${TG_USERNAME}`;
+
         const parseSvg = async (res) => {
             const text = await res.text();
             const matches = [...text.matchAll(/>([\d][\d.,]*[KMBкмб]?)<\/text>/gi)];
             return matches.length ? matches[matches.length - 1][1] : null;
         };
-        const base = [
-            { url: badgeUrl, parse: parseSvg },
-            {
-                url: `https://t.me/${TG_USERNAME}`,
-                parse: async (res) => {
-                    const html = await res.text();
-                    const m = html.match(/([\d][\d\s.,]*\s*[KMBкмб]?)\s+(?:members?|subscribers?|участник\w*|подписчик\w*)/i);
-                    return m ? m[1] : null;
-                }
-            }
-        ];
-        CORS_PROXIES.forEach(proxyFn => base.push({ url: proxyFn(badgeUrl), parse: parseSvg }));
-        return base;
+        const parseHtml = async (res) => {
+            const html = await res.text();
+            const m = html.match(/([\d][\d\s.,]*\s*[KMBкмб]?)\s+(?:members?|subscribers?|участник\w*|подписчик\w*)/i);
+            return m ? m[1] : null;
+        };
+
+        const sources = [];
+        // badge.svg через прокси — приоритет
+        CORS_PROXIES.forEach(p => sources.push({ url: p(badgeUrl), parse: parseSvg }));
+        // t.me HTML через прокси — fallback
+        CORS_PROXIES.forEach(p => {
+            sources.push({ url: p(tgPageUrl), parse: parseHtml });
+            sources.push({ url: p(tgPublicUrl), parse: parseHtml });
+        });
+        return sources;
     }
 
     // ============================================================
-    // Twitch: LIVE / OFFLINE
+    // Twitch LIVE / OFFLINE
     // ============================================================
 
     async function loadTwitchLive(el) {
@@ -369,22 +367,20 @@
     function buildDmRow() {
         const row = document.createElement('div');
         row.className = 'social-badges-row';
-        const tgDm = createBadge({
+        row.appendChild(createBadge({
             href: 'https://t.me/NeonCyndows',
             className: 'dm badge-telegram-dm',
             label: 'Telegram DM',
             iconKey: 'telegram',
             ariaLabel: 'Telegram-личка Neon Shadow'
-        });
-        row.appendChild(tgDm);
-        const dsDm = createBadge({
+        }));
+        row.appendChild(createBadge({
             href: 'https://discord.com/users/857872869949177896',
             className: 'dm badge-discord-dm',
             label: 'Discord DM',
             iconKey: 'discord',
             ariaLabel: 'Discord-личка Neon Shadow'
-        });
-        row.appendChild(dsDm);
+        }));
         return row;
     }
 
@@ -413,7 +409,6 @@
         container.appendChild(buildDmRow());
         container.appendChild(buildInfoRow());
 
-        // Запускаем счётчики
         loadCounter(
             document.getElementById('social-yt-count'),
             'youtube', ytSources(), 'subscribers'
@@ -430,8 +425,7 @@
     }
 
     function init() {
-        const containers = document.querySelectorAll('[data-social-badges]');
-        containers.forEach(renderInto);
+        document.querySelectorAll('[data-social-badges]').forEach(renderInto);
     }
 
     if (document.readyState === 'loading') {

@@ -1,9 +1,13 @@
 // js/features/hashtag-videos.js
-// Загрузка видео по хештегу #starveneon.
-// Несколько CORS-прокси опрашиваются ПАРАЛЛЕЛЬНО (Promise.any).
-// Первый успешный результат кешируется в localStorage на 30 минут.
+// Загрузка видео по #starveneon.
 //
-// CSP: требует разрешения для всех доменов из PROXIES в connect-src.
+// Стратегии (запускаются параллельно через Promise.any):
+//   1. Invidious search API × 6 инстансов — самый надёжный путь
+//   2. Piped search API × 4 инстанса
+//   3. YouTube hashtag HTML через CORS-прокси × N
+//   4. RSS через прокси (не работает для хэштега, но для канала да — оставляем как edge-case)
+//
+// Empty state компактный: убрана огромная иконка 48px и padding 40px.
 
 (function() {
     'use strict';
@@ -11,29 +15,41 @@
     const HASHTAG = 'starveneon';
     const YT_HASHTAG_URL = `https://www.youtube.com/hashtag/${HASHTAG}`;
     const CACHE_KEY = `hashtag_videos_cache_${HASHTAG}`;
-    const CACHE_TTL = 30 * 60 * 1000; // 30 минут
+    const CACHE_TTL = 30 * 60 * 1000;
     const MAX_VIDEOS = 9;
-    const REQUEST_TIMEOUT = 12000;
+    const REQUEST_TIMEOUT = 15000;
 
-    // ---- Список CORS-прокси ----
-    // Порядок не важен: все запускаются одновременно, побеждает самый быстрый.
-    // Каждый прокси — функция, принимающая targetUrl и возвращающая URL запроса.
-    const PROXIES = [
-        // 1. allorigins (raw) — иногда падает с 522, но пробуем
-        (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        // 2. allorigins (get) — другой endpoint, может работать, когда raw падает
-        (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-        // 3. everyorigin — бесплатный, без ключа
-        (url) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(url)}`,
-        // 4. cors.lol — бесплатный, простой
-        (url) => `https://api.cors.lol/?url=${encodeURIComponent(url)}`,
-        // 5. codetabs — бесплатный (требует разрешения в CSP)
-        (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-        // 6. cloudflare-cors-anywhere — worker (требует разрешения в CSP)
-        (url) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${url}`
+    const INVIDIOUS_INSTANCES = [
+        'https://inv.nadeko.net',
+        'https://invidious.nerdvpn.de',
+        'https://invidious.privacyredirect.com',
+        'https://iv.melmac.space',
+        'https://invidious.f5.si',
+        'https://yt.artemislena.eu'
     ];
 
-    // ---- Кеш ----
+    const PIPED_INSTANCES = [
+        'https://pipedapi.kavin.rocks',
+        'https://pipedapi.adminforge.de',
+        'https://pipedapi.leptons.xyz',
+        'https://api.piped.private.coffee'
+    ];
+
+    const CORS_PROXIES = [
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://cors.eu.org/${u}`,
+        (u) => `https://cors.x2u.in/${u}`,
+        (u) => `https://yacdn.org/proxy/${u}`,
+        (u) => `https://corsfix.com/?${u}`,
+        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
+        (u) => `https://test.cors.workers.dev/?${u}`
+    ];
+
+    // ---- Кэш ----
     function readCache() {
         try {
             const raw = localStorage.getItem(CACHE_KEY);
@@ -45,21 +61,138 @@
                 return null;
             }
             return data.videos;
-        } catch (e) {
-            return null;
-        }
+        } catch { return null; }
     }
 
     function writeCache(videos) {
         try {
             localStorage.setItem(CACHE_KEY, JSON.stringify({
-                timestamp: Date.now(),
-                videos
+                timestamp: Date.now(), videos
             }));
-        } catch (e) { /* noop */ }
+        } catch { /* noop */ }
     }
 
-    // ---- Извлечение ytInitialData ----
+    function fetchWithTimeout(url, signal, timeout = REQUEST_TIMEOUT) {
+        return new Promise((resolve, reject) => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => {
+                try { controller.abort(new Error('timeout')); } catch { controller.abort(); }
+            }, timeout);
+            if (signal) {
+                if (signal.aborted) {
+                    clearTimeout(timer);
+                    reject(new DOMException('Aborted', 'AbortError'));
+                    return;
+                }
+                signal.addEventListener('abort', () => {
+                    try { controller.abort(); } catch { /* noop */ }
+                }, { once: true });
+            }
+            fetch(url, { signal: controller.signal })
+                .then(res => {
+                    clearTimeout(timer);
+                    if (!res.ok) reject(new Error(`HTTP ${res.status}`));
+                    else resolve(res);
+                })
+                .catch(err => { clearTimeout(timer); reject(err); });
+        });
+    }
+
+    async function fetchViaProxy(proxyFn, targetUrl, signal) {
+        const proxyUrl = proxyFn(targetUrl);
+        const res = await fetchWithTimeout(proxyUrl, signal);
+        let text = await res.text();
+        if (!text || text.length < 200) throw new Error('too short');
+        if (text.trim().startsWith('{')) {
+            try {
+                const json = JSON.parse(text);
+                if (typeof json.contents === 'string') text = json.contents;
+            } catch { /* не JSON */ }
+        }
+        return text;
+    }
+
+    // ---- Утилиты ----
+    function normalizeVideo(v) {
+        if (!v || !v.videoId) return null;
+        let thumb = v.thumbnail || null;
+        // Апгрейд mqdefault (320×180) → hqdefault (480×360)
+        if (thumb && thumb.includes('mqdefault')) {
+            thumb = thumb.replace('mqdefault', 'hqdefault');
+        }
+        if (!thumb) thumb = `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`;
+        return {
+            videoId: v.videoId,
+            title: v.title || 'Без названия',
+            author: v.author || '',
+            thumbnail: thumb
+        };
+    }
+
+    function dedupe(videos) {
+        const seen = new Set();
+        const out = [];
+        for (const v of videos) {
+            if (!v || !v.videoId || seen.has(v.videoId)) continue;
+            seen.add(v.videoId);
+            out.push(v);
+            if (out.length >= MAX_VIDEOS) break;
+        }
+        return out;
+    }
+
+    // ---- Стратегия 1: Invidious search ----
+    async function fetchViaInvidious(signal) {
+        const promises = INVIDIOUS_INSTANCES.map(inst =>
+            fetchWithTimeout(`${inst}/api/v1/search?q=${HASHTAG}&type=video&sort_by=upload_date`, signal)
+                .then(res => res.json())
+                .then(data => {
+                    if (!Array.isArray(data)) throw new Error('not array');
+                    const videos = data
+                        .filter(v => v.type === 'video' && v.videoId)
+                        .map(v => normalizeVideo({
+                            videoId: v.videoId,
+                            title: v.title,
+                            author: v.author,
+                            thumbnail: v.videoThumbnails && v.videoThumbnails.length
+                                ? v.videoThumbnails[v.videoThumbnails.length - 1].url
+                                : null
+                        }))
+                        .filter(Boolean);
+                    if (!videos.length) throw new Error('no videos');
+                    return dedupe(videos);
+                })
+        );
+        return await Promise.any(promises);
+    }
+
+    // ---- Стратегия 2: Piped search ----
+    async function fetchViaPiped(signal) {
+        const promises = PIPED_INSTANCES.map(inst =>
+            fetchWithTimeout(`${inst}/search?q=${HASHTAG}&filter=videos`, signal)
+                .then(res => res.json())
+                .then(data => {
+                    if (!data || !Array.isArray(data.items)) throw new Error('no items');
+                    const videos = data.items
+                        .map(item => {
+                            const vid = (item.url || '').match(/[?&]v=([^&]+)/)?.[1];
+                            if (!vid) return null;
+                            return normalizeVideo({
+                                videoId: vid,
+                                title: item.title,
+                                author: item.uploaderName,
+                                thumbnail: item.thumbnail
+                            });
+                        })
+                        .filter(Boolean);
+                    if (!videos.length) throw new Error('no videos');
+                    return dedupe(videos);
+                })
+        );
+        return await Promise.any(promises);
+    }
+
+    // ---- Стратегия 3: YouTube hashtag через прокси ----
     function extractYtInitialData(html) {
         const patterns = [
             /var ytInitialData = ({[\s\S]+?});/,
@@ -69,12 +202,11 @@
         for (const re of patterns) {
             const m = html.match(re);
             if (m && m[1]) {
-                try {
-                    return JSON.parse(m[1]);
-                } catch (e) {
+                try { return JSON.parse(m[1]); }
+                catch {
                     const end = m[1].lastIndexOf('}');
                     if (end !== -1) {
-                        try { return JSON.parse(m[1].slice(0, end + 1)); } catch (e2) { /* noop */ }
+                        try { return JSON.parse(m[1].slice(0, end + 1)); } catch { /* noop */ }
                     }
                 }
             }
@@ -82,188 +214,86 @@
         return null;
     }
 
-    // ---- Парсинг видео ----
-    function collectVideos(obj, out, seen) {
+    function collectFromData(obj, out, seen) {
         if (!obj || typeof obj !== 'object') return;
-        if (Array.isArray(obj)) {
-            obj.forEach(item => collectVideos(item, out, seen));
-            return;
-        }
+        if (Array.isArray(obj)) { obj.forEach(i => collectFromData(i, out, seen)); return; }
+        if (out.length >= MAX_VIDEOS) return;
 
-        // Классические компоненты
         const classic = obj.videoRenderer || obj.gridVideoRenderer || obj.compactVideoRenderer;
-        if (classic && classic.videoId) addClassicVideo(classic, out, seen);
-
-        // Новый lockupViewModel (страницы каналов/хештегов)
-        if (obj.lockupViewModel) addLockupVideo(obj.lockupViewModel, out, seen);
-
-        // Shorts
-        if (obj.shortsLockupViewModel) addShortsVideo(obj.shortsLockupViewModel, out, seen);
-
-        // richItemRenderer (обёртка для hashtag-страниц)
-        if (obj.richItemRenderer && obj.richItemRenderer.content) {
-            collectVideos(obj.richItemRenderer.content, out, seen);
+        if (classic && classic.videoId && !seen.has(classic.videoId)) {
+            seen.add(classic.videoId);
+            let title = '';
+            if (classic.title?.runs?.[0]) title = classic.title.runs[0].text;
+            else if (classic.title?.simpleText) title = classic.title.simpleText;
+            let thumbnail = null;
+            if (classic.thumbnail?.thumbnails?.length) {
+                thumbnail = classic.thumbnail.thumbnails[classic.thumbnail.thumbnails.length - 1].url;
+            }
+            let author = '';
+            if (classic.ownerText?.runs?.[0]) author = classic.ownerText.runs[0].text;
+            else if (classic.longBylineText?.runs?.[0]) author = classic.longBylineText.runs[0].text;
+            out.push(normalizeVideo({ videoId: classic.videoId, title, author, thumbnail }));
         }
+
+        if (obj.lockupViewModel) {
+            const l = obj.lockupViewModel;
+            const videoId = l.contentId;
+            if (videoId && !seen.has(videoId)) {
+                seen.add(videoId);
+                let title = '';
+                if (l.metadata?.lockupMetadataViewModel?.title?.content) {
+                    title = l.metadata.lockupMetadataViewModel.title.content;
+                }
+                let thumbnail = null;
+                if (l.contentImage?.thumbnailViewModel?.image?.sources?.length) {
+                    const s = l.contentImage.thumbnailViewModel.image.sources;
+                    thumbnail = s[s.length - 1].url;
+                }
+                out.push(normalizeVideo({ videoId, title, author: '', thumbnail }));
+            }
+        }
+
+        if (obj.shortsLockupViewModel) {
+            const s = obj.shortsLockupViewModel;
+            let videoId = '';
+            if (s.entityId) {
+                const m = s.entityId.match(/shorts-shelf-item-(.+)/);
+                if (m) videoId = m[1];
+            }
+            if (videoId && !seen.has(videoId)) {
+                seen.add(videoId);
+                let title = '';
+                if (s.overlayMetadata?.primaryText?.content) title = s.overlayMetadata.primaryText.content;
+                let thumbnail = null;
+                const sources = s.thumbnailViewModel?.thumbnailViewModel?.image?.sources;
+                if (Array.isArray(sources) && sources.length) {
+                    thumbnail = sources[sources.length - 1].url;
+                }
+                out.push(normalizeVideo({ videoId, title, author: '', thumbnail }));
+            }
+        }
+
+        if (obj.richItemRenderer?.content) collectFromData(obj.richItemRenderer.content, out, seen);
 
         for (const key of Object.keys(obj)) {
-            collectVideos(obj[key], out, seen);
+            if (out.length >= MAX_VIDEOS) break;
+            collectFromData(obj[key], out, seen);
         }
     }
 
-    function addClassicVideo(r, out, seen) {
-        if (!r.videoId || seen.has(r.videoId)) return;
-        seen.add(r.videoId);
-
-        let title = '';
-        if (r.title && r.title.runs && r.title.runs[0]) title = r.title.runs[0].text;
-        else if (r.title && r.title.simpleText) title = r.title.simpleText;
-
-        let author = '';
-        if (r.ownerText && r.ownerText.runs && r.ownerText.runs[0]) author = r.ownerText.runs[0].text;
-        else if (r.longBylineText && r.longBylineText.runs && r.longBylineText.runs[0]) author = r.longBylineText.runs[0].text;
-
-        let thumbnail = '';
-        if (r.thumbnail && Array.isArray(r.thumbnail.thumbnails) && r.thumbnail.thumbnails.length) {
-            thumbnail = r.thumbnail.thumbnails[r.thumbnail.thumbnails.length - 1].url;
-        }
-        if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${r.videoId}/mqdefault.jpg`;
-
-        out.push({ videoId: r.videoId, title, author, thumbnail });
-    }
-
-    function addLockupVideo(l, out, seen) {
-        const videoId = l.contentId;
-        if (!videoId || seen.has(videoId)) return;
-        seen.add(videoId);
-
-        let title = '';
-        if (l.metadata?.lockupMetadataViewModel?.title?.content) {
-            title = l.metadata.lockupMetadataViewModel.title.content;
-        }
-
-        let thumbnail = '';
-        if (l.contentImage?.thumbnailViewModel?.image?.sources?.length) {
-            const sources = l.contentImage.thumbnailViewModel.image.sources;
-            thumbnail = sources[sources.length - 1].url;
-        }
-        if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
-
-        let author = '';
-        const rows = l.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows;
-        if (Array.isArray(rows)) {
-            for (const row of rows) {
-                if (Array.isArray(row.metadataParts)) {
-                    for (const part of row.metadataParts) {
-                        const txt = part.text?.content;
-                        if (txt && !/\d+\s*(view|ago)/i.test(txt)) {
-                            author = txt;
-                            break;
-                        }
-                    }
-                }
-                if (author) break;
-            }
-        }
-
-        out.push({ videoId, title, author, thumbnail });
-    }
-
-    function addShortsVideo(s, out, seen) {
-        let videoId = '';
-        if (s.entityId) {
-            const m = s.entityId.match(/shorts-shelf-item-(.+)/);
-            if (m) videoId = m[1];
-        }
-        if (!videoId || seen.has(videoId)) return;
-        seen.add(videoId);
-
-        let title = '';
-        if (s.overlayMetadata?.primaryText?.content) title = s.overlayMetadata.primaryText.content;
-
-        let thumbnail = '';
-        const sources = s.thumbnailViewModel?.thumbnailViewModel?.image?.sources;
-        if (Array.isArray(sources) && sources.length) {
-            thumbnail = sources[sources.length - 1].url;
-        }
-        if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
-
-        out.push({ videoId, title, author: '', thumbnail });
-    }
-
-    function parseVideos(data) {
-        const out = [];
-        const seen = new Set();
-        collectVideos(data, out, seen);
-        return out.slice(0, MAX_VIDEOS);
-    }
-
-    // ---- Загрузка через один прокси ----
-    async function fetchViaProxy(proxyFn, signal) {
-        const proxyUrl = proxyFn(YT_HASHTAG_URL);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-
-        if (signal) {
-            if (signal.aborted) {
-                clearTimeout(timeoutId);
-                throw new DOMException('Aborted', 'AbortError');
-            }
-            signal.addEventListener('abort', () => controller.abort(), { once: true });
-        }
-
-        try {
-            const resp = await fetch(proxyUrl, { signal: controller.signal });
-            clearTimeout(timeoutId);
-
-            if (!resp.ok) {
-                throw new Error(`HTTP ${resp.status}`);
-            }
-
-            const text = await resp.text();
-            if (!text || text.length < 500) {
-                throw new Error('Response too short');
-            }
-
-            // allorigins /get возвращает JSON { contents: "..." }
-            // Нужно распаковать, если это так.
-            let html = text;
-            if (text.trim().startsWith('{')) {
-                try {
-                    const json = JSON.parse(text);
-                    if (json.contents && typeof json.contents === 'string') {
-                        html = json.contents;
-                    }
-                } catch (e) { /* не JSON, оставляем как есть */ }
-            }
-
-            const data = extractYtInitialData(html);
-            if (!data) {
-                throw new Error('ytInitialData not found');
-            }
-
-            const videos = parseVideos(data);
-            if (!videos.length) {
-                throw new Error('No videos parsed');
-            }
-
-            return videos;
-        } catch (err) {
-            clearTimeout(timeoutId);
-            throw err;
-        }
-    }
-
-    // ---- Параллельная гонка прокси ----
-    async function raceProxies(signal) {
-        const promises = PROXIES.map(proxyFn =>
-            fetchViaProxy(proxyFn, signal).catch(err => {
-                // Возвращаем rejected promise, чтобы Promise.any его проигнорировал
-                throw err;
-            })
+    async function fetchViaHashtagProxies(signal) {
+        const promises = CORS_PROXIES.map(proxyFn =>
+            fetchViaProxy(proxyFn, YT_HASHTAG_URL, signal)
+                .then(html => {
+                    const data = extractYtInitialData(html);
+                    if (!data) throw new Error('no ytInitialData');
+                    const out = [];
+                    const seen = new Set();
+                    collectFromData(data, out, seen);
+                    if (!out.length) throw new Error('no videos');
+                    return dedupe(out);
+                })
         );
-
-        // Promise.any вернёт первый успешный результат, остальные будут проигнорированы.
-        // Если все упадут — AggregateError.
         return await Promise.any(promises);
     }
 
@@ -273,9 +303,9 @@
 
         if (!videos.length) {
             container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-video"></i>
-                    <p>Видео по хештегу #${HASHTAG} не найдены</p>
+                <div style="text-align:center;padding:20px 16px;color:var(--text-secondary);font-size:14px;">
+                    <i class="fas fa-video" style="font-size:26px;opacity:0.5;display:block;margin-bottom:8px;"></i>
+                    Видео по хештегу #${HASHTAG} не найдены
                 </div>
             `;
             return;
@@ -296,7 +326,9 @@
             img.src = v.thumbnail;
             img.alt = v.title || '';
             img.loading = 'lazy';
-            img.onerror = () => { img.style.display = 'none'; };
+            img.onerror = () => {
+                img.src = `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`;
+            };
             a.appendChild(img);
 
             const play = document.createElement('span');
@@ -306,17 +338,12 @@
             a.appendChild(play);
 
             const caption = document.createElement('div');
-            caption.className = 'video-caption';
             caption.style.cssText = `
-                position: absolute;
-                bottom: 0; left: 0; right: 0;
+                position: absolute; bottom: 0; left: 0; right: 0;
                 padding: 8px 10px;
                 background: linear-gradient(transparent, rgba(0,0,0,0.85));
-                color: #fff;
-                font-size: 12px;
-                line-height: 1.3;
-                pointer-events: none;
-                z-index: 3;
+                color: #fff; font-size: 12px; line-height: 1.3;
+                pointer-events: none; z-index: 3;
             `;
 
             const titleEl = document.createElement('div');
@@ -343,7 +370,6 @@
         const container = document.getElementById(containerId);
         if (!container) return;
 
-        // 1. Кеш
         if (!forceRefresh) {
             const cached = readCache();
             if (cached && cached.length) {
@@ -352,20 +378,29 @@
             }
         }
 
-        // 2. Скелетон загрузки
         container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка видео по #${HASHTAG}...</p></div>`;
 
         try {
-            const videos = await raceProxies();
-            writeCache(videos);
-            renderVideos(videos, container);
+            const strategies = [
+                fetchViaInvidious(null),
+                fetchViaPiped(null),
+                fetchViaHashtagProxies(null)
+            ];
+            const videos = await Promise.any(strategies);
+            if (videos && videos.length) {
+                writeCache(videos);
+                renderVideos(videos, container);
+                return;
+            }
+            renderVideos([], container);
         } catch (e) {
-            console.warn('[HashtagVideos] Все прокси недоступны:', e.message || e);
+            console.warn('[HashtagVideos] Все стратегии недоступны:', e && e.message ? e.message : e);
+            // Компактный error state — без огромной иконки и больших padding
             container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>Не удалось загрузить видео по хештегу #${HASHTAG}.</p>
-                    <button class="button small" id="hashtag-videos-retry">
+                <div style="text-align:center;padding:20px 16px;color:var(--text-secondary);">
+                    <i class="fas fa-exclamation-triangle" style="font-size:26px;opacity:0.5;display:block;margin-bottom:8px;color:#ff9800;"></i>
+                    <p style="margin:0 0 10px;font-size:14px;">Не удалось загрузить видео по #${HASHTAG}</p>
+                    <button class="button small" id="hashtag-videos-retry" type="button">
                         <i class="fas fa-sync"></i> Повторить
                     </button>
                 </div>
@@ -375,16 +410,13 @@
         }
     }
 
-    // ---- Автозапуск ----
     function init() {
         const container = document.getElementById('hashtag-videos');
-        if (container) {
-            loadHashtagVideos('hashtag-videos');
-        }
+        if (container) loadHashtagVideos('hashtag-videos');
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', init, { once: true });
     } else {
         init();
     }

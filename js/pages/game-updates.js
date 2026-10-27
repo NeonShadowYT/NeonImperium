@@ -1,11 +1,11 @@
 // js/pages/game-updates.js — обновления игры (GitHub issues + itch.io devlog).
 //
-// ПАТТЕРН:
-//   1. Параллельная загрузка GitHub + itch.io через Promise.allSettled.
-//   2. Если оба источника есть в кэше — рендерим СРАЗУ, рефреш в фоне.
-//   3. itch.io: RSS (с превью из <description><img>), HTML-парсинг, rss2json —
-//      все три стратегии параллельно через Promise.any.
-//   4. Fallback превью itch.io — og:image через прокси (лениво, после рендера).
+// ФИКСЫ:
+//   1. Даты из кэша (JSON.parse) нормализуются обратно в Date,
+//      чтобы createUpdateCard не падал на toLocaleDateString().
+//   2. SWR: кэш показывается мгновенно, рефреш в фоне.
+//   3. itch.io: превью из <img> RSS, fallback og:image через прокси.
+//   4. Иконки автора: itch-post → fa-itch-io, gh-update → fa-user.
 
 (function() {
     'use strict';
@@ -38,22 +38,22 @@
     const CORS_PROXIES = [
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
         (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
         (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
         (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
+        (u) => `https://cors.eu.org/${u}`,
+        (u) => `https://cors.x2u.in/${u}`,
+        (u) => `https://yacdn.org/proxy/${u}`,
+        (u) => `https://corsfix.com/?${u}`,
         (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
         (u) => `https://cors-anywhere.herokuapp.com/${u}`,
         (u) => `https://proxy.cors.sh/${u}`,
         (u) => `https://cors.bridged.cc/${u}`,
         (u) => `https://test.cors.workers.dev/?${u}`,
         (u) => `https://cors-anywhere.homely8896.workers.dev/${u}`,
-        (u) => `https://cors.eu.org/${u}`,
-        (u) => `https://cors.x2u.in/${u}`,
-        (u) => `https://yacdn.org/proxy/${u}`,
+        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
         (u) => `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://corsproxy.org/?${encodeURIComponent(u)}`,
-        (u) => `https://thebugging.com/proxy?url=${encodeURIComponent(u)}`
+        (u) => `https://corsproxy.org/?${encodeURIComponent(u)}`
     ];
 
     const RSS2JSON = (rssUrl) =>
@@ -85,6 +85,18 @@
             .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'");
     }
 
+    // КРИТИЧНО: нормализуем дату, чтобы после JSON.parse
+    // (localStorage) она снова была объектом Date.
+    function normalizeDate(d) {
+        if (d instanceof Date && !isNaN(d.getTime())) return d;
+        const nd = new Date(d);
+        return isNaN(nd.getTime()) ? new Date() : nd;
+    }
+
+    function normalizePost(p) {
+        return { ...p, date: normalizeDate(p.date) };
+    }
+
     // ---- Кэш itch.io ----
     function itchCacheKey(game) { return `itch_posts_updates_v3_${game}`; }
 
@@ -98,7 +110,8 @@
                 localStorage.removeItem(itchCacheKey(game));
                 return null;
             }
-            return data.items;
+            // Нормализуем даты сразу при чтении
+            return data.items.map(normalizePost);
         } catch { return null; }
     }
 
@@ -164,7 +177,7 @@
         return await Promise.any(promises);
     }
 
-    // ---- Парсеры itch.io с превью ----
+    // ---- Парсеры itch.io ----
 
     function parseItchDevlogXml(xmlText, source) {
         if (!xmlText || typeof xmlText !== 'string') return [];
@@ -177,8 +190,7 @@
 
             const title = titleMatch ? decodeXmlEntities(titleMatch[1]) : 'Без названия';
             const link = linkMatch ? linkMatch[1] : (source.devlogPageUrl || '#');
-            let date = pubDateMatch ? new Date(pubDateMatch[1]) : new Date();
-            if (isNaN(date.getTime())) date = new Date();
+            const date = pubDateMatch ? new Date(pubDateMatch[1]) : new Date();
 
             let description = '';
             let thumbnail = null;
@@ -197,14 +209,14 @@
                 }
             }
 
-            return {
+            return normalizePost({
                 type: 'itch-post',
                 id: `itch-${link}`,
                 title, author: source.name, date, body: description,
                 thumbnail,
                 itchLink: link, itchSource: source.name,
                 labels: ['type:itch-post']
-            };
+            });
         }).filter(Boolean)
           .sort((a, b) => b.date - a.date)
           .slice(0, MAX_ITCH_POSTS);
@@ -231,13 +243,13 @@
                 }
                 const thumbnail = imgEl ? imgEl.src : null;
 
-                return {
+                return normalizePost({
                     type: 'itch-post',
                     id: `itch-html-${link}`,
                     title, author: source.name, date, body: '', thumbnail,
                     itchLink: link, itchSource: source.name,
                     labels: ['type:itch-post']
-                };
+                });
             });
         } catch { return null; }
     }
@@ -254,7 +266,7 @@
                 else if (url.startsWith('/')) url = 'https://img.itch.zone' + url;
                 thumbnail = url;
             }
-            return {
+            return normalizePost({
                 type: 'itch-post',
                 id: `itch-rss2json-${item.link}`,
                 title: item.title || 'Пост',
@@ -265,7 +277,7 @@
                 itchLink: item.link,
                 itchSource: source.name,
                 labels: ['type:itch-post']
-            };
+            });
         });
     }
 
@@ -367,20 +379,15 @@
     async function fetchGithubUpdates(game, signal, forceRefresh = false) {
         const cacheKey = `game_issues_${game}`;
         let issues = null;
-
-        if (!forceRefresh) {
-            issues = await cacheGet(cacheKey);
-        }
-
+        if (!forceRefresh) issues = await cacheGet(cacheKey);
         if (!issues) {
             issues = await loadIssues({ labels: `game:${game}`, state: 'open', per_page: 100, signal });
             await cacheSet(cacheKey, issues);
         }
-
         return issues.filter(i =>
             i.labels.some(l => l.name === 'type:update') &&
             CONFIG.ALLOWED_AUTHORS.includes(i.user.login)
-        ).map(i => ({
+        ).map(i => normalizePost({
             type: 'gh-update',
             number: i.number,
             id: `gh-${i.number}`,
@@ -422,10 +429,13 @@
     }
 
     function createUpdateCard(post) {
+        // Дополнительная защита: нормализуем дату ещё раз на всякий случай
+        const date = normalizeDate(post.date);
+
         const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
+        card.dataset.itemId = post.id;
         const inner = createElement('div', 'project-card');
 
-        // Превью: сначала пытаемся взять thumbnail, потом — картинка из markdown body
         let imgSrc = post.thumbnail || null;
         if (!imgSrc && post.body) {
             const mdMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
@@ -446,7 +456,7 @@
         const icon = getAuthorIcon(post.type);
         meta.innerHTML = sanitizeHtml(
             `<i class="${icon}"></i> ${escapeHtml(post.author)} · ` +
-            `<i class="fas fa-calendar-alt"></i> ${post.date.toLocaleDateString()}`
+            `<i class="fas fa-calendar-alt"></i> ${date.toLocaleDateString()}`
         );
 
         const summary = extractSummary(post.body || '') || stripHtml(post.body || '').substring(0, 120) + '…';
@@ -492,10 +502,17 @@
     }
 
     function renderUpdates(container, game, posts) {
+        const parent = container.parentNode;
+        let header = parent.querySelector('.updates-header');
+
         if (!posts.length) {
             container.innerHTML = sanitizeHtml(
-                `<p class="text-secondary" data-lang="noUpdates">${t('noUpdates')}</p>`
+                `<p class="text-secondary" data-lang="noUpdates" style="padding:12px 0;">${t('noUpdates')}</p>`
             );
+            if (header) {
+                const existing = header.querySelector('.admin-update-btn');
+                if (existing) existing.remove();
+            }
             return;
         }
 
@@ -507,9 +524,6 @@
         grid.appendChild(fragment);
         container.appendChild(grid);
 
-        // Заголовок «Обновления» + кнопка «Добавить» для админов
-        const parent = container.parentNode;
-        let header = parent.querySelector('.updates-header');
         if (!header) {
             header = createElement('div', 'updates-header', {
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -539,7 +553,6 @@
 
         window.scrollTo({ top: scrollY, behavior: 'instant' });
 
-        // Ленивая подгрузка превью itch-постов, у которых нет thumbnail
         const withoutThumb = posts.filter(p => p.type === 'itch-post' && !p.thumbnail);
         if (withoutThumb.length) {
             enrichItchThumbnails(withoutThumb, null, (updated) => {
@@ -568,14 +581,14 @@
             cacheRemoveByPrefix(`game_issues_${currentGame}`);
             const cont = document.getElementById('game-updates');
             if (!cont) return;
-            const newPost = {
+            const newPost = normalizePost({
                 type: 'gh-update',
                 number: issue.number, id: `gh-${issue.number}`,
                 title: issue.title, body: issue.body,
                 date: new Date(issue.created_at), author: issue.user.login,
                 game: currentGame, labels: issue.labels.map(l => l.name),
                 thumbnail: null
-            };
+            });
             let grid = cont.querySelector('.projects-grid');
             if (!grid) {
                 grid = createElement('div', 'projects-grid');
@@ -612,7 +625,6 @@
         currentAbort = { controller };
 
         try {
-            // SWR: если есть кэш и не forceRefresh — рендерим сразу
             if (!forceRefresh) {
                 const [cachedGh, cachedItch] = await Promise.all([
                     cacheGet(`game_issues_${game}`),
@@ -623,7 +635,7 @@
                     const ghPosts = (cachedGh || []).filter(i =>
                         i.labels.some(l => l.name === 'type:update') &&
                         CONFIG.ALLOWED_AUTHORS.includes(i.user.login)
-                    ).map(i => ({
+                    ).map(i => normalizePost({
                         type: 'gh-update',
                         number: i.number, id: `gh-${i.number}`,
                         title: i.title, body: i.body,
@@ -648,7 +660,6 @@
                                         const cont = document.getElementById('game-updates');
                                         if (cont && cont.dataset.game === game) {
                                             renderUpdates(cont, game, fresh);
-                                            console.log('[GameUpdates] SWR: фон обновил данные');
                                         }
                                     }
                                 } catch (e) {
@@ -663,7 +674,6 @@
                 }
             }
 
-            // Нет кэша или forceRefresh: показываем скелетон и ждём сеть
             container.innerHTML = sanitizeHtml(
                 `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p data-lang="loading">${t('loading')}</p></div>`
             );
