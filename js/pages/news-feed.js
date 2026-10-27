@@ -1,6 +1,6 @@
 // js/pages/news-feed.js — лента новостей (index.html).
-// YouTube: RSS UULF + Piped + Invidious (параллельно).
-// itch.io: общий кэш с game-updates.js (ключ itch_posts_v9_{game}).
+// YouTube: RSS UULF через прокси + Piped (опционально).
+// itch.io: RSS через прокси (общий кэш с game-updates.js).
 
 (function() {
     'use strict';
@@ -45,33 +45,13 @@
         }
     ];
 
-    const PIPED_INSTANCES = [
-        'https://pipedapi.kavin.rocks',
-        'https://pipedapi.adminforge.de',
-        'https://pipedapi.leptons.xyz',
-        'https://api.piped.private.coffee',
-        'https://pipedapi.drgns.space',
-        'https://pipedapi.ducks.party'
-    ];
-    const INVIDIOUS_INSTANCES = [
-        'https://inv.nadeko.net',
-        'https://invidious.nerdvpn.de',
-        'https://invidious.privacyredirect.com',
-        'https://iv.melmac.space',
-        'https://invidious.f5.si',
-        'https://yt.artemislena.eu',
-        'https://invidious.jing.rocks',
-        'https://invidious.perennialte.ch'
-    ];
-
-    const RSS2JSON = (rssUrl) => `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+    // ---- Рабочие прокси ----
     const CORS_PROXIES = [
-        (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
         (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-        (u) => `https://cors.x2u.in/${u}`,
-        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsfix.com/?${u}`,
+        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
         (u) => `https://cors.eu.org/${u}`
     ];
 
@@ -191,13 +171,19 @@
         const proxyUrl = proxyFn(targetUrl);
         const res = await fetchWithTimeout(proxyUrl, signal);
         let text = await res.text();
-        if (!text || text.length < 200) throw new Error('too short');
+        if (!text || text.length < 100) throw new Error('too short');
+
         if (text.trim().startsWith('{')) {
             try {
                 const json = JSON.parse(text);
                 if (typeof json.contents === 'string') text = json.contents;
-            } catch { /* noop */ }
+                else if (json.error) throw new Error('proxy error: ' + json.error);
+            } catch (e) {
+                if (e.message.startsWith('proxy error')) throw e;
+            }
         }
+
+        if (!text || text.length < 100) throw new Error('too short after unwrap');
         return text;
     }
 
@@ -206,7 +192,7 @@
             fetchViaProxy(proxyFn, targetUrl, signal).then(text => {
                 const result = parser(text);
                 if (!result || (Array.isArray(result) && result.length === 0)) {
-                    throw new Error('empty');
+                    throw new Error('empty parse');
                 }
                 return result;
             })
@@ -215,7 +201,7 @@
     }
 
     // ============================================================
-    // YOUTUBE — RSS + Piped + Invidious
+    // YOUTUBE — RSS через прокси
     // ============================================================
 
     function filterYoutubeVideos(videos) {
@@ -232,110 +218,60 @@
             .slice(0, MAX_VIDEOS);
     }
 
+    function parseYoutubeRss(text) {
+        const entryBlocks = text.split('<entry>').slice(1);
+        const items = entryBlocks.map(block => {
+            const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+            const titleMatch = block.match(/<title>([^<]*)<\/title>/);
+            const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
+            if (!videoIdMatch) return null;
+            const videoId = videoIdMatch[1];
+            return normalizeItem({
+                type: 'video', id: videoId,
+                title: decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled'),
+                author: YT_CHANNEL_NAME,
+                date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
+                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                videoData: { service: 'youtube', id: videoId }
+            });
+        }).filter(Boolean);
+        return items;
+    }
+
     async function fetchYoutubeRss(signal) {
         try {
-            const res = await fetchWithTimeout(RSS2JSON(YT_RSS_URL), signal);
-            const data = await res.json();
-            if (data.status !== 'ok' || !Array.isArray(data.items)) throw new Error('bad rss');
-            const items = data.items.map(item => {
-                const vid = (item.link || '').match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
-                if (!vid) return null;
-                return normalizeItem({
-                    type: 'video', id: vid,
-                    title: item.title || 'Untitled',
-                    author: YT_CHANNEL_NAME,
-                    date: new Date(item.pubDate || Date.now()),
-                    thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
-                    videoData: { service: 'youtube', id: vid }
-                });
-            }).filter(Boolean);
-            if (!items.length) throw new Error('empty');
-            return items;
+            return await raceProxies(YT_RSS_URL, parseYoutubeRss, signal);
         } catch (e) {
             if (isAborted(e, signal)) throw e;
-            try {
-                return await raceProxies(YT_RSS_URL, (text) => {
-                    const entryBlocks = text.split('<entry>').slice(1);
-                    const items = entryBlocks.map(block => {
-                        const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
-                        const titleMatch = block.match(/<title>([^<]*)<\/title>/);
-                        const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
-                        if (!videoIdMatch) return null;
-                        const videoId = videoIdMatch[1];
-                        return normalizeItem({
-                            type: 'video', id: videoId,
-                            title: decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled'),
-                            author: YT_CHANNEL_NAME,
-                            date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
-                            thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                            videoData: { service: 'youtube', id: videoId }
-                        });
-                    }).filter(Boolean);
-                    return items;
-                }, signal);
-            } catch {
-                return [];
+            console.warn('[NewsFeed] YouTube RSS прокси не сработали:', e.message || e);
+        }
+
+        try {
+            const res = await fetchWithTimeout(
+                `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(YT_RSS_URL)}`,
+                signal
+            );
+            const data = await res.json();
+            if (data.status === 'ok' && Array.isArray(data.items)) {
+                return data.items.map(item => {
+                    const vid = (item.link || '').match(/(?:youtu\.be\/|v=)([^&\n?#]+)/)?.[1];
+                    if (!vid) return null;
+                    return normalizeItem({
+                        type: 'video', id: vid,
+                        title: item.title || 'Untitled',
+                        author: YT_CHANNEL_NAME,
+                        date: new Date(item.pubDate || Date.now()),
+                        thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+                        videoData: { service: 'youtube', id: vid }
+                    });
+                }).filter(Boolean);
             }
+        } catch (e) {
+            if (isAborted(e, signal)) throw e;
+            console.warn('[NewsFeed] YouTube RSS2JSON fallback:', e.message || e);
         }
-    }
 
-    async function fetchYoutubePiped(signal) {
-        const promises = PIPED_INSTANCES.map(async (base) => {
-            const url = `${base}/channel/${YT_CHANNEL_ID}`;
-            const res = await fetchWithTimeout(url, signal);
-            const data = await res.json();
-            const streams = data.relatedStreams || data.items || [];
-            const videos = streams.map(item => {
-                const videoId = (item.url || '').replace('/watch?v=', '');
-                if (!videoId) return null;
-                const duration = typeof item.duration === 'number' ? item.duration : null;
-                if (duration !== null && duration > 0 && duration < MIN_YT_DURATION) return null;
-                return normalizeItem({
-                    type: 'video', id: videoId,
-                    title: item.title || 'Untitled',
-                    author: YT_CHANNEL_NAME,
-                    date: item.uploaded ? new Date(item.uploaded) : new Date(),
-                    thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                    videoData: { service: 'youtube', id: videoId }
-                });
-            }).filter(Boolean);
-            if (!videos.length) throw new Error('empty');
-            return videos;
-        });
-        try {
-            return await Promise.any(promises);
-        } catch {
-            return [];
-        }
-    }
-
-    async function fetchYoutubeInvidious(signal) {
-        const promises = INVIDIOUS_INSTANCES.map(async (base) => {
-            const url = `${base}/api/v1/channels/${YT_CHANNEL_ID}/videos`;
-            const res = await fetchWithTimeout(url, signal);
-            const data = await res.json();
-            const videos = (Array.isArray(data) ? data : []).map(item => {
-                const videoId = item.videoId;
-                if (!videoId) return null;
-                const length = typeof item.lengthSeconds === 'number' ? item.lengthSeconds : null;
-                if (length !== null && length > 0 && length < MIN_YT_DURATION) return null;
-                return normalizeItem({
-                    type: 'video', id: videoId,
-                    title: item.title || 'Untitled',
-                    author: item.author || YT_CHANNEL_NAME,
-                    date: new Date(item.published ? item.published * 1000 : Date.now()),
-                    thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                    videoData: { service: 'youtube', id: videoId }
-                });
-            }).filter(Boolean);
-            if (!videos.length) throw new Error('empty');
-            return videos;
-        });
-        try {
-            return await Promise.any(promises);
-        } catch {
-            return [];
-        }
+        return [];
     }
 
     async function fetchYoutubeVideos(signal, forceRefresh = false) {
@@ -345,9 +281,7 @@
         }
 
         const results = await Promise.allSettled([
-            fetchYoutubeRss(signal),
-            fetchYoutubePiped(signal),
-            fetchYoutubeInvidious(signal)
+            fetchYoutubeRss(signal)
         ]);
 
         let videos = [];
@@ -394,26 +328,32 @@
         return null;
     }
 
-    function parseItchRssJson(data, source) {
-        if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return null;
-        const items = data.items.map(item => {
-            const rawHtml = item.description || '';
-            let thumbnail = null;
-            const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
-            if (imgMatch) thumbnail = normalizeItchUrl(imgMatch[1]);
+    function parseItchRss(text, source) {
+        const itemBlocks = text.split('<item>').slice(1);
+        const items = itemBlocks.map(block => {
+            const titleMatch = block.match(/<title>([^<]*)<\/title>/);
+            const linkMatch = block.match(/<link>([^<]*)<\/link>/);
+            const pubDateMatch = block.match(/<pubDate>([^<]*)<\/pubDate>/);
+            const descriptionMatch = block.match(/<description>([\s\S]*?)<\/description>/);
+            const title = titleMatch ? decodeXmlEntities(titleMatch[1]) : 'Без названия';
+            const link = linkMatch ? linkMatch[1] : (source.devlogPageUrl || '#');
+            let date = pubDateMatch ? new Date(pubDateMatch[1]) : new Date();
+            if (isNaN(date.getTime())) date = new Date();
+            let description = '';
+            if (descriptionMatch) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = descriptionMatch[1];
+                description = (tempDiv.textContent || tempDiv.innerText || '').trim();
+            }
             return normalizeItem({
                 type: 'itch-post',
-                id: `itch-${item.link}`,
-                title: item.title || 'Пост',
-                author: source.name,
-                date: new Date(item.pubDate || Date.now()),
-                body: rawHtml.replace(/<[^>]*>/g, ''),
-                thumbnail,
-                itchLink: item.link,
-                itchSource: source.name,
+                id: `itch-${link}`,
+                title, author: source.name, date, body: description,
+                thumbnail: extractItchThumbnail(block),
+                itchLink: link, itchSource: source.name,
                 labels: ['type:itch-post']
             });
-        });
+        }).filter(Boolean);
         return sortByDateDesc(items).slice(0, MAX_ITCH_POSTS);
     }
 
@@ -426,9 +366,7 @@
         const allPosts = [];
         for (const source of ITCH_DEVLOG_SOURCES) {
             try {
-                const res = await fetchWithTimeout(RSS2JSON(source.rssUrl), signal);
-                const data = await res.json();
-                const posts = parseItchRssJson(data, source);
+                const posts = await raceProxies(source.rssUrl, (text) => parseItchRss(text, source), signal);
                 if (posts && posts.length) allPosts.push(...posts);
             } catch (e) {
                 if (isAborted(e, signal)) return [];
@@ -437,37 +375,35 @@
         }
 
         if (allPosts.length === 0) {
+            // fallback RSS2JSON
             for (const source of ITCH_DEVLOG_SOURCES) {
                 try {
-                    const posts = await raceProxies(source.rssUrl, (text) => {
-                        const itemBlocks = text.split('<item>').slice(1);
-                        const items = itemBlocks.map(block => {
-                            const titleMatch = block.match(/<title>([^<]*)<\/title>/);
-                            const linkMatch = block.match(/<link>([^<]*)<\/link>/);
-                            const pubDateMatch = block.match(/<pubDate>([^<]*)<\/pubDate>/);
-                            const descriptionMatch = block.match(/<description>([\s\S]*?)<\/description>/);
-                            const title = titleMatch ? decodeXmlEntities(titleMatch[1]) : 'Без названия';
-                            const link = linkMatch ? linkMatch[1] : (source.devlogPageUrl || '#');
-                            let date = pubDateMatch ? new Date(pubDateMatch[1]) : new Date();
-                            if (isNaN(date.getTime())) date = new Date();
-                            let description = '';
-                            if (descriptionMatch) {
-                                const tempDiv = document.createElement('div');
-                                tempDiv.innerHTML = descriptionMatch[1];
-                                description = (tempDiv.textContent || tempDiv.innerText || '').trim();
-                            }
+                    const res = await fetchWithTimeout(
+                        `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.rssUrl)}`,
+                        signal
+                    );
+                    const data = await res.json();
+                    if (data.status === 'ok' && Array.isArray(data.items)) {
+                        const posts = data.items.map(item => {
+                            const rawHtml = item.description || '';
+                            let thumbnail = null;
+                            const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+                            if (imgMatch) thumbnail = normalizeItchUrl(imgMatch[1]);
                             return normalizeItem({
                                 type: 'itch-post',
-                                id: `itch-${link}`,
-                                title, author: source.name, date, body: description,
-                                thumbnail: extractItchThumbnail(block),
-                                itchLink: link, itchSource: source.name,
+                                id: `itch-${item.link}`,
+                                title: item.title || 'Пост',
+                                author: source.name,
+                                date: new Date(item.pubDate || Date.now()),
+                                body: rawHtml.replace(/<[^>]*>/g, ''),
+                                thumbnail,
+                                itchLink: item.link,
+                                itchSource: source.name,
                                 labels: ['type:itch-post']
                             });
-                        }).filter(Boolean);
-                        return sortByDateDesc(items).slice(0, MAX_ITCH_POSTS);
-                    }, signal);
-                    if (posts && posts.length) allPosts.push(...posts);
+                        });
+                        if (posts.length) allPosts.push(...posts);
+                    }
                 } catch (e) {
                     if (isAborted(e, signal)) return [];
                 }
@@ -602,7 +538,7 @@
                 return item;
             } catch (e) {
                 clearTimeout(timeoutId);
-                if (isAborted(e, signal) || isAborted(e, controller.signal)) return null;
+                if (isAborted(e, signal) || isAborted(controller.signal)) return null;
                 return null;
             }
         });
