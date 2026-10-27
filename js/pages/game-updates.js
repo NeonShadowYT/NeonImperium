@@ -1,7 +1,7 @@
 // js/pages/game-updates.js — обновления (GitHub + itch.io + YouTube-канал).
-// CORS-прокси: everyorigin, cors.lol, cloudflare-cors-anywhere, corsfix, corsproxy.dev.
+// CORS-прокси: corsproxy.dev, cors.lol, cloudflare-cors-anywhere, corsfix, cors.x2u.in.
 // itch.io: RSS через прокси (общий кэш с news-feed.js).
-// YouTube: RSS UULF через прокси + Piped (leptons) как резерв.
+// YouTube: RSS UULF через прокси + Piped (leptons, nosebs, libre) как резерв.
 
 (function() {
     'use strict';
@@ -44,13 +44,12 @@
     };
 
     // ---- Рабочие CORS-прокси (2026) ----
-    // everyorigin — без лимитов; cors.lol — бесплатный; cloudflare-cors-anywhere — 100k/день.
     const CORS_PROXIES = [
-        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
-        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
-        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsfix.com/?${u}`
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,          // 500 запросов/день
+        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,           // rate-limit, без фильтра доменов
+        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`, // 100k/день
+        (u) => `https://corsfix.com/?${u}`,                                    // 60 запросов/мин
+        (u) => `https://cors.x2u.in/${u}`                                      // 100 запросов/час
     ];
 
     function t(key) {
@@ -145,9 +144,7 @@
 
     /**
      * Универсальная распаковка ответа прокси.
-     * - everyorigin/get и allorigins/get возвращают JSON {contents: "..."}
-     * - corsfix может вернуть JSON с contents или сырой текст
-     * - остальные — сырой текст
+     * corsproxy.dev может вернуть JSON {contents: "..."}, cors.lol — сырой текст.
      */
     async function fetchViaProxy(proxyFn, targetUrl, signal) {
         const proxyUrl = proxyFn(targetUrl);
@@ -327,7 +324,8 @@
         const keywords = GAME_KEYWORDS[game] || [];
         const instances = [
             'https://pipedapi.leptons.xyz',
-            'https://api.piped.private.coffee'
+            'https://pipedapi.nosebs.ru',
+            'https://pipedapi-libre.kavin.rocks'
         ];
         const promises = instances.map(async (base) => {
             const url = `${base}/channel/${YT_CHANNEL_ID}`;

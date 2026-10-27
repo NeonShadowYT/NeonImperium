@@ -47,11 +47,11 @@
 
     // ---- Рабочие CORS-прокси (2026) ----
     const CORS_PROXIES = [
-        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
         (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
-        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsfix.com/?${u}`
+        (u) => `https://corsfix.com/?${u}`,
+        (u) => `https://cors.x2u.in/${u}`
     ];
 
     let currentUser = null;

@@ -1,8 +1,8 @@
 // js/features/hashtag-videos.js
 // Хэштег #starveneon.
-// Основные источники: Invidious (inv.nadeko.net) и Piped (leptons, private.coffee).
-// Резерв: прямой парсинг ytInitialData через everyorigin (без лимитов).
-// Фильтр по 'starveneon' сделан мягче: проверяется и заголовок, и описание.
+// Основной источник: Piped Search (leptons, nosebs, libre).
+// Резерв: прямой парсинг ytInitialData через corsproxy.dev / cors.lol / cloudflare-cors-anywhere.
+// Фильтр по 'starveneon' проверяет и заголовок, и описание.
 
 (function() {
     'use strict';
@@ -16,10 +16,10 @@
     const REQUEST_TIMEOUT = 20000;
 
     const CORS_PROXIES = [
-        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
         (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
-        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`
+        (u) => `https://corsfix.com/?${u}`
     ];
 
     function parseDurationToSec(text) {
@@ -216,43 +216,12 @@
         return videos;
     }
 
-    // Invidious: inv.nadeko.net (в логах отвечал 200)
-    async function fetchViaInvidiousHashtag(signal) {
-        const instances = [
-            'https://inv.nadeko.net',
-            'https://invidious.nerdvpn.de'
-        ];
-        const promises = instances.map(async (base) => {
-            const url = `${base}/api/v1/hashtag/${HASHTAG}`;
-            const res = await fetchWithTimeout(url, signal);
-            const data = await res.json();
-            const videos = (Array.isArray(data) ? data : []).map(item => {
-                const videoId = item.videoId;
-                if (!videoId) return null;
-                const length = typeof item.lengthSeconds === 'number' ? item.lengthSeconds : null;
-                if (length !== null && length > 0 && length < MIN_DURATION_SEC) return null;
-                return normalizeVideo({
-                    videoId,
-                    title: item.title || '',
-                    author: item.author || '',
-                    description: item.description || ''
-                });
-            }).filter(Boolean);
-            if (!videos.length) throw new Error('empty');
-            return videos;
-        });
-        try {
-            return await Promise.any(promises);
-        } catch {
-            throw new Error('all invidious hashtag failed');
-        }
-    }
-
-    // Piped: leptons и private.coffee
+    // Piped Search — основной источник
     async function fetchViaPipedSearch(signal) {
         const instances = [
             'https://pipedapi.leptons.xyz',
-            'https://api.piped.private.coffee'
+            'https://pipedapi.nosebs.ru',
+            'https://pipedapi-libre.kavin.rocks'
         ];
         const promises = instances.map(async (base) => {
             const url = `${base}/search?q=%23${HASHTAG}&filter=videos`;
@@ -283,7 +252,6 @@
 
     async function loadHashtagVideosFromNetwork(signal) {
         const strategies = [
-            fetchViaInvidiousHashtag(signal),
             fetchViaPipedSearch(signal),
             ...CORS_PROXIES.map(p => fetchViaHtmlProxy(p, signal))
         ];
