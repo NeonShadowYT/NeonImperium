@@ -1,5 +1,5 @@
 // js/pages/game-updates.js — обновления игры (GitHub + itch.io + YouTube-канал разработчика).
-// YouTube: только видео с канала, релевантные игре, без shorts.
+// YouTube: только канал (RSS), без shorts, превью всегда i.ytimg.com.
 
 (function() {
     'use strict';
@@ -45,14 +45,7 @@
         (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
         (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
         (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://cors.eu.org/${u}`,
-        (u) => `https://cors.x2u.in/${u}`,
-        (u) => `https://yacdn.org/proxy/${u}`,
-        (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`,
-        (u) => `https://test.cors.workers.dev/?${u}`,
-        (u) => `https://corsproxy.org/?${encodeURIComponent(u)}`
+        (u) => `https://corsfix.com/?${u}`
     ];
 
     function t(key) {
@@ -93,8 +86,8 @@
     }
 
     // ---- Кэш ----
-    function itchCacheKey(game) { return `itch_posts_updates_v4_${game}`; }
-    function ytCacheKey(game) { return `yt_updates_v4_${game}`; }
+    function itchCacheKey(game) { return `itch_posts_updates_v5_${game}`; }
+    function ytCacheKey(game) { return `yt_updates_v5_${game}`; }
 
     function readCacheWithDates(key, ttl) {
         try {
@@ -171,7 +164,7 @@
     }
 
     // ============================================================
-    // ITCH.IO
+    // ITCH.IO (без изменений — превью из media:content/enclosure/img)
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -192,11 +185,6 @@
         const descMatch = block.match(/<description>([\s\S]*?)<\/description>/);
         if (descMatch) {
             const imgMatch = descMatch[1].match(/<img[^>]+src=["']([^"']+)["']/i);
-            if (imgMatch) return normalizeItchUrl(imgMatch[1]);
-        }
-        const contentMatch = block.match(/<content:encoded>([\s\S]*?)<\/content:encoded>/);
-        if (contentMatch) {
-            const imgMatch = contentMatch[1].match(/<img[^>]+src=["']([^"']+)["']/i);
             if (imgMatch) return normalizeItchUrl(imgMatch[1]);
         }
         return null;
@@ -236,36 +224,6 @@
           .slice(0, MAX_ITCH_POSTS);
     }
 
-    function parseItchDevlogHtml(html, source) {
-        try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const postElements = doc.querySelectorAll('.post, .devlog_post, article');
-            if (postElements.length === 0) return null;
-            return Array.from(postElements).slice(0, MAX_ITCH_POSTS).map(el => {
-                const titleEl = el.querySelector('h2, h3, .post_title');
-                const linkEl = el.querySelector('a[href*="/devlog/"]') || el.querySelector('a');
-                const dateEl = el.querySelector('time, .post_date, .date');
-                const imgEl = el.querySelector('img');
-                const title = titleEl ? titleEl.textContent.trim() : 'Пост';
-                const link = linkEl ? linkEl.href : source.devlogPageUrl;
-                let date = new Date();
-                if (dateEl) {
-                    const parsed = new Date(dateEl.getAttribute('datetime') || dateEl.textContent);
-                    if (!isNaN(parsed.getTime())) date = parsed;
-                }
-                return normalizePost({
-                    type: 'itch-post',
-                    id: `itch-html-${link}`,
-                    title, author: source.name, date, body: '',
-                    thumbnail: imgEl ? imgEl.src : null,
-                    itchLink: link, itchSource: source.name,
-                    labels: ['type:itch-post']
-                });
-            });
-        } catch { return null; }
-    }
-
     async function fetchItchPosts(game, signal, forceRefresh = false) {
         const source = ITCH_DEVLOG_SOURCES[game];
         if (!source) return [];
@@ -275,13 +233,8 @@
             if (cached && cached.length) return cached;
         }
 
-        const strategies = [
-            raceProxies(source.rssUrl, (text) => parseItchDevlogXml(text, source), signal),
-            raceProxies(source.devlogPageUrl, (html) => parseItchDevlogHtml(html, source), signal)
-        ];
-
         try {
-            const posts = await Promise.any(strategies);
+            const posts = await raceProxies(source.rssUrl, (text) => parseItchDevlogXml(text, source), signal);
             if (posts && posts.length) {
                 writeCache(itchCacheKey(game), posts);
                 return posts;
@@ -313,34 +266,19 @@
         if (!posts || !posts.length) return;
         const without = posts.filter(p => !p.thumbnail && p.itchLink);
         if (!without.length) return;
-        let enriched = 0;
         await Promise.allSettled(without.map(async (p) => {
             const thumb = await fetchItchPostThumbnail(p.itchLink, signal);
             if (thumb) {
                 p.thumbnail = thumb;
-                enriched++;
                 if (typeof onEnriched === 'function') {
                     try { onEnriched(p); } catch { /* noop */ }
                 }
             }
         }));
-        if (enriched > 0 && currentGame) {
-            try {
-                const cached = readCacheWithDates(itchCacheKey(currentGame), Infinity);
-                if (cached) {
-                    let changed = false;
-                    for (const c of cached) {
-                        const updated = posts.find(p => p.id === c.id && p.thumbnail);
-                        if (updated && !c.thumbnail) { c.thumbnail = updated.thumbnail; changed = true; }
-                    }
-                    if (changed) writeCache(itchCacheKey(currentGame), cached);
-                }
-            } catch { /* noop */ }
-        }
     }
 
     // ============================================================
-    // YOUTUBE — канал разработчика (без shorts)
+    // YOUTUBE — только канал, без shorts, превью i.ytimg.com
     // ============================================================
 
     function parseYoutubeRssForGame(xmlText, game) {
@@ -351,11 +289,9 @@
             const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
             const titleMatch = block.match(/<title>([^<]*)<\/title>/);
             const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
-            const thumbMatch = block.match(/<media:thumbnail\s+url=["']([^"']+)["']/);
             if (!videoIdMatch) return null;
             const videoId = videoIdMatch[1];
             const title = decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled');
-            // фильтр по названию игры
             const titleLower = title.toLowerCase();
             const relevant = keywords.some(kw => titleLower.includes(kw))
                 || titleLower.includes('#starveneon');
@@ -367,7 +303,7 @@
                 title,
                 author: YT_CHANNEL_NAME,
                 date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
-                thumbnail: thumbMatch ? thumbMatch[1] : `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`, // всегда i.ytimg.com
                 labels: ['type:yt-video']
             });
         }).filter(Boolean);
@@ -558,7 +494,6 @@
 
         const scrollY = window.scrollY;
 
-        // Атомарная замена без мигания
         const grid = createElement('div', 'projects-grid');
         const fragment = document.createDocumentFragment();
         posts.forEach(p => fragment.appendChild(createUpdateCard(p)));
