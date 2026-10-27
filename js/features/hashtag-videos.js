@@ -1,8 +1,10 @@
 // js/features/hashtag-videos.js
-// Хэштег #starveneon.
-// 1) Основной путь: Invidious API (inv.nadeko.net) + Piped API (api.piped.private.coffee) — они отвечают 200.
-// 2) Если по хэштегу пусто — fallback: последние видео с канала через Piped, фильтр по 'starve' или 'neon'.
-// 3) HTML-парсинг и неработающие прокси убраны полностью.
+// Стратегия:
+//  1) Пытаемся получить видео по хэштегу #starveneon через Piped (api.piped.private.coffee)
+//     и Invidious (inv.nadeko.net) — они отвечают 200.
+//  2) Если по хэштегу ничего нет — fallback: последние видео с канала,
+//     отфильтрованные по 'starve' или 'neon'.
+//  3) Если и это не сработало — показываем сообщение, но секция не пустая.
 
 (function() {
     'use strict';
@@ -15,21 +17,34 @@
     const MAX_VIDEOS = 12;
     const MIN_DURATION_SEC = 60;
 
-    // ---- Реально работающие источники (из логов) ----
-    const INVIDIOUS_INSTANCES = [
-        'https://inv.nadeko.net'
-    ];
+    // ---- Рабочие источники (из логов 200) ----
     const PIPED_INSTANCES = [
         'https://api.piped.private.coffee'
     ];
+    const INVIDIOUS_INSTANCES = [
+        'https://inv.nadeko.net'
+    ];
 
     // ---- Ключевые слова для fallback с канала ----
-    const FALLBACK_KEYWORDS = ['starve', 'neon', 'starveneon'];
+    const FALLBACK_KEYWORDS = ['starve', 'neon'];
+
+    // ============================================================
+    // УТИЛИТЫ
+    // ============================================================
 
     function isRelevant(v, keywords) {
         if (!v) return false;
         const text = ((v.title || '') + ' ' + (v.description || '')).toLowerCase();
         return keywords.some(kw => text.includes(kw));
+    }
+
+    function toNumber(value) {
+        if (typeof value === 'number' && isFinite(value)) return value;
+        if (typeof value === 'string') {
+            const n = parseInt(value, 10);
+            if (!isNaN(n)) return n;
+        }
+        return null;
     }
 
     function readCache() {
@@ -93,38 +108,7 @@
     }
 
     // ============================================================
-    // ИСТОЧНИК 1: Invidious /api/v1/hashtag/:tag
-    // ============================================================
-
-    async function fetchViaInvidiousHashtag() {
-        const promises = INVIDIOUS_INSTANCES.map(async (base) => {
-            const url = `${base}/api/v1/hashtag/${HASHTAG}`;
-            const res = await fetchWithTimeout(url);
-            const data = await res.json();
-            const videos = (Array.isArray(data) ? data : []).map(item => {
-                const videoId = item.videoId;
-                if (!videoId) return null;
-                const length = typeof item.lengthSeconds === 'number' ? item.lengthSeconds : null;
-                if (length !== null && length > 0 && length < MIN_DURATION_SEC) return null;
-                return normalizeVideo({
-                    videoId,
-                    title: item.title || '',
-                    author: item.author || '',
-                    description: item.description || ''
-                });
-            }).filter(Boolean);
-            if (!videos.length) throw new Error('empty');
-            return videos;
-        });
-        try {
-            return await Promise.any(promises);
-        } catch {
-            return [];
-        }
-    }
-
-    // ============================================================
-    // ИСТОЧНИК 2: Piped /search?q=%23starveneon&filter=videos
+    // ИСТОЧНИК 1: Piped Search (основной)
     // ============================================================
 
     async function fetchViaPipedSearch() {
@@ -132,11 +116,11 @@
             const url = `${base}/search?q=%23${HASHTAG}&filter=videos`;
             const res = await fetchWithTimeout(url);
             const data = await res.json();
-            const streams = data.items || [];
-            const videos = streams.map(item => {
+            if (!data || !Array.isArray(data.items)) throw new Error('bad response');
+            const videos = data.items.map(item => {
                 const videoId = (item.url || '').replace('/watch?v=', '');
                 if (!videoId) return null;
-                const duration = typeof item.duration === 'number' ? item.duration : null;
+                const duration = toNumber(item.duration);
                 if (duration !== null && duration > 0 && duration < MIN_DURATION_SEC) return null;
                 return normalizeVideo({
                     videoId,
@@ -156,7 +140,40 @@
     }
 
     // ============================================================
-    // FALLBACK: последние видео с канала через Piped
+    // ИСТОЧНИК 2: Invidious Hashtag (резерв)
+    // ============================================================
+
+    async function fetchViaInvidiousHashtag() {
+        const promises = INVIDIOUS_INSTANCES.map(async (base) => {
+            const url = `${base}/api/v1/hashtag/${HASHTAG}`;
+            const res = await fetchWithTimeout(url);
+            const data = await res.json();
+            // Invidious может вернуть массив или объект с полем results
+            const items = Array.isArray(data) ? data : (data.results || []);
+            const videos = items.map(item => {
+                const videoId = item.videoId;
+                if (!videoId) return null;
+                const length = toNumber(item.lengthSeconds);
+                if (length !== null && length > 0 && length < MIN_DURATION_SEC) return null;
+                return normalizeVideo({
+                    videoId,
+                    title: item.title || '',
+                    author: item.author || '',
+                    description: item.description || ''
+                });
+            }).filter(Boolean);
+            if (!videos.length) throw new Error('empty');
+            return videos;
+        });
+        try {
+            return await Promise.any(promises);
+        } catch {
+            return [];
+        }
+    }
+
+    // ============================================================
+    // FALLBACK: последние видео с канала
     // ============================================================
 
     async function fetchChannelVideosFallback() {
@@ -168,7 +185,7 @@
             const videos = streams.map(item => {
                 const videoId = (item.url || '').replace('/watch?v=', '');
                 if (!videoId) return null;
-                const duration = typeof item.duration === 'number' ? item.duration : null;
+                const duration = toNumber(item.duration);
                 if (duration !== null && duration > 0 && duration < MIN_DURATION_SEC) return null;
                 return normalizeVideo({
                     videoId,
@@ -192,26 +209,25 @@
     // ============================================================
 
     async function loadHashtagVideosFromNetwork() {
-        // 1) Пытаемся получить видео по хэштегу из двух источников параллельно
-        const [invidiousResult, pipedResult] = await Promise.allSettled([
-            fetchViaInvidiousHashtag(),
-            fetchViaPipedSearch()
+        // 1) Пытаемся получить видео по хэштегу
+        const [pipedResult, invidiousResult] = await Promise.allSettled([
+            fetchViaPipedSearch(),
+            fetchViaInvidiousHashtag()
         ]);
 
         let collected = [];
-        if (invidiousResult.status === 'fulfilled') collected = collected.concat(invidiousResult.value);
         if (pipedResult.status === 'fulfilled') collected = collected.concat(pipedResult.value);
+        if (invidiousResult.status === 'fulfilled') collected = collected.concat(invidiousResult.value);
 
         let filtered = filterVideos(collected, [HASHTAG]);
 
-        // 2) Если по хэштегу пусто — fallback на канал (ключевые слова 'starve', 'neon')
+        // 2) Если по хэштегу пусто — fallback на канал
         if (!filtered.length) {
             const channelVideos = await fetchChannelVideosFallback();
             filtered = filterVideos(channelVideos, FALLBACK_KEYWORDS);
         }
 
-        if (!filtered.length) throw new Error('No relevant videos');
-        return filtered;
+        return filtered; // может быть пустым — это нормально, отрисуем сообщение
     }
 
     // ============================================================
@@ -293,21 +309,15 @@
 
         try {
             const videos = await loadHashtagVideosFromNetwork();
-            writeCache(videos);
-            renderVideos(videos, container);
+            if (videos.length) {
+                writeCache(videos);
+                renderVideos(videos, container);
+            } else {
+                renderVideos([], container);
+            }
         } catch (e) {
-            console.warn('[HashtagVideos] Все источники недоступны:', e.message || e);
-            container.innerHTML = `
-                <div style="text-align:center;padding:20px 16px;color:var(--text-secondary);">
-                    <i class="fas fa-exclamation-triangle" style="font-size:26px;opacity:0.5;display:block;margin-bottom:8px;color:#ff9800;"></i>
-                    <p style="margin:0 0 10px;font-size:14px;">Не удалось загрузить видео</p>
-                    <button class="button small" id="hashtag-videos-retry" type="button">
-                        <i class="fas fa-sync"></i> Повторить
-                    </button>
-                </div>
-            `;
-            const retry = container.querySelector('#hashtag-videos-retry');
-            if (retry) retry.addEventListener('click', () => loadHashtagVideos(containerId, true));
+            console.warn('[HashtagVideos] Ошибка:', e.message || e);
+            renderVideos([], container);
         }
     }
 
