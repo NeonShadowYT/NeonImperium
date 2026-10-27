@@ -1,4 +1,4 @@
-// js/pages/news-feed.js – лента новостей с авто-релизами и видео с канала Neon Shadow.
+// js/pages/news-feed.js – лента новостей с авто-релизами, видео с канала Neon Shadow и постами из Itch.io devlog.
 // cacheGet/cacheSet асинхронные. Abort предыдущего запроса НЕ логируется.
 //
 // ВИДЕО С YOUTUBE (канал Neon Shadow):
@@ -8,6 +8,19 @@
 //       c) HTML страницы канала через те же прокси (парсим ytInitialData)
 //   - Первый успешный результат кешируется в localStorage на 30 минут.
 //   - При повторном визите видео отдаются мгновенно из кеша.
+//
+// ПОСТЫ ИЗ ITCH.IO DEVLOG:
+//   - Itch.io предоставляет RSS-ленту: https://{user}.itch.io/{game}/devlog.rss
+//   - Лента запрашивается через те же CORS-прокси, что и YouTube RSS.
+//   - Из ленты берутся последние 3 поста и добавляются в общую ленту.
+//   - Результат кешируется в localStorage на 30 минут.
+//
+// GAMEJOLT:
+//   - Официального API или RSS для devlog-постов нет.
+//   - Данные загружаются динамически, поэтому простой парсинг HTML не работает.
+//   - Для добавления постов GameJolt требуется внешний сервис (например, RSS.app)
+//     или ручное добавление. В данной версии автоматическое получение не реализовано.
+
 (function() {
     const {
         cacheGet, cacheSet, cacheRemoveByPrefix,
@@ -22,13 +35,17 @@
     const CACHE_TTL = 5 * 60 * 1000;
     const VIDEOS_CACHE_KEY = 'yt_videos_cache_neonshadow';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
+    const ITCH_POSTS_CACHE_KEY = 'itch_devlog_posts_cache';
+    const ITCH_POSTS_CACHE_TTL = 30 * 60 * 1000;
     const SOURCE_TIMEOUT = 15000;
     const VIDEO_PROXY_TIMEOUT = 12000;
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 1000;
     const MAX_DISPLAY_ITEMS = 9;
     const MAX_VIDEOS = 6;
+    const MAX_ITCH_POSTS = 3; // берём только последние 3 поста
 
+    // ---- GitHub Releases ----
     const RELEASE_SOURCES = [
         { owner: 'NeonShadowYT', repo: 'WorldGenerator', name: 'WorldGenerator', icon: 'images/tool-world-generator.webp' },
         { owner: 'NeonShadowYT', repo: 'IconCreator', name: 'IconCreator', icon: 'images/tool-icon-creator.webp' }
@@ -40,16 +57,23 @@
     const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`;
     const YT_CHANNEL_URL = `https://www.youtube.com/channel/${YT_CHANNEL_ID}/videos`;
 
+    // ---- Itch.io Devlog ----
+    const ITCH_DEVLOG_SOURCES = [
+        {
+            name: 'Starve Neon',
+            rssUrl: 'https://neon-shadow.itch.io/starve-neon/devlog.rss',
+            // Страница devlog для формирования ссылки, если в RSS её нет
+            devlogPageUrl: 'https://neon-shadow.itch.io/starve-neon/devlog'
+        }
+        // При необходимости можно добавить другие игры
+    ];
+
     // CORS-прокси. Все запускаются параллельно, побеждает самый быстрый успешный.
     // ВАЖНО: домены должны быть разрешены в connect-src CSP.
     const VIDEO_PROXIES = [
-        // allorigins — обычно самый стабильный
         (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        // codetabs — резерв
         (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-        // corsproxy.io — иногда работает без ключа
         (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-        // everyorigin — ещё один запасной
         (url) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(url)}`
     ];
 
@@ -78,6 +102,7 @@
             case 'loadModulesError': return 'Ошибка загрузки модулей';
             case 'stream': return 'Стрим';
             case 'viewers': return 'зрителей';
+            case 'readMore': return 'Читать далее';
             default: return key;
         }
     }
@@ -100,7 +125,7 @@
         }
         return {
             type: item.type || 'post',
-            id: item.id || item.number || item.videoId || item.channel || '',
+            id: item.id || item.number || item.videoId || item.channel || item.link || '',
             title: item.title || 'Без названия',
             author: item.author || 'Unknown',
             date: date,
@@ -111,7 +136,10 @@
             videoData: item.videoData || null,
             twitchData: item.twitchData || null,
             releaseUrl: item.releaseUrl || null,
-            releaseData: item.releaseData || null
+            releaseData: item.releaseData || null,
+            // Для постов Itch.io
+            itchLink: item.itchLink || null,
+            itchSource: item.itchSource || null
         };
     }
 
@@ -123,6 +151,7 @@
         if (item.type === 'release' && item.releaseUrl) return item.releaseUrl;
         if (item.type === 'video') return `https://www.youtube.com/watch?v=${item.id}`;
         if (item.type === 'twitch') return `https://www.twitch.tv/${item.id}`;
+        if (item.type === 'itch-post' && item.itchLink) return item.itchLink;
         if (item.type === 'post') return `${location.origin}${location.pathname}?post=${item.id}`;
         return '#';
     }
@@ -181,6 +210,35 @@
     }
 
     // ============================================================
+    // Посты Itch.io Devlog — кеш
+    // ============================================================
+
+    function readItchPostsCache() {
+        try {
+            const raw = localStorage.getItem(ITCH_POSTS_CACHE_KEY);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            if (!data || !data.timestamp || !Array.isArray(data.posts)) return null;
+            if (Date.now() - data.timestamp > ITCH_POSTS_CACHE_TTL) {
+                localStorage.removeItem(ITCH_POSTS_CACHE_KEY);
+                return null;
+            }
+            return normalizeItems(data.posts);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function writeItchPostsCache(posts) {
+        try {
+            localStorage.setItem(ITCH_POSTS_CACHE_KEY, JSON.stringify({
+                timestamp: Date.now(),
+                posts
+            }));
+        } catch (e) { /* noop */ }
+    }
+
+    // ============================================================
     // Видео — парсинг RSS XML
     // ============================================================
 
@@ -216,6 +274,96 @@
     }
 
     // ============================================================
+    // Itch.io Devlog — парсинг RSS XML
+    // ============================================================
+
+    function parseItchDevlogXml(xmlText, source) {
+        if (!xmlText || typeof xmlText !== 'string') return [];
+        // В RSS Itch.io каждый пост обёрнут в <item>
+        const itemBlocks = xmlText.split('<item>').slice(1);
+        return itemBlocks.slice(0, MAX_ITCH_POSTS).map(block => {
+            const titleMatch = block.match(/<title>([^<]*)<\/title>/);
+            const linkMatch = block.match(/<link>([^<]*)<\/link>/);
+            const pubDateMatch = block.match(/<pubDate>([^<]*)<\/pubDate>/);
+            const descriptionMatch = block.match(/<description>([\s\S]*?)<\/description>/);
+
+            const title = titleMatch ? decodeXmlEntities(titleMatch[1]) : 'Без названия';
+            const link = linkMatch ? linkMatch[1] : (source.devlogPageUrl || '#');
+            let date = pubDateMatch ? new Date(pubDateMatch[1]) : new Date();
+            if (isNaN(date.getTime())) date = new Date();
+
+            let description = '';
+            if (descriptionMatch) {
+                // Описание может содержать HTML, извлекаем текст для превью
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = descriptionMatch[1];
+                description = tempDiv.textContent || tempDiv.innerText || '';
+            }
+
+            return normalizeItem({
+                type: 'itch-post',
+                id: `itch-${link}`, // используем ссылку как уникальный ID
+                title: title,
+                author: source.name,
+                date: date,
+                body: description, // используем как краткое описание
+                itchLink: link,
+                itchSource: source.name,
+                labels: ['type:itch-post']
+            });
+        }).filter(p => p);
+    }
+
+    // ============================================================
+    // Itch.io Devlog — запрос через прокси
+    // ============================================================
+
+    async function fetchItchDevlogPosts(signal) {
+        const cached = readItchPostsCache();
+        if (cached && cached.length) {
+            console.log(`[NewsFeed] Посты Itch.io из кеша: ${cached.length}`);
+            return cached;
+        }
+
+        const allPosts = [];
+
+        for (const source of ITCH_DEVLOG_SOURCES) {
+            try {
+                const promises = VIDEO_PROXIES.map(proxyFn =>
+                    fetchViaProxy(proxyFn, source.rssUrl, signal)
+                        .then(text => {
+                            const posts = parseItchDevlogXml(text, source);
+                            if (!posts.length) throw new Error('no posts');
+                            return posts;
+                        })
+                );
+
+                const posts = await Promise.any(promises);
+                if (posts && posts.length) {
+                    allPosts.push(...posts);
+                }
+            } catch (e) {
+                if (isAborted(e, signal)) {
+                    // Если запрос был прерван, прекращаем обработку
+                    return [];
+                }
+                console.warn(`[NewsFeed] Не удалось загрузить Itch.io devlog для ${source.name}:`, e.message || e);
+            }
+        }
+
+        // Сортируем по дате (новые сначала) и берём только MAX_ITCH_POSTS
+        allPosts.sort((a, b) => b.date - a.date);
+        const limited = allPosts.slice(0, MAX_ITCH_POSTS);
+
+        if (limited.length) {
+            writeItchPostsCache(limited);
+            console.log(`[NewsFeed] Посты Itch.io из сети: ${limited.length}`);
+        }
+
+        return limited;
+    }
+
+    // ============================================================
     // Видео — парсинг HTML канала (ytInitialData)
     // ============================================================
 
@@ -248,7 +396,6 @@
             return;
         }
 
-        // Классические videoRenderer / gridVideoRenderer / compactVideoRenderer
         const classic = obj.videoRenderer || obj.gridVideoRenderer || obj.compactVideoRenderer;
         if (classic && classic.videoId && !seen.has(classic.videoId)) {
             seen.add(classic.videoId);
@@ -269,7 +416,6 @@
             }));
         }
 
-        // Новый lockupViewModel
         if (obj.lockupViewModel) {
             const l = obj.lockupViewModel;
             const videoId = l.contentId;
@@ -295,7 +441,6 @@
             }
         }
 
-        // richItemRenderer — обёртка
         if (obj.richItemRenderer?.content) {
             collectVideosFromData(obj.richItemRenderer.content, out, seen);
         }
@@ -409,14 +554,12 @@
     // ============================================================
 
     async function loadVideos(signal) {
-        // 1. Кеш
         const cached = readVideosCache();
         if (cached && cached.length) {
             console.log(`[NewsFeed] Видео из кеша: ${cached.length}`);
             return cached;
         }
 
-        // 2. Параллельный опрос трёх стратегий
         const strategies = [
             fetchVideosViaRss2Json(signal).catch(e => {
                 if (isAborted(e, signal)) throw e;
@@ -652,15 +795,23 @@
                 },
                 abortController.signal
             );
+            // НОВОЕ: загрузка постов Itch.io devlog
+            const itchPostsPromise = fetchItchDevlogPosts(abortController.signal);
 
-            const results = await Promise.allSettled([postsPromise, videosPromise, twitchPromise, releasesPromise]);
+            const results = await Promise.allSettled([
+                postsPromise,
+                videosPromise,
+                twitchPromise,
+                releasesPromise,
+                itchPostsPromise
+            ]);
 
             let allItems = [];
             results.forEach((result, index) => {
                 if (result.status === 'fulfilled') {
                     allItems = allItems.concat(result.value);
                 } else {
-                    const source = ['посты', 'видео', 'стримы', 'релизы'][index];
+                    const source = ['посты', 'видео', 'стримы', 'релизы', 'Itch.io devlog'][index];
                     if (!isAborted(result.reason, abortController.signal)) {
                         console.warn(`[NewsFeed] Не удалось загрузить ${source}:`, result.reason);
                     }
@@ -842,9 +993,12 @@
         if (item.type === 'release' && item.releaseData?.tag) {
             meta.innerHTML += sanitizeHtml(` · <i class="fas fa-tag"></i> ${escapeHtml(item.releaseData.tag)}`);
         }
+        if (item.type === 'itch-post' && item.itchSource) {
+            meta.innerHTML += sanitizeHtml(` · <i class="fab fa-itch-io"></i> ${escapeHtml(item.itchSource)}`);
+        }
         card.appendChild(meta);
 
-        if ((item.type === 'post' || item.type === 'release') && item.body) {
+        if ((item.type === 'post' || item.type === 'release' || item.type === 'itch-post') && item.body) {
             const summary = window.GithubCore.extractSummary(item.body) || item.body.replace(/\n/g, ' ').substring(0, 120) + '…';
             const preview = createElement('p', 'text-secondary', {
                 fontSize: '13px', overflow: 'hidden', display: '-webkit-box',
@@ -852,6 +1006,17 @@
             });
             preview.textContent = summary;
             card.appendChild(preview);
+        }
+
+        // Ссылка для Itch.io поста
+        if (item.type === 'itch-post' && item.itchLink) {
+            const readMore = createElement('a', 'button small', {
+                marginTop: '8px', display: 'inline-flex', alignItems: 'center',
+                justifyContent: 'center', gap: '6px', width: '100%'
+            }, { href: item.itchLink, target: '_blank', rel: 'noopener noreferrer' });
+            readMore.innerHTML = sanitizeHtml(`<i class="fas fa-external-link-alt" aria-hidden="true"></i> <span>${t('readMore')}</span>`);
+            readMore.addEventListener('click', (e) => e.stopPropagation());
+            card.appendChild(readMore);
         }
 
         if (item.type === 'release' && item.releaseUrl) {
@@ -865,7 +1030,7 @@
         }
 
         const currentUser = getCurrentUser();
-        if (currentUser && hasScope('gist') && item.type !== 'release') {
+        if (currentUser && hasScope('gist') && item.type !== 'release' && item.type !== 'itch-post') {
             const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: t('addToFavorites') });
             favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
             favBtn.addEventListener('click', async (e) => {
@@ -920,6 +1085,8 @@
                 });
             } else if (item.type === 'release' && item.releaseUrl) {
                 openExternal(item.releaseUrl);
+            } else if (item.type === 'itch-post' && item.itchLink) {
+                openExternal(item.itchLink);
             } else {
                 openExternal(buildWatchUrl(item));
             }
@@ -994,8 +1161,11 @@
         if (!container) return;
         container.innerHTML = '';
         container.appendChild(renderSkeleton(6));
-        // При ручном обновлении сбрасываем и кеш видео, чтобы получить свежие данные
-        try { localStorage.removeItem(VIDEOS_CACHE_KEY); } catch { /* noop */ }
+        // При ручном обновлении сбрасываем и кеш видео, и кеш постов Itch.io
+        try {
+            localStorage.removeItem(VIDEOS_CACHE_KEY);
+            localStorage.removeItem(ITCH_POSTS_CACHE_KEY);
+        } catch { /* noop */ }
         fetchNewsFeed({
             forceRefresh: true,
             onItem: (item) => appendItemToGrid(item)
