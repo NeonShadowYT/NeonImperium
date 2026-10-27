@@ -1,46 +1,35 @@
 // js/features/hashtag-videos.js
 // Хэштег #starveneon.
-// Основной источник: прямой парсинг ytInitialData через corsfix.com (единственный рабочий прокси в логах).
-// Резерв 1: Invidious /api/v1/hashtag/:tag (inv.nadeko.net) — с мягким фильтром.
-// Резерв 2: Piped /search?q=%23starveneon&filter=videos (api.piped.private.coffee).
-// Фильтр: видео считается релевантным, если в заголовке ИЛИ описании есть 'starveneon' (без #).
+// 1) Основной путь: Invidious API (inv.nadeko.net) + Piped API (api.piped.private.coffee) — они отвечают 200.
+// 2) Если по хэштегу пусто — fallback: последние видео с канала через Piped, фильтр по 'starve' или 'neon'.
+// 3) HTML-парсинг и неработающие прокси убраны полностью.
 
 (function() {
     'use strict';
 
     const HASHTAG = 'starveneon';
-    const YT_HASHTAG_URL = `https://www.youtube.com/hashtag/${HASHTAG}`;
+    const YT_CHANNEL_ID = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
+    const YT_CHANNEL_NAME = 'Neon Shadow';
     const CACHE_KEY = `hashtag_videos_cache_v9_${HASHTAG}`;
     const CACHE_TTL = 30 * 60 * 1000;
     const MAX_VIDEOS = 12;
     const MIN_DURATION_SEC = 60;
-    const REQUEST_TIMEOUT = 20000;
 
-    // ---- Прокси, которые реально работают для HTML ----
-    // corsfix.com — единственный, кто в логах стабильно отдавал 200 на страницу хэштега.
-    const HTML_PROXIES = [
-        (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`, // резерв (требует CSP)
-        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,   // резерв (rate-limit)
+    // ---- Реально работающие источники (из логов) ----
+    const INVIDIOUS_INSTANCES = [
+        'https://inv.nadeko.net'
+    ];
+    const PIPED_INSTANCES = [
+        'https://api.piped.private.coffee'
     ];
 
-    function parseDurationToSec(text) {
-        if (!text) return 0;
-        const parts = String(text).split(':').map(Number);
-        if (parts.some(isNaN)) return 0;
-        if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-        if (parts.length === 2) return parts[0] * 60 + parts[1];
-        return parts[0] || 0;
-    }
+    // ---- Ключевые слова для fallback с канала ----
+    const FALLBACK_KEYWORDS = ['starve', 'neon', 'starveneon'];
 
-    /**
-     * Мягкий фильтр: ищем 'starveneon' в заголовке или описании.
-     * Не требуем '#', так как YouTube в ytInitialData часто убирает решётку.
-     */
-    function isRelevantVideo(v) {
+    function isRelevant(v, keywords) {
         if (!v) return false;
         const text = ((v.title || '') + ' ' + (v.description || '')).toLowerCase();
-        return text.includes('starveneon');
+        return keywords.some(kw => text.includes(kw));
     }
 
     function readCache() {
@@ -63,22 +52,12 @@
         } catch { /* noop */ }
     }
 
-    function fetchWithTimeout(url, signal, timeout = REQUEST_TIMEOUT) {
+    function fetchWithTimeout(url, timeout = 20000) {
         return new Promise((resolve, reject) => {
             const controller = new AbortController();
             const timer = setTimeout(() => {
                 try { controller.abort(new Error('timeout')); } catch { controller.abort(); }
             }, timeout);
-            if (signal) {
-                if (signal.aborted) {
-                    clearTimeout(timer);
-                    reject(new DOMException('Aborted', 'AbortError'));
-                    return;
-                }
-                signal.addEventListener('abort', () => {
-                    try { controller.abort(); } catch { /* noop */ }
-                }, { once: true });
-            }
             fetch(url, { signal: controller.signal })
                 .then(res => {
                     clearTimeout(timer);
@@ -94,18 +73,18 @@
         return {
             videoId: v.videoId,
             title: v.title || '',
-            author: v.author || '',
+            author: v.author || YT_CHANNEL_NAME,
             description: v.description || '',
             thumbnail: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`
         };
     }
 
-    function filterRelevant(videos) {
+    function filterVideos(videos, keywords) {
         const seen = new Set();
         const out = [];
         for (const v of videos) {
             if (!v || !v.videoId || seen.has(v.videoId)) continue;
-            if (!isRelevantVideo(v)) continue;
+            if (!isRelevant(v, keywords)) continue;
             seen.add(v.videoId);
             out.push(v);
             if (out.length >= MAX_VIDEOS) break;
@@ -114,131 +93,13 @@
     }
 
     // ============================================================
-    // ПАРСИНГ ytInitialData (основной путь)
+    // ИСТОЧНИК 1: Invidious /api/v1/hashtag/:tag
     // ============================================================
 
-    function extractYtInitialData(html) {
-        const patterns = [
-            /var ytInitialData = ({[\s\S]+?});/,
-            /window\["ytInitialData"\]\s*=\s*({[\s\S]+?});/,
-            /ytInitialData\s*=\s*({[\s\S]+?});/
-        ];
-        for (const re of patterns) {
-            const m = html.match(re);
-            if (m && m[1]) {
-                try { return JSON.parse(m[1]); }
-                catch {
-                    const end = m[1].lastIndexOf('}');
-                    if (end !== -1) {
-                        try { return JSON.parse(m[1].slice(0, end + 1)); } catch { /* noop */ }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    function collectFromData(obj, out, seen) {
-        if (!obj || typeof obj !== 'object') return;
-        if (Array.isArray(obj)) { obj.forEach(i => collectFromData(i, out, seen)); return; }
-        if (out.length >= MAX_VIDEOS * 2) return;
-
-        const classic = obj.videoRenderer || obj.gridVideoRenderer || obj.compactVideoRenderer;
-        if (classic && classic.videoId && !seen.has(classic.videoId)) {
-            const durationSec = parseDurationToSec(
-                classic.lengthText?.simpleText ||
-                classic.lengthText?.runs?.[0]?.text ||
-                ''
-            );
-            if (durationSec > 0 && durationSec < MIN_DURATION_SEC) return;
-            seen.add(classic.videoId);
-            let title = '';
-            if (classic.title?.runs?.[0]) title = classic.title.runs[0].text;
-            else if (classic.title?.simpleText) title = classic.title.simpleText;
-            let author = '';
-            if (classic.ownerText?.runs?.[0]) author = classic.ownerText.runs[0].text;
-            else if (classic.longBylineText?.runs?.[0]) author = classic.longBylineText.runs[0].text;
-            let description = '';
-            if (classic.descriptionSnippet?.runs?.[0]) description = classic.descriptionSnippet.runs[0].text;
-            out.push(normalizeVideo({ videoId: classic.videoId, title, author, description }));
-        }
-
-        // Новый формат lockupViewModel (Shorts отсекаются по длительности)
-        if (obj.lockupViewModel) {
-            const l = obj.lockupViewModel;
-            const videoId = l.contentId;
-            if (videoId && !seen.has(videoId)) {
-                seen.add(videoId);
-                let title = '';
-                if (l.metadata?.lockupMetadataViewModel?.title?.content) {
-                    title = l.metadata.lockupMetadataViewModel.title.content;
-                }
-                let description = '';
-                if (l.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows) {
-                    const rows = l.metadata.lockupMetadataViewModel.metadata.contentMetadataViewModel.metadataRows;
-                    for (const row of rows) {
-                        if (row.metadataParts) {
-                            for (const part of row.metadataParts) {
-                                if (part.text?.content) description += part.text.content + ' ';
-                            }
-                        }
-                    }
-                }
-                out.push(normalizeVideo({ videoId, title, author: '', description }));
-            }
-        }
-
-        if (obj.richItemRenderer?.content) collectFromData(obj.richItemRenderer.content, out, seen);
-
-        for (const key of Object.keys(obj)) {
-            if (out.length >= MAX_VIDEOS * 2) break;
-            if (key === 'shortsLockupViewModel') continue;
-            collectFromData(obj[key], out, seen);
-        }
-    }
-
-    function parseHashtagHtml(html) {
-        const data = extractYtInitialData(html);
-        if (!data) return null;
-        const out = [];
-        const seen = new Set();
-        collectFromData(data, out, seen);
-        return filterRelevant(out);
-    }
-
-    async function fetchViaHtmlProxy(proxyFn, signal) {
-        const url = proxyFn(YT_HASHTAG_URL);
-        const res = await fetchWithTimeout(url, signal);
-        let text = await res.text();
-
-        // corsfix.com может вернуть JSON-обёртку (contents) для некоторых запросов
-        if (text.trim().startsWith('{')) {
-            try {
-                const json = JSON.parse(text);
-                if (typeof json.contents === 'string') text = json.contents;
-                else if (json.error) throw new Error('proxy error: ' + json.error);
-            } catch (e) {
-                if (e.message.startsWith('proxy error')) throw e;
-            }
-        }
-
-        if (!text || text.length < 1000) throw new Error('too short');
-        const videos = parseHashtagHtml(text);
-        if (!videos || !videos.length) throw new Error('no relevant videos');
-        return videos;
-    }
-
-    // ============================================================
-    // INVIDIOUS (резерв)
-    // ============================================================
-
-    async function fetchViaInvidiousHashtag(signal) {
-        const instances = [
-            'https://inv.nadeko.net', // в логах отвечал 200
-        ];
-        const promises = instances.map(async (base) => {
+    async function fetchViaInvidiousHashtag() {
+        const promises = INVIDIOUS_INSTANCES.map(async (base) => {
             const url = `${base}/api/v1/hashtag/${HASHTAG}`;
-            const res = await fetchWithTimeout(url, signal);
+            const res = await fetchWithTimeout(url);
             const data = await res.json();
             const videos = (Array.isArray(data) ? data : []).map(item => {
                 const videoId = item.videoId;
@@ -258,22 +119,18 @@
         try {
             return await Promise.any(promises);
         } catch {
-            throw new Error('all invidious hashtag failed');
+            return [];
         }
     }
 
     // ============================================================
-    // PIPED (резерв)
+    // ИСТОЧНИК 2: Piped /search?q=%23starveneon&filter=videos
     // ============================================================
 
-    async function fetchViaPipedSearch(signal) {
-        const instances = [
-            'https://api.piped.private.coffee', // в логах отвечал 200
-            'https://pipedapi.leptons.xyz',
-        ];
-        const promises = instances.map(async (base) => {
+    async function fetchViaPipedSearch() {
+        const promises = PIPED_INSTANCES.map(async (base) => {
             const url = `${base}/search?q=%23${HASHTAG}&filter=videos`;
-            const res = await fetchWithTimeout(url, signal);
+            const res = await fetchWithTimeout(url);
             const data = await res.json();
             const streams = data.items || [];
             const videos = streams.map(item => {
@@ -294,7 +151,39 @@
         try {
             return await Promise.any(promises);
         } catch {
-            throw new Error('all piped search failed');
+            return [];
+        }
+    }
+
+    // ============================================================
+    // FALLBACK: последние видео с канала через Piped
+    // ============================================================
+
+    async function fetchChannelVideosFallback() {
+        const promises = PIPED_INSTANCES.map(async (base) => {
+            const url = `${base}/channel/${YT_CHANNEL_ID}`;
+            const res = await fetchWithTimeout(url);
+            const data = await res.json();
+            const streams = data.relatedStreams || data.items || [];
+            const videos = streams.map(item => {
+                const videoId = (item.url || '').replace('/watch?v=', '');
+                if (!videoId) return null;
+                const duration = typeof item.duration === 'number' ? item.duration : null;
+                if (duration !== null && duration > 0 && duration < MIN_DURATION_SEC) return null;
+                return normalizeVideo({
+                    videoId,
+                    title: item.title || '',
+                    author: item.uploaderName || YT_CHANNEL_NAME,
+                    description: item.shortDescription || ''
+                });
+            }).filter(Boolean);
+            if (!videos.length) throw new Error('empty');
+            return videos;
+        });
+        try {
+            return await Promise.any(promises);
+        } catch {
+            return [];
         }
     }
 
@@ -302,27 +191,26 @@
     // АГРЕГАЦИЯ
     // ============================================================
 
-    async function loadHashtagVideosFromNetwork(signal) {
-        // Запускаем все стратегии параллельно, собираем ВСЕ результаты.
-        const strategies = [
-            ...HTML_PROXIES.map(p => fetchViaHtmlProxy(p, signal)),
-            fetchViaInvidiousHashtag(signal),
-            fetchViaPipedSearch(signal)
-        ];
+    async function loadHashtagVideosFromNetwork() {
+        // 1) Пытаемся получить видео по хэштегу из двух источников параллельно
+        const [invidiousResult, pipedResult] = await Promise.allSettled([
+            fetchViaInvidiousHashtag(),
+            fetchViaPipedSearch()
+        ]);
 
-        const results = await Promise.allSettled(strategies);
-        const collected = [];
-        for (const r of results) {
-            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
-                collected.push(...r.value);
-            }
+        let collected = [];
+        if (invidiousResult.status === 'fulfilled') collected = collected.concat(invidiousResult.value);
+        if (pipedResult.status === 'fulfilled') collected = collected.concat(pipedResult.value);
+
+        let filtered = filterVideos(collected, [HASHTAG]);
+
+        // 2) Если по хэштегу пусто — fallback на канал (ключевые слова 'starve', 'neon')
+        if (!filtered.length) {
+            const channelVideos = await fetchChannelVideosFallback();
+            filtered = filterVideos(channelVideos, FALLBACK_KEYWORDS);
         }
 
-        if (!collected.length) throw new Error('No strategy returned videos');
-
-        const filtered = filterRelevant(collected);
         if (!filtered.length) throw new Error('No relevant videos');
-
         return filtered;
     }
 
@@ -337,7 +225,7 @@
             container.innerHTML = `
                 <div style="text-align:center;padding:20px 16px;color:var(--text-secondary);font-size:14px;">
                     <i class="fas fa-video" style="font-size:26px;opacity:0.5;display:block;margin-bottom:8px;"></i>
-                    Видео по хештегу #${HASHTAG} не найдены
+                    Видео по запросу не найдены
                 </div>
             `;
             return;
@@ -396,30 +284,23 @@
         if (!forceRefresh) {
             const cached = readCache();
             if (cached && cached.length) {
-                const filtered = filterRelevant(cached);
-                if (filtered.length) {
-                    renderVideos(filtered, container);
-                    return;
-                }
+                renderVideos(cached, container);
+                return;
             }
         }
 
-        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка видео по #${HASHTAG}...</p></div>`;
+        container.innerHTML = `<div class="loading-spinner"><i class="fas fa-circle-notch fa-spin"></i><p>Загрузка видео...</p></div>`;
 
         try {
-            const videos = await loadHashtagVideosFromNetwork(null);
-            if (videos && videos.length) {
-                writeCache(videos);
-                renderVideos(videos, container);
-                return;
-            }
-            renderVideos([], container);
+            const videos = await loadHashtagVideosFromNetwork();
+            writeCache(videos);
+            renderVideos(videos, container);
         } catch (e) {
-            console.warn('[HashtagVideos] Все стратегии недоступны:', e && e.message ? e.message : e);
+            console.warn('[HashtagVideos] Все источники недоступны:', e.message || e);
             container.innerHTML = `
                 <div style="text-align:center;padding:20px 16px;color:var(--text-secondary);">
                     <i class="fas fa-exclamation-triangle" style="font-size:26px;opacity:0.5;display:block;margin-bottom:8px;color:#ff9800;"></i>
-                    <p style="margin:0 0 10px;font-size:14px;">Не удалось загрузить видео по #${HASHTAG}</p>
+                    <p style="margin:0 0 10px;font-size:14px;">Не удалось загрузить видео</p>
                     <button class="button small" id="hashtag-videos-retry" type="button">
                         <i class="fas fa-sync"></i> Повторить
                     </button>
