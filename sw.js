@@ -315,7 +315,7 @@ self.addEventListener('fetch', event => {
 
     // 3. RSS.
     if (isRss2Json) {
-        event.respondWith(networkFirstWithTTL(req, RSS_CACHE, RSS_CACHE_MAX_AGE));
+        // Не перехватываем — Service Worker ломал запросы (NS_ERROR_INTERCEPTION_FAILED)
         return;
     }
 

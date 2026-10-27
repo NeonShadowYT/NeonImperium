@@ -195,12 +195,9 @@
     const MARKED_CDNS = [
         {
             src: 'https://cdn.jsdelivr.net/npm/marked@18.1.0/lib/marked.umd.js',
-            integrity: 'sha384-IvVdUXkhyoD0shbjhiiOnuiTbervTaB0VJcnEcg3shUAMVOOF6lKj4ozJrCwvz6s',
             crossOrigin: 'anonymous'
         },
-        {
-            src: 'https://unpkg.com/marked@18.1.0/lib/marked.umd.js'
-        }
+        { src: 'https://unpkg.com/marked@18.1.0/lib/marked.umd.js' }
     ];
 
     async function ensureMarked() {

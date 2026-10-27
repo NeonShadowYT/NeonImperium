@@ -1,8 +1,5 @@
-// js/pages/game-updates.js — обновления игры (GitHub issues + itch.io devlog).
-//
-// Даты принудительно нормализуются при чтении из кэша.
-// itch.io использует тот же улучшенный парсер превью, что и news-feed.
-// SWR: кэш показывается мгновенно, рефреш в фоне.
+// js/pages/game-updates.js — обновления игры (GitHub + itch.io + YouTube-канал разработчика).
+// YouTube: только видео с канала, релевантные игре, без shorts.
 
 (function() {
     'use strict';
@@ -21,8 +18,19 @@
     let backgroundRefreshInFlight = false;
 
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
+    const YT_CACHE_TTL = 30 * 60 * 1000;
     const REQUEST_TIMEOUT = 12000;
     const MAX_ITCH_POSTS = 3;
+    const MAX_YT_VIDEOS = 3;
+    const MIN_SHORT_DURATION = 60;
+
+    const YT_CHANNEL_ID = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
+    const YT_CHANNEL_NAME = 'Neon Shadow';
+    const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`;
+
+    const GAME_KEYWORDS = {
+        'starve-neon': ['starve neon', 'starveneon', 'starve-neon']
+    };
 
     const ITCH_DEVLOG_SOURCES = {
         'starve-neon': {
@@ -47,9 +55,6 @@
         (u) => `https://corsproxy.org/?${encodeURIComponent(u)}`
     ];
 
-    const RSS2JSON = (rssUrl) =>
-        `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
-
     function t(key) {
         if (window.I18n && typeof window.I18n.translate === 'function') {
             const v = window.I18n.translate(key);
@@ -58,7 +63,8 @@
         const map = {
             loading: 'Загрузка...', noUpdates: 'Нет обновлений',
             updatesTitle: 'Обновления', addUpdate: 'Добавить обновление',
-            updatesLoadError: 'Ошибка загрузки обновлений', readMore: 'Читать далее'
+            updatesLoadError: 'Ошибка загрузки обновлений', readMore: 'Читать далее',
+            watch: 'Смотреть'
         };
         return map[key] || key;
     }
@@ -76,7 +82,6 @@
             .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'");
     }
 
-    // КРИТИЧНО: нормализуем дату после JSON.parse
     function normalizeDate(d) {
         if (d instanceof Date && !isNaN(d.getTime())) return d;
         const nd = new Date(d);
@@ -87,28 +92,27 @@
         return { ...p, date: normalizeDate(p.date) };
     }
 
-    // ---- Кэш itch.io ----
-    function itchCacheKey(game) { return `itch_posts_updates_v3_${game}`; }
+    // ---- Кэш ----
+    function itchCacheKey(game) { return `itch_posts_updates_v4_${game}`; }
+    function ytCacheKey(game) { return `yt_updates_v4_${game}`; }
 
-    function readItchCache(game) {
+    function readCacheWithDates(key, ttl) {
         try {
-            const raw = localStorage.getItem(itchCacheKey(game));
+            const raw = localStorage.getItem(key);
             if (!raw) return null;
             const data = JSON.parse(raw);
             if (!data || !data.timestamp || !Array.isArray(data.items)) return null;
-            if (Date.now() - data.timestamp > ITCH_CACHE_TTL) {
-                localStorage.removeItem(itchCacheKey(game));
+            if (Date.now() - data.timestamp > ttl) {
+                localStorage.removeItem(key);
                 return null;
             }
             return data.items.map(normalizePost);
         } catch { return null; }
     }
 
-    function writeItchCache(game, items) {
+    function writeCache(key, items) {
         try {
-            localStorage.setItem(itchCacheKey(game), JSON.stringify({
-                timestamp: Date.now(), items
-            }));
+            localStorage.setItem(key, JSON.stringify({ timestamp: Date.now(), items }));
         } catch { /* noop */ }
     }
 
@@ -166,15 +170,34 @@
         return await Promise.any(promises);
     }
 
-    // ---- Парсеры itch.io ----
-    function extractItchThumbnail(rawHtml, source) {
-        if (!rawHtml) return null;
-        const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
-        if (imgMatch) {
-            let url = imgMatch[1];
-            if (url.startsWith('//')) url = 'https:' + url;
-            else if (url.startsWith('/')) url = 'https://img.itch.zone' + url;
-            return url;
+    // ============================================================
+    // ITCH.IO
+    // ============================================================
+
+    function normalizeItchUrl(url) {
+        if (!url) return null;
+        url = url.trim();
+        if (url.startsWith('//')) return 'https:' + url;
+        if (url.startsWith('/')) return 'https://img.itch.zone' + url;
+        return url;
+    }
+
+    function extractItchThumbnail(block) {
+        let m = block.match(/<media:content[^>]+url=["']([^"']+)["']/i);
+        if (m) return normalizeItchUrl(m[1]);
+        m = block.match(/<media:thumbnail[^>]+url=["']([^"']+)["']/i);
+        if (m) return normalizeItchUrl(m[1]);
+        m = block.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]*type=["']image[^"']*["']/i);
+        if (m) return normalizeItchUrl(m[1]);
+        const descMatch = block.match(/<description>([\s\S]*?)<\/description>/);
+        if (descMatch) {
+            const imgMatch = descMatch[1].match(/<img[^>]+src=["']([^"']+)["']/i);
+            if (imgMatch) return normalizeItchUrl(imgMatch[1]);
+        }
+        const contentMatch = block.match(/<content:encoded>([\s\S]*?)<\/content:encoded>/);
+        if (contentMatch) {
+            const imgMatch = contentMatch[1].match(/<img[^>]+src=["']([^"']+)["']/i);
+            if (imgMatch) return normalizeItchUrl(imgMatch[1]);
         }
         return null;
     }
@@ -194,20 +217,17 @@
             if (isNaN(date.getTime())) date = new Date();
 
             let description = '';
-            let thumbnail = null;
             if (descriptionMatch) {
-                const rawHtml = descriptionMatch[1];
                 const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = rawHtml;
+                tempDiv.innerHTML = descriptionMatch[1];
                 description = (tempDiv.textContent || tempDiv.innerText || '').trim();
-                thumbnail = extractItchThumbnail(rawHtml, source);
             }
 
             return normalizePost({
                 type: 'itch-post',
                 id: `itch-${link}`,
                 title, author: source.name, date, body: description,
-                thumbnail,
+                thumbnail: extractItchThumbnail(block),
                 itchLink: link, itchSource: source.name,
                 labels: ['type:itch-post']
             });
@@ -227,7 +247,6 @@
                 const linkEl = el.querySelector('a[href*="/devlog/"]') || el.querySelector('a');
                 const dateEl = el.querySelector('time, .post_date, .date');
                 const imgEl = el.querySelector('img');
-
                 const title = titleEl ? titleEl.textContent.trim() : 'Пост';
                 const link = linkEl ? linkEl.href : source.devlogPageUrl;
                 let date = new Date();
@@ -235,12 +254,11 @@
                     const parsed = new Date(dateEl.getAttribute('datetime') || dateEl.textContent);
                     if (!isNaN(parsed.getTime())) date = parsed;
                 }
-                const thumbnail = imgEl ? imgEl.src : null;
-
                 return normalizePost({
                     type: 'itch-post',
                     id: `itch-html-${link}`,
-                    title, author: source.name, date, body: '', thumbnail,
+                    title, author: source.name, date, body: '',
+                    thumbnail: imgEl ? imgEl.src : null,
                     itchLink: link, itchSource: source.name,
                     labels: ['type:itch-post']
                 });
@@ -248,62 +266,30 @@
         } catch { return null; }
     }
 
-    function parseRss2JsonItch(data, source) {
-        if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return null;
-        return data.items.slice(0, MAX_ITCH_POSTS).map(item => {
-            const rawHtml = item.description || '';
-            const thumbnail = extractItchThumbnail(rawHtml, source);
-            return normalizePost({
-                type: 'itch-post',
-                id: `itch-rss2json-${item.link}`,
-                title: item.title || 'Пост',
-                author: source.name,
-                date: new Date(item.pubDate || Date.now()),
-                body: rawHtml.replace(/<[^>]*>/g, ''),
-                thumbnail,
-                itchLink: item.link,
-                itchSource: source.name,
-                labels: ['type:itch-post']
-            });
-        });
-    }
-
-    // ---- Загрузка itch.io ----
     async function fetchItchPosts(game, signal, forceRefresh = false) {
         const source = ITCH_DEVLOG_SOURCES[game];
         if (!source) return [];
 
         if (!forceRefresh) {
-            const cached = readItchCache(game);
-            if (cached && cached.length) {
-                console.log(`[GameUpdates] itch.io из кеша: ${cached.length}`);
-                return cached;
-            }
+            const cached = readCacheWithDates(itchCacheKey(game), ITCH_CACHE_TTL);
+            if (cached && cached.length) return cached;
         }
 
         const strategies = [
             raceProxies(source.rssUrl, (text) => parseItchDevlogXml(text, source), signal),
-            raceProxies(source.devlogPageUrl, (html) => parseItchDevlogHtml(html, source), signal),
-            fetchWithTimeout(RSS2JSON(source.rssUrl), signal)
-                .then(res => res.json())
-                .then(data => {
-                    const posts = parseRss2JsonItch(data, source);
-                    if (!posts || !posts.length) throw new Error('no posts');
-                    return posts;
-                })
+            raceProxies(source.devlogPageUrl, (html) => parseItchDevlogHtml(html, source), signal)
         ];
 
         try {
             const posts = await Promise.any(strategies);
             if (posts && posts.length) {
-                writeItchCache(game, posts);
-                console.log(`[GameUpdates] itch.io из сети: ${posts.length}`);
+                writeCache(itchCacheKey(game), posts);
                 return posts;
             }
             return [];
         } catch (e) {
             if (isAborted(e, signal)) return [];
-            const stale = readItchCache(game);
+            const stale = readCacheWithDates(itchCacheKey(game), Infinity);
             if (stale) return stale;
             console.warn(`[GameUpdates] itch.io ${source.name}: все стратегии упали`);
             return [];
@@ -327,7 +313,6 @@
         if (!posts || !posts.length) return;
         const without = posts.filter(p => !p.thumbnail && p.itchLink);
         if (!without.length) return;
-
         let enriched = 0;
         await Promise.allSettled(without.map(async (p) => {
             const thumb = await fetchItchPostThumbnail(p.itchLink, signal);
@@ -339,22 +324,75 @@
                 }
             }
         }));
-
         if (enriched > 0 && currentGame) {
             try {
-                const cached = readItchCache(currentGame);
+                const cached = readCacheWithDates(itchCacheKey(currentGame), Infinity);
                 if (cached) {
                     let changed = false;
                     for (const c of cached) {
                         const updated = posts.find(p => p.id === c.id && p.thumbnail);
-                        if (updated && !c.thumbnail) {
-                            c.thumbnail = updated.thumbnail;
-                            changed = true;
-                        }
+                        if (updated && !c.thumbnail) { c.thumbnail = updated.thumbnail; changed = true; }
                     }
-                    if (changed) writeItchCache(currentGame, cached);
+                    if (changed) writeCache(itchCacheKey(currentGame), cached);
                 }
             } catch { /* noop */ }
+        }
+    }
+
+    // ============================================================
+    // YOUTUBE — канал разработчика (без shorts)
+    // ============================================================
+
+    function parseYoutubeRssForGame(xmlText, game) {
+        if (!xmlText || typeof xmlText !== 'string') return [];
+        const keywords = GAME_KEYWORDS[game] || [];
+        const entryBlocks = xmlText.split('<entry>').slice(1);
+        const items = entryBlocks.map(block => {
+            const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+            const titleMatch = block.match(/<title>([^<]*)<\/title>/);
+            const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
+            const thumbMatch = block.match(/<media:thumbnail\s+url=["']([^"']+)["']/);
+            if (!videoIdMatch) return null;
+            const videoId = videoIdMatch[1];
+            const title = decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled');
+            // фильтр по названию игры
+            const titleLower = title.toLowerCase();
+            const relevant = keywords.some(kw => titleLower.includes(kw))
+                || titleLower.includes('#starveneon');
+            if (!relevant) return null;
+            return normalizePost({
+                type: 'yt-video',
+                id: `yt-${videoId}`,
+                videoId: videoId,
+                title,
+                author: YT_CHANNEL_NAME,
+                date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
+                thumbnail: thumbMatch ? thumbMatch[1] : `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+                labels: ['type:yt-video']
+            });
+        }).filter(Boolean);
+        return items.sort((a, b) => b.date - a.date).slice(0, MAX_YT_VIDEOS);
+    }
+
+    async function fetchYoutubeForGame(game, signal, forceRefresh = false) {
+        if (!forceRefresh) {
+            const cached = readCacheWithDates(ytCacheKey(game), YT_CACHE_TTL);
+            if (cached && cached.length) return cached;
+        }
+
+        try {
+            const videos = await raceProxies(YT_RSS_URL, (text) => parseYoutubeRssForGame(text, game), signal);
+            if (videos && videos.length) {
+                writeCache(ytCacheKey(game), videos);
+                return videos;
+            }
+            return [];
+        } catch (e) {
+            if (isAborted(e, signal)) return [];
+            const stale = readCacheWithDates(ytCacheKey(game), Infinity);
+            if (stale) return stale;
+            console.warn(`[GameUpdates] YouTube для ${game}: не удалось загрузить`);
+            return [];
         }
     }
 
@@ -390,20 +428,21 @@
     async function fetchAllUpdates(game, signal, forceRefresh = false) {
         const results = await Promise.allSettled([
             fetchGithubUpdates(game, signal, forceRefresh),
-            fetchItchPosts(game, signal, forceRefresh)
+            fetchItchPosts(game, signal, forceRefresh),
+            fetchYoutubeForGame(game, signal, forceRefresh)
         ]);
 
         const gh = results[0].status === 'fulfilled' ? results[0].value : [];
         const itch = results[1].status === 'fulfilled' ? results[1].value : [];
+        const yt = results[2].status === 'fulfilled' ? results[2].value : [];
 
-        if (results[0].status === 'rejected' && !isAborted(results[0].reason, signal)) {
-            console.warn('[GameUpdates] GitHub issues error:', results[0].reason);
-        }
-        if (results[1].status === 'rejected' && !isAborted(results[1].reason, signal)) {
-            console.warn('[GameUpdates] itch.io error:', results[1].reason);
-        }
+        ['GitHub', 'itch.io', 'YouTube'].forEach((name, i) => {
+            if (results[i].status === 'rejected' && !isAborted(results[i].reason, signal)) {
+                console.warn(`[GameUpdates] ${name} error:`, results[i].reason);
+            }
+        });
 
-        return [...itch, ...gh].sort((a, b) => b.date - a.date);
+        return [...yt, ...itch, ...gh].sort((a, b) => b.date - a.date);
     }
 
     // ============================================================
@@ -411,7 +450,9 @@
     // ============================================================
 
     function getAuthorIcon(type) {
-        return type === 'itch-post' ? 'fab fa-itch-io' : 'fas fa-user';
+        if (type === 'itch-post') return 'fab fa-itch-io';
+        if (type === 'yt-video') return 'fab fa-youtube';
+        return 'fas fa-user';
     }
 
     function createUpdateCard(post) {
@@ -463,11 +504,25 @@
             inner.appendChild(a);
         }
 
+        if (post.type === 'yt-video' && post.videoId) {
+            const a = createElement('a', 'button small', {
+                marginTop: '8px', display: 'inline-flex', alignItems: 'center',
+                justifyContent: 'center', gap: '6px', width: '100%'
+            }, { href: `https://www.youtube.com/watch?v=${post.videoId}`, target: '_blank', rel: 'noopener noreferrer' });
+            a.innerHTML = sanitizeHtml(`<i class="fab fa-youtube"></i> <span>${t('watch')}</span>`);
+            a.addEventListener('click', (e) => e.stopPropagation());
+            inner.appendChild(a);
+        }
+
         card.appendChild(inner);
 
         card.addEventListener('click', async () => {
             if (post.type === 'itch-post' && post.itchLink) {
                 window.open(post.itchLink, '_blank', 'noopener,noreferrer');
+                return;
+            }
+            if (post.type === 'yt-video' && post.videoId) {
+                window.open(`https://www.youtube.com/watch?v=${post.videoId}`, '_blank', 'noopener,noreferrer');
                 return;
             }
             if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
@@ -502,12 +557,13 @@
         }
 
         const scrollY = window.scrollY;
-        container.innerHTML = '';
+
+        // Атомарная замена без мигания
         const grid = createElement('div', 'projects-grid');
         const fragment = document.createDocumentFragment();
         posts.forEach(p => fragment.appendChild(createUpdateCard(p)));
         grid.appendChild(fragment);
-        container.appendChild(grid);
+        container.replaceChildren(grid);
 
         if (!header) {
             header = createElement('div', 'updates-header', {
@@ -548,7 +604,7 @@
     }
 
     // ============================================================
-    // Публичные точки входа
+    // Публичные функции
     // ============================================================
 
     window.initGameUpdates = function() {
@@ -577,8 +633,7 @@
             let grid = cont.querySelector('.projects-grid');
             if (!grid) {
                 grid = createElement('div', 'projects-grid');
-                cont.innerHTML = '';
-                cont.appendChild(grid);
+                cont.replaceChildren(grid);
             }
             const fragment = document.createDocumentFragment();
             fragment.appendChild(createUpdateCard(newPost));
@@ -611,12 +666,13 @@
 
         try {
             if (!forceRefresh) {
-                const [cachedGh, cachedItch] = await Promise.all([
+                const [cachedGh, cachedItch, cachedYt] = await Promise.all([
                     cacheGet(`game_issues_${game}`),
-                    Promise.resolve(readItchCache(game))
+                    Promise.resolve(readCacheWithDates(itchCacheKey(game), Infinity)),
+                    Promise.resolve(readCacheWithDates(ytCacheKey(game), Infinity))
                 ]);
 
-                if (cachedGh || cachedItch) {
+                if (cachedGh || cachedItch || cachedYt) {
                     const ghPosts = (cachedGh || []).filter(i =>
                         i.labels.some(l => l.name === 'type:update') &&
                         CONFIG.ALLOWED_AUTHORS.includes(i.user.login)
@@ -629,12 +685,11 @@
                         labels: i.labels.map(l => l.name),
                         thumbnail: null
                     }));
-                    const itchPosts = cachedItch || [];
-                    const combined = [...itchPosts, ...ghPosts].sort((a, b) => b.date - a.date);
+                    const combined = [...(cachedYt || []), ...(cachedItch || []), ...ghPosts]
+                        .sort((a, b) => b.date - a.date);
 
                     if (combined.length) {
                         renderUpdates(container, game, combined);
-                        console.log('[GameUpdates] SWR: показан кэш, рефреш в фоне');
 
                         if (!backgroundRefreshInFlight) {
                             backgroundRefreshInFlight = true;
