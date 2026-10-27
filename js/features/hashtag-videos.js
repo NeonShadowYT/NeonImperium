@@ -1,27 +1,34 @@
 // js/features/hashtag-videos.js
-// Хэштег #starveneon через прямой парсинг HTML страницы YouTube.
-// r.jina.ai используется как reader-прокси: отдаёт чистый HTML без CORS-блокировок.
-// Invidious и Piped удалены — публичные инстансы не работают.
-// Строгий фильтр: только видео, где в title/description есть "starveneon".
+// Хэштег #starveneon через прямой парсинг HTML страницы YouTube (r.jina.ai).
+// Shorts полностью исключены: shortsLockupViewModel не собирается,
+// у videoRenderer проверяется длина < 60 сек.
+// Строгий фильтр: только title/description содержит "starveneon".
 
 (function() {
     'use strict';
 
     const HASHTAG = 'starveneon';
     const YT_HASHTAG_URL = `https://www.youtube.com/hashtag/${HASHTAG}`;
-    const CACHE_KEY = `hashtag_videos_cache_v7_${HASHTAG}`;
+    const CACHE_KEY = `hashtag_videos_cache_v9_${HASHTAG}`;
     const CACHE_TTL = 30 * 60 * 1000;
     const MAX_VIDEOS = 12;
+    const MIN_DURATION_SEC = 60;
     const REQUEST_TIMEOUT = 20000;
 
-    // r.jina.ai — reader-прокси, отдаёт HTML без CORS-ограничений.
     const READER_PROXY = (url) => `https://r.jina.ai/${url}`;
-
-    // Резервные CORS-прокси (только проверенные)
     const CORS_PROXIES = [
         (u) => `https://corsfix.com/?${u}`,
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
     ];
+
+    function parseDurationToSec(text) {
+        if (!text) return 0;
+        const parts = String(text).split(':').map(Number);
+        if (parts.some(isNaN)) return 0;
+        if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        if (parts.length === 2) return parts[0] * 60 + parts[1];
+        return parts[0] || 0;
+    }
 
     function isRelevantVideo(v) {
         if (!v) return false;
@@ -99,7 +106,6 @@
         return out;
     }
 
-    // ---- Парсинг HTML страницы хэштега ----
     function extractYtInitialData(html) {
         const patterns = [
             /var ytInitialData = ({[\s\S]+?});/,
@@ -121,6 +127,8 @@
         return null;
     }
 
+    // Shorts полностью исключены: shortsLockupViewModel не обрабатываем,
+    // а у videoRenderer/lockupViewModel проверяем длительность.
     function collectFromData(obj, out, seen) {
         if (!obj || typeof obj !== 'object') return;
         if (Array.isArray(obj)) { obj.forEach(i => collectFromData(i, out, seen)); return; }
@@ -128,6 +136,12 @@
 
         const classic = obj.videoRenderer || obj.gridVideoRenderer || obj.compactVideoRenderer;
         if (classic && classic.videoId && !seen.has(classic.videoId)) {
+            const durationSec = parseDurationToSec(
+                classic.lengthText?.simpleText ||
+                classic.lengthText?.runs?.[0]?.text ||
+                ''
+            );
+            if (durationSec > 0 && durationSec < MIN_DURATION_SEC) return;
             seen.add(classic.videoId);
             let title = '';
             if (classic.title?.runs?.[0]) title = classic.title.runs[0].text;
@@ -164,27 +178,11 @@
             }
         }
 
-        if (obj.shortsLockupViewModel) {
-            const s = obj.shortsLockupViewModel;
-            let videoId = '';
-            if (s.entityId) {
-                const m = s.entityId.match(/shorts-shelf-item-(.+)/);
-                if (m) videoId = m[1];
-            }
-            if (videoId && !seen.has(videoId)) {
-                seen.add(videoId);
-                let title = '';
-                if (s.overlayMetadata?.primaryText?.content) {
-                    title = s.overlayMetadata.primaryText.content;
-                }
-                out.push(normalizeVideo({ videoId, title, author: '', description: '' }));
-            }
-        }
-
         if (obj.richItemRenderer?.content) collectFromData(obj.richItemRenderer.content, out, seen);
 
         for (const key of Object.keys(obj)) {
             if (out.length >= MAX_VIDEOS * 2) break;
+            if (key === 'shortsLockupViewModel') continue;
             collectFromData(obj[key], out, seen);
         }
     }

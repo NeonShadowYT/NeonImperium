@@ -1,0 +1,169 @@
+/* css/video-preview-unified.css
+   Унификация стилей видеопревью и кнопок в карточках.
+   Подключается после style.css на ВСЕХ страницах. */
+
+/* ===== Превью видео ===== */
+.video-preview {
+    display: block;
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-card);
+    text-decoration: none;
+    color: inherit;
+    box-shadow: var(--shadow);
+    transition: transform var(--duration-base) var(--ease-out),
+                box-shadow var(--duration-base) var(--ease-out);
+    cursor: pointer;
+    isolation: isolate;
+    contain: layout style paint;
+}
+
+.video-preview:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-hover);
+}
+
+.video-preview:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.video-preview img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    z-index: 0;
+}
+
+/* ===== Play-кнопка на превью ===== */
+.video-preview__play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(15, 15, 26, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #fff;
+    z-index: 2;
+    pointer-events: none;
+    transition: transform 0.25s var(--ease-out),
+                background 0.25s var(--ease-out),
+                box-shadow 0.25s var(--ease-out);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.video-preview__play i {
+    line-height: 1;
+}
+
+.video-preview--youtube .video-preview__play i.fa-play {
+    margin-left: 4px;
+}
+
+.video-preview:hover .video-preview__play {
+    transform: translate(-50%, -50%) scale(1.15);
+}
+
+.video-preview--youtube:hover .video-preview__play {
+    background: #ff0033;
+    color: #fff;
+    box-shadow: 0 8px 28px rgba(255, 0, 51, 0.6);
+}
+
+.video-preview--twitch:hover .video-preview__play {
+    background: #9146FF;
+    color: #fff;
+    box-shadow: 0 8px 28px rgba(145, 70, 255, 0.6);
+}
+
+/* ===== Кнопки в карточках (Смотреть / Открыть релиз / Читать далее) =====
+   Единый вид на главной и на starve-neon. */
+.project-card .button.small {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px 20px;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: #fff;
+    font-family: var(--font-family);
+    font-size: 14px;
+    line-height: 1.2;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+    box-sizing: border-box;
+    transition:
+        background var(--duration-base) var(--ease-out),
+        transform var(--duration-fast) var(--ease-out),
+        box-shadow var(--duration-base) var(--ease-out);
+    position: relative;
+    overflow: hidden;
+    letter-spacing: 0.3px;
+}
+
+.project-card .button.small:hover {
+    background: var(--accent-light);
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(61, 158, 179, 0.35);
+}
+
+.project-card .button.small:active {
+    transform: translateY(0) scale(0.98);
+}
+
+.project-card .button.small i {
+    font-size: 14px;
+    line-height: 1;
+}
+
+/* ===== Мобильная адаптация ===== */
+@media (max-width: 600px) {
+    .video-preview__play {
+        width: 56px;
+        height: 56px;
+        font-size: 20px;
+    }
+    .video-preview--youtube .video-preview__play i.fa-play {
+        margin-left: 3px;
+    }
+    .project-card .button.small {
+        font-size: 13px;
+        padding: 9px 16px;
+    }
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+    .video-preview,
+    .video-preview__play,
+    .project-card .button.small {
+        transition: none !important;
+    }
+    .video-preview:hover {
+        transform: none;
+    }
+    .video-preview:hover .video-preview__play {
+        transform: translate(-50%, -50%);
+    }
+    .project-card .button.small:hover {
+        transform: none;
+    }
+}

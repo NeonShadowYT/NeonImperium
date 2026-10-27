@@ -1,6 +1,6 @@
 // js/pages/game-updates.js — обновления (GitHub + itch.io + YouTube-канал).
-// YouTube: RSS через rss2json.com. itch.io: RSS через rss2json.com.
-// Превью всегда i.ytimg.com.
+// YouTube: UULF-плейлист (без Shorts). Заголовки без обрезки.
+// Кнопка "Смотреть" — та же, что на главной.
 
 (function() {
     'use strict';
@@ -26,7 +26,8 @@
 
     const YT_CHANNEL_ID = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
     const YT_CHANNEL_NAME = 'Neon Shadow';
-    const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`;
+    const YT_UULF_PLAYLIST_ID = YT_CHANNEL_ID.replace(/^UC/, 'UULF');
+    const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${YT_UULF_PLAYLIST_ID}`;
 
     const GAME_KEYWORDS = {
         'starve-neon': ['starve neon', 'starveneon', 'starve-neon']
@@ -41,7 +42,6 @@
     };
 
     const RSS2JSON = (rssUrl) => `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
-
     const CORS_PROXIES = [
         (u) => `https://corsfix.com/?${u}`,
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
@@ -84,8 +84,8 @@
         return { ...p, date: normalizeDate(p.date) };
     }
 
-    function itchCacheKey(game) { return `itch_posts_updates_v7_${game}`; }
-    function ytCacheKey(game) { return `yt_updates_v7_${game}`; }
+    function itchCacheKey(game) { return `itch_posts_updates_v9_${game}`; }
+    function ytCacheKey(game) { return `yt_updates_v9_${game}`; }
 
     function readCacheWithDates(key, ttl) {
         try {
@@ -161,7 +161,7 @@
     }
 
     // ============================================================
-    // ITCH.IO — RSS через rss2json.com
+    // ITCH.IO
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -231,7 +231,6 @@
             console.warn(`[GameUpdates] itch.io ${source.name}:`, e.message || e);
         }
 
-        // Fallback: corsfix
         try {
             const posts = await raceProxies(source.rssUrl, (text) => {
                 const itemBlocks = text.split('<item>').slice(1);
@@ -274,7 +273,7 @@
     }
 
     // ============================================================
-    // YOUTUBE — RSS через rss2json.com
+    // YOUTUBE — UULF-плейлист (без Shorts)
     // ============================================================
 
     function parseYoutubeRssJson(data, game) {
@@ -321,7 +320,6 @@
             console.warn(`[GameUpdates] YouTube для ${game}: rss2json не сработал`, e.message || e);
         }
 
-        // Fallback: corsfix
         try {
             const videos = await raceProxies(YT_RSS_URL, (text) => {
                 const keywords = GAME_KEYWORDS[game] || [];
@@ -432,16 +430,17 @@
         imgW.appendChild(img);
 
         const title = createElement('h3');
-        title.textContent = post.title.length > 70 ? post.title.slice(0, 70) + '…' : post.title;
+        // Заголовок полностью, без обрезки и "…"
+        title.textContent = post.title;
 
         const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
         const icon = getAuthorIcon(post.type);
+        // Без лишней "·" между автором и датой
         meta.innerHTML = sanitizeHtml(
-            `<i class="${icon}"></i> ${escapeHtml(post.author)} · ` +
-            `<i class="fas fa-calendar-alt"></i> ${date.toLocaleDateString()}`
+            `<i class="${icon}"></i> ${escapeHtml(post.author)} <i class="fas fa-calendar-alt"></i> ${date.toLocaleDateString()}`
         );
 
-        const summary = extractSummary(post.body || '') || stripHtml(post.body || '').substring(0, 120) + '…';
+        const summary = extractSummary(post.body || '') || stripHtml(post.body || '').substring(0, 120);
         const preview = createElement('p', 'text-secondary', {
             fontSize: '13px', overflow: 'hidden', display: '-webkit-box',
             WebkitLineClamp: '2', WebkitBoxOrient: 'vertical'

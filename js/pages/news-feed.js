@@ -1,7 +1,7 @@
 // js/pages/news-feed.js — лента новостей (index.html).
-// YouTube: RSS канала через rss2json.com (server-side fetch, всегда CORS).
-// itch.io: RSS через rss2json.com + corsfix.com.
-// Превью всегда i.ytimg.com.
+// YouTube: UULF-плейлист (Shorts исключены).
+// Кнопка "Смотреть" добавлена для видео — как на starve-neon.html.
+// Заголовки отображаются полностью, без "…".
 
 (function() {
     'use strict';
@@ -14,11 +14,11 @@
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const { showToast } = window.UIUtils;
 
-    const CACHE_KEY = 'news_feed_data_v7';
+    const CACHE_KEY = 'news_feed_data_v9';
     const CACHE_TTL = 5 * 60 * 1000;
-    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v7';
+    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v9';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
-    const ITCH_CACHE_KEY = 'itch_posts_news_v7';
+    const ITCH_CACHE_KEY = 'itch_posts_news_v9';
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
 
     const SOURCE_TIMEOUT = 15000;
@@ -34,7 +34,8 @@
 
     const YT_CHANNEL_ID = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
     const YT_CHANNEL_NAME = 'Neon Shadow';
-    const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`;
+    const YT_UULF_PLAYLIST_ID = YT_CHANNEL_ID.replace(/^UC/, 'UULF');
+    const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${YT_UULF_PLAYLIST_ID}`;
 
     const ITCH_DEVLOG_SOURCES = [
         {
@@ -44,10 +45,7 @@
         }
     ];
 
-    // rss2json.com — server-side fetch, всегда CORS.
     const RSS2JSON = (rssUrl) => `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
-
-    // Резервные CORS-прокси (только проверенные)
     const CORS_PROXIES = [
         (u) => `https://corsfix.com/?${u}`,
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
@@ -70,7 +68,8 @@
             newsRetryVideo: 'Повторить загрузку', addNews: 'Добавить новость',
             dataLoadError: 'Ошибка загрузки данных', addToFavorites: 'В избранное',
             loadError: 'Ошибка загрузки', loadModulesError: 'Ошибка загрузки модулей',
-            stream: 'Стрим', viewers: 'зрителей', readMore: 'Читать далее'
+            stream: 'Стрим', viewers: 'зрителей', readMore: 'Читать далее',
+            watch: 'Смотреть'
         };
         return map[key] || key;
     }
@@ -192,7 +191,7 @@
     }
 
     // ============================================================
-    // YOUTUBE — RSS канала через rss2json.com
+    // YOUTUBE — UULF-плейлист (без Shorts)
     // ============================================================
 
     function parseYoutubeRssJson(data) {
@@ -226,7 +225,6 @@
                 writeCache(VIDEOS_CACHE_KEY, videos);
                 return videos;
             }
-            // Fallback: corsfix
             const fallback = await raceProxies(YT_RSS_URL, (text) => {
                 const entryBlocks = text.split('<entry>').slice(1);
                 const items = entryBlocks.map(block => {
@@ -259,7 +257,7 @@
     }
 
     // ============================================================
-    // ITCH.IO — RSS через rss2json.com
+    // ITCH.IO
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -328,7 +326,6 @@
         }
 
         if (allPosts.length === 0) {
-            // Fallback: corsfix
             for (const source of ITCH_DEVLOG_SOURCES) {
                 try {
                     const posts = await raceProxies(source.rssUrl, (text) => {
@@ -730,32 +727,44 @@
         card.appendChild(imgWrapper);
 
         const title = createElement('h3');
-        title.textContent = item.title.length > 70 ? item.title.slice(0, 70) + '…' : item.title;
+        // Заголовок полностью, без обрезки и "…"
+        title.textContent = item.title;
         card.appendChild(title);
 
         const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
         const icon = getAuthorIcon(item.type);
+        // Без лишней "·" между автором и датой
         meta.innerHTML = sanitizeHtml(
-            `<i class="${icon}"></i> ${escapeHtml(item.author)} · ` +
-            `<i class="fas fa-calendar-alt"></i> ${item.date.toLocaleDateString()}`
+            `<i class="${icon}"></i> ${escapeHtml(item.author)} <i class="fas fa-calendar-alt"></i> ${item.date.toLocaleDateString()}`
         );
         if (item.type === 'twitch' && item.twitchData) {
-            meta.innerHTML += sanitizeHtml(` · 🎮 ${escapeHtml(item.twitchData.game)}`);
+            meta.innerHTML += sanitizeHtml(` 🎮 ${escapeHtml(item.twitchData.game)}`);
         }
         if (item.type === 'release' && item.releaseData?.tag) {
-            meta.innerHTML += sanitizeHtml(` · <i class="fas fa-tag"></i> ${escapeHtml(item.releaseData.tag)}`);
+            meta.innerHTML += sanitizeHtml(` <i class="fas fa-tag"></i> ${escapeHtml(item.releaseData.tag)}`);
         }
         card.appendChild(meta);
 
         if ((item.type === 'post' || item.type === 'release' || item.type === 'itch-post') && item.body) {
             const summary = window.GithubCore.extractSummary(item.body)
-                || item.body.replace(/\n/g, ' ').substring(0, 120) + '…';
+                || item.body.replace(/\n/g, ' ').substring(0, 120);
             const preview = createElement('p', 'text-secondary', {
                 fontSize: '13px', overflow: 'hidden', display: '-webkit-box',
                 WebkitLineClamp: '2', WebkitBoxOrient: 'vertical'
             });
             preview.textContent = summary;
             card.appendChild(preview);
+        }
+
+        // Кнопка для YouTube-видео — единая с game-updates.js
+        if (item.type === 'video' && item.id) {
+            const a = createElement('a', 'button small', {
+                marginTop: '8px', display: 'inline-flex', alignItems: 'center',
+                justifyContent: 'center', gap: '6px', width: '100%'
+            }, { href: `https://www.youtube.com/watch?v=${item.id}`, target: '_blank', rel: 'noopener noreferrer' });
+            a.innerHTML = sanitizeHtml(`<i class="fab fa-youtube"></i> <span>${t('watch')}</span>`);
+            a.addEventListener('click', (e) => e.stopPropagation());
+            card.appendChild(a);
         }
 
         if (item.type === 'release' && item.releaseUrl) {
