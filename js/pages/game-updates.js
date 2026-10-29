@@ -5,8 +5,14 @@
 //   - Только для игры starve-neon
 //   - GitHub issues: type:update + game:starve-neon
 //
-// Всё остальное — как в news-feed: DOMParser, Invidious через прокси, parseDuration с ISO,
-// НЕ кешируем пустоту, вставка по одной карточке.
+// ИСПРАВЛЕНИЯ (как в news-feed):
+//   1. DOMParser + getElementsByTagName — работает с RSS 1.0/2.0/Atom.
+//   2. itch.io: getElementsByTagName('item'), thumbnail из description.
+//   3. YouTube: если после Shorts-фильтра 0, но исходных > 0 — показываем без фильтра Shorts
+//      (но всё равно фильтруем по 'starve'/'neon' — это отличие от новостей).
+//   4. Piped duration — число секунд, parseDuration обрабатывает.
+//   5. НЕ кешируем пустоту.
+//   6. Вставка карточек по одной по дате (без полной перерисовки).
 
 (function() {
     'use strict';
@@ -134,8 +140,8 @@
         return { ...p, date: normalizeDate(p.date) };
     }
 
-    function getItchCacheKey(game) { return `itch_posts_updates_v14_${game}`; }
-    function getYtCacheKey(game) { return `yt_channel_cache_v14_${game}`; }
+    function getItchCacheKey(game) { return `itch_posts_updates_v15_${game}`; }
+    function getYtCacheKey(game) { return `yt_channel_cache_v15_${game}`; }
 
     function readCacheWithDates(key, ttl) {
         try {
@@ -222,6 +228,7 @@
         const trimmed = val.trim();
         if (!trimmed) return null;
 
+        // ISO 8601: PT1M23S, PT1H23M45S
         const isoMatch = trimmed.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
         if (isoMatch) {
             const h = parseInt(isoMatch[1] || 0, 10);
@@ -231,6 +238,7 @@
             return total > 0 ? total : null;
         }
 
+        // H:M:S или M:S или S
         const parts = trimmed.split(':').map(Number);
         if (parts.some(isNaN)) return null;
         if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
@@ -245,9 +253,14 @@
         return keywords.some(kw => text.includes(kw));
     }
 
+    /**
+     * Отсекаем Shorts и дубликаты.
+     * Если после Shorts-фильтра 0, но исходных > 0 — показываем БЕЗ Shorts-фильтра
+     * (всё равно оставляем дубликаты-удаление и сортировку по дате).
+     */
     function filterYoutubeVideos(videos) {
         const seen = new Set();
-        const result = [];
+        const filtered = [];
         let shortsCount = 0;
         for (const v of videos) {
             if (!v || !v.videoId) continue;
@@ -258,14 +271,26 @@
                 shortsCount++;
                 continue;
             }
-            result.push(v);
+            filtered.push(v);
         }
-        console.log(`[GameUpdates] YouTube после Shorts-фильтра: ${result.length} (Shorts отсечено: ${shortsCount})`);
-        return result.sort((a, b) => b.date - a.date).slice(0, MAX_YT_VIDEOS);
+        if (filtered.length === 0 && videos.length > 0) {
+            console.warn(`[GameUpdates] YouTube: все ${videos.length} отсеклись как Shorts, показываем без Shorts-фильтра`);
+            // Убираем только дубликаты, оставляем всё
+            const dedup = [];
+            const seen2 = new Set();
+            for (const v of videos) {
+                if (!v || !v.videoId || seen2.has(v.videoId)) continue;
+                seen2.add(v.videoId);
+                dedup.push(v);
+            }
+            return dedup.sort((a, b) => b.date - a.date).slice(0, MAX_YT_VIDEOS);
+        }
+        console.log(`[GameUpdates] YouTube после Shorts-фильтра: ${filtered.length} (Shorts: ${shortsCount})`);
+        return filtered.sort((a, b) => b.date - a.date).slice(0, MAX_YT_VIDEOS);
     }
 
     // ============================================================
-    // ITCH.IO — DOMParser
+    // ITCH.IO — DOMParser + getElementsByTagName
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -299,9 +324,11 @@
         const doc = parser.parseFromString(text, 'text/xml');
         if (doc.querySelector('parsererror')) throw new Error('XML parser error');
 
-        const items = doc.querySelectorAll('item');
+        // getElementsByTagName работает с любыми префиксами (rdf:item, item)
+        const items = doc.getElementsByTagName('item');
         const result = [];
-        for (const itemEl of items) {
+        for (let i = 0; i < items.length; i++) {
+            const itemEl = items[i];
             const titleEl = itemEl.getElementsByTagName('title')[0];
             const linkEl = itemEl.getElementsByTagName('link')[0];
             const pubDateEl = itemEl.getElementsByTagName('pubDate')[0];
@@ -385,7 +412,7 @@
     }
 
     // ============================================================
-    // YOUTUBE RSS — DOMParser
+    // YOUTUBE RSS — DOMParser + getElementsByTagName
     // ============================================================
 
     function parseYoutubeRssWithDom(text, game) {
@@ -394,9 +421,10 @@
         const doc = parser.parseFromString(text, 'text/xml');
         if (doc.querySelector('parsererror')) throw new Error('XML parser error');
 
-        const entries = doc.querySelectorAll('entry');
+        const entries = doc.getElementsByTagName('entry');
         const items = [];
-        for (const entry of entries) {
+        for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
             const videoIdEl = entry.getElementsByTagName('yt:videoId')[0];
             const titleEl = entry.getElementsByTagName('title')[0];
             const publishedEl = entry.getElementsByTagName('published')[0];
@@ -487,7 +515,8 @@
                 })
                 .catch(() => [])
         );
-        // Плюс через прокси для первых 5
+
+        // Через прокси для первых 5 инстансов
         for (const base of PIPED_INSTANCES.slice(0, 5)) {
             for (const proxyFn of CORS_PROXIES.slice(0, 4)) {
                 tasks.push(
@@ -523,6 +552,7 @@
                 );
             }
         }
+
         const results = await Promise.allSettled(tasks);
         let all = [];
         for (const r of results) {
@@ -540,7 +570,8 @@
         const tasks = [];
         for (const base of INVIDIOUS_INSTANCES) {
             const apiUrl = `${base}/api/v1/channels/${YT_CHANNEL_ID}/videos`;
-            // Прямой
+
+            // Прямой запрос
             tasks.push(
                 fetchWithTimeout(apiUrl, signal)
                     .then(r => r.json())
@@ -567,6 +598,7 @@
                     })
                     .catch(() => [])
             );
+
             // Через прокси
             for (const proxyFn of CORS_PROXIES.slice(0, 4)) {
                 tasks.push(
@@ -661,7 +693,7 @@
         const cacheKey = `game_issues_${game}`;
         let issues = null;
         if (!forceRefresh) issues = await cacheGet(cacheKey);
-        if (!issues) {
+        if (!issues || !issues.length) {
             issues = await loadIssues({ labels: `game:${game}`, state: 'open', per_page: 100, signal });
             if (issues && issues.length > 0) await cacheSet(cacheKey, issues);
         }

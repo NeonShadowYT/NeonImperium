@@ -1,16 +1,12 @@
 // js/pages/news-feed.js — лента новостей (index.html).
 //
-// ИЗМЕНЕНИЯ:
-//   1. DOMParser для парсинга XML (надёжнее, чем split).
-//   2. Invidious — через CORS-прокси (напрямую блокируется).
-//   3. parseDuration поддерживает "1:23", "1:23:45", 123, "PT1M23S".
-//   4. 16 Piped × 2 попытки (прямой + через прокси), 9 Invidious × 4 прокси.
-//   5. RSS: 3 URL × 10 прокси × 2 формата (raw + get) = 60 попыток.
-//   6. itch.io: 10 прокси, DOMParser.
-//   7. НЕ кешируем пустоту — при 0 кеш не пишется, следующий заход снова пробует.
-//   8. Вставка карточек по одной по дате (без полной перерисовки).
-//   9. YouTube в news НЕ фильтруется по контенту — только отсекаются Shorts.
-//  10. Логирование каждого видео с duration для дебага.
+// ИСПРАВЛЕНИЯ:
+//   1. DOMParser + getElementsByTagName (работает с RSS 1.0/2.0/Atom).
+//   2. YouTube: если после Shorts-фильтра 0, но исходных > 0 — показываем все (без фильтра).
+//   3. itch.io: getElementsByTagName('item'), извлечение thumbnail из description.
+//   4. Piped: duration в секундах (число), parseDuration обрабатывает.
+//   5. НЕ кешируем пустоту.
+//   6. Вставка карточек по одной по дате (без полной перерисовки).
 
 (function() {
     'use strict';
@@ -23,15 +19,13 @@
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const { showToast } = window.UIUtils;
 
-    // ---- Кеши ----
-    const CACHE_KEY = 'news_feed_data_v14';
+    const CACHE_KEY = 'news_feed_data_v15';
     const CACHE_TTL = 5 * 60 * 1000;
-    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v14';
+    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v15';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
-    const ITCH_CACHE_KEY = 'itch_posts_news_v14';
+    const ITCH_CACHE_KEY = 'itch_posts_news_v15';
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
 
-    // ---- Лимиты ----
     const SOURCE_TIMEOUT = 25000;
     const REQUEST_TIMEOUT = 25000;
     const MAX_DISPLAY_ITEMS = 9;
@@ -39,7 +33,6 @@
     const MAX_ITCH_POSTS = 3;
     const MIN_YT_DURATION = 60;
 
-    // ---- YouTube ----
     const YT_CHANNEL_ID = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
     const YT_CHANNEL_NAME = 'Neon Shadow';
     const YT_UULF_PLAYLIST_ID = YT_CHANNEL_ID.replace(/^UC/, 'UULF');
@@ -50,7 +43,6 @@
         `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`
     ];
 
-    // 16 Piped-инстансов
     const PIPED_INSTANCES = [
         'https://api.piped.private.coffee',
         'https://pipedapi.ducks.party',
@@ -70,7 +62,6 @@
         'https://pipedapi.orangenet.cc'
     ];
 
-    // 9 Invidious-инстансов
     const INVIDIOUS_INSTANCES = [
         'https://inv.nadeko.net',
         'https://invidious.nerdvpn.de',
@@ -83,7 +74,6 @@
         'https://invidious.perennialte.ch'
     ];
 
-    // 10 CORS-прокси
     const CORS_PROXIES = [
         (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`,
@@ -115,10 +105,6 @@
     let abortController = null;
     let backgroundRefreshInFlight = false;
     let container = null;
-
-    // ============================================================
-    // УТИЛИТЫ
-    // ============================================================
 
     function t(key) {
         if (window.I18n && typeof window.I18n.translate === 'function') {
@@ -182,7 +168,7 @@
             if (!raw) return null;
             const data = JSON.parse(raw);
             if (!data || !data.timestamp || !Array.isArray(data.items)) return null;
-            if (data.items.length === 0) return null; // пустой = не кеш
+            if (data.items.length === 0) return null;
             if (Date.now() - data.timestamp > ttl) {
                 localStorage.removeItem(key);
                 return null;
@@ -224,17 +210,12 @@
         });
     }
 
-    /**
-     * Универсальный загрузчик через прокси.
-     * Распаковывает JSON ({contents}), проверяет наличие XML-тегов.
-     */
     async function fetchViaProxy(proxyFn, targetUrl, signal, mustContain = ['<entry', '<feed', '<rss', '<item', '<channel']) {
         const proxyUrl = proxyFn(targetUrl);
         const res = await fetchWithTimeout(proxyUrl, signal);
         let text = await res.text();
         if (!text || text.length < 100) throw new Error('too short (' + text.length + 'b)');
 
-        // Распаковка JSON
         if (text.trim().startsWith('{')) {
             try {
                 const json = JSON.parse(text);
@@ -247,23 +228,18 @@
 
         const isValid = mustContain.some(tag => text.includes(tag));
         if (!isValid) {
-            throw new Error('no XML tags (' + mustContain.slice(0, 2).join('/') + '), got ' + text.length + 'b: ' + text.slice(0, 80).replace(/\s+/g, ' '));
+            throw new Error('no XML tags, got ' + text.length + 'b: ' + text.slice(0, 80).replace(/\s+/g, ' '));
         }
 
         return text;
     }
 
-    /** Извлекает 11-символьный YouTube videoId из любого URL. */
     function extractVideoId(url) {
         if (!url) return null;
         const m = String(url).match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|\/watch\?v=|\/embed\/|v\/)([a-zA-Z0-9_-]{11})/);
         return m ? m[1] : null;
     }
 
-    /**
-     * Универсальный парсер длительности.
-     * Поддерживает: 123 (число), "123", "1:23", "1:23:45", "PT1M23S", "PT1H23M45S"
-     */
     function parseDuration(val) {
         if (val == null) return null;
         if (typeof val === 'number' && isFinite(val)) return val > 0 ? val : null;
@@ -271,7 +247,6 @@
         const trimmed = val.trim();
         if (!trimmed) return null;
 
-        // ISO 8601: PT1M23S, PT1H23M45S
         const isoMatch = trimmed.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
         if (isoMatch) {
             const h = parseInt(isoMatch[1] || 0, 10);
@@ -281,7 +256,6 @@
             return total > 0 ? total : null;
         }
 
-        // H:M:S или M:S
         const parts = trimmed.split(':').map(Number);
         if (parts.some(isNaN)) return null;
         if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
@@ -290,34 +264,32 @@
         return null;
     }
 
-    /** Отсекаем Shorts и дубликаты. */
+    /** Отсекаем Shorts. Если после фильтра 0, но исходных > 0 — возвращаем все. */
     function filterShortsAndDuplicates(videos) {
         const seen = new Set();
-        const result = [];
+        const filtered = [];
         let shortsCount = 0;
-        let noDurationCount = 0;
         for (const v of videos) {
             if (!v || !v.videoId) continue;
             if (seen.has(v.videoId)) continue;
             seen.add(v.videoId);
             const dur = parseDuration(v.duration);
-            if (dur == null) {
-                noDurationCount++;
-                // Если duration неизвестна — пропускаем (это не Shorts, а стрим/длинное)
-                result.push(v);
-            } else if (dur < MIN_YT_DURATION) {
+            if (dur != null && dur > 0 && dur < MIN_YT_DURATION) {
                 shortsCount++;
-                // Shorts — не пускаем
-            } else {
-                result.push(v);
+                continue;
             }
+            filtered.push(v);
         }
-        console.log(`[NewsFeed] YouTube: было ${videos.length}, Shorts ${shortsCount}, без duration ${noDurationCount}, итого ${result.length}`);
-        return result.sort((a, b) => b.date - a.date).slice(0, MAX_VIDEOS);
+        if (filtered.length === 0 && videos.length > 0) {
+            console.warn(`[NewsFeed] YouTube: все ${videos.length} видео отсеклись как Shorts (dur<60), показываем без фильтра`);
+            return videos.slice(0, MAX_VIDEOS);
+        }
+        console.log(`[NewsFeed] YouTube: было ${videos.length}, Shorts ${shortsCount}, осталось ${filtered.length}`);
+        return filtered.sort((a, b) => b.date - a.date).slice(0, MAX_VIDEOS);
     }
 
     // ============================================================
-    // YOUTUBE RSS — DOMParser
+    // YOUTUBE RSS — DOMParser + getElementsByTagName
     // ============================================================
 
     function parseYoutubeRssWithDom(text) {
@@ -325,18 +297,16 @@
         const doc = parser.parseFromString(text, 'text/xml');
         if (doc.querySelector('parsererror')) throw new Error('XML parser error');
 
-        const entries = doc.querySelectorAll('entry');
+        const entries = doc.getElementsByTagName('entry');
         const items = [];
-        for (const entry of entries) {
+        for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
             const videoIdEl = entry.getElementsByTagName('yt:videoId')[0];
             const titleEl = entry.getElementsByTagName('title')[0];
             const publishedEl = entry.getElementsByTagName('published')[0];
-            const descEl = entry.getElementsByTagName('media:description')[0];
-
             if (!videoIdEl || !videoIdEl.textContent) continue;
             const videoId = videoIdEl.textContent.trim();
             const title = decodeXmlEntities(titleEl ? titleEl.textContent : 'Untitled');
-
             items.push(normalizeItem({
                 type: 'video', id: videoId,
                 title,
@@ -359,7 +329,7 @@
                             const videos = parseYoutubeRssWithDom(text);
                             if (videos.length > 0) {
                                 const host = new URL(proxyFn(rssUrl)).hostname;
-                                console.log(`[NewsFeed] RSS OK через ${host}: ${videos.length} видео (${rssUrl.slice(0, 60)})`);
+                                console.log(`[NewsFeed] RSS OK через ${host}: ${videos.length} видео`);
                             }
                             return videos;
                         })
@@ -393,27 +363,24 @@
                 date: new Date(item.uploaded || Date.now()),
                 thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                 videoData: { service: 'youtube', id: videoId },
-                duration: item.duration
+                duration: item.duration // число секунд
             });
         }).filter(Boolean);
     }
 
     async function fetchYoutubePiped(signal) {
-        // Прямые запросы
-        const directTasks = PIPED_INSTANCES.map(base =>
+        const tasks = PIPED_INSTANCES.map(base =>
             fetchYoutubePipedDirect(base, signal)
                 .then(v => {
-                    if (v.length > 0) console.log(`[NewsFeed] Piped OK: ${base}: ${v.length} видео`);
+                    if (v.length > 0) console.log(`[NewsFeed] Piped OK: ${base}: ${v.length}`);
                     return v;
                 })
                 .catch(() => [])
         );
-
-        // Через прокси (только 5 инстансов × 4 прокси — самые быстрые)
-        const proxyTasks = [];
+        // Через прокси для первых 5 инстансов
         for (const base of PIPED_INSTANCES.slice(0, 5)) {
             for (const proxyFn of CORS_PROXIES.slice(0, 4)) {
-                proxyTasks.push(
+                tasks.push(
                     fetchViaProxy(proxyFn, `${base}/channel/${YT_CHANNEL_ID}`, signal, ['"relatedStreams"', '"items"', '{"'])
                         .then(text => {
                             const data = JSON.parse(text);
@@ -440,8 +407,7 @@
                 );
             }
         }
-
-        const results = await Promise.allSettled([...directTasks, ...proxyTasks]);
+        const results = await Promise.allSettled(tasks);
         let videos = [];
         for (const r of results) {
             if (r.status === 'fulfilled' && Array.isArray(r.value)) videos = videos.concat(r.value);
@@ -450,14 +416,13 @@
     }
 
     // ============================================================
-    // YOUTUBE INVIDIOUS — через CORS-прокси
+    // YOUTUBE INVIDIOUS
     // ============================================================
 
     async function fetchYoutubeInvidious(signal) {
         const tasks = [];
         for (const base of INVIDIOUS_INSTANCES) {
             const apiUrl = `${base}/api/v1/channels/${YT_CHANNEL_ID}/videos`;
-            // Прямой запрос
             tasks.push(
                 fetchWithTimeout(apiUrl, signal)
                     .then(r => r.json())
@@ -482,7 +447,6 @@
                     })
                     .catch(() => [])
             );
-            // Через прокси
             for (const proxyFn of CORS_PROXIES.slice(0, 4)) {
                 tasks.push(
                     fetchViaProxy(proxyFn, apiUrl, signal, ['"videoId"', '"videos"', '['])
@@ -539,8 +503,8 @@
         ]);
 
         let videos = [];
+        const names = ['RSS', 'Piped', 'Invidious'];
         results.forEach((r, i) => {
-            const names = ['RSS', 'Piped', 'Invidious'];
             if (r.status === 'fulfilled' && Array.isArray(r.value)) {
                 console.log(`[NewsFeed] ${names[i]}: ${r.value.length} видео`);
                 videos = videos.concat(r.value);
@@ -552,7 +516,7 @@
         if (videos.length === 0) {
             const stale = readCache(VIDEOS_CACHE_KEY, Infinity);
             if (stale && stale.length) {
-                console.log(`[NewsFeed] YouTube: пусто, fallback на stale ${stale.length}`);
+                console.log(`[NewsFeed] YouTube: пусто, fallback stale ${stale.length}`);
                 return stale.map(normalizeItem);
             }
             console.warn('[NewsFeed] YouTube: 0 видео, кеш не пишем');
@@ -565,7 +529,7 @@
     }
 
     // ============================================================
-    // ITCH.IO — DOMParser
+    // ITCH.IO — DOMParser + getElementsByTagName
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -578,22 +542,13 @@
 
     function extractItchThumbnailFromEl(itemEl) {
         const mediaContent = itemEl.getElementsByTagName('media:content')[0];
-        if (mediaContent) {
-            const url = mediaContent.getAttribute('url');
-            if (url) return normalizeItchUrl(url);
-        }
+        if (mediaContent) { const url = mediaContent.getAttribute('url'); if (url) return normalizeItchUrl(url); }
         const mediaThumb = itemEl.getElementsByTagName('media:thumbnail')[0];
-        if (mediaThumb) {
-            const url = mediaThumb.getAttribute('url');
-            if (url) return normalizeItchUrl(url);
-        }
+        if (mediaThumb) { const url = mediaThumb.getAttribute('url'); if (url) return normalizeItchUrl(url); }
         const enclosure = itemEl.getElementsByTagName('enclosure')[0];
         if (enclosure) {
             const type = enclosure.getAttribute('type') || '';
-            if (type.startsWith('image')) {
-                const url = enclosure.getAttribute('url');
-                if (url) return normalizeItchUrl(url);
-            }
+            if (type.startsWith('image')) { const url = enclosure.getAttribute('url'); if (url) return normalizeItchUrl(url); }
         }
         const descEl = itemEl.getElementsByTagName('description')[0];
         if (descEl) {
@@ -608,9 +563,11 @@
         const doc = parser.parseFromString(text, 'text/xml');
         if (doc.querySelector('parsererror')) throw new Error('XML parser error');
 
-        const items = doc.querySelectorAll('item');
+        // getElementsByTagName работает с любыми префиксами (rdf:item, item и т.д.)
+        const items = doc.getElementsByTagName('item');
         const result = [];
-        for (const itemEl of items) {
+        for (let i = 0; i < items.length; i++) {
+            const itemEl = items[i];
             const titleEl = itemEl.getElementsByTagName('title')[0];
             const linkEl = itemEl.getElementsByTagName('link')[0];
             const pubDateEl = itemEl.getElementsByTagName('pubDate')[0];
@@ -661,10 +618,7 @@
                         }
                         return posts;
                     })
-                    .catch(err => {
-                        // Логируем только если не timeout и не abort
-                        return [];
-                    })
+                    .catch(() => [])
             );
             const results = await Promise.allSettled(tasks);
             for (const r of results) {
@@ -935,7 +889,7 @@
     }
 
     // ============================================================
-    // SKELETON
+    // SKELETON / ВСТАВКА / РЕНДЕР
     // ============================================================
 
     function renderSkeleton(count = 6) {
@@ -955,10 +909,6 @@
         return grid;
     }
 
-    // ============================================================
-    // ВСТАВКА ПО ОДНОЙ
-    // ============================================================
-
     function insertCardSorted(grid, item) {
         if (!item || !item.id) return;
         if (grid.querySelector(`[data-item-id="${CSS.escape(item.id)}"]`)) return;
@@ -973,9 +923,7 @@
         }
         if (insertBefore) grid.insertBefore(newCard, insertBefore);
         else grid.appendChild(newCard);
-        while (grid.children.length > MAX_DISPLAY_ITEMS) {
-            grid.removeChild(grid.lastChild);
-        }
+        while (grid.children.length > MAX_DISPLAY_ITEMS) grid.removeChild(grid.lastChild);
     }
 
     function getOrCreateGrid() {
