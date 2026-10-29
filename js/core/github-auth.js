@@ -7,6 +7,11 @@
 //   — UI-тексты: через window.DomUtils.setElementText.
 //   — При 401 от GitHub API (событие 'github-api-unauthorized')
 //     автоматически разлогинивает пользователя.
+//
+// ИЗМЕНЕНИЯ:
+//   — Убран пункт "Зачем это нужно?" (whyNeed) из выпадающего меню профиля:
+//     он уже есть аккордеоном внутри самой панели входа.
+//   — Удалён case 'about' из handleAction (кнопка больше не нужна).
 
 (function() {
     'use strict';
@@ -84,9 +89,8 @@
     let unauthorizedHandled = false;
 
     function handleApiUnauthorized() {
-        // Защита от множественных вызовов (например, при параллельных запросах).
         if (unauthorizedHandled) return;
-        if (!currentUserLogin) return; // пользователь и так не залогинен
+        if (!currentUserLogin) return;
 
         unauthorizedHandled = true;
         setTimeout(() => { unauthorizedHandled = false; }, 3000);
@@ -316,9 +320,9 @@
                 <div class="auth-modal-token-row">
                     <input type="password" id="github-token-input"
                         class="auth-modal-token-input"
-                        placeholder="github_pat_xxx..." autocomplete="off">
+                        placeholder="github_pat_xxx..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                     <button type="button" id="token-toggle" class="auth-modal-token-toggle" aria-label="Показать/скрыть токен">
-                        <i class="fas fa-eye"></i>
+                        <i class="fas fa-eye" aria-hidden="true"></i>
                     </button>
                 </div>
 
@@ -371,8 +375,8 @@
                 const isPassword = tokenInput.type === 'password';
                 tokenInput.type = isPassword ? 'text' : 'password';
                 tokenToggle.innerHTML = isPassword
-                    ? '<i class="fas fa-eye-slash"></i>'
-                    : '<i class="fas fa-eye"></i>';
+                    ? '<i class="fas fa-eye-slash" aria-hidden="true"></i>'
+                    : '<i class="fas fa-eye" aria-hidden="true"></i>';
             });
         }
 
@@ -418,7 +422,7 @@
             tokenInput.value = '';
             tokenInput.type = 'password';
         }
-        if (tokenToggle) tokenToggle.innerHTML = '<i class="fas fa-eye"></i>';
+        if (tokenToggle) tokenToggle.innerHTML = '<i class="fas fa-eye" aria-hidden="true"></i>';
         if (rememberCheckbox) {
             rememberCheckbox.checked = false;
             const checkmark = modal.querySelector('#remember-checkmark');
@@ -549,12 +553,12 @@
     function renderLoggedOutUI() {
         if (!profileContainer) return;
         const t = getT();
+        // Пункт "Зачем это нужно?" убран: он уже есть аккордеоном в самой панели входа.
         profileContainer.innerHTML = `
             <span class="nav-profile-login placeholder">${t('loginViaGitHub')}</span>
             <i class="fas fa-chevron-right nav-profile-chevron"></i>
             <div class="profile-dropdown">
                 <div class="profile-dropdown-item" data-action="login"><i class="fab fa-github"></i> ${t('loginViaGitHub')}</div>
-                <div class="profile-dropdown-item" data-action="about"><i class="fas fa-info-circle"></i> ${t('whyNeed')}</div>
                 <div class="profile-dropdown-divider"></div>
                 <div class="profile-dropdown-item" data-action="rate-panel"><i class="fas fa-chart-bar"></i> ${t('ratePanel')}</div>
             </div>
@@ -588,9 +592,7 @@
             case 'login':
                 openLoginModal();
                 break;
-            case 'about':
-                showToast(t('githubWarning'), 'info', 8000);
-                break;
+            // case 'about' убран — пункт "Зачем это нужно?" есть в самой панели входа.
             case 'profile':
                 if (currentUserLogin) {
                     window.open(`https://github.com/${currentUserLogin}`, '_blank', 'noopener,noreferrer');

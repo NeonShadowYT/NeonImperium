@@ -1,5 +1,11 @@
 /* auth.css — стили модального окна входа через GitHub.
-   Вынесены из github-auth.js::injectLoginModalStyles + inline-стилей buildLoginModalHTML. */
+   Вынесены из github-auth.js::injectLoginModalStyles + inline-стилей buildLoginModalHTML.
+   ИЗМЕНЕНИЯ:
+   — .auth-modal-content теперь почти непрозрачный (rgba(30, 30, 48, 0.94)),
+     лёгкий матовый эффект остаётся за счёт backdrop-filter.
+   — Скрыт встроенный браузерный значок "показать пароль"
+     (::-ms-reveal, ::-webkit-credentials-auto-fill-button, ::-webkit-contacts-auto-fill-button),
+     чтобы не дублировать кастомную кнопку глаза. */
 
 /* ===== Анимации ===== */
 @keyframes authShimmerSlide {
@@ -31,13 +37,19 @@
     animation: authModalFadeIn 0.3s var(--ease-out);
 }
 
-/* ===== Контент модалки ===== */
+/* ===== Контент модалки =====
+   Почти непрозрачный фон (94%) — "не прозрачный".
+   Лёгкий матовый стеклянный эффект обеспечивает backdrop-filter: blur(16px):
+   он размывает оставшиеся 6% просвечивающего фона, создавая матовость,
+   но детали фона уже не читаются. */
 .auth-modal-content {
     max-width: 480px;
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
-    background: var(--glass-bg);
+    background: rgba(30, 30, 48, 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border-radius: var(--radius-lg);
     border: 1px solid var(--glass-border);
     box-shadow: var(--shadow), 0 0 40px rgba(61, 158, 179, 0.05);
@@ -111,7 +123,7 @@
     text-shadow: var(--neon-text-glow);
 }
 
-/* ===== Аккордеон "Зачем это нужно?" ===== */
+/* ===== Аккордеон "Зачем это нужно?" (в самой панели регистрации) ===== */
 .auth-modal-accordion {
     margin-bottom: 16px;
 }
@@ -175,11 +187,34 @@
     font-size: 15px;
     transition: border-color 0.3s, box-shadow 0.3s;
     outline: none;
+    box-sizing: border-box;
 }
 .auth-modal-token-input:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(61, 158, 179, 0.2);
 }
+
+/* СКРЫВАЕМ ВСТРОЕННЫЕ БРАУЗЕРНЫЕ ЗНАЧКИ "ПОКАЗАТЬ ПАРОЛЬ"
+   Они дублируют кастомную кнопку-глаз справа от поля.
+   — ::-ms-reveal — Edge / IE
+   — ::-webkit-credentials-auto-fill-button — Chrome / Safari (автозаполнение)
+   — ::-webkit-contacts-auto-fill-button — Safari (контакты) */
+.auth-modal-token-input::-ms-reveal,
+.auth-modal-token-input::-ms-clear {
+    display: none;
+    width: 0;
+    height: 0;
+}
+.auth-modal-token-input::-webkit-contacts-auto-fill-button,
+.auth-modal-token-input::-webkit-credentials-auto-fill-button {
+    visibility: hidden;
+    display: none !important;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+}
+
+/* Кастомная кнопка-глаз — единственная видимая */
 .auth-modal-token-toggle {
     position: absolute;
     right: 12px;
@@ -191,6 +226,13 @@
     cursor: pointer;
     font-size: 18px;
     padding: 4px 8px;
+    line-height: 1;
+}
+.auth-modal-token-toggle:hover {
+    color: var(--accent);
+}
+.auth-modal-token-toggle i {
+    line-height: 1;
 }
 
 /* ===== Ссылки и чекбокс ===== */
@@ -359,12 +401,12 @@
     }
 }
 
-/* Мобильные устройства: backdrop-filter off */
+/* Мобильные устройства: backdrop-filter off — но фон всё равно почти непрозрачный */
 @media (hover: none), (pointer: coarse) {
     .auth-modal-content {
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
-        background: var(--glass-bg-solid) !important;
+        background: rgba(30, 30, 48, 0.97) !important;
     }
 }
 
