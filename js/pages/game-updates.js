@@ -1,7 +1,16 @@
 // js/pages/game-updates.js — обновления (GitHub + itch.io + YouTube-канал).
-// Только проверенные Piped-инстансы: api.piped.private.coffee, pipedapi.ducks.party.
-// Превью всегда через i.ytimg.com (не через Piped-прокси — CSP).
-// Фильтр проверяет title И description.
+//
+// ВАЖНО: YouTube здесь ФИЛЬТРУЕТСЯ по 'starve' ИЛИ 'neon' в title/description.
+// itch.io берётся без фильтра (это и так девлог Starve Neon).
+// Shorts отсекаются по duration < 60 сек.
+//
+// Источники:
+//   - GitHub issues (type:update + game:starve-neon)
+//   - itch.io devlog RSS
+//   - YouTube: RSS UULF (через прокси) + Piped (2 рабочих инстанса)
+//
+// Превью ВСЕГДА через i.ytimg.com.
+// Все источники через Promise.allSettled.
 
 (function() {
     'use strict';
@@ -31,6 +40,7 @@
     const YT_UULF_PLAYLIST_ID = YT_CHANNEL_ID.replace(/^UC/, 'UULF');
     const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${YT_UULF_PLAYLIST_ID}`;
 
+    // Ключевые слова для фильтрации YouTube (проверяются в title ИЛИ description)
     const GAME_KEYWORDS = {
         'starve-neon': ['starve', 'neon']
     };
@@ -43,13 +53,13 @@
         }
     };
 
-    // Только работающие Piped-инстансы (200 в логах)
+    // Только проверенные Piped-инстансы (200 в логах)
     const PIPED_INSTANCES = [
         'https://api.piped.private.coffee',
         'https://pipedapi.ducks.party'
     ];
 
-    // RSS-прокси, которые стабильно отдают 200
+    // Проверенные RSS-прокси (200 в логах)
     const RSS_PROXIES = [
         (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`
@@ -96,7 +106,7 @@
         return `itch_posts_v9_${game}`;
     }
     function getYtCacheKey(game) {
-        return `yt_channel_cache_v2_${game}`;
+        return `yt_channel_cache_v3_${game}`;
     }
 
     function readCacheWithDates(key, ttl) {
@@ -145,11 +155,31 @@
         });
     }
 
-    /** Извлекает 11-символьный YouTube videoId из любого URL. */
     function extractVideoId(url) {
         if (!url) return null;
         const m = String(url).match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|\/watch\?v=|\/embed\/|v\/)([a-zA-Z0-9_-]{11})/);
         return m ? m[1] : null;
+    }
+
+    /** Фильтр релевантности: 'starve' ИЛИ 'neon' в title ИЛИ description. */
+    function isRelevantVideo(video, keywords) {
+        if (!video) return false;
+        const text = ((video.title || '') + ' ' + (video.description || '')).toLowerCase();
+        return keywords.some(kw => text.includes(kw));
+    }
+
+    function filterYoutubeVideos(videos) {
+        const seen = new Set();
+        return videos
+            .filter(v => v && v.videoId && !seen.has(v.videoId) && (seen.add(v.videoId), true))
+            .filter(v => {
+                if (typeof v.duration === 'number' && v.duration > 0 && v.duration < MIN_YT_DURATION) {
+                    return false;
+                }
+                return true;
+            })
+            .sort((a, b) => b.date - a.date)
+            .slice(0, MAX_YT_VIDEOS);
     }
 
     // ============================================================
@@ -219,49 +249,44 @@
             if (cached && cached.length) return cached;
         }
 
-        const promises = RSS_PROXIES.map(proxyFn =>
-            fetchWithTimeout(proxyFn(source.rssUrl), signal)
-                .then(res => res.text())
-                .then(text => parseItchRss(text, source))
+        const results = await Promise.allSettled(
+            RSS_PROXIES.map(proxyFn =>
+                fetchWithTimeout(proxyFn(source.rssUrl), signal)
+                    .then(res => res.text())
+                    .then(text => parseItchRss(text, source))
+            )
         );
-        try {
-            const posts = await Promise.any(promises);
-            if (posts && posts.length) {
-                writeCache(cacheKey, posts);
-                return posts;
+
+        let posts = [];
+        results.forEach((r, idx) => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
+                console.log(`[GameUpdates] itch.io прокси ${idx}: ${r.value.length} постов`);
+                posts = posts.concat(r.value);
+            } else if (r.status === 'rejected') {
+                console.warn(`[GameUpdates] itch.io прокси ${idx} ошибка:`, r.reason?.message || r.reason);
             }
-        } catch (e) {
-            if (isAborted(e, signal)) return [];
-            console.warn(`[GameUpdates] itch.io ${source.name}:`, e.message || e);
+        });
+
+        if (posts.length === 0) {
+            const stale = readCacheWithDates(cacheKey, Infinity);
+            return stale || [];
         }
 
-        const stale = readCacheWithDates(cacheKey, Infinity);
-        return stale || [];
-    }
-
-    // ============================================================
-    // YOUTUBE
-    // ============================================================
-
-    function filterYoutubeVideos(videos) {
+        // Дедупликация по itchLink
         const seen = new Set();
-        return videos
-            .filter(v => v && v.videoId && !seen.has(v.videoId) && (seen.add(v.videoId), true))
-            .filter(v => {
-                if (typeof v.duration === 'number' && v.duration > 0 && v.duration < MIN_YT_DURATION) {
-                    return false;
-                }
-                return true;
-            })
-            .sort((a, b) => b.date - a.date)
-            .slice(0, MAX_YT_VIDEOS);
+        const unique = posts.filter(p => {
+            if (seen.has(p.itchLink)) return false;
+            seen.add(p.itchLink);
+            return true;
+        }).slice(0, MAX_ITCH_POSTS);
+
+        writeCache(cacheKey, unique);
+        return unique;
     }
 
-    function isRelevant(video, keywords) {
-        if (!video) return false;
-        const text = ((video.title || '') + ' ' + (video.description || '')).toLowerCase();
-        return keywords.some(kw => text.includes(kw));
-    }
+    // ============================================================
+    // YOUTUBE — RSS (с фильтром)
+    // ============================================================
 
     function parseYoutubeRss(text, game) {
         const keywords = GAME_KEYWORDS[game] || [];
@@ -275,8 +300,7 @@
             const videoId = videoIdMatch[1];
             const title = decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled');
             const description = descMatch ? decodeXmlEntities(descMatch[1]) : '';
-            const video = { videoId, title, description, duration: null };
-            if (!isRelevant(video, keywords)) return null;
+            if (!isRelevantVideo({ title, description }, keywords)) return null;
             return normalizePost({
                 type: 'yt-video',
                 id: `yt-${videoId}`,
@@ -284,7 +308,6 @@
                 title,
                 author: YT_CHANNEL_NAME,
                 date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
-                // Превью ВСЕГДА через i.ytimg.com, не через Piped-прокси
                 thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                 labels: ['type:yt-video']
             });
@@ -293,19 +316,28 @@
     }
 
     async function fetchYoutubeRss(game, signal) {
-        const promises = RSS_PROXIES.map(proxyFn =>
-            fetchWithTimeout(proxyFn(YT_RSS_URL), signal)
-                .then(res => res.text())
-                .then(text => parseYoutubeRss(text, game))
+        const results = await Promise.allSettled(
+            RSS_PROXIES.map(proxyFn =>
+                fetchWithTimeout(proxyFn(YT_RSS_URL), signal)
+                    .then(res => res.text())
+                    .then(text => parseYoutubeRss(text, game))
+            )
         );
-        try {
-            return await Promise.any(promises);
-        } catch (e) {
-            if (isAborted(e, signal)) throw e;
-            console.warn(`[GameUpdates] YouTube RSS прокси не сработали:`, e.message || e);
-        }
-        return [];
+        let videos = [];
+        results.forEach((r, idx) => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
+                console.log(`[GameUpdates] YouTube RSS прокси ${idx}: ${r.value.length} видео`);
+                videos = videos.concat(r.value);
+            } else if (r.status === 'rejected') {
+                console.warn(`[GameUpdates] YouTube RSS прокси ${idx} ошибка:`, r.reason?.message || r.reason);
+            }
+        });
+        return videos;
     }
+
+    // ============================================================
+    // YOUTUBE — Piped (с фильтром)
+    // ============================================================
 
     async function fetchYoutubePiped(game, signal) {
         const keywords = GAME_KEYWORDS[game] || [];
@@ -319,34 +351,32 @@
                     const videoId = extractVideoId(item.url);
                     if (!videoId) return null;
                     const duration = typeof item.duration === 'number' ? item.duration : null;
-                    if (duration !== null && duration > 0 && duration < MIN_YT_DURATION) return null;
-                    const video = {
-                        videoId,
-                        title: item.title || '',
-                        description: item.shortDescription || '',
-                        duration
-                    };
-                    if (!isRelevant(video, keywords)) return null;
+                    const title = item.title || '';
+                    const description = item.shortDescription || '';
+                    if (!isRelevantVideo({ title, description }, keywords)) return null;
                     return normalizePost({
                         type: 'yt-video',
                         id: `yt-${videoId}`,
                         videoId,
-                        title: item.title || '',
+                        title,
                         author: YT_CHANNEL_NAME,
                         date: new Date(item.uploaded || Date.now()),
-                        // Превью ВСЕГДА через i.ytimg.com
                         thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                        labels: ['type:yt-video']
+                        labels: ['type:yt-video'],
+                        duration
                     });
                 }).filter(Boolean);
             })
         );
-        const videos = [];
-        for (const r of results) {
-            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
-                videos.push(...r.value);
+        let videos = [];
+        results.forEach((r, idx) => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
+                console.log(`[GameUpdates] Piped ${idx}: ${r.value.length} видео`);
+                videos = videos.concat(r.value);
+            } else if (r.status === 'rejected') {
+                console.warn(`[GameUpdates] Piped ${idx} ошибка:`, r.reason?.message || r.reason);
             }
-        }
+        });
         return videos;
     }
 
@@ -376,12 +406,13 @@
         }
 
         const filtered = filterYoutubeVideos(videos);
+        console.log(`[GameUpdates] YouTube итого (с фильтром по ${GAME_KEYWORDS[game]?.join('/')}): ${filtered.length}`);
         if (filtered.length) writeCache(cacheKey, filtered);
         return filtered;
     }
 
     // ============================================================
-    // GitHub issues
+    // GITHUB ISSUES
     // ============================================================
 
     async function fetchGithubUpdates(game, signal, forceRefresh = false) {
@@ -419,6 +450,8 @@
         const gh = results[0].status === 'fulfilled' ? results[0].value : [];
         const itch = results[1].status === 'fulfilled' ? results[1].value : [];
         const yt = results[2].status === 'fulfilled' ? results[2].value : [];
+
+        console.log(`[GameUpdates] GitHub: ${gh.length}, itch.io: ${itch.length}, YouTube: ${yt.length}`);
 
         return [...yt, ...itch, ...gh].sort((a, b) => b.date - a.date);
     }
@@ -570,6 +603,10 @@
         window.scrollTo({ top: scrollY, behavior: 'instant' });
     }
 
+    // ============================================================
+    // ИНИЦИАЛИЗАЦИЯ
+    // ============================================================
+
     window.initGameUpdates = function() {
         const container = document.getElementById('game-updates');
         if (container?.dataset.game) {
@@ -624,7 +661,7 @@
 
     async function loadGameUpdates(container, game, forceRefresh = false) {
         if (currentAbort) { currentAbort.controller.abort(); currentAbort = null; }
-        const { controller, timeoutId } = createAbortable(20000);
+        const { controller, timeoutId } = createAbortable(25000);
         currentAbort = { controller };
 
         try {

@@ -1,15 +1,17 @@
 // js/pages/news-feed.js — лента новостей (index.html).
 //
-// YouTube: RSS UULF (через прокси) + Piped (2 рабочих инстанса) — параллельно, allSettled.
-//   - Превью ВСЕГДА через i.ytimg.com (не через Piped-прокси — CSP).
-//   - Shorts отсекаются по duration < 60 сек.
-//   - Фильтр по 'starve' / 'neon' в title ИЛИ description.
-//   - Отдельный кеш: yt_videos_cache_v11 (не путать с game-updates).
+// ВАЖНО: YouTube здесь НЕ фильтруется по 'starve'/'neon' — берём ВСЕ видео канала,
+// кроме Shorts (duration < 60 сек). itch.io тоже без фильтра.
 //
-// itch.io: RSS через прокси (corsproxy.dev, corsfix.com), общий кеш с game-updates.
+// Источники:
+//   - GitHub issues (type:news + type:update)
+//   - YouTube: RSS UULF (через прокси) + Piped (2 рабочих инстанса)
+//   - itch.io devlog RSS
+//   - Twitch (2 канала)
+//   - GitHub Releases (инструменты)
 //
-// Устойчивость: если источник упал — используется stale cache или пустой массив.
-// Всё собирается через Promise.allSettled, чтобы падение одного не ломало остальные.
+// Превью ВСЕГДА через i.ytimg.com (не Piped-прокси — CSP).
+// Все источники через Promise.allSettled — падение одного не ломает остальные.
 
 (function() {
     'use strict';
@@ -23,14 +25,14 @@
     const { showToast } = window.UIUtils;
 
     // ---- Кеши ----
-    const CACHE_KEY = 'news_feed_data_v11';
+    const CACHE_KEY = 'news_feed_data_v12';
     const CACHE_TTL = 5 * 60 * 1000;
-    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v11';
+    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v12';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
-    const ITCH_CACHE_KEY = 'itch_posts_v9_starve-neon'; // общий с game-updates.js
+    const ITCH_CACHE_KEY = 'itch_posts_v9_starve-neon'; // общий с game-updates
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
 
-    // ---- Таймауты / лимиты ----
+    // ---- Лимиты ----
     const SOURCE_TIMEOUT = 20000;
     const REQUEST_TIMEOUT = 20000;
     const MAX_DISPLAY_ITEMS = 9;
@@ -44,28 +46,23 @@
     const YT_UULF_PLAYLIST_ID = YT_CHANNEL_ID.replace(/^UC/, 'UULF');
     const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${YT_UULF_PLAYLIST_ID}`;
 
-    // Ключевые слова для фильтрации видео (проверяются в title ИЛИ description)
-    const YT_KEYWORDS = ['starve', 'neon'];
-
-    // ---- Рабочие Piped-инстансы (200 в логах) ----
+    // Только проверенные Piped-инстансы (200 в логах)
     const PIPED_INSTANCES = [
         'https://api.piped.private.coffee',
         'https://pipedapi.ducks.party'
     ];
 
-    // ---- Рабочие RSS-прокси (200 в логах) ----
+    // Проверенные RSS-прокси (200 в логах)
     const RSS_PROXIES = [
         (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`
     ];
 
-    // ---- Релизы инструментов ----
     const RELEASE_SOURCES = [
         { owner: 'NeonShadowYT', repo: 'WorldGenerator', name: 'WorldGenerator', icon: 'images/tool-world-generator.webp' },
         { owner: 'NeonShadowYT', repo: 'IconCreator', name: 'IconCreator', icon: 'images/tool-icon-creator.webp' }
     ];
 
-    // ---- itch.io ----
     const ITCH_DEVLOG_SOURCES = [
         {
             name: 'Starve Neon',
@@ -185,10 +182,7 @@
                     try { controller.abort(); } catch { /* noop */ }
                 }, { once: true });
             }
-            fetch(url, {
-                signal: controller.signal,
-                cache: 'no-store' // SW не должен отдавать пустой кэш
-            })
+            fetch(url, { signal: controller.signal, cache: 'no-store' })
                 .then(res => {
                     clearTimeout(timer);
                     if (!res.ok) reject(new Error(`HTTP ${res.status}`));
@@ -205,15 +199,8 @@
         return m ? m[1] : null;
     }
 
-    /** Фильтр видео: 'starve' или 'neon' в title ИЛИ description. */
-    function isRelevantVideo(video) {
-        if (!video) return false;
-        const text = ((video.title || '') + ' ' + (video.description || '')).toLowerCase();
-        return YT_KEYWORDS.some(kw => text.includes(kw));
-    }
-
-    /** Убираем Shorts (duration < 60) и дубликаты. */
-    function filterYoutubeVideos(videos) {
+    /** Убирает Shorts (duration < 60) и дубликаты. НЕ фильтрует по контенту. */
+    function filterShortsAndDuplicates(videos) {
         const seen = new Set();
         return videos
             .filter(v => v && v.videoId && !seen.has(v.videoId) && (seen.add(v.videoId), true))
@@ -242,13 +229,11 @@
             const videoId = videoIdMatch[1];
             const title = decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled');
             const description = descMatch ? decodeXmlEntities(descMatch[1]) : '';
-            if (!isRelevantVideo({ title, description })) return null;
             return normalizeItem({
                 type: 'video', id: videoId,
                 title,
                 author: YT_CHANNEL_NAME,
                 date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
-                // Превью ВСЕГДА через i.ytimg.com (не Piped-прокси)
                 thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                 videoData: { service: 'youtube', id: videoId }
             });
@@ -257,26 +242,30 @@
     }
 
     async function fetchYoutubeRss(signal) {
-        const promises = RSS_PROXIES.map(proxyFn =>
-            fetchWithTimeout(proxyFn(YT_RSS_URL), signal)
-                .then(res => res.text())
-                .then(text => parseYoutubeRss(text))
+        const results = await Promise.allSettled(
+            RSS_PROXIES.map(proxyFn =>
+                fetchWithTimeout(proxyFn(YT_RSS_URL), signal)
+                    .then(res => res.text())
+                    .then(text => parseYoutubeRss(text))
+            )
         );
-        try {
-            return await Promise.any(promises);
-        } catch (e) {
-            if (isAborted(e, signal)) throw e;
-            console.warn('[NewsFeed] YouTube RSS прокси не сработали:', e.message || e);
-        }
-        return [];
+        let videos = [];
+        results.forEach((r, idx) => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+                console.log(`[NewsFeed] RSS прокси ${idx}: ${r.value.length} видео`);
+                videos = videos.concat(r.value);
+            } else if (r.status === 'rejected') {
+                console.warn(`[NewsFeed] RSS прокси ${idx} ошибка:`, r.reason?.message || r.reason);
+            }
+        });
+        return videos;
     }
 
     // ============================================================
-    // YOUTUBE — Piped (только 2 рабочих инстанса)
+    // YOUTUBE — Piped (2 рабочих инстанса)
     // ============================================================
 
     async function fetchYoutubePiped(signal) {
-        // Используем allSettled — падение одного не ломает остальные
         const results = await Promise.allSettled(
             PIPED_INSTANCES.map(async (base) => {
                 const url = `${base}/channel/${YT_CHANNEL_ID}`;
@@ -287,35 +276,30 @@
                     const videoId = extractVideoId(item.url);
                     if (!videoId) return null;
                     const duration = typeof item.duration === 'number' ? item.duration : null;
-                    if (duration !== null && duration > 0 && duration < MIN_YT_DURATION) return null;
-                    const title = item.title || '';
-                    const description = item.shortDescription || '';
-                    if (!isRelevantVideo({ title, description })) return null;
                     return normalizeItem({
                         type: 'video', id: videoId,
-                        title,
+                        title: item.title || 'Untitled',
                         author: YT_CHANNEL_NAME,
                         date: new Date(item.uploaded || Date.now()),
-                        // Превью ВСЕГДА через i.ytimg.com
                         thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                        videoData: { service: 'youtube', id: videoId }
+                        videoData: { service: 'youtube', id: videoId },
+                        // Сохраняем duration для отсечения Shorts
+                        duration
                     });
                 }).filter(Boolean);
             })
         );
-
-        const videos = [];
-        for (const r of results) {
-            if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
-                videos.push(...r.value);
+        let videos = [];
+        results.forEach((r, idx) => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+                console.log(`[NewsFeed] Piped ${idx}: ${r.value.length} видео`);
+                videos = videos.concat(r.value);
+            } else if (r.status === 'rejected') {
+                console.warn(`[NewsFeed] Piped ${idx} ошибка:`, r.reason?.message || r.reason);
             }
-        }
+        });
         return videos;
     }
-
-    // ============================================================
-    // YOUTUBE — агрегация + кеш
-    // ============================================================
 
     async function fetchYoutubeVideos(signal, forceRefresh = false) {
         if (!forceRefresh) {
@@ -323,7 +307,7 @@
             if (cached && cached.length) return cached.map(normalizeItem);
         }
 
-        // RSS и Piped параллельно, ошибки изолированы
+        // Оба источника параллельно
         const results = await Promise.allSettled([
             fetchYoutubeRss(signal),
             fetchYoutubePiped(signal)
@@ -333,18 +317,17 @@
         for (const r of results) {
             if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
                 videos = videos.concat(r.value);
-            } else if (r.status === 'rejected') {
-                console.warn('[NewsFeed] YouTube источник упал:', r.reason?.message || r.reason);
             }
         }
 
         if (!videos.length) {
-            // Ничего не нашли — пробуем stale cache
             const stale = readCache(VIDEOS_CACHE_KEY, Infinity);
             return stale ? stale.map(normalizeItem) : [];
         }
 
-        const filtered = filterYoutubeVideos(videos);
+        // БЕЗ фильтра по starve/neon — только отсекаем Shorts и дубликаты
+        const filtered = filterShortsAndDuplicates(videos);
+        console.log(`[NewsFeed] YouTube итого: ${filtered.length} видео (без Shorts)`);
         if (filtered.length) writeCache(VIDEOS_CACHE_KEY, filtered);
         return filtered;
     }
@@ -413,18 +396,21 @@
 
         const allPosts = [];
         for (const source of ITCH_DEVLOG_SOURCES) {
-            const promises = RSS_PROXIES.map(proxyFn =>
-                fetchWithTimeout(proxyFn(source.rssUrl), signal)
-                    .then(res => res.text())
-                    .then(text => parseItchRss(text, source))
+            const results = await Promise.allSettled(
+                RSS_PROXIES.map(proxyFn =>
+                    fetchWithTimeout(proxyFn(source.rssUrl), signal)
+                        .then(res => res.text())
+                        .then(text => parseItchRss(text, source))
+                )
             );
-            try {
-                const posts = await Promise.any(promises);
-                if (posts && posts.length) allPosts.push(...posts);
-            } catch (e) {
-                if (isAborted(e, signal)) return [];
-                console.warn(`[NewsFeed] itch.io ${source.name}:`, e.message || e);
-            }
+            results.forEach((r, idx) => {
+                if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
+                    console.log(`[NewsFeed] itch.io прокси ${idx}: ${r.value.length} постов`);
+                    allPosts.push(...r.value);
+                } else if (r.status === 'rejected') {
+                    console.warn(`[NewsFeed] itch.io прокси ${idx} ошибка:`, r.reason?.message || r.reason);
+                }
+            });
         }
 
         if (allPosts.length === 0) {
@@ -438,7 +424,7 @@
     }
 
     // ============================================================
-    // GITHUB ISSUES (посты новостей + обновления)
+    // GITHUB ISSUES
     // ============================================================
 
     async function loadPosts(signal) {
@@ -520,7 +506,7 @@
     }
 
     // ============================================================
-    // GITHUB RELEASES (инструменты)
+    // GITHUB RELEASES
     // ============================================================
 
     async function loadReleases(onEach, signal) {
@@ -575,7 +561,7 @@
     }
 
     // ============================================================
-    // АГРЕГАЦИЯ ВСЕХ ИСТОЧНИКОВ
+    // АГРЕГАЦИЯ
     // ============================================================
 
     async function loadAllSources(signal, forceRefresh, onItem) {
@@ -589,9 +575,11 @@
         let allItems = [];
         const labels = ['посты', 'YouTube', 'Twitch', 'релизы', 'itch.io'];
         results.forEach((r, i) => {
-            if (r.status === 'fulfilled') allItems = allItems.concat(r.value || []);
-            else if (!isAborted(r.reason, signal)) {
-                console.warn(`[NewsFeed] ${labels[i]}:`, r.reason?.message || r.reason);
+            if (r.status === 'fulfilled') {
+                console.log(`[NewsFeed] ${labels[i]}: ${r.value?.length || 0} элементов`);
+                allItems = allItems.concat(r.value || []);
+            } else if (!isAborted(r.reason, signal)) {
+                console.warn(`[NewsFeed] ${labels[i]} упал:`, r.reason?.message || r.reason);
             }
         });
         allItems.sort((a, b) => b.date - a.date);
@@ -599,7 +587,7 @@
     }
 
     // ============================================================
-    // ОСНОВНОЙ FETCH С КЕШЕМ
+    // FETCH С КЕШЕМ
     // ============================================================
 
     async function fetchNewsFeed({ signal, forceRefresh = false, maxAge = CACHE_TTL, onItem, onUpdate } = {}) {
