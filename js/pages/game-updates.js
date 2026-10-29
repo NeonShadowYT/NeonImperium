@@ -1,8 +1,11 @@
 // js/pages/game-updates.js — обновления (GitHub + itch.io + YouTube).
 //
 // ВАЖНО:
-//   — YouTube: фильтр ТОЛЬКО по title ('starve' || 'neon').
-//   — api.codetabs.com УДАЛЁН (отключён с июня 2026).
+//   — YouTube: фильтр ТОЛЬКО по title ('starve' || 'neon'). Description НЕ учитывается.
+//   — Shorts (< 60 сек) отсекаются.
+//   — itch.io: превью из media:*, enclosure, content:encoded или description.
+//   — Мгновенное обновление: каждый источник вставляет карточки сразу.
+//   — Кеш обновляется после каждого успешного ответа.
 
 (function() {
     'use strict';
@@ -80,7 +83,6 @@
         'https://invidious.perennialte.ch'
     ];
 
-    // api.codetabs.com УДАЛЁН.
     const CORS_PROXIES = [
         (u) => `https://corsfix.com/?${u}`,
         (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
@@ -130,8 +132,8 @@
         return { ...p, date: normalizeDate(p.date) };
     }
 
-    function getItchCacheKey(game) { return `itch_posts_updates_v19_${game}`; }
-    function getYtCacheKey(game) { return `yt_channel_cache_v19_${game}`; }
+    function getItchCacheKey(game) { return `itch_posts_updates_v20_${game}`; }
+    function getYtCacheKey(game) { return `yt_channel_cache_v20_${game}`; }
 
     function readCacheWithDates(key, ttl) {
         try {

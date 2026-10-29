@@ -1,12 +1,10 @@
 // js/pages/news-feed.js — лента новостей (index.html).
 //
-// ИСПРАВЛЕНИЯ:
-//   — api.codetabs.com УДАЛЁН из списка прокси (отключён с июня 2026).
-//   — Порядок прокси: corsfix.com → corsproxy.io → allorigins → остальные.
-//   — itch.io: добавлен RSSHub fallback.
-//   — Мгновенный рендер: скелетон заменяется первой же карточкой,
-//     даже если остальные источники ещё грузятся.
-//   — Кеш: если есть кеш, он показывается сразу, без скелетона.
+// ВАЖНО:
+//   — YouTube: фильтр ТОЛЬКО по title ('starve' || 'neon'), как в game-updates.js.
+//   — Shorts (< 60 сек) отсекаются.
+//   — itch.io: те же 3 поста, что и в game-updates.js.
+//   — Мгновенный рендер: каждый источник вставляет карточки сразу.
 
 (function() {
     'use strict';
@@ -19,11 +17,11 @@
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const { showToast } = window.UIUtils;
 
-    const CACHE_KEY = 'news_feed_data_v19';
+    const CACHE_KEY = 'news_feed_data_v20';
     const CACHE_TTL = 5 * 60 * 1000;
-    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v19';
+    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v20';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
-    const ITCH_CACHE_KEY = 'itch_posts_news_v19';
+    const ITCH_CACHE_KEY = 'itch_posts_news_v20';
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
 
     const SOURCE_TIMEOUT = 25000;
@@ -41,6 +39,9 @@
         `https://www.youtube.com/feeds/videos.xml?playlist_id=${YT_UU_PLAYLIST_ID}`,
         `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`
     ];
+
+    // Те же ключевые слова, что и в game-updates.js.
+    const GAME_KEYWORDS = ['starve', 'neon'];
 
     const PIPED_INSTANCES = [
         'https://api.piped.private.coffee',
@@ -73,7 +74,6 @@
         'https://invidious.perennialte.ch'
     ];
 
-    // api.codetabs.com УДАЛЁН (отключён с июня 2026).
     const CORS_PROXIES = [
         (u) => `https://corsfix.com/?${u}`,
         (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
@@ -268,7 +268,14 @@
         return null;
     }
 
-    function filterShortsAndDuplicates(videos) {
+    // Тот же фильтр, что и в game-updates.js.
+    function isRelevantVideo(video) {
+        if (!video) return false;
+        const title = (video.title || '').toLowerCase();
+        return GAME_KEYWORDS.some(kw => title.includes(kw));
+    }
+
+    function filterYoutubeVideos(videos) {
         const seen = new Set();
         const filtered = [];
         let shortsCount = 0;
@@ -532,13 +539,13 @@
             return [];
         }
 
-        const filtered = filterShortsAndDuplicates(videos);
+        const filtered = filterYoutubeVideos(videos);
         if (filtered.length > 0) writeCache(VIDEOS_CACHE_KEY, filtered);
         return filtered;
     }
 
     // ============================================================
-    // ITCH.IO — RSS + RSSHub fallback
+    // ITCH.IO
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -658,7 +665,6 @@
                 if (r.status === 'fulfilled' && Array.isArray(r.value)) allPosts.push(...r.value);
             }
 
-            // Резерв: RSSHub
             if (allPosts.length === 0 && source.rssHubUrl) {
                 const rssHubUrls = [
                     source.rssHubUrl,
@@ -857,7 +863,7 @@
     }
 
     // ============================================================
-    // АГРЕГАЦИЯ — каждый источник независимо
+    // АГРЕГАЦИЯ
     // ============================================================
 
     async function loadAllSources(signal, forceRefresh, onItem) {
@@ -902,7 +908,7 @@
     }
 
     // ============================================================
-    // FETCH С КЕШЕМ — постепенное обновление
+    // FETCH С КЕШЕМ
     // ============================================================
 
     async function fetchNewsFeed({ signal, forceRefresh = false, maxAge = CACHE_TTL, onUpdate } = {}) {
@@ -1289,12 +1295,10 @@
         if (!container) return;
         currentUser = getCurrentUser();
 
-        // Проверяем кеш ДО добавления скелетона.
         const cached = await cacheGet(CACHE_KEY, CACHE_TTL);
         const hasCachedItems = cached && Array.isArray(cached.items) && cached.items.length > 0;
 
         if (hasCachedItems) {
-            // Показываем кеш сразу, без скелетона.
             updateNewsFeed(cached.items.map(normalizeItem), { replace: true });
         } else {
             container.innerHTML = '';
