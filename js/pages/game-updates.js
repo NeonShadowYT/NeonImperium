@@ -1,7 +1,7 @@
 // js/pages/game-updates.js — обновления (GitHub + itch.io + YouTube-канал).
-// YouTube: RSS UULF (через прокси) + Piped (расширенный список) — параллельно.
-// Shorts отсекаются по длительности (< 60 сек). Фильтр проверяет название И описание.
-// Кеш видео с канала отдельный — при сбое источника данные не теряются.
+// Только проверенные Piped-инстансы: api.piped.private.coffee, pipedapi.ducks.party.
+// Превью всегда через i.ytimg.com (не через Piped-прокси — CSP).
+// Фильтр проверяет title И description.
 
 (function() {
     'use strict';
@@ -31,7 +31,6 @@
     const YT_UULF_PLAYLIST_ID = YT_CHANNEL_ID.replace(/^UC/, 'UULF');
     const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${YT_UULF_PLAYLIST_ID}`;
 
-    // Ключевые слова для фильтрации видео с канала (название ИЛИ описание)
     const GAME_KEYWORDS = {
         'starve-neon': ['starve', 'neon']
     };
@@ -44,23 +43,13 @@
         }
     };
 
-    // ---- Расширенный список Piped-инстансов (проверены в логах: 200) ----
+    // Только работающие Piped-инстансы (200 в логах)
     const PIPED_INSTANCES = [
         'https://api.piped.private.coffee',
-        'https://pipedapi.ducks.party',
-        'https://pipedapi.leptons.xyz',
-        'https://pipedapi.kavin.rocks',
-        'https://pipedapi-libre.kavin.rocks',
-        'https://pipedapi.adminforge.de',
-        'https://piped-api.privacy.com.de',
-        'https://api.piped.yt',
-        'https://pipedapi.drgns.space',
-        'https://pipedapi.owo.si',
-        'https://pipedapi.reallyaweso.me',
-        'https://pipedapi.darkness.services'
+        'https://pipedapi.ducks.party'
     ];
 
-    // ---- CORS-прокси для RSS (работают стабильно) ----
+    // RSS-прокси, которые стабильно отдают 200
     const RSS_PROXIES = [
         (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`
@@ -107,7 +96,7 @@
         return `itch_posts_v9_${game}`;
     }
     function getYtCacheKey(game) {
-        return `yt_channel_cache_v1_${game}`; // отдельный кеш для видео с канала
+        return `yt_channel_cache_v2_${game}`;
     }
 
     function readCacheWithDates(key, ttl) {
@@ -146,10 +135,7 @@
                     try { controller.abort(); } catch { /* noop */ }
                 }, { once: true });
             }
-            fetch(url, {
-                signal: controller.signal,
-                cache: 'no-store' // чтобы SW не отдавал пустой кэш
-            })
+            fetch(url, { signal: controller.signal, cache: 'no-store' })
                 .then(res => {
                     clearTimeout(timer);
                     if (!res.ok) reject(new Error(`HTTP ${res.status}`));
@@ -157,6 +143,13 @@
                 })
                 .catch(err => { clearTimeout(timer); reject(err); });
         });
+    }
+
+    /** Извлекает 11-символьный YouTube videoId из любого URL. */
+    function extractVideoId(url) {
+        if (!url) return null;
+        const m = String(url).match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|\/watch\?v=|\/embed\/|v\/)([a-zA-Z0-9_-]{11})/);
+        return m ? m[1] : null;
     }
 
     // ============================================================
@@ -226,7 +219,6 @@
             if (cached && cached.length) return cached;
         }
 
-        // raceProxies для itch.io
         const promises = RSS_PROXIES.map(proxyFn =>
             fetchWithTimeout(proxyFn(source.rssUrl), signal)
                 .then(res => res.text())
@@ -248,7 +240,7 @@
     }
 
     // ============================================================
-    // YOUTUBE — RSS + Piped (расширенный)
+    // YOUTUBE
     // ============================================================
 
     function filterYoutubeVideos(videos) {
@@ -265,11 +257,6 @@
             .slice(0, MAX_YT_VIDEOS);
     }
 
-    /**
-     * Проверяет, относится ли видео к игре.
-     * Смотрит и в title, и в description (описание у Piped может быть пустым,
-     * но у RSS оно есть).
-     */
     function isRelevant(video, keywords) {
         if (!video) return false;
         const text = ((video.title || '') + ' ' + (video.description || '')).toLowerCase();
@@ -288,12 +275,7 @@
             const videoId = videoIdMatch[1];
             const title = decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled');
             const description = descMatch ? decodeXmlEntities(descMatch[1]) : '';
-            const video = {
-                videoId,
-                title,
-                description,
-                duration: null // RSS не даёт длительность
-            };
+            const video = { videoId, title, description, duration: null };
             if (!isRelevant(video, keywords)) return null;
             return normalizePost({
                 type: 'yt-video',
@@ -302,6 +284,7 @@
                 title,
                 author: YT_CHANNEL_NAME,
                 date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
+                // Превью ВСЕГДА через i.ytimg.com, не через Piped-прокси
                 thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                 labels: ['type:yt-video']
             });
@@ -326,42 +309,45 @@
 
     async function fetchYoutubePiped(game, signal) {
         const keywords = GAME_KEYWORDS[game] || [];
-        const promises = PIPED_INSTANCES.map(async (base) => {
-            const url = `${base}/channel/${YT_CHANNEL_ID}`;
-            const res = await fetchWithTimeout(url, signal);
-            const data = await res.json();
-            const streams = data.relatedStreams || data.items || [];
-            const videos = streams.map(item => {
-                const videoId = (item.url || '').replace('/watch?v=', '');
-                if (!videoId) return null;
-                const duration = typeof item.duration === 'number' ? item.duration : null;
-                if (duration !== null && duration > 0 && duration < MIN_YT_DURATION) return null;
-                const video = {
-                    videoId,
-                    title: item.title || '',
-                    description: item.shortDescription || '',
-                    duration
-                };
-                if (!isRelevant(video, keywords)) return null;
-                return normalizePost({
-                    type: 'yt-video',
-                    id: `yt-${videoId}`,
-                    videoId,
-                    title: item.title || '',
-                    author: YT_CHANNEL_NAME,
-                    date: new Date(item.uploaded || Date.now()),
-                    thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                    labels: ['type:yt-video']
-                });
-            }).filter(Boolean);
-            if (!videos.length) throw new Error('empty');
-            return videos;
-        });
-        try {
-            return await Promise.any(promises);
-        } catch {
-            return [];
+        const results = await Promise.allSettled(
+            PIPED_INSTANCES.map(async (base) => {
+                const url = `${base}/channel/${YT_CHANNEL_ID}`;
+                const res = await fetchWithTimeout(url, signal);
+                const data = await res.json();
+                const streams = data.relatedStreams || data.items || [];
+                return streams.map(item => {
+                    const videoId = extractVideoId(item.url);
+                    if (!videoId) return null;
+                    const duration = typeof item.duration === 'number' ? item.duration : null;
+                    if (duration !== null && duration > 0 && duration < MIN_YT_DURATION) return null;
+                    const video = {
+                        videoId,
+                        title: item.title || '',
+                        description: item.shortDescription || '',
+                        duration
+                    };
+                    if (!isRelevant(video, keywords)) return null;
+                    return normalizePost({
+                        type: 'yt-video',
+                        id: `yt-${videoId}`,
+                        videoId,
+                        title: item.title || '',
+                        author: YT_CHANNEL_NAME,
+                        date: new Date(item.uploaded || Date.now()),
+                        // Превью ВСЕГДА через i.ytimg.com
+                        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                        labels: ['type:yt-video']
+                    });
+                }).filter(Boolean);
+            })
+        );
+        const videos = [];
+        for (const r of results) {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+                videos.push(...r.value);
+            }
         }
+        return videos;
     }
 
     async function fetchYoutubeForGame(game, signal, forceRefresh = false) {
@@ -372,7 +358,6 @@
             if (cached && cached.length) return cached;
         }
 
-        // Запускаем RSS и Piped параллельно, собираем все результаты
         const results = await Promise.allSettled([
             fetchYoutubeRss(game, signal),
             fetchYoutubePiped(game, signal)
