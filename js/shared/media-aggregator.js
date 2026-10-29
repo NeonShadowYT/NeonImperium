@@ -2,6 +2,7 @@
 // Единый модуль для YouTube + itch.io. Общий кеш для всех страниц.
 // Кеш хранит ВСЕ видео с канала (без фильтра по названию).
 // Фильтр по названию применяется на стороне страницы через options.filterByTitle.
+// Нормализация date на выходе — критично, так как Date в JSON превращается в строку.
 
 (function() {
     'use strict';
@@ -79,6 +80,22 @@
         }
     ];
 
+    // ---------- Нормализация ----------
+
+    function toDate(d) {
+        if (d instanceof Date && !isNaN(d.getTime())) return d;
+        const nd = new Date(d);
+        return isNaN(nd.getTime()) ? new Date() : nd;
+    }
+
+    function normalizeRawItems(items) {
+        if (!Array.isArray(items)) return [];
+        return items.map(item => {
+            if (!item) return item;
+            return { ...item, date: toDate(item.date) };
+        });
+    }
+
     // ---------- Кеш ----------
 
     function readCache(key, ttl) {
@@ -92,7 +109,7 @@
                 localStorage.removeItem(key);
                 return null;
             }
-            return data.items;
+            return normalizeRawItems(data.items);
         } catch { return null; }
     }
 
@@ -363,7 +380,6 @@
         return all;
     }
 
-    // Возвращает ВСЕ уникальные видео с канала (кеш без фильтра по названию)
     async function fetchYoutubeVideosRaw(signal, forceRefresh = false) {
         if (!forceRefresh) {
             const cached = readCache(YT_CACHE_KEY, CACHE_TTL);
@@ -398,7 +414,6 @@
             return [];
         }
 
-        // Дедупликация по videoId
         const seen = new Set();
         const unique = [];
         for (const v of allVideos) {
@@ -411,22 +426,19 @@
 
         writeCache(YT_CACHE_KEY, unique);
         console.log('[MediaAggregator] YouTube уникальных:', unique.length);
-        return unique;
+        return normalizeRawItems(unique);
     }
 
-    // Возвращает отфильтрованные видео по запросу
     async function fetchYoutubeVideos(signal, options = {}) {
         const { forceRefresh = false, filterByTitle = false } = options;
-        const raw = await fetchYoutubeVideosRaw(signal, forceRefresh);
+        const raw = normalizeRawItems(await fetchYoutubeVideosRaw(signal, forceRefresh));
 
-        // Фильтр по названию (если нужен)
         let relevant = raw;
         if (filterByTitle) {
             relevant = raw.filter(v => isRelevantVideo(v, GAME_KEYWORDS));
             console.log(`[MediaAggregator] YouTube фильтр по названию: ${relevant.length} из ${raw.length}`);
         }
 
-        // Отсечение Shorts
         const noShorts = [];
         let shortsCount = 0;
         for (const v of relevant) {
@@ -440,11 +452,11 @@
 
         if (noShorts.length === 0 && relevant.length > 0) {
             console.warn(`[MediaAggregator] Все ${relevant.length} видео оказались Shorts — возвращаем как есть`);
-            return relevant;
+            return normalizeRawItems(relevant);
         }
 
         console.log(`[MediaAggregator] YouTube: ${relevant.length} → ${noShorts.length} (Shorts: ${shortsCount})`);
-        return noShorts;
+        return normalizeRawItems(noShorts);
     }
 
     // ---------- ITCH.IO ----------
@@ -613,7 +625,7 @@
             writeCache(ITCH_CACHE_KEY, unique);
         }
         console.log('[MediaAggregator] itch.io уникальных:', unique.length);
-        return unique;
+        return normalizeRawItems(unique);
     }
 
     window.MediaAggregator = {

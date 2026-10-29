@@ -1,6 +1,7 @@
 // js/pages/game-updates.js
 // Обновления. YouTube — только видео с "starve"/"neon" в названии (кроме Shorts).
 // itch.io — единый кеш с news-feed.
+// ИСПРАВЛЕНИЕ: нормализация date на выходе fetchAllUpdates + защита в createUpdateCard.
 
 (function() {
     'use strict';
@@ -42,14 +43,15 @@
         return String(err.message || '').includes('Aborted');
     }
 
-    function normalizeDate(d) {
+    function toDate(d) {
         if (d instanceof Date && !isNaN(d.getTime())) return d;
         const nd = new Date(d);
         return isNaN(nd.getTime()) ? new Date() : nd;
     }
 
     function normalizePost(p) {
-        return { ...p, date: normalizeDate(p.date) };
+        if (!p) return p;
+        return { ...p, date: toDate(p.date) };
     }
 
     function readCache(key, ttl) {
@@ -107,13 +109,14 @@
             return source.fn()
                 .then(items => {
                     if (!items || !items.length) return [];
-                    console.log(`[GameUpdates] ${source.name}: ${items.length} элементов`);
+                    const normalized = items.map(normalizePost);
+                    console.log(`[GameUpdates] ${source.name}: ${normalized.length} элементов`);
                     if (typeof onItem === 'function') {
-                        for (const item of items) {
+                        for (const item of normalized) {
                             try { onItem(item); } catch { /* noop */ }
                         }
                     }
-                    return items;
+                    return normalized;
                 })
                 .catch(err => {
                     if (!isAborted(err, signal)) {
@@ -143,36 +146,37 @@
     }
 
     function createUpdateCard(post) {
-        const date = normalizeDate(post.date);
+        const safe = normalizePost(post);
+        const date = safe.date;
 
         const card = createElement('div', 'project-card-link tilt-card', { cursor: 'pointer' });
-        card.dataset.itemId = post.id;
+        card.dataset.itemId = safe.id;
         card.dataset.date = String(date.getTime());
         const inner = createElement('div', 'project-card');
 
-        let imgSrc = post.thumbnail || null;
-        if (!imgSrc && post.body) {
-            const mdMatch = post.body.match(/!\[.*?\]\((.*?)\)/);
+        let imgSrc = safe.thumbnail || null;
+        if (!imgSrc && safe.body) {
+            const mdMatch = safe.body.match(/!\[.*?\]\((.*?)\)/);
             if (mdMatch) imgSrc = mdMatch[1];
         }
         const imgW = createElement('div', 'image-wrapper');
         const img = createElement('img', 'project-image', {}, {
             src: imgSrc || 'images/default-news.webp',
-            alt: post.title, loading: 'lazy'
+            alt: safe.title, loading: 'lazy'
         });
         img.onerror = () => { img.src = 'images/default-news.webp'; };
         imgW.appendChild(img);
 
         const title = createElement('h3');
-        title.textContent = post.title;
+        title.textContent = safe.title;
 
         const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
-        const icon = getAuthorIcon(post.type);
+        const icon = getAuthorIcon(safe.type);
         meta.innerHTML = sanitizeHtml(
-            `<i class="${icon}"></i> ${escapeHtml(post.author)} <i class="fas fa-calendar-alt"></i> ${date.toLocaleDateString()}`
+            `<i class="${icon}"></i> ${escapeHtml(safe.author)} <i class="fas fa-calendar-alt"></i> ${date.toLocaleDateString()}`
         );
 
-        const summary = extractSummary(post.body || '') || stripHtml(post.body || '').substring(0, 120);
+        const summary = extractSummary(safe.body || '') || stripHtml(safe.body || '').substring(0, 120);
         const preview = createElement('p', 'text-secondary', {
             fontSize: '13px', overflow: 'hidden', display: '-webkit-box',
             WebkitLineClamp: '2', WebkitBoxOrient: 'vertical'
@@ -181,21 +185,21 @@
 
         inner.append(imgW, title, meta, preview);
 
-        if (post.type === 'itch-post' && post.itchLink) {
+        if (safe.type === 'itch-post' && safe.itchLink) {
             const a = createElement('a', 'button small', {
                 marginTop: '8px', display: 'inline-flex', alignItems: 'center',
                 justifyContent: 'center', gap: '6px', width: '100%'
-            }, { href: post.itchLink, target: '_blank', rel: 'noopener noreferrer' });
+            }, { href: safe.itchLink, target: '_blank', rel: 'noopener noreferrer' });
             a.innerHTML = sanitizeHtml(`<i class="fab fa-itch-io"></i> <span>${t('readMore')}</span>`);
             a.addEventListener('click', (e) => e.stopPropagation());
             inner.appendChild(a);
         }
 
-        if ((post.type === 'yt-video' || post.type === 'video') && post.videoId) {
+        if ((safe.type === 'yt-video' || safe.type === 'video') && safe.videoId) {
             const a = createElement('a', 'button small', {
                 marginTop: '8px', display: 'inline-flex', alignItems: 'center',
                 justifyContent: 'center', gap: '6px', width: '100%'
-            }, { href: `https://www.youtube.com/watch?v=${post.videoId}`, target: '_blank', rel: 'noopener noreferrer' });
+            }, { href: `https://www.youtube.com/watch?v=${safe.videoId}`, target: '_blank', rel: 'noopener noreferrer' });
             a.innerHTML = sanitizeHtml(`<i class="fab fa-youtube"></i> <span>${t('watch')}</span>`);
             a.addEventListener('click', (e) => e.stopPropagation());
             inner.appendChild(a);
@@ -204,24 +208,24 @@
         card.appendChild(inner);
 
         card.addEventListener('click', async () => {
-            if (post.type === 'itch-post' && post.itchLink) {
-                window.open(post.itchLink, '_blank', 'noopener,noreferrer');
+            if (safe.type === 'itch-post' && safe.itchLink) {
+                window.open(safe.itchLink, '_blank', 'noopener,noreferrer');
                 return;
             }
-            if ((post.type === 'yt-video' || post.type === 'video') && post.videoId) {
-                window.open(`https://www.youtube.com/watch?v=${post.videoId}`, '_blank', 'noopener,noreferrer');
+            if ((safe.type === 'yt-video' || safe.type === 'video') && safe.videoId) {
+                window.open(`https://www.youtube.com/watch?v=${safe.videoId}`, '_blank', 'noopener,noreferrer');
                 return;
             }
             if (!window.UIFeedback) await loadModule('js/features/ui-feedback.js');
             window.UIFeedback.openFullModal({
                 type: 'update',
-                id: post.number || post.id,
-                title: post.title,
-                body: post.body,
-                author: post.author,
-                date: post.date,
-                game: post.game,
-                labels: post.labels
+                id: safe.number || safe.id,
+                title: safe.title,
+                body: safe.body,
+                author: safe.author,
+                date: safe.date,
+                game: safe.game,
+                labels: safe.labels
             });
         });
 
@@ -233,8 +237,9 @@
     function insertCardSorted(grid, post) {
         if (!post || !post.id) return;
         if (grid.querySelector(`[data-item-id="${CSS.escape(post.id)}"]`)) return;
-        const newCard = createUpdateCard(post);
-        const newTs = normalizeDate(post.date).getTime();
+        const normalized = normalizePost(post);
+        const newCard = createUpdateCard(normalized);
+        const newTs = normalized.date.getTime();
         let insertBefore = null;
         for (const child of grid.children) {
             const ts = parseInt(child.dataset.date, 10) || 0;
@@ -378,16 +383,18 @@
                         thumbnail: null
                     }));
 
-                    // Кеш YouTube хранит все видео, поэтому фильтруем по названию здесь
-                    const ytFiltered = (cachedYt || []).filter(v => {
-                        const title = (v.title || '').toLowerCase();
-                        return window.MediaAggregator.GAME_KEYWORDS.some(kw => title.includes(kw));
-                    }).filter(v => {
-                        const dur = typeof v.duration === 'number' ? v.duration : null;
-                        return !(dur != null && dur > 0 && dur < 60);
-                    });
+                    const ytFiltered = (cachedYt || [])
+                        .map(normalizePost)
+                        .filter(v => {
+                            const title = (v.title || '').toLowerCase();
+                            return window.MediaAggregator.GAME_KEYWORDS.some(kw => title.includes(kw));
+                        })
+                        .filter(v => {
+                            const dur = typeof v.duration === 'number' ? v.duration : null;
+                            return !(dur != null && dur > 0 && dur < 60);
+                        });
 
-                    const combined = [...ytFiltered, ...(cachedItch || []), ...ghPosts]
+                    const combined = [...ytFiltered, ...(cachedItch || []).map(normalizePost), ...ghPosts]
                         .sort((a, b) => b.date - a.date);
 
                     if (combined.length) {

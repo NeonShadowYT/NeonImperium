@@ -1,6 +1,7 @@
 // js/pages/news-feed.js
 // Лента новостей. YouTube — все видео канала (без title-фильтра, кроме Shorts).
 // itch.io — те же посты, что и на starve-neon (единый кеш).
+// ИСПРАВЛЕНИЕ: нормализация date на выходе loadAllSources + защита в createNewsCard.
 
 (function() {
     'use strict';
@@ -13,7 +14,7 @@
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const { showToast } = window.UIUtils;
 
-    const CACHE_KEY = 'news_feed_data_v23';
+    const CACHE_KEY = 'news_feed_data_v24';
     const CACHE_TTL = 5 * 60 * 1000;
     const VIDEOS_CACHE_KEY = 'unified_yt_videos_v3';
     const ITCH_CACHE_KEY = 'unified_itch_posts_v3';
@@ -56,19 +57,20 @@
         return String(err.message || '').includes('Aborted');
     }
 
-    function normalizeDate(d) {
+    function toDate(d) {
         if (d instanceof Date && !isNaN(d.getTime())) return d;
         const nd = new Date(d);
         return isNaN(nd.getTime()) ? new Date() : nd;
     }
 
     function normalizeItem(item) {
+        if (!item) return item;
         return {
             type: item.type || 'post',
             id: item.id || item.number || item.videoId || item.channel || item.link || '',
             title: item.title || 'Без названия',
             author: item.author || 'Unknown',
-            date: normalizeDate(item.date),
+            date: toDate(item.date),
             thumbnail: item.thumbnail || null,
             body: item.body || null,
             labels: item.labels || [],
@@ -250,13 +252,14 @@
             return source.fn()
                 .then(items => {
                     if (!items || !items.length) return [];
-                    console.log(`[NewsFeed] ${source.name}: ${items.length} элементов`);
+                    const normalized = items.map(normalizeItem);
+                    console.log(`[NewsFeed] ${source.name}: ${normalized.length} элементов`);
                     if (typeof onItem === 'function') {
-                        for (const item of items) {
+                        for (const item of normalized) {
                             try { onItem(item); } catch { /* noop */ }
                         }
                     }
-                    return items;
+                    return normalized;
                 })
                 .catch(err => {
                     if (!isAborted(err, signal)) {
@@ -394,10 +397,11 @@
     function insertCardSorted(grid, item) {
         if (!item || !item.id) return;
         if (grid.querySelector(`[data-item-id="${CSS.escape(item.id)}"]`)) return;
-        const newCard = createNewsCard(item);
-        newCard.dataset.itemId = item.id;
-        newCard.dataset.date = String(item.date.getTime());
-        const newTs = item.date.getTime();
+        const normalized = normalizeItem(item);
+        const newCard = createNewsCard(normalized);
+        newCard.dataset.itemId = normalized.id;
+        newCard.dataset.date = String(normalized.date.getTime());
+        const newTs = normalized.date.getTime();
         let insertBefore = null;
         for (const child of grid.children) {
             const ts = parseInt(child.dataset.date, 10) || 0;
@@ -508,38 +512,39 @@
     }
 
     function createNewsCard(item) {
+        const safe = normalizeItem(item);
         const cardWrapper = createElement('div', 'project-card-link card-interactive tilt-card');
         const card = createElement('div', 'project-card');
 
         const imgWrapper = createElement('div', 'image-wrapper');
         const img = createElement('img', 'project-image', {}, {
-            src: item.thumbnail || 'images/default-news.webp',
-            alt: item.title, loading: 'lazy'
+            src: safe.thumbnail || 'images/default-news.webp',
+            alt: safe.title, loading: 'lazy'
         });
         img.onerror = () => { img.src = 'images/default-news.webp'; };
         imgWrapper.appendChild(img);
         card.appendChild(imgWrapper);
 
         const title = createElement('h3');
-        title.textContent = item.title;
+        title.textContent = safe.title;
         card.appendChild(title);
 
         const meta = createElement('p', 'text-secondary', { fontSize: '12px' });
-        const icon = getAuthorIcon(item.type);
+        const icon = getAuthorIcon(safe.type);
         meta.innerHTML = sanitizeHtml(
-            `<i class="${icon}"></i> ${escapeHtml(item.author)} <i class="fas fa-calendar-alt"></i> ${item.date.toLocaleDateString()}`
+            `<i class="${icon}"></i> ${escapeHtml(safe.author)} <i class="fas fa-calendar-alt"></i> ${safe.date.toLocaleDateString()}`
         );
-        if (item.type === 'twitch' && item.twitchData) {
-            meta.innerHTML += sanitizeHtml(` 🎮 ${escapeHtml(item.twitchData.game)}`);
+        if (safe.type === 'twitch' && safe.twitchData) {
+            meta.innerHTML += sanitizeHtml(` 🎮 ${escapeHtml(safe.twitchData.game)}`);
         }
-        if (item.type === 'release' && item.releaseData?.tag) {
-            meta.innerHTML += sanitizeHtml(` <i class="fas fa-tag"></i> ${escapeHtml(item.releaseData.tag)}`);
+        if (safe.type === 'release' && safe.releaseData?.tag) {
+            meta.innerHTML += sanitizeHtml(` <i class="fas fa-tag"></i> ${escapeHtml(safe.releaseData.tag)}`);
         }
         card.appendChild(meta);
 
-        if ((item.type === 'post' || item.type === 'release' || item.type === 'itch-post') && item.body) {
-            const summary = window.GithubCore.extractSummary(item.body)
-                || item.body.replace(/\n/g, ' ').substring(0, 120);
+        if ((safe.type === 'post' || safe.type === 'release' || safe.type === 'itch-post') && safe.body) {
+            const summary = window.GithubCore.extractSummary(safe.body)
+                || safe.body.replace(/\n/g, ' ').substring(0, 120);
             const preview = createElement('p', 'text-secondary', {
                 fontSize: '13px', overflow: 'hidden', display: '-webkit-box',
                 WebkitLineClamp: '2', WebkitBoxOrient: 'vertical'
@@ -548,38 +553,38 @@
             card.appendChild(preview);
         }
 
-        if (item.type === 'video' && item.id) {
+        if (safe.type === 'video' && safe.id) {
             const a = createElement('a', 'button small', {
                 marginTop: '8px', display: 'inline-flex', alignItems: 'center',
                 justifyContent: 'center', gap: '6px', width: '100%'
-            }, { href: `https://www.youtube.com/watch?v=${item.id}`, target: '_blank', rel: 'noopener noreferrer' });
+            }, { href: `https://www.youtube.com/watch?v=${safe.id}`, target: '_blank', rel: 'noopener noreferrer' });
             a.innerHTML = sanitizeHtml(`<i class="fab fa-youtube"></i> <span>${t('watch')}</span>`);
             a.addEventListener('click', (e) => e.stopPropagation());
             card.appendChild(a);
         }
 
-        if (item.type === 'release' && item.releaseUrl) {
+        if (safe.type === 'release' && safe.releaseUrl) {
             const a = createElement('a', 'button small', {
                 marginTop: '8px', display: 'inline-flex', alignItems: 'center',
                 justifyContent: 'center', gap: '6px', width: '100%'
-            }, { href: item.releaseUrl, target: '_blank', rel: 'noopener noreferrer' });
+            }, { href: safe.releaseUrl, target: '_blank', rel: 'noopener noreferrer' });
             a.innerHTML = sanitizeHtml(`<i class="fab fa-github"></i> <span>${t('openRelease')}</span>`);
             a.addEventListener('click', (e) => e.stopPropagation());
             card.appendChild(a);
         }
 
-        if (item.type === 'itch-post' && item.itchLink) {
+        if (safe.type === 'itch-post' && safe.itchLink) {
             const a = createElement('a', 'button small', {
                 marginTop: '8px', display: 'inline-flex', alignItems: 'center',
                 justifyContent: 'center', gap: '6px', width: '100%'
-            }, { href: item.itchLink, target: '_blank', rel: 'noopener noreferrer' });
+            }, { href: safe.itchLink, target: '_blank', rel: 'noopener noreferrer' });
             a.innerHTML = sanitizeHtml(`<i class="fab fa-itch-io"></i> <span>${t('readMore')}</span>`);
             a.addEventListener('click', (e) => e.stopPropagation());
             card.appendChild(a);
         }
 
         const currentUser = getCurrentUser();
-        if (currentUser && hasScope('gist') && item.type !== 'release' && item.type !== 'itch-post') {
+        if (currentUser && hasScope('gist') && safe.type !== 'release' && safe.type !== 'itch-post') {
             const favBtn = createElement('div', 'news-bookmark-btn', {}, { title: t('addToFavorites') });
             favBtn.innerHTML = '<i class="far fa-bookmark"></i>';
             favBtn.addEventListener('click', async (e) => {
@@ -600,20 +605,20 @@
                 }
                 if (!window.BookmarkStorage) { showToast(t('loadModulesError'), 'error'); return; }
                 const bookmark = {
-                    url: item.type === 'video' ? `https://www.youtube.com/watch?v=${item.id}` :
-                         item.type === 'twitch' ? `https://www.twitch.tv/${item.id}` :
-                         `${location.origin}${location.pathname}?post=${item.id}`,
-                    title: item.title,
-                    type: item.type === 'post' ? 'post' : 'video',
-                    thumbnail: item.thumbnail || 'images/default-news.webp',
-                    author: item.author, date: item.date,
-                    postData: item.type === 'post' ? {
-                        id: item.id, title: item.title, body: item.body,
-                        author: item.author, date: item.date.toISOString(),
-                        labels: item.labels, game: item.game
+                    url: safe.type === 'video' ? `https://www.youtube.com/watch?v=${safe.id}` :
+                         safe.type === 'twitch' ? `https://www.twitch.tv/${safe.id}` :
+                         `${location.origin}${location.pathname}?post=${safe.id}`,
+                    title: safe.title,
+                    type: safe.type === 'post' ? 'post' : 'video',
+                    thumbnail: safe.thumbnail || 'images/default-news.webp',
+                    author: safe.author, date: safe.date,
+                    postData: safe.type === 'post' ? {
+                        id: safe.id, title: safe.title, body: safe.body,
+                        author: safe.author, date: safe.date.toISOString(),
+                        labels: safe.labels, game: safe.game
                     } : undefined,
-                    videoData: item.type === 'video' ? { id: item.id, service: 'youtube' } : undefined,
-                    twitchData: item.type === 'twitch' ? { channel: item.id } : undefined
+                    videoData: safe.type === 'video' ? { id: safe.id, service: 'youtube' } : undefined,
+                    twitchData: safe.type === 'twitch' ? { channel: safe.id } : undefined
                 };
                 window.BookmarkStorage.addBookmark(bookmark)
                     .then(() => showToast(t('addToFavorites'), 'success'))
@@ -629,20 +634,20 @@
         cardWrapper.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.news-bookmark-btn')) return;
 
-            if (item.type === 'post') {
+            if (safe.type === 'post') {
                 if (!window.UIFeedback) { loadModule('js/features/ui-feedback.js').catch(() => {}); return; }
                 window.UIFeedback.openFullModal({
-                    type: 'post', id: item.id, title: item.title, body: item.body,
-                    author: item.author, date: item.date, game: item.game, labels: item.labels
+                    type: 'post', id: safe.id, title: safe.title, body: safe.body,
+                    author: safe.author, date: safe.date, game: safe.game, labels: safe.labels
                 });
-            } else if (item.type === 'release' && item.releaseUrl) {
-                window.open(item.releaseUrl, '_blank', 'noopener,noreferrer');
-            } else if (item.type === 'itch-post' && item.itchLink) {
-                window.open(item.itchLink, '_blank', 'noopener,noreferrer');
-            } else if (item.type === 'video') {
-                window.open(`https://www.youtube.com/watch?v=${item.id}`, '_blank', 'noopener,noreferrer');
-            } else if (item.type === 'twitch') {
-                window.open(`https://www.twitch.tv/${item.id}`, '_blank', 'noopener,noreferrer');
+            } else if (safe.type === 'release' && safe.releaseUrl) {
+                window.open(safe.releaseUrl, '_blank', 'noopener,noreferrer');
+            } else if (safe.type === 'itch-post' && safe.itchLink) {
+                window.open(safe.itchLink, '_blank', 'noopener,noreferrer');
+            } else if (safe.type === 'video') {
+                window.open(`https://www.youtube.com/watch?v=${safe.id}`, '_blank', 'noopener,noreferrer');
+            } else if (safe.type === 'twitch') {
+                window.open(`https://www.twitch.tv/${safe.id}`, '_blank', 'noopener,noreferrer');
             }
         });
 
