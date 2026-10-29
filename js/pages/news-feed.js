@@ -1,17 +1,14 @@
 // js/pages/news-feed.js — лента новостей (index.html).
 //
-// ВАЖНО: YouTube здесь НЕ фильтруется по 'starve'/'neon' — берём ВСЕ видео канала,
-// кроме Shorts (duration < 60 сек). itch.io тоже без фильтра.
-//
-// Источники:
-//   - GitHub issues (type:news + type:update)
-//   - YouTube: RSS UULF (через прокси) + Piped (2 рабочих инстанса)
-//   - itch.io devlog RSS
-//   - Twitch (2 канала)
-//   - GitHub Releases (инструменты)
-//
-// Превью ВСЕГДА через i.ytimg.com (не Piped-прокси — CSP).
-// Все источники через Promise.allSettled — падение одного не ломает остальные.
+// КЛЮЧЕВЫЕ ИЗМЕНЕНИЯ:
+//   1. Много источников: Piped (15 инстансов) + Invidious (9) + RSS (UULF и UU) + RSS-прокси (10).
+//   2. Распаковка JSON-обёрток ({contents}) и проверка XML перед парсингом.
+//   3. Правильный parseDuration: "1:23" → 83 сек, "1:23:45" → 5025 сек.
+//   4. YouTube в news НЕ фильтруется по контенту — только отсекаются Shorts.
+//   5. itch.io берётся из девлога без фильтра.
+//   6. НЕ КЕШИРУЕМ ПУСТОТУ — если источник вернул 0, кеш не пишется, следующий заход пробует снова.
+//   7. Раздельные кеши: news_feed_data, yt_videos_cache, itch_posts_cache.
+//   8. Вставка карточек по одной в правильное место по дате (без полной перерисовки).
 
 (function() {
     'use strict';
@@ -25,11 +22,11 @@
     const { showToast } = window.UIUtils;
 
     // ---- Кеши ----
-    const CACHE_KEY = 'news_feed_data_v12';
+    const CACHE_KEY = 'news_feed_data_v13';
     const CACHE_TTL = 5 * 60 * 1000;
-    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v12';
+    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v13';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
-    const ITCH_CACHE_KEY = 'itch_posts_v9_starve-neon'; // общий с game-updates
+    const ITCH_CACHE_KEY = 'itch_posts_news_v13';
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
 
     // ---- Лимиты ----
@@ -44,18 +41,56 @@
     const YT_CHANNEL_ID = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
     const YT_CHANNEL_NAME = 'Neon Shadow';
     const YT_UULF_PLAYLIST_ID = YT_CHANNEL_ID.replace(/^UC/, 'UULF');
-    const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${YT_UULF_PLAYLIST_ID}`;
+    const YT_UU_PLAYLIST_ID = YT_CHANNEL_ID.replace(/^UC/, 'UU');
+    const YT_RSS_URL_UULF = `https://www.youtube.com/feeds/videos.xml?playlist_id=${YT_UULF_PLAYLIST_ID}`;
+    const YT_RSS_URL_UU = `https://www.youtube.com/feeds/videos.xml?playlist_id=${YT_UU_PLAYLIST_ID}`;
+    const YT_RSS_URL_CHANNEL = `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`;
 
-    // Только проверенные Piped-инстансы (200 в логах)
+    // Все Piped-инстансы — от самых быстрых до запасных
     const PIPED_INSTANCES = [
         'https://api.piped.private.coffee',
-        'https://pipedapi.ducks.party'
+        'https://pipedapi.ducks.party',
+        'https://pipedapi.kavin.rocks',
+        'https://pipedapi.leptons.xyz',
+        'https://pipedapi-libre.kavin.rocks',
+        'https://pipedapi.r4fo.com',
+        'https://pipedapi.adminforge.de',
+        'https://pipedapi.nosebs.ru',
+        'https://api.piped.yt',
+        'https://piped-api.privacy.com.de',
+        'https://pipedapi.owo.si',
+        'https://pipedapi.drgns.space',
+        'https://piped-api.codespace.cz',
+        'https://pipedapi.reallyaweso.me',
+        'https://pipedapi.darkness.services',
+        'https://pipedapi.orangenet.cc'
     ];
 
-    // Проверенные RSS-прокси (200 в логах)
+    // Invidious-инстансы
+    const INVIDIOUS_INSTANCES = [
+        'https://inv.nadeko.net',
+        'https://invidious.nerdvpn.de',
+        'https://yewtu.be',
+        'https://invidious.privacyredirect.com',
+        'https://iv.melmac.space',
+        'https://invidious.f5.si',
+        'https://yt.artemislena.eu',
+        'https://invidious.jing.rocks',
+        'https://invidious.perennialte.ch'
+    ];
+
+    // CORS-прокси (могут вернуть {contents} или сырой XML)
     const RSS_PROXIES = [
         (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsfix.com/?${u}`
+        (u) => `https://corsfix.com/?${u}`,
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
+        (u) => `https://cors.eu.org/${u}`,
+        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`
     ];
 
     const RELEASE_SOURCES = [
@@ -146,12 +181,14 @@
         return arr.slice().sort((a, b) => b.date - a.date);
     }
 
+    /** Читает кеш. Возвращает null если пусто или истёк TTL. */
     function readCache(key, ttl) {
         try {
             const raw = localStorage.getItem(key);
             if (!raw) return null;
             const data = JSON.parse(raw);
             if (!data || !data.timestamp || !Array.isArray(data.items)) return null;
+            if (data.items.length === 0) return null; // пустой кеш = не кеш
             if (Date.now() - data.timestamp > ttl) {
                 localStorage.removeItem(key);
                 return null;
@@ -160,7 +197,9 @@
         } catch { return null; }
     }
 
+    /** Пишет кеш. Не пишет пустоту. */
     function writeCache(key, items) {
+        if (!Array.isArray(items) || items.length === 0) return;
         try {
             localStorage.setItem(key, JSON.stringify({ timestamp: Date.now(), items }));
         } catch { /* noop */ }
@@ -192,6 +231,36 @@
         });
     }
 
+    /**
+     * Загружает XML через прокси. Распаковывает JSON-обёртку ({contents}).
+     * Проверяет, что это действительно RSS/Atom перед возвратом.
+     */
+    async function fetchXmlViaProxy(proxyFn, targetUrl, signal, validateContains = ['<entry', '<feed', '<rss', '<item']) {
+        const proxyUrl = proxyFn(targetUrl);
+        const res = await fetchWithTimeout(proxyUrl, signal);
+        let text = await res.text();
+        if (!text || text.length < 100) throw new Error('too short');
+
+        // Распаковка JSON-обёртки
+        if (text.trim().startsWith('{')) {
+            try {
+                const json = JSON.parse(text);
+                if (typeof json.contents === 'string') text = json.contents;
+                else if (json.error) throw new Error('proxy: ' + json.error);
+            } catch (e) {
+                if (e.message.startsWith('proxy:')) throw e;
+            }
+        }
+
+        // Проверка что это XML с нужными тегами
+        const isValid = validateContains.some(tag => text.includes(tag));
+        if (!isValid) {
+            throw new Error('not valid XML (no ' + validateContains.join('/') + ')');
+        }
+
+        return text;
+    }
+
     /** Извлекает 11-символьный YouTube videoId из любого URL. */
     function extractVideoId(url) {
         if (!url) return null;
@@ -199,15 +268,33 @@
         return m ? m[1] : null;
     }
 
-    /** Убирает Shorts (duration < 60) и дубликаты. НЕ фильтрует по контенту. */
+    /**
+     * Парсит duration. Возвращает секунды или null.
+     * "1:23" → 83, "1:23:45" → 5025, 123 → 123, undefined → null
+     */
+    function parseDuration(val) {
+        if (val == null) return null;
+        if (typeof val === 'number' && isFinite(val)) return val;
+        if (typeof val === 'string') {
+            const trimmed = val.trim();
+            if (!trimmed) return null;
+            const parts = trimmed.split(':').map(Number);
+            if (parts.some(isNaN)) return null;
+            if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            if (parts.length === 2) return parts[0] * 60 + parts[1];
+            if (parts.length === 1) return parts[0];
+        }
+        return null;
+    }
+
+    /** Отсекаем Shorts (duration < 60) и дубликаты. */
     function filterShortsAndDuplicates(videos) {
         const seen = new Set();
         return videos
             .filter(v => v && v.videoId && !seen.has(v.videoId) && (seen.add(v.videoId), true))
             .filter(v => {
-                if (typeof v.duration === 'number' && v.duration > 0 && v.duration < MIN_YT_DURATION) {
-                    return false;
-                }
+                const dur = parseDuration(v.duration);
+                if (dur != null && dur > 0 && dur < MIN_YT_DURATION) return false;
                 return true;
             })
             .sort((a, b) => b.date - a.date)
@@ -215,120 +302,228 @@
     }
 
     // ============================================================
-    // YOUTUBE — RSS (UULF через прокси)
+    // YOUTUBE RSS
     // ============================================================
 
     function parseYoutubeRss(text) {
         const entryBlocks = text.split('<entry>').slice(1);
-        const items = entryBlocks.map(block => {
+        const items = [];
+        for (const block of entryBlocks) {
             const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
             const titleMatch = block.match(/<title>([^<]*)<\/title>/);
             const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
             const descMatch = block.match(/<media:description>([\s\S]*?)<\/media:description>/);
-            if (!videoIdMatch) return null;
+            if (!videoIdMatch) continue;
             const videoId = videoIdMatch[1];
             const title = decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled');
             const description = descMatch ? decodeXmlEntities(descMatch[1]) : '';
-            return normalizeItem({
+            items.push(normalizeItem({
                 type: 'video', id: videoId,
                 title,
                 author: YT_CHANNEL_NAME,
                 date: new Date(publishedMatch ? publishedMatch[1] : Date.now()),
                 thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                 videoData: { service: 'youtube', id: videoId }
-            });
-        }).filter(Boolean);
+            }));
+        }
         return items;
     }
 
     async function fetchYoutubeRss(signal) {
-        const results = await Promise.allSettled(
-            RSS_PROXIES.map(proxyFn =>
-                fetchWithTimeout(proxyFn(YT_RSS_URL), signal)
-                    .then(res => res.text())
-                    .then(text => parseYoutubeRss(text))
-            )
-        );
-        let videos = [];
-        results.forEach((r, idx) => {
-            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
-                console.log(`[NewsFeed] RSS прокси ${idx}: ${r.value.length} видео`);
-                videos = videos.concat(r.value);
-            } else if (r.status === 'rejected') {
-                console.warn(`[NewsFeed] RSS прокси ${idx} ошибка:`, r.reason?.message || r.reason);
+        const RSS_URLS = [YT_RSS_URL_UULF, YT_RSS_URL_UU, YT_RSS_URL_CHANNEL];
+        const allVideos = [];
+
+        // Запускаем по всем URL × всем прокси — кто первый отдаст, тот и работает
+        const tasks = [];
+        for (const rssUrl of RSS_URLS) {
+            for (const proxyFn of RSS_PROXIES) {
+                tasks.push(
+                    fetchXmlViaProxy(proxyFn, rssUrl, signal, ['<entry>', '<entry '])
+                        .then(text => {
+                            const videos = parseYoutubeRss(text);
+                            if (videos.length > 0) {
+                                console.log(`[NewsFeed] RSS OK: ${rssUrl.slice(-30)} через ${new URL(proxyFn(rssUrl)).hostname}: ${videos.length} видео`);
+                            }
+                            return videos;
+                        })
+                        .catch(() => [])
+                );
             }
-        });
-        return videos;
+        }
+
+        const results = await Promise.allSettled(tasks);
+        for (const r of results) {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+                allVideos.push(...r.value);
+            }
+        }
+        return allVideos;
     }
 
     // ============================================================
-    // YOUTUBE — Piped (2 рабочих инстанса)
+    // YOUTUBE PIPED
     // ============================================================
+
+    async function fetchYoutubePipedDirect(base, signal) {
+        const url = `${base}/channel/${YT_CHANNEL_ID}`;
+        const res = await fetchWithTimeout(url, signal);
+        const data = await res.json();
+        const streams = data.relatedStreams || data.items || [];
+        return streams.map(item => {
+            const videoId = extractVideoId(item.url);
+            if (!videoId) return null;
+            return normalizeItem({
+                type: 'video', id: videoId,
+                title: item.title || 'Untitled',
+                author: YT_CHANNEL_NAME,
+                date: new Date(item.uploaded || Date.now()),
+                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                videoData: { service: 'youtube', id: videoId },
+                duration: item.duration
+            });
+        }).filter(Boolean);
+    }
+
+    async function fetchYoutubePipedViaProxy(base, proxyFn, signal) {
+        const url = `${base}/channel/${YT_CHANNEL_ID}`;
+        const proxyUrl = proxyFn(url);
+        const res = await fetchWithTimeout(proxyUrl, signal);
+        let text = await res.text();
+        if (text.trim().startsWith('{')) {
+            try {
+                const json = JSON.parse(text);
+                if (typeof json.contents === 'string') text = json.contents;
+            } catch { /* noop */ }
+        }
+        const data = JSON.parse(text);
+        const streams = data.relatedStreams || data.items || [];
+        return streams.map(item => {
+            const videoId = extractVideoId(item.url);
+            if (!videoId) return null;
+            return normalizeItem({
+                type: 'video', id: videoId,
+                title: item.title || 'Untitled',
+                author: YT_CHANNEL_NAME,
+                date: new Date(item.uploaded || Date.now()),
+                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                videoData: { service: 'youtube', id: videoId },
+                duration: item.duration
+            });
+        }).filter(Boolean);
+    }
 
     async function fetchYoutubePiped(signal) {
-        const results = await Promise.allSettled(
-            PIPED_INSTANCES.map(async (base) => {
-                const url = `${base}/channel/${YT_CHANNEL_ID}`;
-                const res = await fetchWithTimeout(url, signal);
-                const data = await res.json();
-                const streams = data.relatedStreams || data.items || [];
-                return streams.map(item => {
-                    const videoId = extractVideoId(item.url);
-                    if (!videoId) return null;
-                    const duration = typeof item.duration === 'number' ? item.duration : null;
-                    return normalizeItem({
-                        type: 'video', id: videoId,
-                        title: item.title || 'Untitled',
-                        author: YT_CHANNEL_NAME,
-                        date: new Date(item.uploaded || Date.now()),
-                        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                        videoData: { service: 'youtube', id: videoId },
-                        // Сохраняем duration для отсечения Shorts
-                        duration
-                    });
-                }).filter(Boolean);
-            })
-        );
-        let videos = [];
-        results.forEach((r, idx) => {
-            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
-                console.log(`[NewsFeed] Piped ${idx}: ${r.value.length} видео`);
-                videos = videos.concat(r.value);
-            } else if (r.status === 'rejected') {
-                console.warn(`[NewsFeed] Piped ${idx} ошибка:`, r.reason?.message || r.reason);
+        const tasks = [];
+        // 1) Прямые запросы ко всем инстансам
+        for (const base of PIPED_INSTANCES) {
+            tasks.push(
+                fetchYoutubePipedDirect(base, signal)
+                    .then(v => {
+                        if (v.length > 0) console.log(`[NewsFeed] Piped OK: ${base}: ${v.length} видео`);
+                        return v;
+                    })
+                    .catch(() => [])
+            );
+        }
+        // 2) Через прокси (если прямой CORS не сработал)
+        for (const base of PIPED_INSTANCES.slice(0, 5)) {
+            for (const proxyFn of RSS_PROXIES.slice(0, 4)) {
+                tasks.push(
+                    fetchYoutubePipedViaProxy(base, proxyFn, signal)
+                        .then(v => {
+                            if (v.length > 0) console.log(`[NewsFeed] Piped OK (proxy): ${base}: ${v.length} видео`);
+                            return v;
+                        })
+                        .catch(() => [])
+                );
             }
-        });
-        return videos;
+        }
+
+        const results = await Promise.allSettled(tasks);
+        const allVideos = [];
+        for (const r of results) {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+                allVideos.push(...r.value);
+            }
+        }
+        return allVideos;
     }
+
+    // ============================================================
+    // YOUTUBE INVIDIOUS
+    // ============================================================
+
+    async function fetchYoutubeInvidious(signal) {
+        const tasks = INVIDIOUS_INSTANCES.map(async (base) => {
+            const url = `${base}/api/v1/channels/${YT_CHANNEL_ID}/videos`;
+            const res = await fetchWithTimeout(url, signal);
+            const data = await res.json();
+            const items = Array.isArray(data) ? data : (data.videos || []);
+            return items.map(item => {
+                if (!item.videoId) return null;
+                return normalizeItem({
+                    type: 'video', id: item.videoId,
+                    title: item.title || 'Untitled',
+                    author: YT_CHANNEL_NAME,
+                    date: new Date(item.published ? item.published * 1000 : Date.now()),
+                    thumbnail: `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`,
+                    videoData: { service: 'youtube', id: item.videoId },
+                    duration: item.lengthSeconds
+                });
+            }).filter(Boolean);
+        });
+
+        const results = await Promise.allSettled(tasks);
+        const allVideos = [];
+        for (const r of results) {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+                if (r.value.length > 0) console.log(`[NewsFeed] Invidious: ${r.value.length} видео`);
+                allVideos.push(...r.value);
+            }
+        }
+        return allVideos;
+    }
+
+    // ============================================================
+    // YOUTUBE — АГРЕГАЦИЯ
+    // ============================================================
 
     async function fetchYoutubeVideos(signal, forceRefresh = false) {
         if (!forceRefresh) {
             const cached = readCache(VIDEOS_CACHE_KEY, VIDEOS_CACHE_TTL);
-            if (cached && cached.length) return cached.map(normalizeItem);
-        }
-
-        // Оба источника параллельно
-        const results = await Promise.allSettled([
-            fetchYoutubeRss(signal),
-            fetchYoutubePiped(signal)
-        ]);
-
-        let videos = [];
-        for (const r of results) {
-            if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
-                videos = videos.concat(r.value);
+            if (cached && cached.length) {
+                console.log(`[NewsFeed] YouTube из кеша: ${cached.length}`);
+                return cached.map(normalizeItem);
             }
         }
 
-        if (!videos.length) {
+        console.log('[NewsFeed] YouTube: параллельный опрос всех источников…');
+        const results = await Promise.allSettled([
+            fetchYoutubeRss(signal),
+            fetchYoutubePiped(signal),
+            fetchYoutubeInvidious(signal)
+        ]);
+
+        let videos = [];
+        results.forEach((r, i) => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
+                videos = videos.concat(r.value);
+            }
+        });
+
+        if (videos.length === 0) {
             const stale = readCache(VIDEOS_CACHE_KEY, Infinity);
-            return stale ? stale.map(normalizeItem) : [];
+            if (stale && stale.length) {
+                console.log(`[NewsFeed] YouTube fallback на stale: ${stale.length}`);
+                return stale.map(normalizeItem);
+            }
+            console.warn('[NewsFeed] YouTube: пусто, кеш не пишем');
+            return [];
         }
 
-        // БЕЗ фильтра по starve/neon — только отсекаем Shorts и дубликаты
         const filtered = filterShortsAndDuplicates(videos);
-        console.log(`[NewsFeed] YouTube итого: ${filtered.length} видео (без Shorts)`);
-        if (filtered.length) writeCache(VIDEOS_CACHE_KEY, filtered);
+        console.log(`[NewsFeed] YouTube итого после фильтра Shorts: ${filtered.length}`);
+        if (filtered.length > 0) writeCache(VIDEOS_CACHE_KEY, filtered);
         return filtered;
     }
 
@@ -391,36 +586,52 @@
     async function fetchItchPosts(signal, forceRefresh = false) {
         if (!forceRefresh) {
             const cached = readCache(ITCH_CACHE_KEY, ITCH_CACHE_TTL);
-            if (cached && cached.length) return cached.map(normalizeItem);
+            if (cached && cached.length) {
+                console.log(`[NewsFeed] itch.io из кеша: ${cached.length}`);
+                return cached.map(normalizeItem);
+            }
         }
 
         const allPosts = [];
         for (const source of ITCH_DEVLOG_SOURCES) {
-            const results = await Promise.allSettled(
-                RSS_PROXIES.map(proxyFn =>
-                    fetchWithTimeout(proxyFn(source.rssUrl), signal)
-                        .then(res => res.text())
-                        .then(text => parseItchRss(text, source))
-                )
+            const tasks = RSS_PROXIES.map(proxyFn =>
+                fetchXmlViaProxy(proxyFn, source.rssUrl, signal, ['<item>', '<item ', '<rss', '<channel'])
+                    .then(text => {
+                        const posts = parseItchRss(text, source);
+                        if (posts.length > 0) {
+                            console.log(`[NewsFeed] itch.io OK через ${new URL(proxyFn(source.rssUrl)).hostname}: ${posts.length}`);
+                        }
+                        return posts;
+                    })
+                    .catch(() => [])
             );
-            results.forEach((r, idx) => {
-                if (r.status === 'fulfilled' && Array.isArray(r.value) && r.value.length) {
-                    console.log(`[NewsFeed] itch.io прокси ${idx}: ${r.value.length} постов`);
+            const results = await Promise.allSettled(tasks);
+            for (const r of results) {
+                if (r.status === 'fulfilled' && Array.isArray(r.value)) {
                     allPosts.push(...r.value);
-                } else if (r.status === 'rejected') {
-                    console.warn(`[NewsFeed] itch.io прокси ${idx} ошибка:`, r.reason?.message || r.reason);
                 }
-            });
+            }
         }
 
         if (allPosts.length === 0) {
             const stale = readCache(ITCH_CACHE_KEY, Infinity);
-            return stale ? stale.map(normalizeItem) : [];
+            if (stale && stale.length) {
+                console.log(`[NewsFeed] itch.io fallback на stale: ${stale.length}`);
+                return stale.map(normalizeItem);
+            }
+            console.warn('[NewsFeed] itch.io: пусто, кеш не пишем');
+            return [];
         }
 
-        const limited = sortByDateDesc(allPosts).slice(0, MAX_ITCH_POSTS);
-        writeCache(ITCH_CACHE_KEY, limited);
-        return limited;
+        const seen = new Set();
+        const unique = sortByDateDesc(allPosts).filter(p => {
+            if (seen.has(p.itchLink)) return false;
+            seen.add(p.itchLink);
+            return true;
+        }).slice(0, MAX_ITCH_POSTS);
+
+        if (unique.length > 0) writeCache(ITCH_CACHE_KEY, unique);
+        return unique;
     }
 
     // ============================================================
@@ -576,7 +787,8 @@
         const labels = ['посты', 'YouTube', 'Twitch', 'релизы', 'itch.io'];
         results.forEach((r, i) => {
             if (r.status === 'fulfilled') {
-                console.log(`[NewsFeed] ${labels[i]}: ${r.value?.length || 0} элементов`);
+                const count = r.value?.length || 0;
+                console.log(`[NewsFeed] ${labels[i]}: ${count} элементов`);
                 allItems = allItems.concat(r.value || []);
             } else if (!isAborted(r.reason, signal)) {
                 console.warn(`[NewsFeed] ${labels[i]} упал:`, r.reason?.message || r.reason);
@@ -590,7 +802,7 @@
     // FETCH С КЕШЕМ
     // ============================================================
 
-    async function fetchNewsFeed({ signal, forceRefresh = false, maxAge = CACHE_TTL, onItem, onUpdate } = {}) {
+    async function fetchNewsFeed({ signal, forceRefresh = false, maxAge = CACHE_TTL, onUpdate } = {}) {
         const cached = await cacheGet(CACHE_KEY, maxAge);
         const hasCache = cached && Array.isArray(cached.items) && cached.items.length > 0;
 
@@ -620,8 +832,8 @@
                 const check = async () => {
                     if (!isLoading) {
                         const fresh = await cacheGet(CACHE_KEY, maxAge);
-                        resolve(fresh
-                            ? { items: (fresh.items || []).map(normalizeItem), fromCache: true, isStale: false }
+                        resolve(fresh && fresh.items && fresh.items.length
+                            ? { items: fresh.items.map(normalizeItem), fromCache: true, isStale: false }
                             : { items: [], fromCache: false, isStale: false });
                     } else {
                         setTimeout(check, 100);
@@ -644,14 +856,21 @@
         }
 
         try {
-            const allItems = await loadAllSources(abortController.signal, forceRefresh, onItem);
+            const allItems = await loadAllSources(abortController.signal, forceRefresh, null);
             const limited = allItems.slice(0, MAX_DISPLAY_ITEMS);
-            await cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
+
+            // Не кешируем пустоту
+            if (limited.length > 0) {
+                await cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
+            }
+
             return { items: limited, fromCache: false, isStale: false };
         } catch (err) {
             if (isAborted(err, abortController.signal)) return { items: [], fromCache: false, isStale: false };
             const stale = await cacheGet(CACHE_KEY, Infinity);
-            if (stale && stale.items) return { items: stale.items.map(normalizeItem), fromCache: true, isStale: true };
+            if (stale && stale.items && stale.items.length) {
+                return { items: stale.items.map(normalizeItem), fromCache: true, isStale: true };
+            }
             throw err;
         } finally {
             isLoading = false;
@@ -680,8 +899,47 @@
         return grid;
     }
 
-    function appendItemToGrid(item) {
-        if (!container || !item || !item.id) return;
+    // ============================================================
+    // РЕНДЕР — ВСТАВКА ПО ОДНОМУ (без полной перерисовки)
+    // ============================================================
+
+    /**
+     * Вставляет карточку в нужное место по дате (новые сверху).
+     * НЕ перерисовывает существующие карточки.
+     */
+    function insertCardSorted(grid, item) {
+        if (!item || !item.id) return;
+        if (grid.querySelector(`[data-item-id="${CSS.escape(item.id)}"]`)) return;
+
+        const newCard = createNewsCard(item);
+        newCard.dataset.itemId = item.id;
+        newCard.dataset.date = String(item.date.getTime());
+
+        const newTs = item.date.getTime();
+        const children = Array.from(grid.children);
+        let insertBefore = null;
+        for (const child of children) {
+            const ts = parseInt(child.dataset.date, 10) || 0;
+            if (newTs > ts) {
+                insertBefore = child;
+                break;
+            }
+        }
+
+        if (insertBefore) {
+            grid.insertBefore(newCard, insertBefore);
+        } else {
+            grid.appendChild(newCard);
+        }
+
+        // Удаляем лишние сверх лимита
+        while (grid.children.length > MAX_DISPLAY_ITEMS) {
+            grid.removeChild(grid.lastChild);
+        }
+    }
+
+    function getOrCreateGrid() {
+        if (!container) return null;
         let grid = container.querySelector('.projects-grid:not(.skeleton-grid)');
         if (!grid) {
             const sk = container.querySelector('.skeleton-grid');
@@ -691,21 +949,11 @@
             grid = createElement('div', 'projects-grid');
             container.appendChild(grid);
         }
-        if (grid.children.length >= MAX_DISPLAY_ITEMS) return;
-        if (grid.querySelector(`[data-item-id="${item.id}"]`)) return;
-        const card = createNewsCard(item);
-        card.dataset.itemId = item.id;
-        grid.appendChild(card);
+        return grid;
     }
 
-    // ============================================================
-    // РЕНДЕР
-    // ============================================================
-
-    function renderNewsFeed(items, { replace = false } = {}) {
+    function renderNewsHeader() {
         if (!container) return;
-        const displayItems = items.slice(0, MAX_DISPLAY_ITEMS);
-
         let header = container.parentNode?.querySelector('.news-header');
         if (!header) {
             header = createElement('div', 'news-header', {
@@ -736,50 +984,60 @@
                 existingBtn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addNews')}`);
             }
         } else if (existingBtn) existingBtn.remove();
+    }
 
-        let grid = container.querySelector('.projects-grid:not(.skeleton-grid)');
-        if (replace && grid) { grid.remove(); grid = null; }
+    function renderEmptyState() {
+        if (!container) return;
+        const sk = container.querySelector('.skeleton-grid');
+        if (sk) sk.remove();
+        const existing = container.querySelector('.empty-state');
+        if (existing) return;
+        container.innerHTML = sanitizeHtml(`
+            <div class="empty-state">
+                <i class="fas fa-newspaper"></i>
+                <p data-lang="newsNoItems">${t('newsNoItems')}</p>
+                <button class="button small" id="news-retry-btn"><i class="fas fa-sync"></i> ${t('newsRetryVideo')}</button>
+            </div>
+        `);
+        const btn = container.querySelector('#news-retry-btn');
+        if (btn) btn.addEventListener('click', () => refreshNewsFeed());
+    }
 
-        if (displayItems.length === 0 && (!grid || grid.children.length === 0)) {
-            const sk = container.querySelector('.skeleton-grid');
-            if (sk) sk.remove();
-            container.innerHTML = sanitizeHtml(`
-                <div class="empty-state">
-                    <i class="fas fa-newspaper"></i>
-                    <p data-lang="newsNoItems">${t('newsNoItems')}</p>
-                    <button class="button small" id="news-retry-btn"><i class="fas fa-sync"></i> ${t('newsRetryVideo')}</button>
-                </div>
-            `);
-            const btn = container.querySelector('#news-retry-btn');
-            if (btn) btn.addEventListener('click', () => refreshNewsFeed());
+    /**
+     * Обновляет ленту. Если replace=true — полная замена (первая загрузка, refresh).
+     * Если replace=false — только вставка новых карточек.
+     */
+    function updateNewsFeed(items, { replace = false } = {}) {
+        if (!container) return;
+        const displayItems = items.slice(0, MAX_DISPLAY_ITEMS);
+
+        renderNewsHeader();
+
+        if (displayItems.length === 0) {
+            if (replace) renderEmptyState();
             return;
         }
 
-        if (!grid) {
-            const sk = container.querySelector('.skeleton-grid');
-            if (sk) sk.remove();
-            const em = container.querySelector('.empty-state');
-            if (em) em.remove();
-            grid = createElement('div', 'projects-grid');
-            container.appendChild(grid);
+        const grid = getOrCreateGrid();
+        if (!grid) return;
+
+        if (replace) {
+            grid.replaceChildren();
         }
 
-        const fragment = document.createDocumentFragment();
-        let count = 0;
         for (const item of displayItems) {
-            if (count >= MAX_DISPLAY_ITEMS) break;
-            const card = createNewsCard(item);
-            card.dataset.itemId = item.id;
-            fragment.appendChild(card);
-            count++;
+            insertCardSorted(grid, item);
         }
-        grid.replaceChildren(fragment);
 
         container.querySelectorAll('[data-lang]').forEach(el => {
             const k = el.getAttribute('data-lang');
             if (k) el.textContent = t(k);
         });
     }
+
+    // ============================================================
+    // КАРТОЧКА
+    // ============================================================
 
     function getAuthorIcon(type) {
         switch (type) {
@@ -946,41 +1204,34 @@
         try {
             const result = await fetchNewsFeed({
                 forceRefresh: false,
-                onItem: (item) => appendItemToGrid(item),
                 onUpdate: (freshItems) => {
-                    renderNewsFeed(freshItems, { replace: true });
+                    updateNewsFeed(freshItems, { replace: false });
                 }
             });
             if (result) {
-                renderNewsFeed(result.items, { replace: true });
+                updateNewsFeed(result.items, { replace: true });
                 if (result.isStale) showToast('Данные могут быть устаревшими', 'warning', 5000);
             } else {
-                renderNewsFeed([], { replace: true });
+                updateNewsFeed([], { replace: true });
             }
         } catch (err) {
             console.error('[NewsFeed] Ошибка инициализации:', err);
-            container.innerHTML = sanitizeHtml(`
-                <div class="empty-state">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>${t('dataLoadError')}</p>
-                    <button class="button small" id="news-retry-btn"><i class="fas fa-sync"></i> ${t('newsRetryVideo')}</button>
-                </div>
-            `);
-            const btn = container.querySelector('#news-retry-btn');
-            if (btn) btn.addEventListener('click', () => refreshNewsFeed());
+            if (container) {
+                container.innerHTML = sanitizeHtml(`
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>${t('dataLoadError')}</p>
+                        <button class="button small" id="news-retry-btn"><i class="fas fa-sync"></i> ${t('newsRetryVideo')}</button>
+                    </div>
+                `);
+                const btn = container.querySelector('#news-retry-btn');
+                if (btn) btn.addEventListener('click', () => refreshNewsFeed());
+            }
         }
 
         window.addEventListener('languageChanged', () => {
             if (!container) return;
-            const header = container.parentNode?.querySelector('.news-header');
-            if (header) {
-                const titleSpan = header.querySelector('h2 span');
-                if (titleSpan) titleSpan.textContent = t('newsTitle');
-                const desc = header.querySelector('.text-secondary');
-                if (desc) desc.textContent = t('newsDesc');
-                const btn = header.querySelector('.admin-news-btn');
-                if (btn) btn.innerHTML = sanitizeHtml(`<i class="fas fa-plus"></i> ${t('addNews')}`);
-            }
+            renderNewsHeader();
             container.querySelectorAll('[data-lang]').forEach(el => {
                 const k = el.getAttribute('data-lang');
                 if (k) el.textContent = t(k);
@@ -1009,18 +1260,17 @@
         } catch { /* noop */ }
         fetchNewsFeed({
             forceRefresh: true,
-            onItem: (it) => appendItemToGrid(it),
             onUpdate: (freshItems) => {
-                renderNewsFeed(freshItems, { replace: true });
+                updateNewsFeed(freshItems, { replace: false });
             }
         })
             .then(r => {
-                if (r) renderNewsFeed(r.items, { replace: true });
-                else renderNewsFeed([], { replace: true });
+                if (r) updateNewsFeed(r.items, { replace: true });
+                else updateNewsFeed([], { replace: true });
             })
             .catch(err => {
                 console.error('[NewsFeed] Ошибка обновления:', err);
-                renderNewsFeed([], { replace: true });
+                updateNewsFeed([], { replace: true });
             });
     }
 
