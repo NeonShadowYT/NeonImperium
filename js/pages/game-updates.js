@@ -1,11 +1,11 @@
 // js/pages/game-updates.js — обновления (GitHub + itch.io + YouTube).
 //
-// ВАЖНО:
-//   — YouTube: фильтр ТОЛЬКО по title ('starve' || 'neon'). Description НЕ учитывается.
-//   — Shorts (< 60 сек) отсекаются.
-//   — itch.io: превью из media:*, enclosure, content:encoded или description.
-//   — Мгновенное обновление: каждый источник вставляет карточки сразу.
-//   — Кеш обновляется после каждого успешного ответа.
+// ИСПРАВЛЕНИЯ:
+//   — corsproxy.io УДАЛЁН (требует ключ, отдаёт 401).
+//   — Добавлены corsproxy.dev, cors.sh, thingproxy.
+//   — itch.io и YouTube RSS опрашиваются ПАРАЛЛЕЛЬНО со всеми прокси.
+//   — Логика itch.io и YouTube полностью совпадает с news-feed.js.
+//   — YouTube: фильтр только по title, Shorts отсекаются.
 
 (function() {
     'use strict';
@@ -52,15 +52,16 @@
         }
     };
 
+    // Актуальные Piped-инстансы (февраль 2026)
     const PIPED_INSTANCES = [
+        'https://pipedapi.kavin.rocks',
+        'https://pipedapi.adminforge.de',
         'https://api.piped.private.coffee',
         'https://pipedapi.ducks.party',
-        'https://pipedapi.kavin.rocks',
         'https://pipedapi.leptons.xyz',
         'https://pipedapi-libre.kavin.rocks',
-        'https://pipedapi.r4fo.com',
-        'https://pipedapi.adminforge.de',
         'https://pipedapi.nosebs.ru',
+        'https://pipedapi.r4fo.com',
         'https://api.piped.yt',
         'https://piped-api.privacy.com.de',
         'https://pipedapi.owo.si',
@@ -71,6 +72,7 @@
         'https://pipedapi.orangenet.cc'
     ];
 
+    // Актуальные Invidious-инстансы (февраль 2026)
     const INVIDIOUS_INSTANCES = [
         'https://inv.nadeko.net',
         'https://invidious.nerdvpn.de',
@@ -83,12 +85,14 @@
         'https://invidious.perennialte.ch'
     ];
 
+    // Обновлённый список прокси (corsproxy.io удалён)
     const CORS_PROXIES = [
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
         (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
+        (u) => `https://thingproxy.freeboard.io/fetch/${u}`,
+        (u) => `https://cors-anywhere.herokuapp.com/${u}`,
         (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
         (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
         (u) => `https://cors.eu.org/${u}`,
@@ -132,8 +136,8 @@
         return { ...p, date: normalizeDate(p.date) };
     }
 
-    function getItchCacheKey(game) { return `itch_posts_updates_v20_${game}`; }
-    function getYtCacheKey(game) { return `yt_channel_cache_v20_${game}`; }
+    function getItchCacheKey(game) { return `itch_posts_updates_v21_${game}`; }
+    function getYtCacheKey(game) { return `yt_channel_cache_v21_${game}`; }
 
     function readCacheWithDates(key, ttl) {
         try {
@@ -278,7 +282,7 @@
     }
 
     // ============================================================
-    // ITCH.IO
+    // ITCH.IO — одинаково с news-feed.js
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -383,6 +387,7 @@
             }
         }
 
+        // ПАРАЛЛЕЛЬНЫЙ перебор всех прокси
         const tasks = CORS_PROXIES.map(proxyFn =>
             fetchViaProxy(proxyFn, source.rssUrl, signal, ['<item', '<rss', '<channel'])
                 .then(text => {
@@ -402,10 +407,11 @@
             if (r.status === 'fulfilled' && Array.isArray(r.value)) posts = posts.concat(r.value);
         }
 
+        // Резерв: RSSHub
         if (posts.length === 0 && source.rssHubUrl) {
             const rssHubUrls = [
                 source.rssHubUrl,
-                `https://corsproxy.io/?url=${encodeURIComponent(source.rssHubUrl)}`,
+                `https://corsproxy.dev/?url=${encodeURIComponent(source.rssHubUrl)}`,
                 `https://corsfix.com/?${source.rssHubUrl}`
             ];
             for (const rssHubUrl of rssHubUrls) {
@@ -563,6 +569,7 @@
                 .catch(() => [])
         );
 
+        // Параллельно через прокси для первых 5 инстансов
         for (const base of PIPED_INSTANCES.slice(0, 5)) {
             for (const proxyFn of CORS_PROXIES.slice(0, 4)) {
                 tasks.push(

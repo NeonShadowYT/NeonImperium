@@ -1,10 +1,11 @@
 // js/pages/news-feed.js — лента новостей (index.html).
 //
-// ВАЖНО:
-//   — YouTube: фильтр ТОЛЬКО по title ('starve' || 'neon'), как в game-updates.js.
-//   — Shorts (< 60 сек) отсекаются.
-//   — itch.io: те же 3 поста, что и в game-updates.js.
-//   — Мгновенный рендер: каждый источник вставляет карточки сразу.
+// ИСПРАВЛЕНИЯ:
+//   — corsproxy.io УДАЛЁН (401).
+//   — Добавлены corsproxy.dev, cors.sh, thingproxy.
+//   — itch.io и YouTube RSS опрашиваются ПАРАЛЛЕЛЬНО со всеми прокси.
+//   — Логика itch.io и YouTube полностью совпадает с game-updates.js.
+//   — YouTube: фильтр только по title, Shorts отсекаются.
 
 (function() {
     'use strict';
@@ -17,11 +18,11 @@
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const { showToast } = window.UIUtils;
 
-    const CACHE_KEY = 'news_feed_data_v20';
+    const CACHE_KEY = 'news_feed_data_v21';
     const CACHE_TTL = 5 * 60 * 1000;
-    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v20';
+    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v21';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
-    const ITCH_CACHE_KEY = 'itch_posts_news_v20';
+    const ITCH_CACHE_KEY = 'itch_posts_news_v21';
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
 
     const SOURCE_TIMEOUT = 25000;
@@ -40,18 +41,18 @@
         `https://www.youtube.com/feeds/videos.xml?channel_id=${YT_CHANNEL_ID}`
     ];
 
-    // Те же ключевые слова, что и в game-updates.js.
     const GAME_KEYWORDS = ['starve', 'neon'];
 
+    // Актуальные Piped-инстансы (февраль 2026)
     const PIPED_INSTANCES = [
+        'https://pipedapi.kavin.rocks',
+        'https://pipedapi.adminforge.de',
         'https://api.piped.private.coffee',
         'https://pipedapi.ducks.party',
-        'https://pipedapi.kavin.rocks',
         'https://pipedapi.leptons.xyz',
         'https://pipedapi-libre.kavin.rocks',
-        'https://pipedapi.r4fo.com',
-        'https://pipedapi.adminforge.de',
         'https://pipedapi.nosebs.ru',
+        'https://pipedapi.r4fo.com',
         'https://api.piped.yt',
         'https://piped-api.privacy.com.de',
         'https://pipedapi.owo.si',
@@ -62,6 +63,7 @@
         'https://pipedapi.orangenet.cc'
     ];
 
+    // Актуальные Invidious-инстансы (февраль 2026)
     const INVIDIOUS_INSTANCES = [
         'https://inv.nadeko.net',
         'https://invidious.nerdvpn.de',
@@ -74,12 +76,14 @@
         'https://invidious.perennialte.ch'
     ];
 
+    // Обновлённый список прокси (corsproxy.io удалён)
     const CORS_PROXIES = [
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
         (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
+        (u) => `https://thingproxy.freeboard.io/fetch/${u}`,
+        (u) => `https://cors-anywhere.herokuapp.com/${u}`,
         (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
         (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
         (u) => `https://cors.eu.org/${u}`,
@@ -268,7 +272,6 @@
         return null;
     }
 
-    // Тот же фильтр, что и в game-updates.js.
     function isRelevantVideo(video) {
         if (!video) return false;
         const title = (video.title || '').toLowerCase();
@@ -545,7 +548,7 @@
     }
 
     // ============================================================
-    // ITCH.IO
+    // ITCH.IO — одинаково с game-updates.js
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -648,6 +651,7 @@
 
         const allPosts = [];
         for (const source of ITCH_DEVLOG_SOURCES) {
+            // ПАРАЛЛЕЛЬНЫЙ перебор всех прокси
             const tasks = CORS_PROXIES.map(proxyFn =>
                 fetchViaProxy(proxyFn, source.rssUrl, signal, ['<item', '<rss', '<channel'])
                     .then(text => {
@@ -665,10 +669,11 @@
                 if (r.status === 'fulfilled' && Array.isArray(r.value)) allPosts.push(...r.value);
             }
 
+            // Резерв: RSSHub
             if (allPosts.length === 0 && source.rssHubUrl) {
                 const rssHubUrls = [
                     source.rssHubUrl,
-                    `https://corsproxy.io/?url=${encodeURIComponent(source.rssHubUrl)}`,
+                    `https://corsproxy.dev/?url=${encodeURIComponent(source.rssHubUrl)}`,
                     `https://corsfix.com/?${source.rssHubUrl}`
                 ];
                 for (const rssHubUrl of rssHubUrls) {
