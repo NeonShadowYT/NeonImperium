@@ -1,11 +1,8 @@
 // js/pages/game-updates.js — обновления (GitHub + itch.io + YouTube).
 //
 // ВАЖНО:
-//   — YouTube: фильтр ТОЛЬКО по title ('starve' || 'neon'). Description НЕ учитывается.
-//   — Shorts (< 60 сек) отсекаются.
-//   — itch.io: превью из media:*, enclosure, content:encoded или description.
-//   — Мгновенное обновление: каждый источник вставляет карточки сразу.
-//   — Кеш обновляется после каждого успешного ответа.
+//   — YouTube: фильтр ТОЛЬКО по title ('starve' || 'neon').
+//   — api.codetabs.com УДАЛЁН (отключён с июня 2026).
 
 (function() {
     'use strict';
@@ -83,16 +80,16 @@
         'https://invidious.perennialte.ch'
     ];
 
+    // api.codetabs.com УДАЛЁН.
     const CORS_PROXIES = [
-        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
         (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
         (u) => `https://cors.eu.org/${u}`,
-        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
         (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`
     ];
 
@@ -133,8 +130,8 @@
         return { ...p, date: normalizeDate(p.date) };
     }
 
-    function getItchCacheKey(game) { return `itch_posts_updates_v18_${game}`; }
-    function getYtCacheKey(game) { return `yt_channel_cache_v18_${game}`; }
+    function getItchCacheKey(game) { return `itch_posts_updates_v19_${game}`; }
+    function getYtCacheKey(game) { return `yt_channel_cache_v19_${game}`; }
 
     function readCacheWithDates(key, ttl) {
         try {
@@ -242,7 +239,6 @@
         return null;
     }
 
-    // Только title, без description.
     function isRelevantVideo(video, keywords) {
         if (!video) return false;
         const title = (video.title || '').toLowerCase();
@@ -280,7 +276,7 @@
     }
 
     // ============================================================
-    // ITCH.IO — превью из media:*, enclosure, content:encoded, description
+    // ITCH.IO
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -404,11 +400,10 @@
             if (r.status === 'fulfilled' && Array.isArray(r.value)) posts = posts.concat(r.value);
         }
 
-        // Резерв: RSSHub
         if (posts.length === 0 && source.rssHubUrl) {
             const rssHubUrls = [
                 source.rssHubUrl,
-                `https://corsproxy.dev/?url=${encodeURIComponent(source.rssHubUrl)}`,
+                `https://corsproxy.io/?url=${encodeURIComponent(source.rssHubUrl)}`,
                 `https://corsfix.com/?${source.rssHubUrl}`
             ];
             for (const rssHubUrl of rssHubUrls) {
@@ -453,7 +448,14 @@
             return true;
         }).slice(0, MAX_ITCH_POSTS);
 
-        if (unique.length > 0) writeCache(cacheKey, unique);
+        if (unique.length > 0) {
+            writeCache(cacheKey, unique);
+            if (typeof onItem === 'function') {
+                unique.forEach(item => {
+                    try { onItem(item); } catch { /* noop */ }
+                });
+            }
+        }
         return unique;
     }
 
@@ -757,26 +759,14 @@
     }
 
     // ============================================================
-    // АГРЕГАЦИЯ — каждый источник независимо
+    // АГРЕГАЦИЯ
     // ============================================================
 
     async function fetchAllUpdates(game, signal, forceRefresh = false, onItem) {
         const sources = [
-            {
-                name: 'GitHub',
-                fn: () => fetchGithubUpdates(game, signal, forceRefresh),
-                cacheKey: `game_issues_${game}`
-            },
-            {
-                name: 'itch.io',
-                fn: () => fetchItchPosts(game, signal, forceRefresh, onItem),
-                cacheKey: getItchCacheKey(game)
-            },
-            {
-                name: 'YouTube',
-                fn: () => fetchYoutubeForGame(game, signal, forceRefresh, onItem),
-                cacheKey: getYtCacheKey(game)
-            }
+            { name: 'GitHub', fn: () => fetchGithubUpdates(game, signal, forceRefresh), cacheKey: `game_issues_${game}` },
+            { name: 'itch.io', fn: () => fetchItchPosts(game, signal, forceRefresh, onItem), cacheKey: getItchCacheKey(game) },
+            { name: 'YouTube', fn: () => fetchYoutubeForGame(game, signal, forceRefresh, onItem), cacheKey: getYtCacheKey(game) }
         ];
 
         const promises = sources.map(source => {
@@ -789,9 +779,7 @@
                             try { onItem(item); } catch { /* noop */ }
                         }
                     }
-                    if (source.cacheKey) {
-                        writeCache(source.cacheKey, items);
-                    }
+                    if (source.cacheKey) writeCache(source.cacheKey, items);
                     return items;
                 })
                 .catch(err => {
@@ -910,7 +898,7 @@
     }
 
     // ============================================================
-    // ВСТАВКА ПО ОДНОЙ
+    // ВСТАВКА
     // ============================================================
 
     function insertCardSorted(grid, post) {

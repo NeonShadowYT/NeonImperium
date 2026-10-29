@@ -1,11 +1,12 @@
 // js/pages/news-feed.js — лента новостей (index.html).
 //
-// ВАЖНО:
-//   — YouTube: НЕТ фильтра по title/description, только отсечение Shorts (dur < 60 сек).
-//   — itch.io: превью берётся из media:*, enclosure, content:encoded или description.
-//   — Релизы инструментов: всегда с иконкой и тегом версии.
-//   — Мгновенное обновление: каждый источник вставляет карточки сразу, как только ответил.
-//   — Кеш обновляется после каждого успешного ответа источника.
+// ИСПРАВЛЕНИЯ:
+//   — api.codetabs.com УДАЛЁН из списка прокси (отключён с июня 2026).
+//   — Порядок прокси: corsfix.com → corsproxy.io → allorigins → остальные.
+//   — itch.io: добавлен RSSHub fallback.
+//   — Мгновенный рендер: скелетон заменяется первой же карточкой,
+//     даже если остальные источники ещё грузятся.
+//   — Кеш: если есть кеш, он показывается сразу, без скелетона.
 
 (function() {
     'use strict';
@@ -18,11 +19,11 @@
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const { showToast } = window.UIUtils;
 
-    const CACHE_KEY = 'news_feed_data_v18';
+    const CACHE_KEY = 'news_feed_data_v19';
     const CACHE_TTL = 5 * 60 * 1000;
-    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v18';
+    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v19';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
-    const ITCH_CACHE_KEY = 'itch_posts_news_v18';
+    const ITCH_CACHE_KEY = 'itch_posts_news_v19';
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
 
     const SOURCE_TIMEOUT = 25000;
@@ -72,16 +73,16 @@
         'https://invidious.perennialte.ch'
     ];
 
+    // api.codetabs.com УДАЛЁН (отключён с июня 2026).
     const CORS_PROXIES = [
-        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`,
-        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
         (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
         (u) => `https://cors.eu.org/${u}`,
-        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
         (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`
     ];
 
@@ -267,7 +268,6 @@
         return null;
     }
 
-    // Фильтра по title/description НЕТ. Только Shorts и дубликаты.
     function filterShortsAndDuplicates(videos) {
         const seen = new Set();
         const filtered = [];
@@ -538,7 +538,7 @@
     }
 
     // ============================================================
-    // ITCH.IO — превью из media:*, enclosure, content:encoded, description
+    // ITCH.IO — RSS + RSSHub fallback
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -556,19 +556,16 @@
     }
 
     function extractItchThumbnailFromEl(itemEl) {
-        // 1) media:content
         const mediaContent = itemEl.getElementsByTagName('media:content')[0];
         if (mediaContent) {
             const url = mediaContent.getAttribute('url');
             if (url) return normalizeItchUrl(url);
         }
-        // 2) media:thumbnail
         const mediaThumb = itemEl.getElementsByTagName('media:thumbnail')[0];
         if (mediaThumb) {
             const url = mediaThumb.getAttribute('url');
             if (url) return normalizeItchUrl(url);
         }
-        // 3) enclosure
         const enclosure = itemEl.getElementsByTagName('enclosure')[0];
         if (enclosure) {
             const type = enclosure.getAttribute('type') || '';
@@ -577,13 +574,11 @@
                 if (url) return normalizeItchUrl(url);
             }
         }
-        // 4) content:encoded (itch.io часто кладёт <img> именно сюда)
         const contentEncoded = itemEl.getElementsByTagName('content:encoded')[0];
         if (contentEncoded) {
             const img = extractImageFromHtml(contentEncoded.textContent);
             if (img) return img;
         }
-        // 5) description
         const descEl = itemEl.getElementsByTagName('description')[0];
         if (descEl) {
             const img = extractImageFromHtml(descEl.textContent);
@@ -635,7 +630,6 @@
             const cached = readCache(ITCH_CACHE_KEY, ITCH_CACHE_TTL);
             if (cached && cached.length) {
                 console.log(`[NewsFeed] itch.io из кеша: ${cached.length}`);
-                // Отдаём кеш сразу, но продолжаем загрузку в фоне
                 if (typeof onItem === 'function') {
                     cached.map(normalizeItem).forEach(item => {
                         try { onItem(item); } catch { /* noop */ }
@@ -668,7 +662,7 @@
             if (allPosts.length === 0 && source.rssHubUrl) {
                 const rssHubUrls = [
                     source.rssHubUrl,
-                    `https://corsproxy.dev/?url=${encodeURIComponent(source.rssHubUrl)}`,
+                    `https://corsproxy.io/?url=${encodeURIComponent(source.rssHubUrl)}`,
                     `https://corsfix.com/?${source.rssHubUrl}`
                 ];
                 for (const rssHubUrl of rssHubUrls) {
@@ -714,7 +708,14 @@
             return true;
         }).sort((a, b) => b.date - a.date).slice(0, MAX_ITCH_POSTS);
 
-        if (unique.length > 0) writeCache(ITCH_CACHE_KEY, unique);
+        if (unique.length > 0) {
+            writeCache(ITCH_CACHE_KEY, unique);
+            if (typeof onItem === 'function') {
+                unique.forEach(item => {
+                    try { onItem(item); } catch { /* noop */ }
+                });
+            }
+        }
         return unique;
     }
 
@@ -801,7 +802,7 @@
     }
 
     // ============================================================
-    // GITHUB RELEASES — релизы инструментов
+    // GITHUB RELEASES
     // ============================================================
 
     async function loadReleases(onEach, signal) {
@@ -856,36 +857,16 @@
     }
 
     // ============================================================
-    // АГРЕГАЦИЯ — каждый источник независимо, обновление сразу
+    // АГРЕГАЦИЯ — каждый источник независимо
     // ============================================================
 
-    async function loadAllSources(signal, forceRefresh, onItem, onUpdateCache) {
+    async function loadAllSources(signal, forceRefresh, onItem) {
         const sources = [
-            {
-                name: 'посты',
-                fn: () => loadPosts(signal, onItem),
-                cacheKey: null
-            },
-            {
-                name: 'YouTube',
-                fn: () => fetchYoutubeVideos(signal, forceRefresh),
-                cacheKey: VIDEOS_CACHE_KEY
-            },
-            {
-                name: 'Twitch',
-                fn: () => loadTwitchStreams(signal),
-                cacheKey: null
-            },
-            {
-                name: 'релизы',
-                fn: () => loadReleases(onItem, signal),
-                cacheKey: null
-            },
-            {
-                name: 'itch.io',
-                fn: () => fetchItchPosts(signal, forceRefresh, onItem),
-                cacheKey: ITCH_CACHE_KEY
-            }
+            { name: 'посты', fn: () => loadPosts(signal, onItem), cacheKey: null },
+            { name: 'YouTube', fn: () => fetchYoutubeVideos(signal, forceRefresh), cacheKey: VIDEOS_CACHE_KEY },
+            { name: 'Twitch', fn: () => loadTwitchStreams(signal), cacheKey: null },
+            { name: 'релизы', fn: () => loadReleases(onItem, signal), cacheKey: null },
+            { name: 'itch.io', fn: () => fetchItchPosts(signal, forceRefresh, onItem), cacheKey: ITCH_CACHE_KEY }
         ];
 
         const promises = sources.map(source => {
@@ -893,16 +874,12 @@
                 .then(items => {
                     if (!items || !items.length) return;
                     console.log(`[NewsFeed] ${source.name}: ${items.length} элементов`);
-                    // Сразу отдаём элементы в UI
                     if (typeof onItem === 'function') {
                         for (const item of items) {
                             try { onItem(item); } catch { /* noop */ }
                         }
                     }
-                    // Обновляем кеш источника
-                    if (source.cacheKey) {
-                        writeCache(source.cacheKey, items);
-                    }
+                    if (source.cacheKey) writeCache(source.cacheKey, items);
                     return items;
                 })
                 .catch(err => {
@@ -934,12 +911,10 @@
 
         if (hasCache && !forceRefresh) {
             const items = cached.items.map(normalizeItem);
-            // Сразу показываем кеш
             if (typeof onUpdate === 'function') {
                 try { onUpdate(items, { fromCache: true }); } catch { /* noop */ }
             }
 
-            // Фоновая догрузка — обновляет UI по мере поступления
             if (!backgroundRefreshInFlight) {
                 backgroundRefreshInFlight = true;
                 (async () => {
@@ -951,8 +926,7 @@
                                 if (typeof onUpdate === 'function') {
                                     try { onUpdate([item], { incremental: true }); } catch { /* noop */ }
                                 }
-                            },
-                            null
+                            }
                         );
                         if (freshItems.length) {
                             const limited = freshItems.slice(0, MAX_DISPLAY_ITEMS);
@@ -1004,8 +978,7 @@
                     if (typeof onUpdate === 'function') {
                         try { onUpdate([item], { incremental: true }); } catch { /* noop */ }
                     }
-                },
-                null
+                }
             );
             const limited = allItems.slice(0, MAX_DISPLAY_ITEMS);
             if (limited.length > 0) {
@@ -1131,7 +1104,6 @@
         renderNewsHeader();
 
         if (incremental) {
-            // Добавляем по одной карточке, не трогая остальные
             const grid = getOrCreateGrid();
             if (!grid) return;
             for (const item of items) insertCardSorted(grid, item);
@@ -1316,8 +1288,18 @@
         container = document.getElementById('news-feed');
         if (!container) return;
         currentUser = getCurrentUser();
-        container.innerHTML = '';
-        container.appendChild(renderSkeleton(6));
+
+        // Проверяем кеш ДО добавления скелетона.
+        const cached = await cacheGet(CACHE_KEY, CACHE_TTL);
+        const hasCachedItems = cached && Array.isArray(cached.items) && cached.items.length > 0;
+
+        if (hasCachedItems) {
+            // Показываем кеш сразу, без скелетона.
+            updateNewsFeed(cached.items.map(normalizeItem), { replace: true });
+        } else {
+            container.innerHTML = '';
+            container.appendChild(renderSkeleton(6));
+        }
 
         try {
             const result = await fetchNewsFeed({
@@ -1328,21 +1310,23 @@
                     } else if (opts && opts.final) {
                         updateNewsFeed(items, { replace: true });
                     } else if (opts && opts.fromCache) {
-                        updateNewsFeed(items, { replace: true });
+                        // Уже показали выше — пропускаем.
                     } else {
                         updateNewsFeed(items, { replace: true });
                     }
                 }
             });
             if (result) {
-                updateNewsFeed(result.items, { replace: true });
+                if (!hasCachedItems || !result.fromCache) {
+                    updateNewsFeed(result.items, { replace: true });
+                }
                 if (result.isStale) showToast('Данные могут быть устаревшими', 'warning', 5000);
             } else {
-                updateNewsFeed([], { replace: true });
+                if (!hasCachedItems) updateNewsFeed([], { replace: true });
             }
         } catch (err) {
             console.error('[NewsFeed] Ошибка инициализации:', err);
-            if (container) {
+            if (container && !hasCachedItems) {
                 container.innerHTML = sanitizeHtml(`
                     <div class="empty-state">
                         <i class="fas fa-exclamation-triangle"></i>
