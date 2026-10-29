@@ -1,7 +1,7 @@
 // js/pages/game-updates.js — обновления (GitHub + itch.io + YouTube-канал).
-// CORS-прокси: corsproxy.dev, cors.lol, cloudflare-cors-anywhere, corsfix, cors.x2u.in.
-// itch.io: RSS через прокси (общий кэш с news-feed.js).
-// YouTube: RSS UULF через прокси + Piped (leptons, nosebs, libre) как резерв.
+// YouTube: RSS UULF (через прокси) + Piped (расширенный список) — параллельно.
+// Shorts отсекаются по длительности (< 60 сек). Фильтр проверяет название И описание.
+// Кеш видео с канала отдельный — при сбое источника данные не теряются.
 
 (function() {
     'use strict';
@@ -21,7 +21,7 @@
 
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
     const YT_CACHE_TTL = 30 * 60 * 1000;
-    const REQUEST_TIMEOUT = 15000;
+    const REQUEST_TIMEOUT = 20000;
     const MAX_ITCH_POSTS = 3;
     const MAX_YT_VIDEOS = 3;
     const MIN_YT_DURATION = 60;
@@ -31,8 +31,9 @@
     const YT_UULF_PLAYLIST_ID = YT_CHANNEL_ID.replace(/^UC/, 'UULF');
     const YT_RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${YT_UULF_PLAYLIST_ID}`;
 
+    // Ключевые слова для фильтрации видео с канала (название ИЛИ описание)
     const GAME_KEYWORDS = {
-        'starve-neon': ['starve neon', 'starveneon', 'starve-neon']
+        'starve-neon': ['starve', 'neon']
     };
 
     const ITCH_DEVLOG_SOURCES = {
@@ -43,13 +44,26 @@
         }
     };
 
-    // ---- Рабочие CORS-прокси (2026) ----
-    const CORS_PROXIES = [
-        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,          // 500 запросов/день
-        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,           // rate-limit, без фильтра доменов
-        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`, // 100k/день
-        (u) => `https://corsfix.com/?${u}`,                                    // 60 запросов/мин
-        (u) => `https://cors.x2u.in/${u}`                                      // 100 запросов/час
+    // ---- Расширенный список Piped-инстансов (проверены в логах: 200) ----
+    const PIPED_INSTANCES = [
+        'https://api.piped.private.coffee',
+        'https://pipedapi.ducks.party',
+        'https://pipedapi.leptons.xyz',
+        'https://pipedapi.kavin.rocks',
+        'https://pipedapi-libre.kavin.rocks',
+        'https://pipedapi.adminforge.de',
+        'https://piped-api.privacy.com.de',
+        'https://api.piped.yt',
+        'https://pipedapi.drgns.space',
+        'https://pipedapi.owo.si',
+        'https://pipedapi.reallyaweso.me',
+        'https://pipedapi.darkness.services'
+    ];
+
+    // ---- CORS-прокси для RSS (работают стабильно) ----
+    const RSS_PROXIES = [
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsfix.com/?${u}`
     ];
 
     function t(key) {
@@ -93,7 +107,7 @@
         return `itch_posts_v9_${game}`;
     }
     function getYtCacheKey(game) {
-        return `yt_updates_v9_${game}`;
+        return `yt_channel_cache_v1_${game}`; // отдельный кеш для видео с канала
     }
 
     function readCacheWithDates(key, ttl) {
@@ -132,7 +146,10 @@
                     try { controller.abort(); } catch { /* noop */ }
                 }, { once: true });
             }
-            fetch(url, { signal: controller.signal })
+            fetch(url, {
+                signal: controller.signal,
+                cache: 'no-store' // чтобы SW не отдавал пустой кэш
+            })
                 .then(res => {
                     clearTimeout(timer);
                     if (!res.ok) reject(new Error(`HTTP ${res.status}`));
@@ -140,46 +157,6 @@
                 })
                 .catch(err => { clearTimeout(timer); reject(err); });
         });
-    }
-
-    /**
-     * Универсальная распаковка ответа прокси.
-     * corsproxy.dev может вернуть JSON {contents: "..."}, cors.lol — сырой текст.
-     */
-    async function fetchViaProxy(proxyFn, targetUrl, signal) {
-        const proxyUrl = proxyFn(targetUrl);
-        const res = await fetchWithTimeout(proxyUrl, signal);
-        let text = await res.text();
-        if (!text || text.length < 100) throw new Error('too short');
-
-        if (text.trim().startsWith('{')) {
-            try {
-                const json = JSON.parse(text);
-                if (typeof json.contents === 'string') {
-                    text = json.contents;
-                } else if (json.error) {
-                    throw new Error('proxy error: ' + json.error);
-                }
-            } catch (e) {
-                if (e.message.startsWith('proxy error')) throw e;
-            }
-        }
-
-        if (!text || text.length < 100) throw new Error('too short after unwrap');
-        return text;
-    }
-
-    async function raceProxies(targetUrl, parser, signal) {
-        const promises = CORS_PROXIES.map(proxyFn =>
-            fetchViaProxy(proxyFn, targetUrl, signal).then(text => {
-                const result = parser(text);
-                if (!result || (Array.isArray(result) && result.length === 0)) {
-                    throw new Error('empty parse');
-                }
-                return result;
-            })
-        );
-        return await Promise.any(promises);
     }
 
     // ============================================================
@@ -249,8 +226,14 @@
             if (cached && cached.length) return cached;
         }
 
+        // raceProxies для itch.io
+        const promises = RSS_PROXIES.map(proxyFn =>
+            fetchWithTimeout(proxyFn(source.rssUrl), signal)
+                .then(res => res.text())
+                .then(text => parseItchRss(text, source))
+        );
         try {
-            const posts = await raceProxies(source.rssUrl, (text) => parseItchRss(text, source), signal);
+            const posts = await Promise.any(promises);
             if (posts && posts.length) {
                 writeCache(cacheKey, posts);
                 return posts;
@@ -265,7 +248,7 @@
     }
 
     // ============================================================
-    // YOUTUBE — RSS через прокси + Piped как резерв
+    // YOUTUBE — RSS + Piped (расширенный)
     // ============================================================
 
     function filterYoutubeVideos(videos) {
@@ -282,6 +265,17 @@
             .slice(0, MAX_YT_VIDEOS);
     }
 
+    /**
+     * Проверяет, относится ли видео к игре.
+     * Смотрит и в title, и в description (описание у Piped может быть пустым,
+     * но у RSS оно есть).
+     */
+    function isRelevant(video, keywords) {
+        if (!video) return false;
+        const text = ((video.title || '') + ' ' + (video.description || '')).toLowerCase();
+        return keywords.some(kw => text.includes(kw));
+    }
+
     function parseYoutubeRss(text, game) {
         const keywords = GAME_KEYWORDS[game] || [];
         const entryBlocks = text.split('<entry>').slice(1);
@@ -289,13 +283,18 @@
             const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
             const titleMatch = block.match(/<title>([^<]*)<\/title>/);
             const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
+            const descMatch = block.match(/<media:description>([\s\S]*?)<\/media:description>/);
             if (!videoIdMatch) return null;
             const videoId = videoIdMatch[1];
             const title = decodeXmlEntities(titleMatch ? titleMatch[1] : 'Untitled');
-            const titleLower = title.toLowerCase();
-            const relevant = keywords.some(kw => titleLower.includes(kw))
-                || titleLower.includes('#starveneon');
-            if (!relevant) return null;
+            const description = descMatch ? decodeXmlEntities(descMatch[1]) : '';
+            const video = {
+                videoId,
+                title,
+                description,
+                duration: null // RSS не даёт длительность
+            };
+            if (!isRelevant(video, keywords)) return null;
             return normalizePost({
                 type: 'yt-video',
                 id: `yt-${videoId}`,
@@ -311,8 +310,13 @@
     }
 
     async function fetchYoutubeRss(game, signal) {
+        const promises = RSS_PROXIES.map(proxyFn =>
+            fetchWithTimeout(proxyFn(YT_RSS_URL), signal)
+                .then(res => res.text())
+                .then(text => parseYoutubeRss(text, game))
+        );
         try {
-            return await raceProxies(YT_RSS_URL, (text) => parseYoutubeRss(text, game), signal);
+            return await Promise.any(promises);
         } catch (e) {
             if (isAborted(e, signal)) throw e;
             console.warn(`[GameUpdates] YouTube RSS прокси не сработали:`, e.message || e);
@@ -322,12 +326,7 @@
 
     async function fetchYoutubePiped(game, signal) {
         const keywords = GAME_KEYWORDS[game] || [];
-        const instances = [
-            'https://pipedapi.leptons.xyz',
-            'https://pipedapi.nosebs.ru',
-            'https://pipedapi-libre.kavin.rocks'
-        ];
-        const promises = instances.map(async (base) => {
+        const promises = PIPED_INSTANCES.map(async (base) => {
             const url = `${base}/channel/${YT_CHANNEL_ID}`;
             const res = await fetchWithTimeout(url, signal);
             const data = await res.json();
@@ -335,18 +334,20 @@
             const videos = streams.map(item => {
                 const videoId = (item.url || '').replace('/watch?v=', '');
                 if (!videoId) return null;
-                const title = item.title || '';
-                const titleLower = title.toLowerCase();
-                const relevant = keywords.some(kw => titleLower.includes(kw))
-                    || titleLower.includes('#starveneon');
-                if (!relevant) return null;
                 const duration = typeof item.duration === 'number' ? item.duration : null;
                 if (duration !== null && duration > 0 && duration < MIN_YT_DURATION) return null;
+                const video = {
+                    videoId,
+                    title: item.title || '',
+                    description: item.shortDescription || '',
+                    duration
+                };
+                if (!isRelevant(video, keywords)) return null;
                 return normalizePost({
                     type: 'yt-video',
                     id: `yt-${videoId}`,
                     videoId,
-                    title,
+                    title: item.title || '',
                     author: YT_CHANNEL_NAME,
                     date: new Date(item.uploaded || Date.now()),
                     thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
@@ -371,6 +372,7 @@
             if (cached && cached.length) return cached;
         }
 
+        // Запускаем RSS и Piped параллельно, собираем все результаты
         const results = await Promise.allSettled([
             fetchYoutubeRss(game, signal),
             fetchYoutubePiped(game, signal)
@@ -435,6 +437,10 @@
 
         return [...yt, ...itch, ...gh].sort((a, b) => b.date - a.date);
     }
+
+    // ============================================================
+    // РЕНДЕР
+    // ============================================================
 
     function getAuthorIcon(type) {
         if (type === 'itch-post') return 'fab fa-itch-io';
@@ -633,7 +639,7 @@
 
     async function loadGameUpdates(container, game, forceRefresh = false) {
         if (currentAbort) { currentAbort.controller.abort(); currentAbort = null; }
-        const { controller, timeoutId } = createAbortable(15000);
+        const { controller, timeoutId } = createAbortable(20000);
         currentAbort = { controller };
 
         try {
