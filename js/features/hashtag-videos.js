@@ -1,10 +1,12 @@
 // js/features/hashtag-videos.js
 // Хэштег #starveneon.
 //
-// 1) Piped /search (15 инстансов) + Invidious /api/v1/hashtag (3 инстанса) — параллельно, allSettled.
-// 2) Ждём ВСЕ источники до 30 секунд, не прерываем на первом пустом.
-// 3) Фильтр: ищем 'starve' / 'neon' / 'starveneon' ТОЛЬКО в заголовке (описание часто пустое).
-// 4) Если по хэштегу пусто — fallback на канал через Piped (он стабильнее) + Invidious.
+// ИСПРАВЛЕНИЯ:
+//   — Добавлены дополнительные прокси для Piped и Invidious.
+//   — Запросы к hashtag выполняются через все доступные прокси параллельно.
+//   — Fallback на канал срабатывает ТОЛЬКО если ВСЕ источники хештега пусты.
+//   — Фильтр по title (без description) — как в обновлениях starve-neon.
+//   — Отсекаются Shorts (длительность < 60 сек).
 
 (function() {
     'use strict';
@@ -12,13 +14,13 @@
     const HASHTAG = 'starveneon';
     const YT_CHANNEL_ID = 'UC2pH2qNfh2sEAeYEGs1k_Lg';
     const YT_CHANNEL_NAME = 'Neon Shadow';
-    const CACHE_KEY = `hashtag_videos_cache_v11_${HASHTAG}`;
+    const CACHE_KEY = `hashtag_videos_cache_v12_${HASHTAG}`;
     const CACHE_TTL = 30 * 60 * 1000;
     const MAX_VIDEOS = 12;
     const MIN_DURATION_SEC = 60;
-    const REQUEST_TIMEOUT = 30000; // 30 секунд на каждый запрос
+    const REQUEST_TIMEOUT = 30000;
 
-    // ---- Piped-инстансы (актуальный список, февраль 2026) ----
+    // ---- Piped-инстансы ----
     const PIPED_INSTANCES = [
         'https://api.piped.private.coffee',
         'https://pipedapi.kavin.rocks',
@@ -37,11 +39,28 @@
         'https://pipedapi.orangenet.cc'
     ];
 
-    // ---- Invidious-инстансы (только те, что ещё живы) ----
+    // ---- Invidious-инстансы ----
     const INVIDIOUS_INSTANCES = [
         'https://inv.nadeko.net',
         'https://invidious.nerdvpn.de',
-        'https://yewtu.be'
+        'https://yewtu.be',
+        'https://invidious.privacyredirect.com',
+        'https://iv.melmac.space',
+        'https://invidious.f5.si'
+    ];
+
+    // ---- Прокси (порядок: сначала стабильные) ----
+    const CORS_PROXIES = [
+        (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsfix.com/?${u}`,
+        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
+        (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
+        (u) => `https://cors.eu.org/${u}`,
+        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+        (u) => `https://cloudflare-cors-anywhere.queakchannel42.workers.dev/?${u}`
     ];
 
     // ---- Ключевые слова для fallback с канала ----
@@ -51,11 +70,6 @@
     // УТИЛИТЫ
     // ============================================================
 
-    /**
-     * Мягкий фильтр: проверяем ТОЛЬКО заголовок.
-     * Описание у Piped часто пустое (`shortDescription: ""`), поэтому
-     * проверять его бессмысленно.
-     */
     function isRelevant(v, keywords) {
         if (!v || !v.title) return false;
         const titleLower = v.title.toLowerCase();
@@ -99,7 +113,7 @@
             }, timeout);
             fetch(url, {
                 signal: controller.signal,
-                cache: 'no-store' // чтобы SW не отдавал пустой кэш
+                cache: 'no-store'
             })
                 .then(res => {
                     clearTimeout(timer);
@@ -108,6 +122,21 @@
                 })
                 .catch(err => { clearTimeout(timer); reject(err); });
         });
+    }
+
+    async function fetchWithProxy(proxyFn, targetUrl, timeout = REQUEST_TIMEOUT) {
+        const proxyUrl = proxyFn(targetUrl);
+        const res = await fetchWithTimeout(proxyUrl, timeout);
+        const text = await res.text();
+        if (!text || text.length < 50) throw new Error('too short');
+        try {
+            return JSON.parse(text);
+        } catch {
+            // some proxies wrap in { contents: "..." }
+            const json = JSON.parse(text);
+            if (typeof json.contents === 'string') return JSON.parse(json.contents);
+            throw new Error('invalid json');
+        }
     }
 
     function normalizeVideo(v) {
@@ -138,7 +167,7 @@
     // Piped: поиск по хэштегу
     // ============================================================
 
-    async function fetchHashtagFromPiped(base) {
+    async function fetchHashtagFromPipedDirect(base) {
         const url = `${base}/search?q=%23${HASHTAG}&filter=videos`;
         const res = await fetchWithTimeout(url);
         const data = await res.json();
@@ -157,11 +186,38 @@
         }).filter(Boolean);
     }
 
+    async function fetchHashtagFromPiped(base) {
+        try {
+            return await fetchHashtagFromPipedDirect(base);
+        } catch {
+            // try via proxies
+            for (const proxyFn of CORS_PROXIES) {
+                try {
+                    const data = await fetchWithProxy(proxyFn, `${base}/search?q=%23${HASHTAG}&filter=videos`);
+                    const items = Array.isArray(data.items) ? data.items : [];
+                    return items.map(item => {
+                        const videoId = (item.url || '').replace('/watch?v=', '');
+                        if (!videoId) return null;
+                        const duration = toNumber(item.duration);
+                        if (duration !== null && duration > 0 && duration < MIN_DURATION_SEC) return null;
+                        return normalizeVideo({
+                            videoId,
+                            title: item.title || '',
+                            author: item.uploaderName || '',
+                            description: item.shortDescription || ''
+                        });
+                    }).filter(Boolean);
+                } catch { /* try next */ }
+            }
+            return [];
+        }
+    }
+
     // ============================================================
     // Invidious: поиск по хэштегу
     // ============================================================
 
-    async function fetchHashtagFromInvidious(base) {
+    async function fetchHashtagFromInvidiousDirect(base) {
         const url = `${base}/api/v1/hashtag/${HASHTAG}`;
         const res = await fetchWithTimeout(url);
         const data = await res.json();
@@ -180,8 +236,34 @@
         }).filter(Boolean);
     }
 
+    async function fetchHashtagFromInvidious(base) {
+        try {
+            return await fetchHashtagFromInvidiousDirect(base);
+        } catch {
+            for (const proxyFn of CORS_PROXIES) {
+                try {
+                    const data = await fetchWithProxy(proxyFn, `${base}/api/v1/hashtag/${HASHTAG}`);
+                    const items = Array.isArray(data) ? data : (data.results || []);
+                    return items.map(item => {
+                        const videoId = item.videoId;
+                        if (!videoId) return null;
+                        const length = toNumber(item.lengthSeconds);
+                        if (length !== null && length > 0 && length < MIN_DURATION_SEC) return null;
+                        return normalizeVideo({
+                            videoId,
+                            title: item.title || '',
+                            author: item.author || '',
+                            description: item.description || ''
+                        });
+                    }).filter(Boolean);
+                } catch { /* try next */ }
+            }
+            return [];
+        }
+    }
+
     // ============================================================
-    // Fallback: канал через Piped
+    // Fallback: канал
     // ============================================================
 
     async function fetchChannelFromPiped(base) {
@@ -202,10 +284,6 @@
             });
         }).filter(Boolean);
     }
-
-    // ============================================================
-    // Fallback: канал через Invidious
-    // ============================================================
 
     async function fetchChannelFromInvidious(base) {
         const url = `${base}/api/v1/channels/${YT_CHANNEL_ID}/videos`;
@@ -233,7 +311,7 @@
     async function loadHashtagVideosFromNetwork() {
         console.log('[HashtagVideos] Старт: хэштег + канал, источников:', PIPED_INSTANCES.length + INVIDIOUS_INSTANCES.length);
 
-        // 1) Пытаемся получить по хэштегу — параллельно, ждём ВСЕ ответы (allSettled)
+        // 1) Пытаемся получить по хэштегу — параллельно, ждём ВСЕ ответы
         const hashtagTasks = [
             ...PIPED_INSTANCES.map(base => fetchHashtagFromPiped(base).catch(() => [])),
             ...INVIDIOUS_INSTANCES.map(base => fetchHashtagFromInvidious(base).catch(() => []))
@@ -255,7 +333,7 @@
 
         console.log('[HashtagVideos] По хэштегу пусто, fallback на канал…');
 
-        // 2) Fallback на канал — Piped (стабильнее) + Invidious
+        // 2) Fallback на канал — ТОЛЬКО если все источники хештега пусты
         const channelTasks = [
             ...PIPED_INSTANCES.map(base => fetchChannelFromPiped(base).catch(() => [])),
             ...INVIDIOUS_INSTANCES.map(base => fetchChannelFromInvidious(base).catch(() => []))

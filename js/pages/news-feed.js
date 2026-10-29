@@ -1,12 +1,11 @@
 // js/pages/news-feed.js — лента новостей (index.html).
 //
-// ИСПРАВЛЕНИЯ:
-//   1. DOMParser + getElementsByTagName (работает с RSS 1.0/2.0/Atom).
-//   2. YouTube: если после Shorts-фильтра 0, но исходных > 0 — показываем все (без фильтра).
-//   3. itch.io: getElementsByTagName('item'), извлечение thumbnail из description.
-//   4. Piped: duration в секундах (число), parseDuration обрабатывает.
-//   5. НЕ кешируем пустоту.
-//   6. Вставка карточек по одной по дате (без полной перерисовки).
+// ВАЖНО:
+//   — YouTube: НЕТ фильтра по title/description, только отсечение Shorts (dur < 60 сек).
+//   — itch.io: превью берётся из media:*, enclosure, content:encoded или description.
+//   — Релизы инструментов: всегда с иконкой и тегом версии.
+//   — Мгновенное обновление: каждый источник вставляет карточки сразу, как только ответил.
+//   — Кеш обновляется после каждого успешного ответа источника.
 
 (function() {
     'use strict';
@@ -19,17 +18,16 @@
     const { getCurrentUser, isAdmin, hasScope } = window.GithubAuth;
     const { showToast } = window.UIUtils;
 
-    const CACHE_KEY = 'news_feed_data_v15';
+    const CACHE_KEY = 'news_feed_data_v18';
     const CACHE_TTL = 5 * 60 * 1000;
-    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v15';
+    const VIDEOS_CACHE_KEY = 'yt_videos_cache_v18';
     const VIDEOS_CACHE_TTL = 30 * 60 * 1000;
-    const ITCH_CACHE_KEY = 'itch_posts_news_v15';
+    const ITCH_CACHE_KEY = 'itch_posts_news_v18';
     const ITCH_CACHE_TTL = 30 * 60 * 1000;
 
     const SOURCE_TIMEOUT = 25000;
     const REQUEST_TIMEOUT = 25000;
-    const MAX_DISPLAY_ITEMS = 9;
-    const MAX_VIDEOS = 6;
+    const MAX_DISPLAY_ITEMS = 30;
     const MAX_ITCH_POSTS = 3;
     const MIN_YT_DURATION = 60;
 
@@ -77,10 +75,10 @@
     const CORS_PROXIES = [
         (u) => `https://corsproxy.dev/?url=${encodeURIComponent(u)}`,
         (u) => `https://corsfix.com/?${u}`,
+        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
         (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
         (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
         (u) => `https://everyorigin.jwvbremen.nl/api/get?url=${encodeURIComponent(u)}`,
-        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
         (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
         (u) => `https://cors.eu.org/${u}`,
         (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
@@ -96,6 +94,7 @@
         {
             name: 'Starve Neon',
             rssUrl: 'https://neon-shadow.itch.io/starve-neon/devlog.rss',
+            rssHubUrl: 'https://rsshub.app/itch/devlogs/neon-shadow/starve-neon',
             devlogPageUrl: 'https://neon-shadow.itch.io/starve-neon/devlog'
         }
     ];
@@ -216,6 +215,10 @@
         let text = await res.text();
         if (!text || text.length < 100) throw new Error('too short (' + text.length + 'b)');
 
+        if (/Just a moment|Attention Required|cf-browser-verification/i.test(text)) {
+            throw new Error('cloudflare challenge');
+        }
+
         if (text.trim().startsWith('{')) {
             try {
                 const json = JSON.parse(text);
@@ -264,7 +267,7 @@
         return null;
     }
 
-    /** Отсекаем Shorts. Если после фильтра 0, но исходных > 0 — возвращаем все. */
+    // Фильтра по title/description НЕТ. Только Shorts и дубликаты.
     function filterShortsAndDuplicates(videos) {
         const seen = new Set();
         const filtered = [];
@@ -281,15 +284,22 @@
             filtered.push(v);
         }
         if (filtered.length === 0 && videos.length > 0) {
-            console.warn(`[NewsFeed] YouTube: все ${videos.length} видео отсеклись как Shorts (dur<60), показываем без фильтра`);
-            return videos.slice(0, MAX_VIDEOS);
+            console.warn(`[NewsFeed] YouTube: все ${videos.length} видео оказались Shorts — показываем как есть`);
+            const dedup = [];
+            const seen2 = new Set();
+            for (const v of videos) {
+                if (!v || !v.videoId || seen2.has(v.videoId)) continue;
+                seen2.add(v.videoId);
+                dedup.push(v);
+            }
+            return dedup.sort((a, b) => b.date - a.date);
         }
         console.log(`[NewsFeed] YouTube: было ${videos.length}, Shorts ${shortsCount}, осталось ${filtered.length}`);
-        return filtered.sort((a, b) => b.date - a.date).slice(0, MAX_VIDEOS);
+        return filtered.sort((a, b) => b.date - a.date);
     }
 
     // ============================================================
-    // YOUTUBE RSS — DOMParser + getElementsByTagName
+    // YOUTUBE RSS
     // ============================================================
 
     function parseYoutubeRssWithDom(text) {
@@ -363,7 +373,7 @@
                 date: new Date(item.uploaded || Date.now()),
                 thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                 videoData: { service: 'youtube', id: videoId },
-                duration: item.duration // число секунд
+                duration: item.duration
             });
         }).filter(Boolean);
     }
@@ -377,7 +387,6 @@
                 })
                 .catch(() => [])
         );
-        // Через прокси для первых 5 инстансов
         for (const base of PIPED_INSTANCES.slice(0, 5)) {
             for (const proxyFn of CORS_PROXIES.slice(0, 4)) {
                 tasks.push(
@@ -529,7 +538,7 @@
     }
 
     // ============================================================
-    // ITCH.IO — DOMParser + getElementsByTagName
+    // ITCH.IO — превью из media:*, enclosure, content:encoded, description
     // ============================================================
 
     function normalizeItchUrl(url) {
@@ -540,20 +549,45 @@
         return url;
     }
 
+    function extractImageFromHtml(html) {
+        if (!html) return null;
+        const m = String(html).match(/<img[^>]+src=["']([^"']+)["']/i);
+        return m ? normalizeItchUrl(m[1]) : null;
+    }
+
     function extractItchThumbnailFromEl(itemEl) {
+        // 1) media:content
         const mediaContent = itemEl.getElementsByTagName('media:content')[0];
-        if (mediaContent) { const url = mediaContent.getAttribute('url'); if (url) return normalizeItchUrl(url); }
+        if (mediaContent) {
+            const url = mediaContent.getAttribute('url');
+            if (url) return normalizeItchUrl(url);
+        }
+        // 2) media:thumbnail
         const mediaThumb = itemEl.getElementsByTagName('media:thumbnail')[0];
-        if (mediaThumb) { const url = mediaThumb.getAttribute('url'); if (url) return normalizeItchUrl(url); }
+        if (mediaThumb) {
+            const url = mediaThumb.getAttribute('url');
+            if (url) return normalizeItchUrl(url);
+        }
+        // 3) enclosure
         const enclosure = itemEl.getElementsByTagName('enclosure')[0];
         if (enclosure) {
             const type = enclosure.getAttribute('type') || '';
-            if (type.startsWith('image')) { const url = enclosure.getAttribute('url'); if (url) return normalizeItchUrl(url); }
+            if (type.startsWith('image')) {
+                const url = enclosure.getAttribute('url');
+                if (url) return normalizeItchUrl(url);
+            }
         }
+        // 4) content:encoded (itch.io часто кладёт <img> именно сюда)
+        const contentEncoded = itemEl.getElementsByTagName('content:encoded')[0];
+        if (contentEncoded) {
+            const img = extractImageFromHtml(contentEncoded.textContent);
+            if (img) return img;
+        }
+        // 5) description
         const descEl = itemEl.getElementsByTagName('description')[0];
         if (descEl) {
-            const imgMatch = descEl.textContent.match(/<img[^>]+src=["']([^"']+)["']/i);
-            if (imgMatch) return normalizeItchUrl(imgMatch[1]);
+            const img = extractImageFromHtml(descEl.textContent);
+            if (img) return img;
         }
         return null;
     }
@@ -563,7 +597,6 @@
         const doc = parser.parseFromString(text, 'text/xml');
         if (doc.querySelector('parsererror')) throw new Error('XML parser error');
 
-        // getElementsByTagName работает с любыми префиксами (rdf:item, item и т.д.)
         const items = doc.getElementsByTagName('item');
         const result = [];
         for (let i = 0; i < items.length; i++) {
@@ -597,11 +630,17 @@
         return result.sort((a, b) => b.date - a.date).slice(0, MAX_ITCH_POSTS);
     }
 
-    async function fetchItchPosts(signal, forceRefresh = false) {
+    async function fetchItchPosts(signal, forceRefresh = false, onItem) {
         if (!forceRefresh) {
             const cached = readCache(ITCH_CACHE_KEY, ITCH_CACHE_TTL);
             if (cached && cached.length) {
                 console.log(`[NewsFeed] itch.io из кеша: ${cached.length}`);
+                // Отдаём кеш сразу, но продолжаем загрузку в фоне
+                if (typeof onItem === 'function') {
+                    cached.map(normalizeItem).forEach(item => {
+                        try { onItem(item); } catch { /* noop */ }
+                    });
+                }
                 return cached.map(normalizeItem);
             }
         }
@@ -623,6 +662,38 @@
             const results = await Promise.allSettled(tasks);
             for (const r of results) {
                 if (r.status === 'fulfilled' && Array.isArray(r.value)) allPosts.push(...r.value);
+            }
+
+            // Резерв: RSSHub
+            if (allPosts.length === 0 && source.rssHubUrl) {
+                const rssHubUrls = [
+                    source.rssHubUrl,
+                    `https://corsproxy.dev/?url=${encodeURIComponent(source.rssHubUrl)}`,
+                    `https://corsfix.com/?${source.rssHubUrl}`
+                ];
+                for (const rssHubUrl of rssHubUrls) {
+                    try {
+                        const res = await fetchWithTimeout(rssHubUrl, signal);
+                        let text = await res.text();
+                        if (!text || text.length < 100) continue;
+                        if (/Just a moment|Attention Required|cf-browser-verification/i.test(text)) continue;
+                        if (text.trim().startsWith('{')) {
+                            try {
+                                const json = JSON.parse(text);
+                                if (typeof json.contents === 'string') text = json.contents;
+                            } catch { /* noop */ }
+                        }
+                        if (!/<item|<rss|<channel/.test(text)) continue;
+                        const rssHubPosts = parseItchRssWithDom(text, source);
+                        if (rssHubPosts.length > 0) {
+                            console.log(`[NewsFeed] itch.io RSSHub OK через ${rssHubUrl.split('/')[2]}: ${rssHubPosts.length}`);
+                            allPosts.push(...rssHubPosts);
+                            break;
+                        }
+                    } catch (e) {
+                        console.warn(`[NewsFeed] itch.io RSSHub failed: ${e.message}`);
+                    }
+                }
             }
         }
 
@@ -651,7 +722,7 @@
     // GITHUB ISSUES
     // ============================================================
 
-    async function loadPosts(signal) {
+    async function loadPosts(signal, onItem) {
         if (window.RateLimits && !window.RateLimits.checkLimit('posts')) return [];
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), SOURCE_TIMEOUT);
@@ -730,7 +801,7 @@
     }
 
     // ============================================================
-    // GITHUB RELEASES
+    // GITHUB RELEASES — релизы инструментов
     // ============================================================
 
     async function loadReleases(onEach, signal) {
@@ -785,34 +856,76 @@
     }
 
     // ============================================================
-    // АГРЕГАЦИЯ
+    // АГРЕГАЦИЯ — каждый источник независимо, обновление сразу
     // ============================================================
 
-    async function loadAllSources(signal, forceRefresh, onItem) {
-        const results = await Promise.allSettled([
-            loadPosts(signal),
-            fetchYoutubeVideos(signal, forceRefresh),
-            loadTwitchStreams(signal),
-            loadReleases(onItem, signal),
-            fetchItchPosts(signal, forceRefresh)
-        ]);
-        let allItems = [];
-        const labels = ['посты', 'YouTube', 'Twitch', 'релизы', 'itch.io'];
-        results.forEach((r, i) => {
-            if (r.status === 'fulfilled') {
-                const count = r.value?.length || 0;
-                console.log(`[NewsFeed] ${labels[i]}: ${count} элементов`);
-                allItems = allItems.concat(r.value || []);
-            } else if (!isAborted(r.reason, signal)) {
-                console.warn(`[NewsFeed] ${labels[i]} упал:`, r.reason?.message || r.reason);
+    async function loadAllSources(signal, forceRefresh, onItem, onUpdateCache) {
+        const sources = [
+            {
+                name: 'посты',
+                fn: () => loadPosts(signal, onItem),
+                cacheKey: null
+            },
+            {
+                name: 'YouTube',
+                fn: () => fetchYoutubeVideos(signal, forceRefresh),
+                cacheKey: VIDEOS_CACHE_KEY
+            },
+            {
+                name: 'Twitch',
+                fn: () => loadTwitchStreams(signal),
+                cacheKey: null
+            },
+            {
+                name: 'релизы',
+                fn: () => loadReleases(onItem, signal),
+                cacheKey: null
+            },
+            {
+                name: 'itch.io',
+                fn: () => fetchItchPosts(signal, forceRefresh, onItem),
+                cacheKey: ITCH_CACHE_KEY
             }
+        ];
+
+        const promises = sources.map(source => {
+            return source.fn()
+                .then(items => {
+                    if (!items || !items.length) return;
+                    console.log(`[NewsFeed] ${source.name}: ${items.length} элементов`);
+                    // Сразу отдаём элементы в UI
+                    if (typeof onItem === 'function') {
+                        for (const item of items) {
+                            try { onItem(item); } catch { /* noop */ }
+                        }
+                    }
+                    // Обновляем кеш источника
+                    if (source.cacheKey) {
+                        writeCache(source.cacheKey, items);
+                    }
+                    return items;
+                })
+                .catch(err => {
+                    if (!isAborted(err, signal)) {
+                        console.warn(`[NewsFeed] ${source.name} упал:`, err.message || err);
+                    }
+                    return [];
+                });
         });
+
+        const results = await Promise.allSettled(promises);
+        let allItems = [];
+        for (const r of results) {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+                allItems = allItems.concat(r.value);
+            }
+        }
         allItems.sort((a, b) => b.date - a.date);
         return allItems;
     }
 
     // ============================================================
-    // FETCH С КЕШЕМ
+    // FETCH С КЕШЕМ — постепенное обновление
     // ============================================================
 
     async function fetchNewsFeed({ signal, forceRefresh = false, maxAge = CACHE_TTL, onUpdate } = {}) {
@@ -821,16 +934,31 @@
 
         if (hasCache && !forceRefresh) {
             const items = cached.items.map(normalizeItem);
+            // Сразу показываем кеш
+            if (typeof onUpdate === 'function') {
+                try { onUpdate(items, { fromCache: true }); } catch { /* noop */ }
+            }
+
+            // Фоновая догрузка — обновляет UI по мере поступления
             if (!backgroundRefreshInFlight) {
                 backgroundRefreshInFlight = true;
                 (async () => {
                     try {
-                        const freshItems = await loadAllSources(null, true, null);
+                        const freshItems = await loadAllSources(
+                            null,
+                            true,
+                            (item) => {
+                                if (typeof onUpdate === 'function') {
+                                    try { onUpdate([item], { incremental: true }); } catch { /* noop */ }
+                                }
+                            },
+                            null
+                        );
                         if (freshItems.length) {
                             const limited = freshItems.slice(0, MAX_DISPLAY_ITEMS);
                             await cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
                             if (typeof onUpdate === 'function') {
-                                try { onUpdate(limited); } catch { /* noop */ }
+                                try { onUpdate(limited, { final: true }); } catch { /* noop */ }
                             }
                         }
                     } catch { /* noop */ }
@@ -869,7 +997,16 @@
         }
 
         try {
-            const allItems = await loadAllSources(abortController.signal, forceRefresh, null);
+            const allItems = await loadAllSources(
+                abortController.signal,
+                forceRefresh,
+                (item) => {
+                    if (typeof onUpdate === 'function') {
+                        try { onUpdate([item], { incremental: true }); } catch { /* noop */ }
+                    }
+                },
+                null
+            );
             const limited = allItems.slice(0, MAX_DISPLAY_ITEMS);
             if (limited.length > 0) {
                 await cacheSet(CACHE_KEY, { items: limited, timestamp: Date.now() });
@@ -989,10 +1126,19 @@
         if (btn) btn.addEventListener('click', () => refreshNewsFeed());
     }
 
-    function updateNewsFeed(items, { replace = false } = {}) {
+    function updateNewsFeed(items, { replace = false, incremental = false, fromCache = false, final = false } = {}) {
         if (!container) return;
-        const displayItems = items.slice(0, MAX_DISPLAY_ITEMS);
         renderNewsHeader();
+
+        if (incremental) {
+            // Добавляем по одной карточке, не трогая остальные
+            const grid = getOrCreateGrid();
+            if (!grid) return;
+            for (const item of items) insertCardSorted(grid, item);
+            return;
+        }
+
+        const displayItems = items.slice(0, MAX_DISPLAY_ITEMS);
         if (displayItems.length === 0) {
             if (replace) renderEmptyState();
             return;
@@ -1176,8 +1322,16 @@
         try {
             const result = await fetchNewsFeed({
                 forceRefresh: false,
-                onUpdate: (freshItems) => {
-                    updateNewsFeed(freshItems, { replace: false });
+                onUpdate: (items, opts) => {
+                    if (opts && opts.incremental) {
+                        updateNewsFeed(items, { incremental: true });
+                    } else if (opts && opts.final) {
+                        updateNewsFeed(items, { replace: true });
+                    } else if (opts && opts.fromCache) {
+                        updateNewsFeed(items, { replace: true });
+                    } else {
+                        updateNewsFeed(items, { replace: true });
+                    }
                 }
             });
             if (result) {
@@ -1232,8 +1386,14 @@
         } catch { /* noop */ }
         fetchNewsFeed({
             forceRefresh: true,
-            onUpdate: (freshItems) => {
-                updateNewsFeed(freshItems, { replace: false });
+            onUpdate: (items, opts) => {
+                if (opts && opts.incremental) {
+                    updateNewsFeed(items, { incremental: true });
+                } else if (opts && opts.final) {
+                    updateNewsFeed(items, { replace: true });
+                } else {
+                    updateNewsFeed(items, { replace: true });
+                }
             }
         })
             .then(r => {
