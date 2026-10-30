@@ -10,7 +10,7 @@
 //
 // UI-ПРАВИЛА:
 //   — Нет метки ОС или архитектуры — просто нет предупреждений.
-//   — Один вариант архитектуры — кнопки не рисуются, без пометок.
+//   — Один вариант архитектуры — кнопки не рисуются.
 //   — Один тип файла — вкладки не рисуются.
 //   — Скачивание никогда не блокируется из-за несовместимости.
 //   — Единственная блокировка: нет файла для платформы.
@@ -20,9 +20,6 @@
 //   1. sessionStorage — TTL 1 час.
 //   2. Service Worker — NetworkFirst + TTL 5 мин для api.github.com.
 //   3. Stale fallback — при сетевой ошибке возвращается устаревший кеш.
-//
-// Fallback OS-меток из тела релиза: «os: windows7» применяется к ассетам
-// соответствующей платформы, если в имени файла нет своей метки.
 
 (function () {
     'use strict';
@@ -71,7 +68,7 @@
     // ============================================================
 
     const PLATFORMS = [
-        { id: 'Windows', label: 'Windows', icon: 'fab fa-windows' },
+        { id: 'Windows', label: 'Win',     icon: 'fab fa-windows' },
         { id: 'Android', label: 'Android', icon: 'fab fa-android' },
         { id: 'Linux',   label: 'Linux',   icon: 'fab fa-linux' },
         { id: 'macOS',   label: 'macOS',   icon: 'fab fa-apple' },
@@ -632,7 +629,7 @@
             btn.dataset.platform = p.id;
             btn.setAttribute('aria-label', p.label + (p.soon ? ' — ' + t('platformSoon') : ''));
             btn.innerHTML =
-                `<i class="${p.icon}"></i>` +
+                `<i class="${p.icon}" aria-hidden="true"></i>` +
                 `<span class="platform-label">${escapeHtml(p.label)}</span>`;
 
             if (p.soon) {
