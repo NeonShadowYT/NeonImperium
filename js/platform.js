@@ -1,31 +1,28 @@
 // js/platform.js — выбор платформы, архитектуры, версии ОС и версии релиза.
+//
 // Поддержка: Windows (7/8/8.1/10/11), Android (7+), Linux, macOS, Web (Скоро).
 //
-// СТРАТЕГИЯ КЕШИРОВАНИЯ (три уровня):
-//   1. sessionStorage — TTL 1 час (NeonConfig.RELEASES_CACHE_TTL).
-//      Быстрый ответ без сетевого запроса. Обновляется при успешном fetch.
-//   2. Service Worker (sw.js) — NetworkFirst + TTL 5 мин для api.github.com.
-//      Перехватывает запрос, если sessionStorage пуст или устарел.
-//   3. Stale fallback — при ошибке сети возвращается даже устаревший кеш,
-//      чтобы интерфейс оставался работоспособным.
-//
 // ПРАВИЛА СОВМЕСТИМОСТИ:
-//   — Метка ОС = МИНИМАЛЬНАЯ поддерживаемая версия (win7 работает на 7–11).
-//   — 32-битная сборка работает на 64-битной системе (x86 → x64, arm32 → arm64).
-//   — 64-битная сборка НЕ работает на 32-битной системе.
-//   — Если пользователь не смог определить ОС/архитектуру — предупреждений нет,
-//     выбор не блокируется.
+//   — Метка ОС = минимальная версия (win7 работает на 7–11).
+//   — 32-bit запускается на 64-bit (x86 → x64, arm32 → arm64).
+//   — 64-bit на 32-bit НЕ запускается.
+//   — universal работает везде.
 //
 // UI-ПРАВИЛА:
-//   — Если доступен только 1 вариант архитектуры — кнопки не рисуются,
-//     выводится компактная пометка (в т.ч. «разрядность не помечена»).
-//   — Если доступен только 1 тип файла — вкладки не рисуются.
-//   — Скачивание никогда не блокируется из-за несовместимости —
-//     только мягкое предупреждение.
-//   — При полной ошибке загрузки релизов кнопка ведёт на страницу релизов GitHub.
+//   — Нет метки ОС или архитектуры — просто нет предупреждений.
+//   — Один вариант архитектуры — кнопки не рисуются, без пометок.
+//   — Один тип файла — вкладки не рисуются.
+//   — Скачивание никогда не блокируется из-за несовместимости.
+//   — Единственная блокировка: нет файла для платформы.
+//   — Ошибка сети — fallback на страницу релизов GitHub.
 //
-// Fallback меток ОС из тела релиза: строка «os: windows7» применяется
-// к ассетам соответствующей платформы, если в имени файла нет своей метки.
+// КЕШИРОВАНИЕ:
+//   1. sessionStorage — TTL 1 час.
+//   2. Service Worker — NetworkFirst + TTL 5 мин для api.github.com.
+//   3. Stale fallback — при сетевой ошибке возвращается устаревший кеш.
+//
+// Fallback OS-меток из тела релиза: «os: windows7» применяется к ассетам
+// соответствующей платформы, если в имени файла нет своей метки.
 
 (function () {
     'use strict';
@@ -70,7 +67,7 @@
     }
 
     // ============================================================
-    // Платформы / архитектуры / типы
+    // Константы
     // ============================================================
 
     const PLATFORMS = [
@@ -132,10 +129,6 @@
         return available[0];
     }
 
-    /**
-     * true, если ОС пользователя удовлетворяет минимальной версии файла.
-     * win7 как метка означает «минимум 7»: 7, 8, 8.1, 10, 11 совместимы.
-     */
     function isOSCompatible(userOS, fileMinMajor) {
         if (fileMinMajor === null || fileMinMajor === undefined) return true;
         if (!userOS || userOS.major === null || userOS.major === undefined) return true;
@@ -156,10 +149,6 @@
         return null;
     }
 
-    /**
-     * Возвращает данные из кеша независимо от TTL.
-     * Используется как fallback, когда сеть недоступна.
-     */
     function cacheGetStale(key) {
         try {
             const raw = sessionStorage.getItem(key);
@@ -197,7 +186,7 @@
     }
 
     // ============================================================
-    // Определение ОС пользователя
+    // Определение ОС и архитектуры пользователя
     // ============================================================
 
     function getOS() {
@@ -214,10 +203,6 @@
         return 'Windows';
     }
 
-    // ============================================================
-    // Определение архитектуры пользователя
-    // ============================================================
-
     async function detectUserArchitecture() {
         if (navigator.userAgentData &&
             typeof navigator.userAgentData.getHighEntropyValues === 'function') {
@@ -227,18 +212,12 @@
                 ]);
                 const arch = String(ua.architecture || '').toLowerCase();
                 const bits = String(ua.bitness || '');
-
-                if (arch.includes('arm')) {
-                    return bits === '64' ? 'arm64' : 'arm32';
-                }
-                if (arch.includes('x86')) {
-                    return bits === '64' ? 'x64' : 'x86';
-                }
+                if (arch.includes('arm')) return bits === '64' ? 'arm64' : 'arm32';
+                if (arch.includes('x86')) return bits === '64' ? 'x64' : 'x86';
             } catch { /* noop */ }
         }
 
         const ua = navigator.userAgent;
-
         if (/arm64|aarch64/i.test(ua)) return 'arm64';
         if (/armv7|armhf|arm32/i.test(ua)) return 'arm32';
         if (/WOW64/i.test(ua)) return 'x64';
@@ -246,10 +225,6 @@
         if (/i386|i686|ia32/i.test(ua)) return 'x86';
         return 'unknown';
     }
-
-    // ============================================================
-    // Определение версии ОС пользователя
-    // ============================================================
 
     async function detectUserOSVersion() {
         const platform = getOS();
@@ -287,16 +262,12 @@
             if (match) {
                 const full = match[1];
                 const major = parseInt(full.split('.')[0], 10);
-                if (!isNaN(major)) {
-                    return { platform: 'Android', version: full, major };
-                }
+                if (!isNaN(major)) return { platform: 'Android', version: full, major };
             }
             return null;
         }
 
         if (platform === 'macOS') {
-            // Safari и старый Chromium возвращают замороженный UA 10_15_7 —
-            // не доверяем, показываем null (без предупреждений).
             if (navigator.userAgentData &&
                 typeof navigator.userAgentData.getHighEntropyValues === 'function') {
                 try {
@@ -306,54 +277,31 @@
                     const raw = String(ua.platformVersion || '');
                     if (raw) {
                         const major = parseInt(raw.split('.')[0], 10);
-                        if (!isNaN(major)) {
-                            return { platform: 'macOS', version: raw, major };
-                        }
+                        if (!isNaN(major)) return { platform: 'macOS', version: raw, major };
                     }
                 } catch { /* noop */ }
             }
             return null;
         }
 
-        // Linux — версия ядра ≠ версия дистрибутива, не определяем
         return null;
     }
 
     // ============================================================
-    // Парсинг имени файла: архитектура
+    // Парсинг имён файлов
     // ============================================================
 
     function normalizeArch(name) {
         const s = String(name || '').toLowerCase().replace(/[^a-z0-9._-]/g, ' ');
 
-        if (/(arm64|aarch64|apple[\s-]?silicon|m1|m2|armv8|arm64-v8a)/.test(s)) {
-            return 'arm64';
-        }
-        if (/(armv7|armhf|arm32|armeabi-v7a|arm(?!64))/.test(s)) {
-            return 'arm32';
-        }
-        if (/(x86_64|x86-64|amd64|win64|x64|intel64)/.test(s)) {
-            return 'x64';
-        }
-        if (/(i386|i686|ia32|win32|x86(?!_64)|32bit|32-bit|x32)/.test(s)) {
-            return 'x86';
-        }
-        if (/(universal|fat)/.test(s)) {
-            return 'universal';
-        }
+        if (/(arm64|aarch64|apple[\s-]?silicon|m1|m2|armv8|arm64-v8a)/.test(s)) return 'arm64';
+        if (/(armv7|armhf|arm32|armeabi-v7a|arm(?!64))/.test(s)) return 'arm32';
+        if (/(x86_64|x86-64|amd64|win64|x64|intel64)/.test(s)) return 'x64';
+        if (/(i386|i686|ia32|win32|x86(?!_64)|32bit|32-bit|x32)/.test(s)) return 'x86';
+        if (/(universal|fat)/.test(s)) return 'universal';
         return 'unknown';
     }
 
-    // ============================================================
-    // Парсинг метки версии ОС
-    // ============================================================
-
-    /**
-     * Понимает win7..win11, windows7, android7..android15, macos10..macos15,
-     * osx10, osx11. Число = минимальная поддерживаемая версия.
-     * Возвращает { version: string, major: number } или null.
-     * { version: null, major: null } — слово платформы без числа (без ограничения).
-     */
     function normalizeOSVersion(name, platform) {
         const s = String(name || '').toLowerCase().replace(/[^a-z0-9._-]/g, ' ');
 
@@ -375,9 +323,7 @@
             const m = s.match(/android\s*(\d{1,2})/);
             if (m) {
                 const major = parseInt(m[1], 10);
-                if (!isNaN(major) && major >= 4) {
-                    return { version: String(major), major };
-                }
+                if (!isNaN(major) && major >= 4) return { version: String(major), major };
             }
             if (/(?:^|\s)android(?:\s|$)/.test(s) && !/\d/.test(s)) {
                 return { version: null, major: null };
@@ -389,16 +335,12 @@
             const m = s.match(/macos\s*(\d{1,2})/);
             if (m) {
                 const major = parseInt(m[1], 10);
-                if (!isNaN(major) && major >= 10) {
-                    return { version: String(major), major };
-                }
+                if (!isNaN(major) && major >= 10) return { version: String(major), major };
             }
             const m2 = s.match(/osx\s*(\d{1,2})/);
             if (m2) {
                 const major = parseInt(m2[1], 10);
-                if (!isNaN(major) && major >= 10) {
-                    return { version: String(major), major };
-                }
+                if (!isNaN(major) && major >= 10) return { version: String(major), major };
             }
             if (/(?:^|\s)(macos|osx)(?:\s|$)/.test(s) && !/\d/.test(s)) {
                 return { version: null, major: null };
@@ -408,10 +350,6 @@
 
         return null;
     }
-
-    // ============================================================
-    // Определение платформы и типа файла
-    // ============================================================
 
     function detectPlatformFromName(name) {
         const n = String(name || '').toLowerCase();
@@ -432,7 +370,6 @@
             if (/(android)/.test(n)) return 'Android';
             if (/(linux|ubuntu|debian)/.test(n)) return 'Linux';
             if (/(mac|macos|osx|darwin)/.test(n)) return 'macOS';
-            if (/(win|windows)/.test(n)) return 'Windows';
             return 'Windows';
         }
 
@@ -458,11 +395,9 @@
     // ============================================================
 
     async function fetchAllReleases() {
-        // Уровень 1: свежий кеш
         const cached = cacheGet(RELEASES_CACHE_KEY);
         if (cached) return cached;
 
-        // Уровень 2: сеть (Service Worker добавит свой кеш)
         if (currentAbortController) currentAbortController.abort();
         currentAbortController = new AbortController();
         const signal = currentAbortController.signal;
@@ -479,10 +414,9 @@
         } catch (e) {
             if (e.name === 'AbortError') return [];
 
-            // Уровень 3: устаревший кеш как fallback при ошибке сети
             const stale = cacheGetStale(RELEASES_CACHE_KEY);
             if (stale) {
-                console.warn('[Platform] Сеть недоступна, используем устаревший кеш релизов');
+                console.warn('[Platform] Сеть недоступна, используем устаревший кеш');
                 return stale;
             }
             throw e;
@@ -527,9 +461,7 @@
                         if (!isNaN(d)) date = new Date(d);
                     }
                 }
-                if (date && !isNaN(date.getTime())) {
-                    meta.publishDate = date;
-                }
+                if (date && !isNaN(date.getTime())) meta.publishDate = date;
             }
         }
         return meta;
@@ -582,9 +514,7 @@
             const vB = parseVersion(b.tag_name);
             const typeA = getReleaseType(vA);
             const typeB = getReleaseType(vB);
-            if (typeA.priority !== typeB.priority) {
-                return typeA.priority - typeB.priority;
-            }
+            if (typeA.priority !== typeB.priority) return typeA.priority - typeB.priority;
             return new Date(b.published_at) - new Date(a.published_at);
         });
 
@@ -614,10 +544,8 @@
             const platform = detectPlatformFromName(asset.name);
             if (!platform) return null;
 
-            // 1) Метка из имени файла
             let osMeta = normalizeOSVersion(asset.name, platform);
 
-            // 2) Fallback: метка из тела релиза (первая подходящая)
             if (!osMeta && bodyOsTags.length) {
                 for (const tag of bodyOsTags) {
                     const parsed = normalizeOSVersion(tag, platform);
@@ -684,14 +612,13 @@
     let variantTabs = null;
     let downloadBtn = null;
     let downloadLabel = null;
-    let downloadFilename = null;
     let downloadFileInfo = null;
     let archWarning = null;
     let osWarning = null;
     let whatsNewBtn = null;
 
     // ============================================================
-    // Рендер платформ
+    // Платформы
     // ============================================================
 
     function renderPlatformSelector() {
@@ -703,7 +630,7 @@
             btn.className = 'platform-btn' + (p.id === currentPlatform ? ' active' : '');
             if (p.soon) btn.classList.add('disabled');
             btn.dataset.platform = p.id;
-            btn.innerHTML = `<i class="${p.icon}"></i> ${p.label}`;
+            btn.innerHTML = `<i class="${p.icon}"></i><span>${p.label}</span>`;
 
             if (p.soon) {
                 const badge = document.createElement('span');
@@ -752,7 +679,7 @@
     }
 
     // ============================================================
-    // Рендер архитектур
+    // Архитектуры
     // ============================================================
 
     function renderArchSelector(platform) {
@@ -763,30 +690,22 @@
 
         if (available.length === 0) {
             currentArch = 'unknown';
-            archNote.textContent = t('noBuildsForPlatform');
             return;
         }
 
-        // Сохраняем выбор, если он ещё доступен
         if (prevArch && prevArch !== 'unknown' && available.includes(prevArch)) {
             currentArch = prevArch;
         } else {
             currentArch = preferArch(userArch, available);
         }
 
-        // Единственный вариант — не рисуем кнопки, только компактную пометку
+        // Единственный вариант — кнопки не рисуем, никаких пометок
         if (available.length === 1) {
-            const arch = available[0];
-            currentArch = arch;
-            if (arch === 'unknown') {
-                archNote.textContent = t('archNoteSingle');
-            } else {
-                archNote.textContent = t('archNoteCurrent', { arch: getArchLabel(arch) });
-            }
+            currentArch = available[0];
             return;
         }
 
-        // Несколько вариантов — показываем кнопки
+        // Несколько вариантов — рисуем кнопки
         available.forEach(arch => {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -805,7 +724,7 @@
             archSelector.appendChild(btn);
         });
 
-        // Подсказка о совместимости 32-на-64
+        // Подсказка: 32-бит запустится на 64-битной системе
         if (currentArch === 'x86' && userArch === 'x64' && !available.includes('x64')) {
             archNote.textContent = t('archCompat32On64');
         } else if (currentArch === 'arm32' && userArch === 'arm64' && !available.includes('arm64')) {
@@ -814,7 +733,7 @@
     }
 
     // ============================================================
-    // Рендер версий
+    // Версии
     // ============================================================
 
     function getReleasesForCurrentSelection() {
@@ -935,20 +854,11 @@
     // Выбор лучшего ассета
     // ============================================================
 
-    /**
-     * Выбирает лучший ассет с учётом совместимости.
-     *   — ОС пользователя известна: сначала совместимые (с наибольшей min-версией),
-     *     иначе наименее требовательные (с наименьшей min-версией).
-     *   — ОС неизвестна: предпочитаем файл без метки ОС, затем с наибольшей min-версией.
-     */
     function pickBestAsset(assets) {
         if (!assets || assets.length === 0) return null;
         if (assets.length === 1) return assets[0];
 
-        // Пользователь не определён — нейтральный выбор
         if (!userOS || userOS.major === null) {
-            const noTag = assets.find(a => a.osMajor === null);
-            if (noTag) return noTag;
             const sorted = [...assets].sort(
                 (a, b) => (b.osMajor || 0) - (a.osMajor || 0)
             );
@@ -968,7 +878,7 @@
     }
 
     // ============================================================
-    // Обновление кнопки скачивания
+    // Кнопка скачивания
     // ============================================================
 
     function updateDownloadUI() {
@@ -980,7 +890,6 @@
             downloadBtn.classList.add('disabled');
             downloadBtn.removeAttribute('href');
             downloadLabel.textContent = t('downloadBtn');
-            downloadFilename.textContent = '';
             variantTabs.innerHTML = '';
             return;
         }
@@ -988,16 +897,13 @@
         const assets = findAssetsFor(currentRelease, currentPlatform, currentArch);
 
         if (assets.length === 0) {
-            // Скачивание недоступно — файла нет
             downloadBtn.classList.add('disabled');
             downloadBtn.removeAttribute('href');
             downloadLabel.textContent = t('downloadNoFileForPlatform');
-            downloadFilename.textContent = '';
             variantTabs.innerHTML = '';
             return;
         }
 
-        // Группировка по типу
         const byType = new Map();
         assets.forEach(a => {
             if (!byType.has(a.type)) byType.set(a.type, []);
@@ -1006,7 +912,6 @@
 
         variantTabs.innerHTML = '';
 
-        // Несколько типов — рисуем табы
         if (byType.size > 1) {
             const types = Array.from(byType.keys());
             const compatTypes = types.filter(type =>
@@ -1050,20 +955,19 @@
             return;
         }
 
-        // Кнопка активна всегда, если файл есть —
-        // несовместимость не блокирует скачивание
+        // Кнопка всегда активна, если файл есть
         downloadBtn.classList.remove('disabled');
         downloadBtn.href = asset.url;
 
         const sizeStr = formatSize(asset.size);
         const btnText = t('downloadBtn');
-        downloadLabel.innerHTML = sizeStr
-            ? `<i class="fab fa-github"></i> ${escapeHtml(btnText)} · <span class="file-size">${escapeHtml(sizeStr)}</span>`
-            : `<i class="fab fa-github"></i> ${escapeHtml(btnText)}`;
+        if (sizeStr) {
+            downloadLabel.innerHTML = `${escapeHtml(btnText)} · <span class="file-size">${escapeHtml(sizeStr)}</span>`;
+        } else {
+            downloadLabel.textContent = btnText;
+        }
 
-        downloadFilename.textContent = asset.name;
-
-        // Строка с метками
+        // Строка меток (ОС и архитектура)
         const infoParts = [];
         if (asset.osMajor !== null && asset.osVersion) {
             infoParts.push(t('osMinVersion', {
@@ -1076,7 +980,7 @@
         }
         downloadFileInfo.textContent = infoParts.join(' · ');
 
-        // Предупреждение об архитектуре (не блокирует)
+        // Предупреждение об архитектуре (только при явном несовпадении)
         if (!isArchCompatible(userArch, currentArch) &&
             currentArch !== 'unknown' && userArch !== 'unknown') {
             archWarning.style.display = '';
@@ -1089,26 +993,17 @@
             `;
         }
 
-        // Предупреждение об ОС (не блокирует)
-        if (userOS && userOS.major !== null) {
-            if (asset.osMajor !== null && asset.osVersion) {
-                if (!isOSCompatible(userOS, asset.osMajor)) {
-                    osWarning.style.display = '';
-                    osWarning.innerHTML = `
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <span>${escapeHtml(t('osWarningVersionMismatch', {
-                            fileOs: asset.osVersion,
-                            userOs: userOS.version
-                        }))}</span>
-                    `;
-                }
-            } else {
+        // Предупреждение об ОС: ТОЛЬКО если файл явно требует более новую ОС.
+        // Файл без метки — ничего не выводим.
+        if (userOS && userOS.major !== null &&
+            asset.osMajor !== null && asset.osVersion) {
+            if (!isOSCompatible(userOS, asset.osMajor)) {
                 osWarning.style.display = '';
                 osWarning.innerHTML = `
-                    <i class="fas fa-info-circle"></i>
-                    <span>${escapeHtml(t('osWarningNoTag', {
-                        platform: userOS.platform,
-                        version: userOS.version
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>${escapeHtml(t('osWarningVersionMismatch', {
+                        fileOs: asset.osVersion,
+                        userOs: userOS.version
                     }))}</span>
                 `;
             }
@@ -1116,7 +1011,7 @@
     }
 
     // ============================================================
-    // Fallback на страницу релизов
+    // Fallback
     // ============================================================
 
     function setReleasesPageFallback() {
@@ -1125,7 +1020,6 @@
         downloadBtn.target = '_blank';
         downloadBtn.rel = 'noopener noreferrer';
         downloadLabel.textContent = t('openReleasesPage');
-        downloadFilename.textContent = '';
         downloadFileInfo.textContent = '';
         variantTabs.innerHTML = '';
         archSelector.innerHTML = '';
@@ -1158,7 +1052,6 @@
                 <a href="#" id="github-download-btn" class="download-button github" target="_blank" rel="noopener noreferrer">
                     <i class="fab fa-github"></i> <span id="download-label">${escapeHtml(t('downloadBtn'))}</span>
                 </a>
-                <div class="download-filename" id="download-filename"></div>
                 <div class="download-file-info" id="download-file-info"></div>
                 <div class="arch-warning" id="arch-warning" style="display:none;"></div>
                 <div class="os-warning" id="os-warning" style="display:none;"></div>
@@ -1176,7 +1069,6 @@
         variantTabs = githubContainer.querySelector('#download-variant-tabs');
         downloadBtn = githubContainer.querySelector('#github-download-btn');
         downloadLabel = githubContainer.querySelector('#download-label');
-        downloadFilename = githubContainer.querySelector('#download-filename');
         downloadFileInfo = githubContainer.querySelector('#download-file-info');
         archWarning = githubContainer.querySelector('#arch-warning');
         osWarning = githubContainer.querySelector('#os-warning');
@@ -1203,11 +1095,8 @@
             return;
         }
 
-        if (currentPlatform === 'Web') {
-            currentPlatform = 'Windows';
-        }
+        if (currentPlatform === 'Web') currentPlatform = 'Windows';
 
-        // Подсветим активную платформу
         platformSelector.querySelectorAll('.platform-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.platform === currentPlatform);
         });
@@ -1247,7 +1136,6 @@
             }
         });
 
-        // Перерисовка при смене языка
         window.addEventListener('languageChanged', () => {
             if (!platformInitialized || !githubContainer) return;
 
@@ -1256,33 +1144,24 @@
                 btn.classList.toggle('active', btn.dataset.platform === currentPlatform);
             });
 
-            // Обновляем подписи кнопок архитектур
             archSelector.querySelectorAll('.arch-btn').forEach(btn => {
                 const arch = btn.dataset.arch;
                 if (arch) btn.textContent = getArchLabel(arch);
             });
 
-            // Пометка archNote
             const available = getAvailableArchitectures(currentPlatform);
-            if (available.length === 0) {
-                archNote.textContent = t('noBuildsForPlatform');
-            } else if (available.length === 1) {
-                const arch = available[0];
-                archNote.textContent = arch === 'unknown'
-                    ? t('archNoteSingle')
-                    : t('archNoteCurrent', { arch: getArchLabel(arch) });
-            } else if (currentArch === 'x86' && userArch === 'x64' && !available.includes('x64')) {
-                archNote.textContent = t('archCompat32On64');
-            } else if (currentArch === 'arm32' && userArch === 'arm64' && !available.includes('arm64')) {
-                archNote.textContent = t('archCompatArm32On64');
+            archNote.textContent = '';
+            if (available.length > 1) {
+                if (currentArch === 'x86' && userArch === 'x64' && !available.includes('x64')) {
+                    archNote.textContent = t('archCompat32On64');
+                } else if (currentArch === 'arm32' && userArch === 'arm64' && !available.includes('arm64')) {
+                    archNote.textContent = t('archCompatArm32On64');
+                }
             }
 
-            // Группы версий
             versionSelect.querySelectorAll('optgroup').forEach(group => {
                 const match = group.label.match(/(?:Версия|Version)\s+(.+)/i);
-                if (match) {
-                    group.label = t('versionGroupLabel', { version: match[1] });
-                }
+                if (match) group.label = t('versionGroupLabel', { version: match[1] });
             });
 
             updateVersionDateText();

@@ -254,26 +254,269 @@
     align-items: center;
     gap: 6px;
 }
+/* ============================================================
+   Выбор платформы — компактный segmented control
+   ============================================================ */
+
 .platform-selector {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-}
-.platform-btn {
-    background: var(--glass-bg);
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 40px;
     border: 1px solid var(--glass-border);
+    justify-content: center;
+    margin: 0 auto 10px;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+.platform-selector::-webkit-scrollbar { display: none; }
+
+.platform-btn {
+    background: transparent;
+    border: none;
     color: var(--text-secondary);
-    padding: 8px 14px;
+    padding: 7px 14px;
     border-radius: 30px;
     cursor: pointer;
     font-family: var(--font-family);
-    transition: 0.2s var(--ease-out);
-    font-size: 13px;
+    font-size: 12px;
+    transition: all 0.2s var(--ease-out);
+    white-space: nowrap;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+.platform-btn:hover:not(.disabled):not(.active) {
+    color: var(--text-primary);
+    background: rgba(61, 158, 179, 0.12);
+}
+.platform-btn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 15px rgba(61, 158, 179, 0.35);
+}
+.platform-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+.platform-btn .badge-soon {
+    background: rgba(255, 255, 255, 0.18);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 9px;
+    margin-left: 2px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+/* ============================================================
+   Архитектуры — компактные pill-кнопки
+   ============================================================ */
+
+.arch-selector {
+    display: inline-flex;
+    gap: 4px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 0 auto 4px;
+}
+
+.arch-btn {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--font-family);
+    transition: 0.2s var(--ease-out);
+    letter-spacing: 0.2px;
+}
+.arch-btn:hover:not(.active) {
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+.arch-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+.arch-note {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    min-height: 0;
+}
+.arch-note:empty {
+    display: none;
+}
+
+/* ============================================================
+   Вариант сборки (вкладки)
+   ============================================================ */
+
+.download-variant-tabs {
+    display: inline-flex;
+    gap: 4px;
+    justify-content: center;
+    margin: 8px auto 4px;
+    flex-wrap: wrap;
+}
+
+.variant-tab {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--font-family);
+    transition: 0.2s var(--ease-out);
+}
+.variant-tab:hover:not(.active) {
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+.variant-tab.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+/* ============================================================
+   Кнопка скачивания
+   ============================================================ */
+
+#github-download-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 22px;
+    font-size: 15px;
+    min-width: 220px;
+}
+#github-download-btn .file-size {
+    font-size: 12px;
+    opacity: 0.85;
+    font-weight: 400;
+}
+#github-download-btn.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* ============================================================
+   Строка меток
+   ============================================================ */
+
+.download-file-info {
+    font-size: 11px;
+    color: var(--accent-light);
+    margin-top: 4px;
+    text-align: center;
+    opacity: 0.85;
+    line-height: 1.3;
+    letter-spacing: 0.2px;
+}
+.download-file-info:empty {
+    display: none;
+}
+
+/* ============================================================
+   Предупреждения — с анимированными диагональными полосками
+   ============================================================ */
+
+.arch-warning,
+.arch-warning::before,
+.os-warning::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -50%;
+    width: 200%;
+    height: 100%;
+    background-image: repeating-linear-gradient(
+        45deg,
+        currentColor 0,
+        currentColor 6px,
+        transparent 6px,
+        transparent 14px
+    );
+    opacity: 0.09;
+    mask-image: linear-gradient(
+        90deg,
+        black 0%,
+        transparent 45%,
+        transparent 55%,
+        black 100%
+    );
+    -webkit-mask-image: linear-gradient(
+        90deg,
+        black 0%,
+        transparent 45%,
+        transparent 55%,
+        black 100%
+    );
+    animation: warningStripesSlide 4s linear infinite;
+    pointer-events: none;
+    will-change: transform;
+    transform: translate3d(0, 0, 0);
+    z-index: -1;
+    contain: layout style paint;
+}
+
+@keyframes warningStripesSlide {
+    0%   { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-19.8px, 0, 0); }
+}
+
+.arch-warning i,
+.os-warning i {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .arch-warning::before,
+    .os-warning::before {
+        animation: none;
+    }
+}
+
+/* ============================================================
+   Мобильная адаптация
+   ============================================================ */
+
+@media (max-width: 500px) {
+    .platform-btn {
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+    .platform-btn .badge-soon {
+        display: none;
+    }
+    #github-download-btn {
+        min-width: 180px;
+        padding: 10px 18px;
+        font-size: 14px;
+    }
+    .arch-warning,
+    .os-warning {
+        font-size: 11px;
+        padding: 7px 10px;
+    }
 }
 .platform-btn:hover:not(.disabled) {
     background: var(--accent);
@@ -325,32 +568,6 @@
     margin-top: 1px;
 }
 
-.os-note {
-    text-align: center;
-    font-size: 11px;
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-    min-height: 14px;
-}
-
-.arch-selector {
-    display: flex;
-    gap: 6px;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-bottom: 8px;
-}
-.arch-btn {
-    background: transparent;
-    border: 1px solid var(--glass-border);
-    color: var(--text-secondary);
-    padding: 5px 12px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 12px;
-    font-family: var(--font-family);
-    transition: 0.2s var(--ease-out);
-}
 .arch-btn:hover {
     border-color: var(--accent);
     color: var(--text-primary);
@@ -359,13 +576,6 @@
     background: var(--accent);
     color: #fff;
     border-color: var(--accent);
-}
-.arch-note {
-    text-align: center;
-    font-size: 11px;
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-    min-height: 14px;
 }
 
 .version-row {
@@ -432,33 +642,6 @@
     font-weight: 400;
 }
 
-.download-filename {
-    font-size: 11px;
-    color: var(--text-secondary);
-    margin-top: 6px;
-    word-break: break-all;
-    text-align: center;
-    max-width: 280px;
-    margin-left: auto;
-    margin-right: auto;
-    line-height: 1.3;
-}
-
-.arch-warning {
-    background: rgba(255, 152, 0, 0.12);
-    border: 1px solid rgba(255, 152, 0, 0.4);
-    border-radius: 12px;
-    padding: 8px 12px;
-    font-size: 12px;
-    color: #ffb74d;
-    margin-top: 8px;
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    text-align: left;
-    width: 100%;
-    box-sizing: border-box;
-}
 .arch-warning i {
     flex-shrink: 0;
     margin-top: 1px;
