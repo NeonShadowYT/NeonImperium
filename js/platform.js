@@ -8,38 +8,32 @@
 //   os: windows10         → только Windows
 //   os: android7          → только Android
 //   os: macos10           → только macOS
-//   os: linux             → слово без цифры = нет ограничения
-//   os: win7 / os: android7 одновременно — независимы, каждая для своей
-//      платформы (Windows-ассет получит win7, Android — android7,
-//      Linux/macOS не затронуты).
+//   os: win7 / os: android7 одновременно — независимы.
 //
 // Архитектура (только для совместимых платформ):
-//   arch: x64             → применяется к Windows / Linux / macOS
-//   arch: x86             → Windows / Linux
+//   arch: x64             → Windows / Linux / macOS
 //   arch: arm64           → Windows / Android / Linux / macOS
-//   arch: arm32           → Android / Linux
 //   arch: universal       → macOS / Windows
 //   arch: windows x64     → только Windows
 //   arch: android arm64   → только Android
-//   arch: macos arm64     → только macOS
-//   arch: linux x64       → только Linux
-//   Без платформы тег применяется только к тем платформам, для которых
-//   эта архитектура имеет смысл (x64 → не Android).
-//   Метка в имени файла приоритетнее метки в теле релиза.
 //
-// ── ПРАВИЛА СОВМЕСТИМОСТИ ─────────────────────────────────────
+// ── ПРИОРИТЕТ МЕТОК ──────────────────────────────────────────
+//   Имя файла > тело релиза.
+//   ЕСЛИ В ИМЕНИ ФАЙЛА ЕСТЬ ТОЛЬКО СЛОВО «windows» / «android» / «macos»
+//   БЕЗ НОМЕРА ВЕРСИИ — ЭТО НЕ СЧИТАЕТСЯ МЕТКОЙ. Версия ОС берётся
+//   из описания релиза (os: win7 и т.п.), если там есть.
+//   Пример: «StarveNeon_Windows_x64.zip» + «os: win10» → применится win10.
+//
+// ── СОВМЕСТИМОСТЬ ────────────────────────────────────────────
 //   — Метка ОС = минимальная версия (win7 работает на 7–11).
 //   — 32-bit запускается на 64-bit (x86 → x64, arm32 → arm64).
 //   — 64-bit на 32-bit НЕ запускается.
 //   — universal работает везде.
 //
-// ── UI-ПРАВИЛА ────────────────────────────────────────────────
-//   — Нет метки ОС или архитектуры — нет предупреждений.
-//   — Один вариант архитектуры — кнопки не рисуются.
-//   — Один тип файла — вкладки не рисуются.
-//   — Скачивание не блокируется из-за несовместимости.
-//   — Единственная блокировка: нет файла для платформы.
-//   — Ошибка сети — fallback на страницу релизов GitHub.
+// ── КЕШИРОВАНИЕ ──────────────────────────────────────────────
+//   1. sessionStorage — TTL 1 час.
+//   2. Service Worker — NetworkFirst + TTL 5 мин для api.github.com.
+//   3. Stale fallback — при сетевой ошибке возвращается устаревший кеш.
 
 (function () {
     'use strict';
@@ -113,8 +107,6 @@
 
     const ARCH_ORDER = ['x64', 'x86', 'arm64', 'arm32', 'universal', 'unknown'];
 
-    // Какие архитектуры имеют смысл для каких платформ.
-    // Используется, чтобы тег `arch: x64` без платформы не «прилетал» Android.
     const PLATFORM_ARCH_MATRIX = {
         x64:       ['Windows', 'Linux', 'macOS'],
         x86:       ['Windows', 'Linux'],
@@ -337,6 +329,11 @@
         return 'unknown';
     }
 
+    /**
+     * Возвращает { version, major } ТОЛЬКО если в строке есть номер версии.
+     * Слово платформы без числа (windows / android / macos / osx) — не метка.
+     * Возвращает null, если версии нет.
+     */
     function normalizeOSVersion(name, platform) {
         const s = String(name || '').toLowerCase().replace(/[^a-z0-9._-]/g, ' ');
 
@@ -348,9 +345,6 @@
                     return { version: String(major), major };
                 }
             }
-            if (/(?:^|\s)windows(?:\s|$)/.test(s) && !/\d/.test(s)) {
-                return { version: null, major: null };
-            }
             return null;
         }
 
@@ -359,9 +353,6 @@
             if (m) {
                 const major = parseInt(m[1], 10);
                 if (!isNaN(major) && major >= 4) return { version: String(major), major };
-            }
-            if (/(?:^|\s)android(?:\s|$)/.test(s) && !/\d/.test(s)) {
-                return { version: null, major: null };
             }
             return null;
         }
@@ -377,25 +368,12 @@
                 const major = parseInt(m2[1], 10);
                 if (!isNaN(major) && major >= 10) return { version: String(major), major };
             }
-            if (/(?:^|\s)(macos|osx)(?:\s|$)/.test(s) && !/\d/.test(s)) {
-                return { version: null, major: null };
-            }
             return null;
         }
 
         return null;
     }
 
-    /**
-     * Разбирает arch-тег из тела релиза.
-     * Форматы:
-     *   "x64"              → применится, только если x64 релевантна платформе
-     *   "windows x64"      → только Windows
-     *   "android arm64"    → только Android
-     *   "macos arm64"      → только macOS
-     *   "linux x64"        → только Linux
-     * Возвращает нормализованную архитектуру или null.
-     */
     function parseArchTag(tag, platform) {
         const s = String(tag || '')
             .toLowerCase()
@@ -417,14 +395,13 @@
         for (const [prefix, targetPlatform] of Object.entries(platformMap)) {
             if (s === prefix || s.startsWith(prefix + ' ')) {
                 const rest = s.slice(prefix.length).trim();
-                if (!rest) return null;            // «windows» без архитектуры
-                if (targetPlatform !== platform) return null; // тег другой платформы
+                if (!rest) return null;
+                if (targetPlatform !== platform) return null;
                 const arch = normalizeArch(rest);
                 return arch === 'unknown' ? null : arch;
             }
         }
 
-        // Без платформы — применяем только к совместимым платформам
         const arch = normalizeArch(s);
         if (arch === 'unknown') return null;
         if (!isArchRelevantForPlatform(arch, platform)) return null;
@@ -632,6 +609,9 @@
             if (!platform) return null;
 
             // ---- OS-версия ----
+            // 1) Конкретная метка из имени файла (win7 / android7 / macos10)
+            // 2) Fallback: метка из тела релиза
+            // Слово платформы без номера (windows/android/macos) не считается меткой.
             let osMeta = normalizeOSVersion(asset.name, platform);
             if (!osMeta && bodyOsTags.length) {
                 for (const tag of bodyOsTags) {
