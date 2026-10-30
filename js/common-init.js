@@ -2,22 +2,14 @@
 //   — Preconnect.
 //   — Глобальный fallback изображений (data-fallback).
 //   — Динамическая подгрузка page-скриптов.
-//   — marked@18.1.0 (UMD) — БЕЗ SRI (хеш не совпадает с CDN).
-//   — DOMPurify@3.4.16 — БЕЗ SRI (хеш не совпадает с CDN).
+//   — marked@18.1.0 (UMD) — БЕЗ SRI.
+//   — DOMPurify@3.4.16 — БЕЗ SRI.
 //   — Service Worker + controllerchange.
-//   — Download consent.
 //   — Rate limits.
 //   — window.loadStorageModules.
 //
-// АРХИТЕКТУРА:
-//   bootstrap() — async. Порядок:
-//     1. applyMobileClass (sync)
-//     2. addPreconnects (sync)
-//     3. initImageFallbacks (sync, глобальный error-listener)
-//     4. await initNonLanguageDependent — ждёт marked + DOMPurify
-//     5. waitForLanguageAndInit — запускает page-модули после языка
-//   Это гарантирует, что к моменту вызова sanitizeHtml()
-//   в page-модулях DOMPurify уже загружен.
+// Модальное окно подтверждения лицензии удалено:
+// проект распространяется под MIT, дополнительная галочка не требуется.
 
 (function() {
     'use strict';
@@ -58,8 +50,6 @@
 
     // ============================================================
     // Глобальный fallback изображений
-    // Заменяет inline onerror, который блокируется CSP (script-src-attr).
-    // Событие 'error' на img не всплывает, поэтому useCapture: true.
     // ============================================================
 
     function initImageFallbacks() {
@@ -162,9 +152,7 @@
     }
 
     // ============================================================
-    // Единый загрузчик скриптов.
-    // Принимает строку (src) или объект { src, crossOrigin }.
-    // SRI-хеши больше не передаются — они не совпадали с CDN.
+    // Единый загрузчик скриптов
     // ============================================================
 
     function loadScript(item, timeout = 10000) {
@@ -188,18 +176,12 @@
     }
 
     // ============================================================
-    // marked@18.1.0 — UMD-сборка (lib/marked.umd.js).
-    // SRI-хеш УДАЛЁН — не совпадает с содержимым CDN.
+    // marked@18.1.0 — UMD
     // ============================================================
 
     const MARKED_CDNS = [
-        {
-            src: 'https://cdn.jsdelivr.net/npm/marked@18.1.0/lib/marked.umd.js',
-            crossOrigin: 'anonymous'
-        },
-        {
-            src: 'https://unpkg.com/marked@18.1.0/lib/marked.umd.js'
-        }
+        { src: 'https://cdn.jsdelivr.net/npm/marked@18.1.0/lib/marked.umd.js', crossOrigin: 'anonymous' },
+        { src: 'https://unpkg.com/marked@18.1.0/lib/marked.umd.js' }
     ];
 
     async function ensureMarked() {
@@ -225,17 +207,11 @@
 
     // ============================================================
     // DOMPurify@3.4.16
-    // SRI-хеш УДАЛЁН — не совпадает с содержимым CDN.
     // ============================================================
 
     const DOMPURIFY_CDNS = [
-        {
-            src: 'https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js',
-            crossOrigin: 'anonymous'
-        },
-        {
-            src: 'https://unpkg.com/dompurify@3.4.16/dist/purify.min.js'
-        }
+        { src: 'https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js', crossOrigin: 'anonymous' },
+        { src: 'https://unpkg.com/dompurify@3.4.16/dist/purify.min.js' }
     ];
 
     async function ensureDOMPurify() {
@@ -338,101 +314,6 @@
     }
 
     // ============================================================
-    // Download consent
-    // ============================================================
-
-    const CONSENT_KEY = 'download_consent_given_v1';
-
-    function initDownloadConsent() {
-        let consentGiven = false;
-        try { consentGiven = localStorage.getItem(CONSENT_KEY) === 'true'; }
-        catch { /* noop */ }
-
-        if (consentGiven) return;
-        document.body.addEventListener('click', handleDownloadClick);
-    }
-
-    function handleDownloadClick(e) {
-        const target = e.target.closest(
-            '.download-button, #github-download-btn, .cloud-buttons a, .store-buttons a'
-        );
-        if (!target) return;
-        if (target.classList && target.classList.contains('disabled')) {
-            e.preventDefault();
-            return;
-        }
-
-        const originalHref = target.href;
-        if (!originalHref || originalHref === '#') return;
-
-        e.preventDefault();
-        showConsentModal(() => {
-            window.open(originalHref, target.target || '_blank', 'noopener,noreferrer');
-        });
-    }
-
-    function showConsentModal(callback) {
-        const t = (window.I18n && window.I18n.translate) ? window.I18n.translate : (k => k);
-
-        const modal = document.createElement('div');
-        modal.className = 'modal modal-fullscreen';
-        modal.style.backgroundColor = 'rgba(0,0,0,0.85)';
-        modal.innerHTML = `
-            <div class="modal-content-full" style="max-width: 550px; text-align: center;">
-                <div class="modal-header">
-                    <h2>⚠️ ВАЖНОЕ ПРЕДУПРЕЖДЕНИЕ</h2>
-                    <button class="modal-close" aria-label="Закрыть"><i class="fas fa-times"></i></button>
-                </div>
-                <div class="modal-body" style="text-align: left;">
-                    <p><strong>${t('licenseConfirmDesc')}</strong></p>
-                    <ul style="margin: 15px 0; padding-left: 20px;">
-                        <li>${t('licenseAccept')} <strong><a href="license.html" target="_blank" rel="noopener noreferrer">${t('licenseLink')}</a></strong>.</li>
-                        <li>${t('licenseModDisclaimer')}</li>
-                    </ul>
-                    <label style="display: flex; align-items: center; gap: 10px; margin-top: 15px; cursor: pointer;">
-                        <input type="checkbox" id="consent-checkbox"> ${t('licenseConfirmCheckbox')}
-                    </label>
-                </div>
-                <div class="modal-footer" style="padding: 20px; display: flex; justify-content: flex-end; gap: 12px;">
-                    <button class="button" id="consent-cancel">${t('feedbackCancel')}</button>
-                    <button class="button" id="consent-confirm" disabled style="background: var(--accent);">${t('licenseConfirmButton')}</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
-
-        const closeModal = () => {
-            modal.remove();
-            document.body.style.overflow = '';
-        };
-
-        const checkbox = modal.querySelector('#consent-checkbox');
-        const confirmBtn = modal.querySelector('#consent-confirm');
-        const cancelBtn = modal.querySelector('#consent-cancel');
-        const closeBtn = modal.querySelector('.modal-close');
-
-        checkbox.addEventListener('change', () => {
-            confirmBtn.disabled = !checkbox.checked;
-        });
-
-        confirmBtn.addEventListener('click', () => {
-            if (!checkbox.checked) return;
-            try {
-                localStorage.setItem(CONSENT_KEY, 'true');
-                localStorage.setItem('consent_timestamp', String(Date.now()));
-            } catch { /* noop */ }
-            closeModal();
-            if (typeof callback === 'function') callback();
-        });
-
-        cancelBtn.addEventListener('click', closeModal);
-        closeBtn.addEventListener('click', closeModal);
-        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-    }
-
-    // ============================================================
     // Rate limits
     // ============================================================
 
@@ -470,7 +351,7 @@
     }
 
     // ============================================================
-    // Storage (lazy load) — единственная точка входа.
+    // Storage (lazy load)
     // ============================================================
 
     let storageLoadPromise = null;
@@ -618,7 +499,7 @@
     }
 
     // ============================================================
-    // Non-language init — возвращает Promise.
+    // Non-language init
     // ============================================================
 
     function initNonLanguageDependent() {
@@ -629,16 +510,13 @@
         loadPageScripts();
         loadDustParticles();
         registerServiceWorker();
-        initDownloadConsent();
         initRateLimits();
 
-        // Критично: дождаться загрузки marked и DOMPurify,
-        // иначе sanitizeHtml в page-модулях отработает некорректно.
         return Promise.all([ensureMarked(), ensureDOMPurify()]);
     }
 
     // ============================================================
-    // Bootstrap — async, гарантирует порядок инициализации.
+    // Bootstrap
     // ============================================================
 
     async function bootstrap() {
