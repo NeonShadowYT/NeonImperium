@@ -630,7 +630,10 @@
             btn.className = 'platform-btn' + (p.id === currentPlatform ? ' active' : '');
             if (p.soon) btn.classList.add('disabled');
             btn.dataset.platform = p.id;
-            btn.innerHTML = `<i class="${p.icon}"></i><span>${p.label}</span>`;
+            btn.setAttribute('aria-label', p.label + (p.soon ? ' — ' + t('platformSoon') : ''));
+            btn.innerHTML =
+                `<i class="${p.icon}"></i>` +
+                `<span class="platform-label">${escapeHtml(p.label)}</span>`;
 
             if (p.soon) {
                 const badge = document.createElement('span');
@@ -699,13 +702,11 @@
             currentArch = preferArch(userArch, available);
         }
 
-        // Единственный вариант — кнопки не рисуем, никаких пометок
         if (available.length === 1) {
             currentArch = available[0];
             return;
         }
 
-        // Несколько вариантов — рисуем кнопки
         available.forEach(arch => {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -724,7 +725,6 @@
             archSelector.appendChild(btn);
         });
 
-        // Подсказка: 32-бит запустится на 64-битной системе
         if (currentArch === 'x86' && userArch === 'x64' && !available.includes('x64')) {
             archNote.textContent = t('archCompat32On64');
         } else if (currentArch === 'arm32' && userArch === 'arm64' && !available.includes('arm64')) {
@@ -955,7 +955,6 @@
             return;
         }
 
-        // Кнопка всегда активна, если файл есть
         downloadBtn.classList.remove('disabled');
         downloadBtn.href = asset.url;
 
@@ -967,7 +966,6 @@
             downloadLabel.textContent = btnText;
         }
 
-        // Строка меток (ОС и архитектура)
         const infoParts = [];
         if (asset.osMajor !== null && asset.osVersion) {
             infoParts.push(t('osMinVersion', {
@@ -980,7 +978,6 @@
         }
         downloadFileInfo.textContent = infoParts.join(' · ');
 
-        // Предупреждение об архитектуре (только при явном несовпадении)
         if (!isArchCompatible(userArch, currentArch) &&
             currentArch !== 'unknown' && userArch !== 'unknown') {
             archWarning.style.display = '';
@@ -993,8 +990,6 @@
             `;
         }
 
-        // Предупреждение об ОС: ТОЛЬКО если файл явно требует более новую ОС.
-        // Файл без метки — ничего не выводим.
         if (userOS && userOS.major !== null &&
             asset.osMajor !== null && asset.osVersion) {
             if (!isOSCompatible(userOS, asset.osMajor)) {

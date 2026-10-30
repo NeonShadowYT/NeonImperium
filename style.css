@@ -218,16 +218,21 @@
     flex-direction: column;
     align-items: center;
     gap: 12px;
-    max-width: 360px;
+    max-width: 720px;
     margin: 0 auto;
+    width: 100%;
 }
 .download-subsection {
     width: 100%;
+    max-width: 360px;
     background: var(--glass-bg);
     border-radius: 16px;
     padding: 10px 16px;
     border: 1px solid var(--glass-border);
     text-align: center;
+}
+#github-block-container {
+    max-width: 100%;
 }
 .download-subsection h3 {
     margin: 0 0 6px;
@@ -259,24 +264,18 @@
    ============================================================ */
 
 .platform-selector {
-    display: inline-flex;
-    gap: 2px;
-    padding: 3px;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 40px;
-    border: 1px solid var(--glass-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
     justify-content: center;
-    margin: 0 auto 10px;
-    max-width: 100%;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
+    margin: 0 auto 12px;
+    width: 100%;
 }
 .platform-selector::-webkit-scrollbar { display: none; }
 
 .platform-btn {
-    background: transparent;
-    border: none;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--glass-border);
     color: var(--text-secondary);
     padding: 7px 14px;
     border-radius: 30px;
@@ -287,17 +286,21 @@
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    flex-shrink: 0;
+    gap: 6px;
     line-height: 1;
+}
+.platform-btn i {
+    font-size: 13px;
 }
 .platform-btn:hover:not(.disabled):not(.active) {
     color: var(--text-primary);
-    background: rgba(61, 158, 179, 0.12);
+    border-color: var(--accent);
+    background: rgba(61, 158, 179, 0.1);
 }
 .platform-btn.active {
     background: var(--accent);
     color: #fff;
+    border-color: var(--accent);
     box-shadow: 0 0 15px rgba(61, 158, 179, 0.35);
 }
 .platform-btn.disabled {
@@ -1403,4 +1406,31 @@
     color: var(--accent-light);
     font-family: monospace;
     font-size: 14px;
+}
+
+/* ============================================================
+   Мобильная адаптация выбора платформы
+   ============================================================ */
+
+@media (max-width: 480px) {
+    /* Только иконки, без подписей */
+    .platform-btn {
+        padding: 9px 12px;
+        min-width: 40px;
+        justify-content: center;
+        gap: 0;
+    }
+    .platform-btn .platform-label {
+        display: none;
+    }
+    .platform-btn i {
+        font-size: 15px;
+    }
+    .platform-btn .badge-soon {
+        display: none;
+    }
+
+    .download-subsection#github-block-container {
+        padding: 10px 12px;
+    }
 }
