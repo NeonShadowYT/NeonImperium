@@ -2,24 +2,44 @@
 //
 // Поддержка: Windows (7/8/8.1/10/11), Android (7+), Linux, macOS, Web (Скоро).
 //
-// ПРАВИЛА СОВМЕСТИМОСТИ:
+// ── МЕТКИ В ТЕЛЕ РЕЛИЗА ───────────────────────────────────────
+// OS-версия (только для своей платформы):
+//   os: win7              → только Windows-ассеты, минимум Windows 7
+//   os: windows10         → только Windows
+//   os: android7          → только Android
+//   os: macos10           → только macOS
+//   os: linux             → слово без цифры = нет ограничения
+//   os: win7 / os: android7 одновременно — независимы, каждая для своей
+//      платформы (Windows-ассет получит win7, Android — android7,
+//      Linux/macOS не затронуты).
+//
+// Архитектура (только для совместимых платформ):
+//   arch: x64             → применяется к Windows / Linux / macOS
+//   arch: x86             → Windows / Linux
+//   arch: arm64           → Windows / Android / Linux / macOS
+//   arch: arm32           → Android / Linux
+//   arch: universal       → macOS / Windows
+//   arch: windows x64     → только Windows
+//   arch: android arm64   → только Android
+//   arch: macos arm64     → только macOS
+//   arch: linux x64       → только Linux
+//   Без платформы тег применяется только к тем платформам, для которых
+//   эта архитектура имеет смысл (x64 → не Android).
+//   Метка в имени файла приоритетнее метки в теле релиза.
+//
+// ── ПРАВИЛА СОВМЕСТИМОСТИ ─────────────────────────────────────
 //   — Метка ОС = минимальная версия (win7 работает на 7–11).
 //   — 32-bit запускается на 64-bit (x86 → x64, arm32 → arm64).
 //   — 64-bit на 32-bit НЕ запускается.
 //   — universal работает везде.
 //
-// UI-ПРАВИЛА:
-//   — Нет метки ОС или архитектуры — просто нет предупреждений.
+// ── UI-ПРАВИЛА ────────────────────────────────────────────────
+//   — Нет метки ОС или архитектуры — нет предупреждений.
 //   — Один вариант архитектуры — кнопки не рисуются.
 //   — Один тип файла — вкладки не рисуются.
-//   — Скачивание никогда не блокируется из-за несовместимости.
+//   — Скачивание не блокируется из-за несовместимости.
 //   — Единственная блокировка: нет файла для платформы.
 //   — Ошибка сети — fallback на страницу релизов GitHub.
-//
-// КЕШИРОВАНИЕ:
-//   1. sessionStorage — TTL 1 час.
-//   2. Service Worker — NetworkFirst + TTL 5 мин для api.github.com.
-//   3. Stale fallback — при сетевой ошибке возвращается устаревший кеш.
 
 (function () {
     'use strict';
@@ -93,6 +113,17 @@
 
     const ARCH_ORDER = ['x64', 'x86', 'arm64', 'arm32', 'universal', 'unknown'];
 
+    // Какие архитектуры имеют смысл для каких платформ.
+    // Используется, чтобы тег `arch: x64` без платформы не «прилетал» Android.
+    const PLATFORM_ARCH_MATRIX = {
+        x64:       ['Windows', 'Linux', 'macOS'],
+        x86:       ['Windows', 'Linux'],
+        arm64:     ['Windows', 'Android', 'Linux', 'macOS'],
+        arm32:     ['Android', 'Linux'],
+        universal: ['macOS', 'Windows'],
+        unknown:   []
+    };
+
     function getArchLabel(arch) {
         const key = ARCH_LABEL_KEYS[arch];
         return key ? t(key) : arch;
@@ -101,6 +132,13 @@
     function getTypeLabel(type) {
         const key = TYPE_LABEL_KEYS[type];
         return key ? t(key) : type;
+    }
+
+    function isArchRelevantForPlatform(arch, platform) {
+        if (!arch || arch === 'unknown') return false;
+        const list = PLATFORM_ARCH_MATRIX[arch];
+        if (!list) return false;
+        return list.includes(platform);
     }
 
     // ============================================================
@@ -348,6 +386,51 @@
         return null;
     }
 
+    /**
+     * Разбирает arch-тег из тела релиза.
+     * Форматы:
+     *   "x64"              → применится, только если x64 релевантна платформе
+     *   "windows x64"      → только Windows
+     *   "android arm64"    → только Android
+     *   "macos arm64"      → только macOS
+     *   "linux x64"        → только Linux
+     * Возвращает нормализованную архитектуру или null.
+     */
+    function parseArchTag(tag, platform) {
+        const s = String(tag || '')
+            .toLowerCase()
+            .replace(/[_:]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (!s) return null;
+
+        const platformMap = {
+            'windows': 'Windows',
+            'win':     'Windows',
+            'android': 'Android',
+            'linux':   'Linux',
+            'macos':   'macOS',
+            'mac':     'macOS',
+            'osx':     'macOS'
+        };
+
+        for (const [prefix, targetPlatform] of Object.entries(platformMap)) {
+            if (s === prefix || s.startsWith(prefix + ' ')) {
+                const rest = s.slice(prefix.length).trim();
+                if (!rest) return null;            // «windows» без архитектуры
+                if (targetPlatform !== platform) return null; // тег другой платформы
+                const arch = normalizeArch(rest);
+                return arch === 'unknown' ? null : arch;
+            }
+        }
+
+        // Без платформы — применяем только к совместимым платформам
+        const arch = normalizeArch(s);
+        if (arch === 'unknown') return null;
+        if (!isArchRelevantForPlatform(arch, platform)) return null;
+        return arch;
+    }
+
     function detectPlatformFromName(name) {
         const n = String(name || '').toLowerCase();
 
@@ -437,6 +520,12 @@
                 meta.versionPost = line.slice(14).trim();
             } else if (line.startsWith('sort-order:')) {
                 meta.sortOrder = parseInt(line.slice(11).trim(), 10);
+            } else if (line.startsWith('arch:')) {
+                const val = line.slice(5).trim();
+                if (val) {
+                    if (!meta.archTags) meta.archTags = [];
+                    meta.archTags.push(val);
+                }
             } else if (line.startsWith('os:')) {
                 const val = line.slice(3).trim();
                 if (val) {
@@ -536,17 +625,27 @@
 
         const meta = parseMeta(release.body);
         const bodyOsTags = meta.osTags || [];
+        const bodyArchTags = meta.archTags || [];
 
         return release.assets.map(asset => {
             const platform = detectPlatformFromName(asset.name);
             if (!platform) return null;
 
+            // ---- OS-версия ----
             let osMeta = normalizeOSVersion(asset.name, platform);
-
             if (!osMeta && bodyOsTags.length) {
                 for (const tag of bodyOsTags) {
                     const parsed = normalizeOSVersion(tag, platform);
                     if (parsed) { osMeta = parsed; break; }
+                }
+            }
+
+            // ---- Архитектура ----
+            let arch = normalizeArch(asset.name);
+            if (arch === 'unknown' && bodyArchTags.length) {
+                for (const tag of bodyArchTags) {
+                    const parsed = parseArchTag(tag, platform);
+                    if (parsed) { arch = parsed; break; }
                 }
             }
 
@@ -555,7 +654,7 @@
                 size: asset.size,
                 url: asset.browser_download_url,
                 platform,
-                arch: normalizeArch(asset.name),
+                arch,
                 type: getAssetType(asset.name),
                 osVersion: osMeta ? osMeta.version : null,
                 osMajor: osMeta ? osMeta.major : null
